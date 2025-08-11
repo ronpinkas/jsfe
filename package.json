@@ -1,7 +1,7 @@
 {
   "name": "jsfe",
   "version": "0.1.0",
-  "description": "JavaScript Flow Engine (ESM) with workflow + tool orchestration",
+  "description": "TypeScript workflow engine for conversational/automation apps: multi-flow orchestration, interrupt/resume, stack-based control, robust errors, and flexible tool/REST integration.",
   "license": "MIT",
   "author": "Ron Pinkas",
   "repository": {
