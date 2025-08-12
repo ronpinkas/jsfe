@@ -1444,9 +1444,8 @@ Real implementation would parse actual XML structure.
             }
           },
           "global_presence": {
-            type: "handlebars",
-            template: "Operating in {{api_response.data.company.locations.length}} locations: {{#each api_response.data.company.locations}}{{city}}, {{country}} ({{employees}} employees){{#unless @last}}; {{/unless}}{{/each}}",
-            dataPath: "api_response.data.company"
+            type: "template",
+            template: "Operating in {{api_response.data.company.locations.length}} locations: {{#each api_response.data.company.locations}}{{city}}, {{country}} ({{employees}} employees){{#unless @last}}; {{/unless}}{{/each}}"
           },
           "metrics": {
             type: "conditional",
