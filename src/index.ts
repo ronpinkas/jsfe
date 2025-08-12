@@ -6977,14 +6977,17 @@ export class WorkflowEngine implements Engine {
     */
    private _validateToolArguments(args: any, step: any, flowDef: any, state: any, opts: any): void {
       const tool = this.toolsRegistry.find((t: any) => t.id === step.tool);
-      if (!tool || !tool.schema) {
+      if (!tool || (!tool.schema && !tool.parameters)) {
          state.warnings.push(`Tool "${step.tool}" in step "${step.id}" has no schema for argument validation`);
          return;
       }
 
+      // Use schema or parameters for validation
+      const schema = tool.schema || tool.parameters;
+      
       // Validate required parameters
-      if (tool.schema.required && Array.isArray(tool.schema.required)) {
-         for (const requiredParam of tool.schema.required) {
+      if (schema?.required && Array.isArray(schema.required)) {
+         for (const requiredParam of schema.required) {
             if (!args.hasOwnProperty(requiredParam)) {
                state.errors.push(`CALL-TOOL step "${step.id}" in flow "${flowDef.name}" missing required argument: ${requiredParam}`);
             }
@@ -6992,9 +6995,9 @@ export class WorkflowEngine implements Engine {
       }
 
       // Validate parameter types if schema provides them
-      if (tool.schema.properties) {
+      if (schema && schema.properties) {
          for (const [paramName, paramValue] of Object.entries(args)) {
-            const paramSchema = tool.schema.properties[paramName];
+            const paramSchema = schema.properties[paramName];
             if (paramSchema && paramSchema.type) {
                // Basic type validation - this could be enhanced
                if (!this._validateArgumentType(paramValue, paramSchema, step, flowDef, state)) {
