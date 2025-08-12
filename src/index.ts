@@ -5548,7 +5548,7 @@ async function handlePendingInterruptionContinue(engine: Engine, userId: string)
 // Handle interruption of regular flows (more permissive)
 async function handleRegularFlowInterruption(intentAnalysis: any, engine: Engine, userId: string): Promise<string> {
    try {
-      console.log(`🔄 Handling regular flow interruption for user ${userId}: ${intentAnalysis.originalInput}`);
+      logger.info(`🔄 Handling regular flow interruption for user ${userId}: ${intentAnalysis.originalInput}`);
 
       const currentFlowFrame = getCurrentFlowFrame(engine);
       const currentFlowName = currentFlowFrame.flowName;
