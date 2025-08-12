@@ -6,7 +6,7 @@
   "author": "Ron Pinkas",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ronpinkas/jsfe.git"
+    "url": "git+https://github.com/ronpinkas/jsfe.git"
   },
   "type": "module",
   "sideEffects": false,
