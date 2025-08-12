@@ -4691,9 +4691,71 @@ function evaluateExpression(
 function containsUnsafePatterns(expression: string, options: ExpressionOptions): boolean {
   const { securityLevel = 'standard', allowLogicalOperators = true, allowComparisons = true } = options;
   
-  // Core dangerous patterns (blocked at all levels)
+  // Safe string methods that are allowed in expressions
+  const safeStringMethods = [
+    'toLowerCase', 'toUpperCase', 'trim', 'charAt', 'charCodeAt', 'indexOf', 'lastIndexOf',
+    'substring', 'substr', 'slice', 'split', 'replace', 'match', 'search', 'includes',
+    'startsWith', 'endsWith', 'padStart', 'padEnd', 'repeat', 'toString', 'valueOf',
+    'length', 'concat', 'localeCompare', 'normalize'
+  ];
+  
+  // Safe array methods that are allowed in expressions
+  const safeArrayMethods = [
+    'length', 'join', 'indexOf', 'lastIndexOf', 'includes', 'slice', 'toString', 'valueOf'
+  ];
+  
+  // Safe math methods that are allowed in expressions
+  const safeMathMethods = [
+    'abs', 'ceil', 'floor', 'round', 'max', 'min', 'pow', 'sqrt', 'random'
+  ];
+  
+  // Safe standalone functions that are allowed
+  const safeStandaloneFunctions = [
+    'isNaN', 'isFinite', 'parseInt', 'parseFloat',
+    'encodeURIComponent', 'decodeURIComponent', 'encodeURI', 'decodeURI',
+    'String', 'Number', 'Boolean' // Type conversion functions (not new constructors)
+  ];
+  
+  // Check if expression contains only safe function calls
+  const functionCallPattern = /(\w+)\.(\w+)\s*\(/g;
+  const standaloneFunctionPattern = /(?:^|[^.\w])(\w+)\s*\(/g;
+  
+  let match;
+  const foundFunctionCalls = [];
+  
+  // First, check for any standalone function calls (not methods)
+  standaloneFunctionPattern.lastIndex = 0; // Reset regex
+  while ((match = standaloneFunctionPattern.exec(expression)) !== null) {
+    const functionName = match[1];
+    // Skip if this is actually a method call (preceded by a dot)
+    const beforeFunction = expression.substring(0, match.index + match[0].indexOf(functionName));
+    if (!beforeFunction.endsWith('.')) {
+      // Check if this standalone function is in our safe list
+      if (!safeStandaloneFunctions.includes(functionName)) {
+        logger.debug(`Blocking unsafe standalone function call: ${functionName}`);
+        return true; // Unsafe standalone function calls are not allowed
+      }
+      logger.debug(`Allowing safe standalone function call: ${functionName}`);
+    }
+  }
+  
+  // Then, check method calls and verify they're safe
+  functionCallPattern.lastIndex = 0; // Reset regex
+  while ((match = functionCallPattern.exec(expression)) !== null) {
+    const methodName = match[2];
+    foundFunctionCalls.push(methodName);
+    
+    // If this method is not in our safe lists, it's potentially unsafe
+    if (!safeStringMethods.includes(methodName) && 
+        !safeArrayMethods.includes(methodName) && 
+        !safeMathMethods.includes(methodName)) {
+      logger.debug(`Blocking unsafe method call: ${methodName}`);
+      return true; // Unsafe method found
+    }
+  }
+  
+  // Core dangerous patterns (blocked at all levels) - removed the problematic function call pattern
   const coreDangerousPatterns = [
-    /\w+\s*\(/,          // Function calls: func(
     /eval\s*\(/,         // eval() calls
     /Function\s*\(/,     // Function constructor
     /constructor/,       // Constructor access
@@ -4735,21 +4797,9 @@ function containsUnsafePatterns(expression: string, options: ExpressionOptions):
     /arguments\./,       // Arguments access
   ];
   
-  // For template interpolation context, be more lenient about function call pattern
-  if (options.context === 'template-interpolation') {
-    // Only check patterns that don't include the function call pattern for variables within {{}}
-    const templateSafePatterns = coreDangerousPatterns.filter(pattern => 
-      pattern.source !== '\\w+\\s*\\('  // Exclude the function call pattern for template variables
-    );
-    
-    if (templateSafePatterns.some(pattern => pattern.test(expression))) {
-      return true;
-}
-  } else {
-    // Check core patterns for non-template contexts
-    if (coreDangerousPatterns.some(pattern => pattern.test(expression))) {
-      return true;
-    }
+  // Check core patterns (function call validation is handled separately above)
+  if (coreDangerousPatterns.some(pattern => pattern.test(expression))) {
+    return true;
   }
 
   // Check strict-only patterns if in strict mode
