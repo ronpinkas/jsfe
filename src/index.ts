@@ -2219,7 +2219,7 @@ async function isFlowActivated(input: string, engine: Engine, userId: string = '
       flowPrompt: getFlowPrompt(engine, flow.name)
     });
     // Add to global accumulated messages
-    engine?.addAccumulatedMessage!(tentativeFlowInit);
+    engine.addAccumulatedMessage!(tentativeFlowInit);
 
     const flowFrame: FlowFrame = {
       flowName: flow.name,
@@ -3263,12 +3263,12 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
   }
 }
 
-function handleSayStep(currentFlowFrame: FlowFrame, engine: Engine | null = null): null {
+function handleSayStep(currentFlowFrame: FlowFrame, engine: Engine): null {
   // Extract what we need from the currentFlowFrame
   const step = currentFlowFrame.flowStepsStack.pop()!; // This handler pops its own step
   const contextStack = currentFlowFrame.contextStack;
   
-  const lang = engine?.language;
+  const lang = engine.language;
   const message = (lang && step[`value_${lang}`]) || step.value || '';
   const interpolated = interpolateMessage(String(message), contextStack, currentFlowFrame?.variables, engine || undefined);
   logger.info(`SAY step executed (non-blocking): "${interpolated}"`);
@@ -3296,7 +3296,7 @@ function handleSayGetStep(currentFlowFrame: FlowFrame, engine: Engine): string {
   const step = currentFlowFrame.flowStepsStack[currentFlowFrame.flowStepsStack.length - 1]; // Peek at step without popping
   const contextStack = currentFlowFrame.contextStack;
   
-  const lang = engine?.language;
+  const lang = engine.language;
   const message = (lang && step[`value_${lang}`]) || step.value || '';
   const interpolated = interpolateMessage(String(message), contextStack, currentFlowFrame?.variables, engine || undefined);
   logger.info(`SAY-GET step executed (blocking): "${interpolated}"`);
@@ -3352,9 +3352,9 @@ function handleSayGetStep(currentFlowFrame: FlowFrame, engine: Engine): string {
 }
 
 // Add contextual guidance to SAY messages when user input is expected
-function addFlowContextGuidance(message: string, flowFrame: FlowFrame, engine?: Engine | null): string {
+function addFlowContextGuidance(message: string, flowFrame: FlowFrame, engine: Engine): string {
   // Check if guidance is disabled
-  if (!engine?.guidanceConfig?.enabled) {
+  if (!engine.guidanceConfig?.enabled) {
     return message;
   }
 
@@ -3388,7 +3388,7 @@ function addFlowContextGuidance(message: string, flowFrame: FlowFrame, engine?: 
   // Get guidance message
   if (config.guidanceMessages) {
     // Check if it's multi-language format (has language keys like 'en', 'es')
-    const language = engine?.language || 'en';
+    const language = engine.language || 'en';
     
     // Check if guidanceMessages has language properties (multi-language format)
     if (typeof config.guidanceMessages === 'object' && 
@@ -3462,7 +3462,7 @@ function addFlowContextGuidance(message: string, flowFrame: FlowFrame, engine?: 
   }
 }
 
-function handleSetStep(currentFlowFrame: FlowFrame, engine?: Engine): string {
+function handleSetStep(currentFlowFrame: FlowFrame, engine: Engine): string {
   // Extract what we need from the currentFlowFrame
   const step = currentFlowFrame.flowStepsStack.pop()!; // This handler pops its own step
   
@@ -3560,7 +3560,7 @@ async function handleCaseStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
       
       try {
         // Evaluate the condition expression
-        const conditionResult = evaluateSafeCondition(condition, currentFlowFrame.variables || {});
+        const conditionResult = evaluateSafeCondition(condition, currentFlowFrame.variables || {}, engine);
         logger.info(`CASE: condition '${condition}' evaluated to: ${conditionResult}`);
         
         if (conditionResult) {
@@ -4076,7 +4076,7 @@ async function callTool(engine: Engine, tool: any, args: any, userId: string = '
    }
 }
 
-async function callHttpTool(tool: any, args: any, userId: string = 'anonymous', transactionId: string | null = null, engine?: Engine): Promise<any> {
+async function callHttpTool(tool: any, args: any, userId: string = 'anonymous', transactionId: string | null = null, engine: Engine): Promise<any> {
    try {
       logger.info(`Calling HTTP tool ${tool.name} with args: ${JSON.stringify(args)}`);
 
@@ -4602,7 +4602,7 @@ function evaluateExpression(
   variables: Record<string, any> = {}, 
   contextStack: ContextEntry[] = [],
   options: ExpressionOptions = {},
-  engine?: Engine
+  engine: Engine
 ): any {
   const opts: Required<ExpressionOptions> = {
     securityLevel: 'standard' as const,
@@ -4619,7 +4619,7 @@ function evaluateExpression(
     logger.debug(`Evaluating expression: ${expression} with options: ${JSON.stringify(opts)}`);
 
     // Security check with configurable level
-    if (containsUnsafePatterns(expression, opts)) {
+    if (containsUnsafePatterns(expression, opts, engine)) {
       logger.warn(`Blocked unsafe expression in ${opts.context}: ${expression}`);
       return opts.returnType === 'boolean' ? false : `[blocked: ${expression}]`;
     }
@@ -4700,7 +4700,7 @@ function evaluateExpression(
 }
 
 // Unified security pattern checking with configurable levels
-function containsUnsafePatterns(expression: string, options: ExpressionOptions): boolean {
+function containsUnsafePatterns(expression: string, options: ExpressionOptions, engine: Engine): boolean {
   const { securityLevel = 'standard', allowLogicalOperators = true, allowComparisons = true } = options;
   
   // Safe string methods that are allowed in expressions
@@ -4742,12 +4742,15 @@ function containsUnsafePatterns(expression: string, options: ExpressionOptions):
     // Skip if this is actually a method call (preceded by a dot)
     const beforeFunction = expression.substring(0, match.index + match[0].indexOf(functionName));
     if (!beforeFunction.endsWith('.')) {
-      // Check if this standalone function is in our safe list
-      if (!safeStandaloneFunctions.includes(functionName)) {
+      // Check if this standalone function is in our safe list or approved functions
+      const isApprovedFunction = engine.APPROVED_FUNCTIONS?.get && 
+                                 typeof engine.APPROVED_FUNCTIONS.get(functionName) === 'function';
+      
+      if (!safeStandaloneFunctions.includes(functionName) && !isApprovedFunction) {
         logger.debug(`Blocking unsafe standalone function call: ${functionName}`);
         return true; // Unsafe standalone function calls are not allowed
       }
-      logger.debug(`Allowing safe standalone function call: ${functionName}`);
+      logger.debug(`Allowing safe standalone function call: ${functionName}${isApprovedFunction ? ' (approved)' : ' (built-in)'}`);
     }
   }
   
@@ -4829,7 +4832,7 @@ function interpolateTemplateVariables(
   variables: Record<string, any>, 
   contextStack: ContextEntry[], 
   options: Required<ExpressionOptions>,
-  engine?: Engine
+  engine: Engine
 ): string {
   logger.debug(`Starting template interpolation: ${template}`);
   
@@ -4884,7 +4887,7 @@ function evaluateLogicalExpression(
   variables: Record<string, any>, 
   contextStack: ContextEntry[], 
   options: Required<ExpressionOptions>,
-  engine?: Engine
+  engine: Engine
 ): any {
   // Handle OR expressions
   if (expression.includes('||')) {
@@ -4915,7 +4918,7 @@ function evaluateComparisonExpression(
   variables: Record<string, any>, 
   contextStack: ContextEntry[], 
   options: Required<ExpressionOptions>,
-  engine?: Engine
+  engine: Engine
 ): boolean {
   // For comparison expressions, we need to handle variable substitution properly
   let processedExpression = expression;
@@ -5016,7 +5019,7 @@ function convertReturnType(value: any, returnType: string): any {
 }
 
 // Clean unified expression interface functions  
-function interpolateMessage(template: string, contextStack: ContextEntry[], variables: Record<string, any> = {}, engine?: Engine): string {
+function interpolateMessage(template: string, contextStack: ContextEntry[], variables: Record<string, any> = {}, engine: Engine): string {
   logger.debug(`Interpolating message template: ${template} with variables: ${JSON.stringify(variables)}`);
   if (!template) return template;
   
@@ -5032,7 +5035,7 @@ function interpolateMessage(template: string, contextStack: ContextEntry[], vari
   }, engine);
 }
 
-function evaluateSafeCondition(condition: string, variables: Record<string, any>, engine?: Engine): boolean {
+function evaluateSafeCondition(condition: string, variables: Record<string, any>, engine: Engine): boolean {
   logger.debug(`Evaluating safe condition: ${condition} with variables: ${JSON.stringify(variables)}`);
   return evaluateExpression(condition, variables, [], {
     securityLevel: 'standard',
@@ -5049,7 +5052,7 @@ function isSimpleVariablePath(expression: string): boolean {
   return /^[a-zA-Z_$][a-zA-Z0-9_$.]*$/.test(expression);
 }
 
-function resolveSimpleVariable(expression: string, variables: Record<string, any>, contextStack: ContextEntry[], engine?: Engine): string {
+function resolveSimpleVariable(expression: string, variables: Record<string, any>, contextStack: ContextEntry[], engine: Engine): string {
   // Debug logging to track variable resolution issues
   logger.debug(`Resolving variable '${expression}' - Available variables: ${JSON.stringify(Object.keys(variables || {}))}`);
   
@@ -5113,7 +5116,7 @@ function resolveEngineSessionVariable(expression: string, engine: Engine): any {
 }
 
 // Helper function to evaluate function calls
-function evaluateFunctionCall(expression: string, variables: Record<string, any>, contextStack: ContextEntry[], engine?: Engine): any {
+function evaluateFunctionCall(expression: string, variables: Record<string, any>, contextStack: ContextEntry[], engine: Engine): any {
   try {
     logger.debug(`Evaluating function call: ${expression}`);
     
@@ -5290,7 +5293,7 @@ function getNestedValue(obj: any, path: string): any {
   return current;
 }
 
-function evaluateSafeOrExpression(expression: string, variables: Record<string, any>, contextStack: any[], engine?: Engine): string {
+function evaluateSafeOrExpression(expression: string, variables: Record<string, any>, contextStack: any[], engine: Engine): string {
   const parts = expression.split('||').map(part => part.trim());
   
   for (const part of parts) {
@@ -5334,7 +5337,7 @@ function evaluateSafeOrExpression(expression: string, variables: Record<string, 
   return '';
 }
 
-function evaluateSafeTernaryExpression(expression: string, variables: Record<string, any>, contextStack: any[], engine?: Engine): string {
+function evaluateSafeTernaryExpression(expression: string, variables: Record<string, any>, contextStack: any[], engine: Engine): string {
   const ternaryMatch = expression.match(/^([a-zA-Z_$.]+)\s*(===|!==|==|!=|>=|<=|>|<)\s*(\d+|'[^']*'|"[^"]*"|true|false)\s*\?\s*('([^']*)'|"([^"]*)"|[a-zA-Z_$.]+)\s*:\s*('([^']*)'|"([^"]*)"|[a-zA-Z_$.]+)$/);
   
   if (!ternaryMatch) {
@@ -5386,7 +5389,7 @@ function evaluateSafeTernaryExpression(expression: string, variables: Record<str
   }
 }
 
-function evaluateSafeMathematicalExpression(expression: string, variables: Record<string, any>, contextStack: any[], engine?: Engine): string {
+function evaluateSafeMathematicalExpression(expression: string, variables: Record<string, any>, contextStack: any[], engine: Engine): string {
   try {
     let evaluatedExpression = expression;
     const variablePattern = /[a-zA-Z_$][a-zA-Z0-9_$]*(\.[a-zA-Z_$][a-zA-Z0-9_$]*)*/g;
@@ -6897,6 +6900,15 @@ export class WorkflowEngine implements Engine {
          }
       }
       
+      // Add approved functions to scope (so they're not flagged as undefined variables)
+      if (this.APPROVED_FUNCTIONS) {
+         for (const funcName of Object.keys(this.APPROVED_FUNCTIONS)) {
+            if (funcName !== 'get') { // Skip the 'get' method itself
+               scope.add(funcName);
+            }
+         }
+      }
+      
       // Add variables created by previous steps in execution order
       if (flowDef.steps && Array.isArray(flowDef.steps) && stepIndex >= 0) {
          for (let i = 0; i < stepIndex; i++) {
@@ -7043,7 +7055,7 @@ export class WorkflowEngine implements Engine {
                            continue;
                         }
                         
-                        // Extract the root variable name (before any dot notation)
+                        // Extract the root variable/function name (before any dot notation)
                         const rootVar = part.split('.')[0];
                         if (rootVar && /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(rootVar)) {
                            variableNames.push(rootVar);
@@ -7054,7 +7066,11 @@ export class WorkflowEngine implements Engine {
                   
                   const variableNames = extractVariableNames(varPath);
                   for (const rootVar of variableNames) {
-                     if (!currentScope.has(rootVar)) {
+                     // Check if it's a registered function first (global scope)
+                     const isApprovedFunction = this.APPROVED_FUNCTIONS && this.APPROVED_FUNCTIONS.get && this.APPROVED_FUNCTIONS.get(rootVar);
+                     
+                     // If not an approved function, check if it's in current scope as a variable
+                     if (!isApprovedFunction && !currentScope.has(rootVar)) {
                         state.errors.push(`${context} in step "${step.id}" references undefined variable: ${rootVar} (full path: ${varPath})`);
                      }
                   }
