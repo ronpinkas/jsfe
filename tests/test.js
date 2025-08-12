@@ -1918,11 +1918,6 @@ const flowsMenu = [
             value: "❌ Payment cancelled. You can start a new payment anytime."
           }
         },
-        default: {
-          id: "invalid-choice-message",
-          type: "SAY",
-          value: "Please enter a valid choice (1-4)."
-        }
       }
     ]
   },
