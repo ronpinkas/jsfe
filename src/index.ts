@@ -2665,9 +2665,6 @@ function generateSmartRetryDefaultOnFail(step: FlowStep, error: Error, currentFl
 
   // Categorize error types for intelligent handling
 
-  // Our tool call related errors:
-  const isToolCallError = errorMessage.includes('Failed to generate tool call');
-
   // Provoke retry of the current TOOL step if recoverable
   const isNetworkError = errorMessage.includes('fetch failed') || 
                          errorMessage.includes('ENOTFOUND') || 
@@ -2720,7 +2717,7 @@ function generateSmartRetryDefaultOnFail(step: FlowStep, error: Error, currentFl
   
   if (isNetworkError || isServerError) {
     doRetry = true;
-  } else if (isToolCallError || isBadRequest || isAuthError || isRateLimitError || isCriticalFinancial) {
+  } else if (isBadRequest || isAuthError || isRateLimitError || isCriticalFinancial) {
     doCancel = true;
   } else {
     logger.warn(`Unrecognized error type for tool ${toolName} in flow ${flowName}: ${errorMessage}`);    
@@ -3765,8 +3762,8 @@ async function generateToolCallAndResponse(
       
       return await callTool(engine, tool, validatedArgs, userId, transactionId);
    } catch (error: any) {
-      logger.warn(`Error generating tool call for ${toolName}: ${error.message}`);
-      throw new Error(`Failed to generate tool call for ${toolName}: ${error.message}`);
+      logger.info(`Error generating tool call for ${toolName}: ${error.message}`);
+      throw error;
    }
 }
 
@@ -4070,9 +4067,9 @@ async function callTool(engine: Engine, tool: any, args: any, userId: string = '
       // === ENHANCED HTTP TOOL CALL MODE ===
       return await callHttpTool(tool, args, userId, transactionId, engine);
    } catch (error: any) {
-      logger.warn(`Error calling tool ${tool.name}: ${error.message}`);
+      logger.info(`Error calling tool ${tool.name}: ${error.message}`);
       logger.info(`Stack trace: ${error.stack}`);
-      throw new Error(`Failed to call tool ${tool.name}: ${error.message}`);
+      throw error; // Re-throw to propagate error
    }
 }
 
