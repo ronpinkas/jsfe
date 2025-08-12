@@ -2627,7 +2627,7 @@ async function getFlowForInput(input: string, engine: Engine): Promise<FlowDefin
          const aiResponse = await fetchAiTask(task, rules, context, input, flowsMenu, undefined, engine.aiCallback);
          
          if (aiResponse && aiResponse !== 'None' && aiResponse !== 'null') {
-            const flow = flowsMenu.find(flow => flow.name === aiResponse);
+            const flow = flowsMenu.find(flow => flow.name.toLowerCase() === aiResponse.toLowerCase() || flow.id === aiResponse);
             if (flow) {
             return flow;
             } else {
