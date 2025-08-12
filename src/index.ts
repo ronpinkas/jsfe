@@ -1914,9 +1914,9 @@ function checkRateLimit(engine: Engine, userId: string, toolId: string) {
       attempts.push(now);
       rateLimiter.set(key, attempts);
    } catch (error: any) {
-      logger.warn(`Rate limiting error: ${error.message}`);
+      logger.info(`Rate limiting error: ${error.message}`);
       logger.info(error.stack);
-      throw new Error(`Rate limit check failed for tool ${toolId}: ${error.message}`);
+      throw error; // Re-throw to propagate error
    }
 }
 
