@@ -3168,7 +3168,7 @@ const flowsMenu = [
         id: "increment-attempt-counter",
         type: "SET",
         variable: "attempt_count",
-        value: "{{{{attempt_count}} + 1}}"
+        value: "{{attempt_count + 1}}"
       },
       {
         id: "smart-retry-intro",
