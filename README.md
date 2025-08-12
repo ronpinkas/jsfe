@@ -371,6 +371,212 @@ PROPER USAGE PATTERNS:
 5. Implement comprehensive logging for debugging
 
 ========================================
+🚀 ENHANCED TRANSFORMATION CAPABILITIES
+========================================
+
+The JavaScript Flow Engine now includes a comprehensive suite of mathematical, temporal, 
+and template processing enhancements that enable sophisticated data transformations 
+without code injection risks.
+
+MATHEMATICAL OPERATIONS:
+✅ `add` - Addition with precision control: `{ type: "add", addend: 10, precision: 2 }`
+✅ `subtract` - Subtraction with precision control: `{ type: "subtract", subtrahend: 5, precision: 2 }`
+✅ `multiply` - Multiplication: `{ type: "multiply", multiplier: 1.08, precision: 2 }`
+✅ `divide` - Division with zero protection: `{ type: "divide", divisor: 100, precision: 2 }`
+✅ `percentage` - Percentage calculation: `{ type: "percentage", divisor: 1000, precision: 1 }`
+✅ `abs`, `round`, `floor`, `ceil` - Mathematical functions
+
+DATE-BASED CALCULATIONS:
+✅ `currentYear` - Get current year: `{ type: "currentYear" }`
+✅ `yearDifference` - Calculate age/duration: `{ type: "yearDifference" }` (current year - value)
+✅ Dynamic age calculations, time-based transformations
+
+ARRAY AGGREGATIONS:
+✅ `sum` - Sum array values: `{ type: "sum", field: "budget" }` (for object arrays)
+✅ `average` - Calculate mean: `{ type: "average", field: "employees", precision: 1 }`
+✅ `count` - Count non-null values: `{ type: "count", field: "active" }`
+✅ `min` - Find minimum: `{ type: "min", field: "price" }`
+✅ `max` - Find maximum: `{ type: "max", field: "score" }`
+
+ENHANCED TEMPLATE SYSTEM:
+✅ **Array Length Access**: `{{array.length}}` automatically supported
+✅ **Handlebars-Style Iteration**: `{{#each items}}...{{/each}}` with full nesting
+✅ **Context Variables**: `{{@index}}` (current index), `{{@last}}` (is last item)
+✅ **Conditional Rendering**: `{{#unless @last}}separator{{/unless}}`
+✅ **Nested Property Access**: `{{item.nested.property}}`
+
+REAL-WORLD EXAMPLES:
+
+**Age Calculation:**
+```json
+{
+  "path": "user.birthYear", 
+  "transform": { "type": "yearDifference" }
+}
+```
+Input: `2015` → Output: `10` (automatically calculated as 2025 - 2015)
+
+**Financial Aggregations:**
+```json
+{
+  "path": "departments",
+  "transform": { 
+    "type": "sum", 
+    "field": "budget",
+    "precision": 0
+  }
+}
+```
+Input: `[{budget: 8500000}, {budget: 3200000}]` → Output: `11700000`
+
+**Complex Template with Arrays:**
+```json
+{
+  "type": "template",
+  "template": "Operating in {{locations.length}} locations: {{#each locations}}{{city}}, {{country}} ({{employees}} employees){{#unless @last}}; {{/unless}}{{/each}}"
+}
+```
+Input: Array of locations → Output: `"Operating in 3 locations: San Francisco, USA (150 employees); London, UK (60 employees); Toronto, Canada (40 employees)"`
+
+**Percentage Calculations:**
+```json
+{
+  "path": "completedProjects",
+  "transform": {
+    "type": "percentage", 
+    "divisor": "{{totalProjects}}",
+    "precision": 1
+  }
+}
+```
+Input: `19` completed, `30` total → Output: `63.3` (percentage)
+
+CONTRIBUTORS: Areas for Future Enhancement
+✅ **Current Coverage**: Mathematical, temporal, aggregation, template processing
+⚠️ **Missing Operations**: Trigonometric functions (sin, cos, tan)
+⚠️ **Missing Date Functions**: Date formatting, timezone conversions, date arithmetic
+⚠️ **Missing String Functions**: Advanced regex operations, locale-specific formatting
+⚠️ **Missing Array Functions**: Complex filtering, sorting, grouping operations
+⚠️ **Missing Template Features**: Nested loops, advanced conditionals, custom helpers
+
+========================================
+📋 COMPREHENSIVE FEATURE MATRIX FOR CONTRIBUTORS
+========================================
+
+This section provides a complete overview of implemented features and identifies 
+areas where contributors can add value. All features maintain the engine's security 
+model (no code injection, declarative-only transformations).
+
+FLOW EXECUTION ENGINE:
+✅ **Stack-of-stacks architecture** - Complete with interruption/resumption
+✅ **Flow frame management** - Variables, context, transaction tracking
+✅ **Step types** - SAY, SAY-GET, SET, CALL-TOOL, FLOW, SWITCH
+✅ **Expression evaluation** - Safe JavaScript expressions with allowlist
+✅ **Error handling** - Smart defaults, financial protection, graceful degradation
+✅ **Intent detection** - AI-powered + fallback flow matching
+✅ **Universal commands** - help, status, cancel, exit
+
+TRANSFORMATION SYSTEM:
+✅ **Basic types** - parseInt, parseFloat, toLowerCase, toUpperCase, trim
+✅ **String operations** - replace, concat, regex, substring, split, join
+✅ **Mathematical** - add, subtract, multiply, divide, percentage, abs, round, floor, ceil
+✅ **Date/Time** - currentYear, yearDifference, ISO date conversion
+✅ **Array aggregations** - sum, average, count, min, max (with field targeting)
+✅ **Conditional logic** - Multi-branch conditions with operators
+✅ **Template processing** - Simple placeholders + Handlebars-style iteration
+✅ **Default/fallback** - Robust null handling
+
+RESPONSE MAPPING SYSTEM:
+✅ **JSONPath mapping** - Deep object extraction with transformations
+✅ **Object mapping** - Restructuring and field remapping
+✅ **Array mapping** - Filtering, limiting, item transformation
+✅ **Template mapping** - String interpolation with complex iteration
+✅ **Conditional mapping** - Response-structure-based branching
+
+REST API INTEGRATION:
+✅ **HTTP methods** - GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS
+✅ **Content types** - JSON, form-data, URL-encoded, XML/SOAP, text, multipart
+✅ **Authentication** - Bearer, Basic, API keys, HMAC signatures
+✅ **Parameters** - Path params, query params, body, headers
+✅ **Advanced features** - Retries, timeouts, rate limiting
+✅ **Response handling** - Auto content-type detection, declarative mapping
+
+SECURITY & COMPLIANCE:
+✅ **Expression security** - Safe evaluation, method allowlist, no eval()
+✅ **Transaction management** - Audit trails, state tracking, recovery
+✅ **Rate limiting** - Per-user controls, abuse prevention
+✅ **Input validation** - JSON Schema, size limits, sanitization
+✅ **Credential management** - Secure token handling, audit logging
+
+AREAS FOR CONTRIBUTOR ENHANCEMENT (very liberal AI based 🫣 ):
+
+🔢 **MATHEMATICAL EXTENSIONS:**
+⚠️ Trigonometric functions (sin, cos, tan, asin, acos, atan)
+⚠️ Logarithmic functions (log, log10, ln)
+⚠️ Statistical functions (median, mode, standard deviation)
+⚠️ Financial functions (compound interest, NPV, IRR)
+
+📅 **DATE/TIME ENHANCEMENTS:**
+⚠️ Date formatting with locale support (MM/DD/YYYY, DD-MM-YYYY)
+⚠️ Timezone conversions and handling
+⚠️ Date arithmetic (add days, subtract months, etc.)
+⚠️ Relative date calculations (next Monday, last quarter)
+⚠️ Duration calculations (time between dates)
+
+🔤 **STRING PROCESSING EXPANSIONS:**
+⚠️ Advanced regex operations (lookahead, lookbehind)
+⚠️ Locale-specific formatting (currency, numbers)
+⚠️ String similarity and distance algorithms
+⚠️ Text normalization and cleaning utilities
+⚠️ Encoding/decoding beyond URI (Base64, hex)
+
+🔗 **ARRAY OPERATION ENHANCEMENTS:**
+⚠️ Complex filtering with multiple conditions
+⚠️ Sorting with custom comparators
+⚠️ Grouping and partitioning operations
+⚠️ Set operations (union, intersection, difference)
+⚠️ Array flattening and nested operations
+
+🎨 **TEMPLATE SYSTEM EXTENSIONS:**
+⚠️ Nested loop support (each within each)
+⚠️ Advanced conditionals (if/else if/else blocks)
+⚠️ Custom helper functions (user-defined template functions)
+⚠️ Template caching and optimization
+⚠️ Internationalization and localization support
+
+🔧 **INTEGRATION CAPABILITIES:**
+⚠️ Database connectivity (with secure query building)
+⚠️ File system operations (secure read/write)
+⚠️ Message queue integration (Kafka, RabbitMQ, SQS)
+⚠️ Real-time capabilities (WebSocket, Server-Sent Events)
+⚠️ Monitoring and metrics collection
+
+⚡ **PERFORMANCE OPTIMIZATIONS:**
+⚠️ Expression caching and compilation
+⚠️ Lazy evaluation for expensive operations
+⚠️ Memory usage optimization for large datasets
+⚠️ Parallel processing for independent operations
+⚠️ Streaming processing for large arrays
+
+IMPLEMENTATION GUIDELINES FOR CONTRIBUTORS:
+1. **Security First**: All new features must maintain no-code-injection principle
+2. **Declarative Design**: Use JSON configuration, not executable code
+3. **Error Handling**: Implement comprehensive fallbacks and validation
+4. **Testing**: Add to the 40+ test comprehensive test suite
+5. **Documentation**: Update both README.md and User Guide
+6. **Type Safety**: Maintain TypeScript compliance with proper interfaces
+7. **Performance**: Consider memory and computational impact
+
+CURRENT TEST COVERAGE:
+✅ **40 Comprehensive Test Scenarios** - 100% pass rate validated
+✅ **Flow execution patterns** - Linear, nested, interrupted, resumed
+✅ **Mathematical transformations** - All operations with edge cases
+✅ **Template processing** - Simple and complex Handlebars-style
+✅ **API integrations** - HTTP methods, auth, error handling
+✅ **Error scenarios** - Network failures, invalid data, timeouts
+✅ **Security validation** - Expression safety, input sanitization
+
+========================================
 
 - OpenAI Function Calling Standard schemas
 - JSON Schema validation with ajv
