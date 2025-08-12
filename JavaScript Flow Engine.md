@@ -1,4 +1,4 @@
-# Workflow Engine v2.0 User Guide
+# JavaScript Flow Engine User Guide
 
 ## 📖 Documentation
 
@@ -9,19 +9,16 @@
 
 ## Table of Contents
 
-[Introduction: JavaScript Flow Engine Overview](#introduction-javascript-flow-engine-overview) ✅
-1. [TOOL-CALL Support: Complete Integration Guide](#tool-call-support-complete-integration-guide) ✅
-2. [Variable Management and Expression System](#variable-management-and-expression-system) ✅  
-3. [Flow Control and Step Types](#flow-control-and-step-types) ✅
-4. [Response Mapping and Data Transformation](#response-mapping-and-data-transformation) ✅
-5. [Conditional Execution and Advanced Branching](#conditional-execution-and-advanced-branching) ✅
-6. [Stack-of-Stacks Architecture and Flow Management](#stack-of-stacks-architecture) ✅
-7. [Error Handling and Recovery](#error-handling-and-recovery) ✅
-8. [Rate Limiting and Performance](#rate-limiting-and-performance) ⭐ NEW
-9. [Flow Interruption and Resumption](#flow-interruption-and-resumption) ⭐ NEW
-10. [Testing and Debugging](#testing-and-debugging) ⭐ NEW
-11. [Security and Authentication](#security-and-authentication) ✅
-12. [Performance and Best Practices](#performance-and-best-practices) ✅
+[Introduction: JavaScript Flow Engine Overview](#introduction-javascript-flow-engine-overview)
+
+1. [TOOL-CALL Support: Complete Integration Guide](#chapter-1-tool-call-support-complete-integration-guide)
+2. [Variable Management and Expression System](#chapter-2-variable-management-and-expression-system)
+3. [Workflows and Step Types](#chapter-3-workflows-and-step-types)
+4. [Conditional Execution and Advanced Branching](#chapter-4-conditional-execution-and-advanced-branching)
+5. [Flow Interruption and Resumption](#chapter-5-flow-interruption-and-resumption)
+6. [Testing and Debugging Workflows](#chapter-6-testing-and-debugging-workflows)
+
+[Conclusion and Next Steps](#conclusion-and-next-steps) 
 
 ---
 
@@ -29,11 +26,11 @@
 
 ## What is the JavaScript Flow Engine?
 
-The **JavaScript Flow Engine** is a sophisticated, host-agnostic workflow orchestration system designed to serve as a **plugable intent detector, and work flows orchestrator** for any conversational platform. Whether integrated with AI chat assistants, live agent systems, customer service platforms, or any other conversational interface, the engine provides reliable, secure, and intelligent workflow automation.
+The **JavaScript Flow Engine** is a sophisticated, host-agnostic workflow orchestration system designed to serve as a **pluggable intent detector, and workflows orchestrator** for any conversational platform. Whether integrated with AI chat assistants, live agent systems, customer service platforms, or any other conversational interface, the engine provides reliable, secure, and intelligent workflow automation.
 
 ## Core Concepts
 
-### Plugable Architecture
+### Pluggable Architecture
 
 The engine acts as an intelligent **gatekeeper** that sits at the early ping-pong of conversational interactions:
 
@@ -351,7 +348,7 @@ class ConversationHandler {
 
 ## Overview
 
-The Workflow Engine's TOOL-CALL system provides a sophisticated, secure, and flexible way to integrate external tools and APIs into your workflows. It supports multiple implementation types, comprehensive response mapping, advanced error handling, and robust security features.
+The JavaScript Flow Engine's TOOL-CALL system provides a sophisticated, secure, and flexible way to integrate external tools and APIs into your workflows. It supports multiple implementation types, comprehensive response mapping, advanced error handling, and robust security features.
 
 ## Core Concepts
 
@@ -674,214 +671,1016 @@ Arguments are validated against the tool's parameter schema:
 - **Range validation**: Min/max values for numbers
 - **Required fields**: Validates all required parameters are present
 
-## Response Mapping and Transformation
+## Response Mapping and Data Transformation
 
-The engine supports sophisticated response mapping to transform API responses into usable data:
+The JavaScript Flow Engine features a completely enhanced response mapping system with powerful mathematical operations, advanced date processing, and sophisticated template capabilities.
 
-### JSONPath Mapping
+### Transform Types Overview
 
-Extract specific values from complex JSON responses:
+| Category | Transform Types | Description |
+|----------|----------------|-------------|
+| **Mathematical** | `add`, `subtract`, `multiply`, `divide`, `percentage` | Arithmetic operations with precision control |
+| **Mathematical Functions** | `abs`, `round`, `floor`, `ceil` | Mathematical functions with configurable precision |
+| **Statistical** | `sum`, `average`, `count`, `min`, `max` | Array aggregation operations |
+| **Date/Time** | `currentYear`, `yearDifference`, `date` | Dynamic date calculations and formatting |
+| **String** | `concat`, `template`, `join`, `uppercase`, `lowercase` | String manipulation and formatting |
+| **Conditional** | `conditional` | Logic-based value transformation |
+| **Array** | Array processing with enhanced path resolution | Support for `array.length` and complex iteration |
+| **Custom** | `custom` | User-defined transformation functions |
 
-```javascript
-responseMapping: {
-  type: "jsonPath",
-  mappings: {
-    "location.name": {
-      path: "nearest_area[0].areaName[0].value",
-      fallback: "Unknown Location"
-    },
-    "current.temperature": {
-      path: "current_condition[0].temp_C",
-      transform: { type: "parseInt", fallback: 0 }
-    },
-    "current.condition": {
-      path: "current_condition[0].weatherDesc[0].value",
-      fallback: "Unknown"
-    }
-  }
-}
-```
+### Mathematical Operations
 
-### Object Mapping
-
-Simple field-to-field mapping:
-
+#### Basic Arithmetic
 ```javascript
 responseMapping: {
   type: "object",
   mappings: {
-    "id": "id",
-    "name": "name",
-    "email": "email",
-    "full_address": {
-      path: "address",
+    "total_price": {
+      path: "base_price",
       transform: {
-        type: "template",
-        template: "{{street}}, {{city}} {{zipcode}}"
+        type: "add",
+        value: 10.50  // Add tax
+      }
+    },
+    "discount_price": {
+      path: "original_price", 
+      transform: {
+        type: "subtract",
+        value: "{{discount_amount}}"  // Dynamic subtraction
+      }
+    },
+    "bulk_price": {
+      path: "unit_price",
+      transform: {
+        type: "multiply",
+        value: "{{quantity}}"
+      }
+    },
+    "price_per_unit": {
+      path: "total_cost",
+      transform: {
+        type: "divide",
+        value: "{{item_count}}",
+        precision: 2
+      }
+    },
+    "tax_percentage": {
+      path: "tax_amount",
+      transform: {
+        type: "percentage",
+        total: "{{subtotal}}",
+        precision: 1
       }
     }
   }
 }
 ```
 
-### Array Processing with ItemMapping
-
-Handle arrays with filtering, sorting, and transformation:
-
+#### Mathematical Functions
 ```javascript
 responseMapping: {
-  type: "array",
-  source: "results",              // Array source path
-  filter: {                       // Optional filtering
-    field: "active",
-    operator: "equals",
-    value: true
-  },
-  sort: {                         // Optional sorting
-    field: "price",
-    order: "desc"
-  },
-  limit: 10,                      // Optional limit
-  itemMapping: {                  // Transform each item
-    type: "object",
-    mappings: {
-      "id": "id",
-      "title": "name",
-      "price_display": {
-        path: "price",
-        transform: {
-          type: "concat",
-          prefix: "$",
-          suffix: " USD"
-        }
-      },
-      "category": {
-        path: "category.name",
-        fallback: "Uncategorized"
-      },
-      "is_premium": {
-        path: "price",
-        transform: {
-          type: "conditional",
-          condition: "value > 100",
-          trueValue: true,
-          falseValue: false
-        }
+  type: "object", 
+  mappings: {
+    "absolute_change": {
+      path: "price_change",
+      transform: {
+        type: "abs"  // Always positive
+      }
+    },
+    "rounded_price": {
+      path: "calculated_price",
+      transform: {
+        type: "round",
+        precision: 2  // Round to 2 decimal places
+      }
+    },
+    "floor_price": {
+      path: "estimated_cost",
+      transform: {
+        type: "floor"  // Round down
+      }
+    },
+    "ceiling_estimate": {
+      path: "budget_estimate", 
+      transform: {
+        type: "ceil"  // Round up
       }
     }
   }
 }
 ```
 
-### Advanced Transform Operations
+### Statistical Array Operations
 
-The `transform` property supports multiple operations:
-
+#### Array Aggregations
 ```javascript
-// String transformations
-transform: {
-  type: "concat",
-  prefix: "Mr. ",
-  suffix: " Jr.",
-  fallback: "Unknown"
-}
-
-// Numeric transformations  
-transform: {
-  type: "parseInt",
-  fallback: 0,
-  min: 0,
-  max: 100
-}
-
-// Date transformations
-transform: {
-  type: "date",
-  format: "YYYY-MM-DD",
-  fallback: "1970-01-01"
-}
-
-// Conditional transformations
-transform: {
-  type: "conditional",
-  condition: "value > 1000",
-  trueValue: "High",
-  falseValue: "Normal"
-}
-
-// Custom transformations
-transform: {
-  type: "custom",
-  function: "customTransform",  // Must be in APPROVED_FUNCTIONS
-  args: { multiplier: 1.1, currency: "USD" }
-}
-
-// Template transformations
-transform: {
-  type: "template",
-  template: "Product: {{name}} - Price: ${{price}}"
-}
-
-// Array transformations
-transform: {
-  type: "join",
-  separator: ", ",
-  fallback: "No items"
+responseMapping: {
+  type: "object",
+  mappings: {
+    "total_revenue": {
+      path: "sales",
+      transform: {
+        type: "sum",
+        field: "amount"  // Sum of sales[].amount
+      }
+    },
+    "average_rating": {
+      path: "reviews",
+      transform: {
+        type: "average", 
+        field: "rating",
+        precision: 1
+      }
+    },
+    "product_count": {
+      path: "inventory",
+      transform: {
+        type: "count"  // Count array items
+      }
+    },
+    "highest_price": {
+      path: "products",
+      transform: {
+        type: "max",
+        field: "price"
+      }
+    },
+    "lowest_stock": {
+      path: "inventory",
+      transform: {
+        type: "min", 
+        field: "quantity"
+      }
+    }
+  }
 }
 ```
 
-### Conditional Mapping
+### Enhanced Date and Time Processing
 
-Different mappings based on response content:
+#### Dynamic Date Operations
+```javascript
+responseMapping: {
+  type: "object",
+  mappings: {
+    "current_year": {
+      transform: {
+        type: "currentYear"  // Always returns current year
+      }
+    },
+    "age_years": {
+      path: "birth_date",
+      transform: {
+        type: "yearDifference",
+        from: "birth_date",  // Can reference path or use current date
+        precision: 0  // Whole years only
+      }
+    },
+    "years_employed": {
+      path: "hire_date", 
+      transform: {
+        type: "yearDifference",
+        to: "{{current_date}}",  // Dynamic end date
+        precision: 1  // Include decimal years
+      }
+    },
+    "formatted_date": {
+      path: "created_at",
+      transform: {
+        type: "date",
+        format: "YYYY-MM-DD",
+        fallback: "No date"
+      }
+    }
+  }
+}
+```
+
+### Advanced Template System with Handlebars-Style Iteration
+
+#### Enhanced Template Processing
+```javascript
+responseMapping: {
+  type: "template",
+  template: `
+Company Overview:
+- Founded: {{founded_year}}
+- Current Year: {{#transform type="currentYear"}}{{/transform}}
+- Years in Business: {{#transform type="yearDifference" from="founded_year"}}{{/transform}}
+
+Financial Summary:
+{{#each financial_data}}
+  Quarter {{@index}}: ${{revenue}} ({{#if @last}}Latest{{else}}Historical{{/if}})
+{{/each}}
+
+Global Presence: {{locations.length}} locations worldwide
+{{#each locations}}
+  • {{name}} - {{country}}{{#unless @last}},{{/unless}}
+{{/each}}
+  `
+}
+```
+
+#### Complex Array Iteration with Context
+```javascript
+responseMapping: {
+  type: "template",
+  template: `
+Sales Performance Report:
+
+{{#each sales_data}}
+Region {{@index}} - {{region_name}}:
+- Revenue: ${{#transform type="add" value="0"}}{{revenue}}{{/transform}}
+- Growth: {{#transform type="percentage" total="../total_revenue" precision="1"}}{{revenue}}{{/transform}}%
+{{#if @last}}
+─────────────────
+Total Regions: {{@root.sales_data.length}}
+{{/if}}
+{{/each}}
+  `
+}
+```
+
+### Enhanced JSONPath with Array Length Support
+
+#### Complex Path Resolution
+```javascript
+responseMapping: {
+  type: "object",
+  mappings: {
+    "total_locations": {
+      path: "company.locations.length"  // Direct array length access
+    },
+    "has_multiple_offices": {
+      path: "company.locations.length",
+      transform: {
+        type: "conditional",
+        condition: "value > 1",
+        trueValue: "Multi-location company",
+        falseValue: "Single location"
+      }
+    },
+    "location_summary": {
+      path: "company.locations",
+      transform: {
+        type: "template", 
+        template: "{{length}} offices: {{#each this}}{{city}}{{#unless @last}}, {{/unless}}{{/each}}"
+      }
+    }
+  }
+}
+```
+
+### Real-World Example: E-commerce Order Processing
+
+```javascript
+const orderProcessingFlow = {
+  id: "process-ecommerce-order",
+  name: "E-commerce Order Processing",
+  steps: [
+    {
+      id: "calculate-order-totals",
+      type: "CALL-TOOL", 
+      tool: "OrderCalculator",
+      parameters: {
+        order_id: "{{order_id}}"
+      },
+      responseMapping: {
+        type: "object",
+        mappings: {
+          // Basic calculations
+          "subtotal": {
+            path: "line_items",
+            transform: {
+              type: "sum",
+              field: "total_price"
+            }
+          },
+          "tax_amount": {
+            path: "subtotal",
+            transform: {
+              type: "multiply",
+              value: 0.08,  // 8% tax
+              precision: 2
+            }
+          },
+          "shipping_cost": {
+            path: "weight_total",
+            transform: {
+              type: "conditional",
+              condition: "value > 50",
+              trueValue: 0,     // Free shipping over 50lbs
+              falseValue: 15.99
+            }
+          },
+          "grand_total": {
+            path: "subtotal", 
+            transform: {
+              type: "add",
+              value: "{{tax_amount}} + {{shipping_cost}}"
+            }
+          },
+          
+          // Customer insights
+          "customer_tier": {
+            path: "customer.total_orders",
+            transform: {
+              type: "conditional", 
+              condition: "value >= 10",
+              trueValue: "VIP",
+              falseValue: "Standard"
+            }
+          },
+          "loyalty_discount": {
+            path: "customer.total_orders",
+            transform: {
+              type: "conditional",
+              condition: "value >= 10",
+              trueValue: { type: "percentage", total: "{{subtotal}}", value: 5 },
+              falseValue: 0
+            }
+          },
+          
+          // Order summary template
+          "order_summary": {
+            transform: {
+              type: "template",
+              template: `
+Order #{{order_id}} Summary:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Items ({{line_items.length}}):
+{{#each line_items}}
+  {{quantity}}x {{product_name}} - ${{total_price}}
+{{/each}}
+
+Financial Breakdown:
+  Subtotal: ${{subtotal}}
+  Tax (8%): ${{tax_amount}}
+  Shipping: ${{#if shipping_cost}}${{shipping_cost}}{{else}}FREE{{/if}}
+  {{#if loyalty_discount}}VIP Discount: -${{loyalty_discount}}{{/if}}
+  ─────────────
+  Total: ${{grand_total}}
+
+Customer: {{customer_tier}} ({{customer.total_orders}} orders)
+Estimated Delivery: {{#transform type="add" value="3"}}{{current_date}}{{/transform}} days
+              `
+            }
+          }
+        }
+      }
+    }
+  ]
+};
+```
+
+### Advanced Conditional Mapping
 
 ```javascript
 responseMapping: {
   type: "conditional",
   conditions: [
     {
-      if: { field: "type", operator: "equals", value: "weather" },
+      if: { field: "customer.age", operator: "gte", value: 65 },
       then: {
         type: "object",
         mappings: {
-          "temperature": "current.temp_c",
-          "condition": "current.condition",
-          "location": "location.name"
+          "discount_rate": {
+            value: 15,
+            transform: { type: "percentage", total: "{{subtotal}}" }
+          },
+          "message": {
+            transform: {
+              type: "template",
+              template: "Senior discount applied: {{discount_rate}}% off!"
+            }
+          }
         }
       }
     },
     {
-      if: { field: "type", operator: "equals", value: "user" },
+      if: { field: "order_total", operator: "gt", value: 100 },
       then: {
-        type: "object", 
+        type: "object",
         mappings: {
-          "id": "user_id",
-          "name": "full_name",
-          "email": "email_address"
+          "shipping_cost": { value: 0 },
+          "message": { value: "Free shipping on orders over $100!" }
         }
       }
     }
   ],
   else: {
-    type: "template",
-    template: "Raw response: {{JSON.stringify(response)}}"
+    type: "object",
+    mappings: {
+      "shipping_cost": {
+        path: "weight",
+        transform: {
+          type: "multiply",
+          value: 2.50,
+          precision: 2
+        }
+      }
+    }
   }
 }
 ```
 
-### Template Mapping
+## Real-World Implementation Examples
 
-Generate formatted strings:
+This section showcases comprehensive real-world scenarios demonstrating the enhanced transformation capabilities across different industry verticals.
+
+### 1. E-commerce Platform: Dynamic Pricing & Inventory Management
 
 ```javascript
-responseMapping: {
-  type: "template",
-  template: "Weather in {{location.name}}: {{current.condition}}, {{current.temp_c}}°C",
+const ecommercePricingFlow = {
+  id: "dynamic-pricing-engine",
+  name: "E-commerce Dynamic Pricing Engine",
+  description: "Comprehensive pricing system with inventory tracking, customer segmentation, and promotional calculations",
   
-  // Multi-language templates
-  template_es: "Clima en {{location.name}}: {{current.condition}}, {{current.temp_c}}°C",
-  template_fr: "Météo à {{location.name}}: {{current.condition}}, {{current.temp_c}}°C"
-}
+  steps: [
+    {
+      id: "fetch-product-data",
+      type: "CALL-TOOL",
+      tool: "ProductCatalogAPI",
+      parameters: {
+        product_ids: "{{requested_products}}",
+        include_inventory: true,
+        include_pricing_history: true
+      },
+      responseMapping: {
+        type: "object",
+        mappings: {
+          // Basic product information
+          "product_count": {
+            path: "products.length"
+          },
+          "total_inventory_value": {
+            path: "products",
+            transform: {
+              type: "sum",
+              field: "inventory_value"
+            }
+          },
+          "average_base_price": {
+            path: "products",
+            transform: {
+              type: "average",
+              field: "base_price",
+              precision: 2
+            }
+          },
+          
+          // Dynamic pricing calculations
+          "pricing_summary": {
+            transform: {
+              type: "template",
+              template: `
+🛒 E-commerce Pricing Analysis
+═══════════════════════════════════════
+
+📊 Portfolio Overview:
+• Total Products: {{product_count}}
+• Average Base Price: ${{average_base_price}}
+• Total Inventory Value: ${{#transform type="round" precision="0"}}{{total_inventory_value}}{{/transform}}
+
+💰 Dynamic Pricing Strategy:
+{{#each products}}
+┌─ {{name}} (SKU: {{sku}})
+│  Base Price: ${{base_price}}
+│  Stock Level: {{inventory_quantity}} units
+│  Demand Score: {{#transform type="round" precision="1"}}{{demand_score}}{{/transform}}/10
+│  
+│  📈 Price Adjustments:
+{{#if (gt inventory_quantity 100)}}
+│  • Overstock Discount: -{{#transform type="percentage" total="../base_price" precision="0"}}5{{/transform}}%
+{{/if}}
+{{#if (lt inventory_quantity 10)}}
+│  • Low Stock Premium: +{{#transform type="percentage" total="../base_price" precision="0"}}10{{/transform}}%
+{{/if}}
+│  • Seasonal Adjustment: {{#transform type="conditional" condition="demand_score > 7" trueValue="+5%" falseValue="0%"}}{{/transform}}
+│  
+│  💵 Final Price: ${{#transform type="add" value="{{seasonal_adjustment}}"}}{{adjusted_price}}{{/transform}}
+│  📊 Margin: {{#transform type="percentage" total="../final_price" precision="1"}}{{profit_margin}}{{/transform}}%
+│  
+{{#unless @last}}├─────────────────────────────────────────
+{{else}}└─────────────────────────────────────────
+{{/unless}}
+{{/each}}
+
+🎯 Optimization Recommendations:
+• High-performing products: {{#transform type="count" condition="demand_score > 8"}}{{products}}{{/transform}}
+• Clearance candidates: {{#transform type="count" condition="inventory_quantity > 50 AND demand_score < 5"}}{{products}}{{/transform}}
+• Restock alerts: {{#transform type="count" condition="inventory_quantity < 20"}}{{products}}{{/transform}}
+              `
+            }
+          }
+        }
+      }
+    },
+    
+    {
+      id: "customer-segmentation",
+      type: "CALL-TOOL",
+      tool: "CustomerAnalyticsAPI",
+      parameters: {
+        customer_id: "{{customer_id}}",
+        include_purchase_history: true,
+        loyalty_program: true
+      },
+      responseMapping: {
+        type: "object",
+        mappings: {
+          "customer_lifetime_value": {
+            path: "purchase_history",
+            transform: {
+              type: "sum",
+              field: "order_total"
+            }
+          },
+          "average_order_value": {
+            path: "purchase_history",
+            transform: {
+              type: "average",
+              field: "order_total",
+              precision: 2
+            }
+          },
+          "years_as_customer": {
+            path: "registration_date",
+            transform: {
+              type: "yearDifference",
+              precision: 1
+            }
+          },
+          "loyalty_tier": {
+            path: "customer_lifetime_value",
+            transform: {
+              type: "conditional",
+              condition: "value >= 5000",
+              trueValue: "Platinum",
+              falseValue: {
+                type: "conditional", 
+                condition: "value >= 1000",
+                trueValue: "Gold",
+                falseValue: "Silver"
+              }
+            }
+          },
+          "personalized_discount": {
+            path: "loyalty_tier",
+            transform: {
+              type: "conditional",
+              condition: "value === 'Platinum'",
+              trueValue: 15,
+              falseValue: {
+                type: "conditional",
+                condition: "value === 'Gold'", 
+                trueValue: 10,
+                falseValue: 5
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+};
 ```
+
+### 2. Financial Services: Investment Portfolio Analysis
+
+```javascript
+const portfolioAnalysisFlow = {
+  id: "investment-portfolio-analyzer",
+  name: "Investment Portfolio Analysis Engine",
+  description: "Comprehensive portfolio analysis with risk assessment, performance metrics, and rebalancing recommendations",
+  
+  steps: [
+    {
+      id: "portfolio-performance",
+      type: "CALL-TOOL",
+      tool: "PortfolioAPI",
+      parameters: {
+        portfolio_id: "{{portfolio_id}}",
+        time_period: "1Y",
+        include_dividends: true
+      },
+      responseMapping: {
+        type: "object",
+        mappings: {
+          "portfolio_analysis": {
+            transform: {
+              type: "template",
+              template: `
+📈 Investment Portfolio Analysis Report
+════════════════════════════════════════════════
+
+👤 Portfolio Overview:
+• Portfolio ID: {{portfolio_id}}
+• Total Value: ${{#transform type="round" precision="0"}}{{total_value}}{{/transform}}
+• Analysis Date: {{#transform type="currentYear"}}{{/transform}}-{{current_month}}-{{current_day}}
+• Performance Period: {{performance_period}}
+
+💼 Asset Allocation:
+{{#each holdings}}
+┌─ {{asset_name}} ({{symbol}})
+│  Current Value: ${{#transform type="round" precision="0"}}{{current_value}}{{/transform}}
+│  Portfolio Weight: {{#transform type="percentage" total="../total_value" precision="1"}}{{current_value}}{{/transform}}%
+│  Shares Held: {{#transform type="round" precision="0"}}{{shares}}{{/transform}}
+│  
+│  📊 Performance Metrics:
+│  • 1Y Return: {{#transform type="percentage" total="../purchase_price" precision="1"}}{{annual_return}}{{/transform}}%
+│  • Unrealized P&L: {{#transform type="conditional" condition="unrealized_pnl > 0" trueValue="+$" falseValue="-$"}}{{/transform}}{{#transform type="abs"}}{{unrealized_pnl}}{{/transform}}
+│  • Dividend Yield: {{#transform type="percentage" total="../current_value" precision="2"}}{{dividend_income}}{{/transform}}%
+│  
+│  🎯 Risk Assessment:
+│  • Beta: {{#transform type="round" precision="2"}}{{beta}}{{/transform}}
+│  • Volatility: {{#transform type="percentage" precision="1"}}{{volatility}}{{/transform}}%
+│  • Risk Score: {{#transform type="conditional" condition="risk_score < 3" trueValue="🟢 Low" falseValue="🟡 Medium"}}{{/transform}}{{#transform type="conditional" condition="risk_score > 7" trueValue="🔴 High" falseValue=""}}{{/transform}}
+│  
+{{#unless @last}}├─────────────────────────────────────────
+{{else}}└─────────────────────────────────────────
+{{/unless}}
+{{/each}}
+
+📊 Portfolio Statistics:
+• Total Return (1Y): {{#transform type="percentage" total="../initial_investment" precision="1"}}{{total_return}}{{/transform}}%
+• Dividend Income: ${{#transform type="sum" field="dividend_income"}}{{holdings}}{{/transform}}
+• Portfolio Beta: {{#transform type="average" field="beta" precision="2"}}{{holdings}}{{/transform}}
+• Sharpe Ratio: {{#transform type="round" precision="3"}}{{sharpe_ratio}}{{/transform}}
+
+⚖️ Asset Allocation Analysis:
+• Equity Exposure: {{#transform type="percentage" total="../total_value" precision="0"}}{{equity_value}}{{/transform}}%
+• Fixed Income: {{#transform type="percentage" total="../total_value" precision="0"}}{{bond_value}}{{/transform}}%
+• Alternative Investments: {{#transform type="percentage" total="../total_value" precision="0"}}{{alternative_value}}{{/transform}}%
+• Cash & Equivalents: {{#transform type="percentage" total="../total_value" precision="0"}}{{cash_value}}{{/transform}}%
+
+🔄 Rebalancing Recommendations:
+{{#each rebalancing_suggestions}}
+• {{action}}: {{asset_symbol}} - {{#transform type="conditional" condition="action === 'BUY'" trueValue="Add" falseValue="Reduce"}}{{/transform}} ${{#transform type="round" precision="0"}}{{amount}}{{/transform}}
+  Target Weight: {{target_percentage}}% | Current: {{current_percentage}}%
+{{/each}}
+
+⚠️  Risk Alerts:
+{{#each risk_alerts}}
+• {{alert_type}}: {{description}}
+  Impact: {{#transform type="conditional" condition="severity === 'HIGH'" trueValue="🔴 High" falseValue="🟡 Medium"}}{{/transform}}
+{{/each}}
+              `
+            }
+          }
+        }
+      }
+    }
+  ]
+};
+```
+
+### 3. Human Resources: Employee Performance & Analytics
+
+```javascript
+const hrAnalyticsFlow = {
+  id: "employee-performance-analytics",
+  name: "HR Performance Analytics Engine",
+  description: "Comprehensive employee analytics with performance tracking, compensation analysis, and development recommendations",
+  
+  steps: [
+    {
+      id: "employee-metrics",
+      type: "CALL-TOOL",
+      tool: "HRManagementAPI",
+      parameters: {
+        department: "{{department}}",
+        include_performance: true,
+        include_compensation: true,
+        time_period: "annual"
+      },
+      responseMapping: {
+        type: "object",
+        mappings: {
+          "department_analytics": {
+            transform: {
+              type: "template",
+              template: `
+👥 HR Analytics Dashboard - {{department}} Department
+═══════════════════════════════════════════════════════
+
+📊 Department Overview:
+• Total Employees: {{employees.length}}
+• Current Year: {{#transform type="currentYear"}}{{/transform}}
+• Analysis Period: {{analysis_period}}
+• Department Budget: ${{#transform type="round" precision="0"}}{{total_budget}}{{/transform}}
+
+👨‍💼 Employee Demographics:
+{{#each employees}}
+┌─ {{first_name}} {{last_name}} (ID: {{employee_id}})
+│  📋 Profile:
+│  • Position: {{job_title}}
+│  • Level: {{job_level}}
+│  • Tenure: {{#transform type="yearDifference" from="../hire_date" precision="1"}}{{/transform}} years
+│  • Age: {{#transform type="yearDifference" from="../birth_date" precision="0"}}{{/transform}} years
+│  
+│  💰 Compensation:
+│  • Base Salary: ${{#transform type="round" precision="0"}}{{base_salary}}{{/transform}}
+│  • Performance Bonus: ${{#transform type="round" precision="0"}}{{performance_bonus}}{{/transform}}
+│  • Total Compensation: ${{#transform type="add" value="{{performance_bonus}}"}}{{base_salary}}{{/transform}}
+│  • Market Percentile: {{#transform type="round" precision="0"}}{{market_percentile}}{{/transform}}%
+│  
+│  📈 Performance Metrics:
+│  • Overall Rating: {{performance_rating}}/5.0
+│  • Goal Achievement: {{#transform type="percentage" precision="0"}}{{goal_completion_rate}}{{/transform}}%
+│  • Peer Ranking: {{peer_ranking}}/{{../employees.length}}
+│  • YTD Performance: {{#transform type="conditional" condition="performance_rating >= 4.5" trueValue="🌟 Exceeds Expectations" falseValue=""}}{{/transform}}{{#transform type="conditional" condition="performance_rating >= 3.5 AND performance_rating < 4.5" trueValue="✅ Meets Expectations" falseValue=""}}{{/transform}}{{#transform type="conditional" condition="performance_rating < 3.5" trueValue="⚠️ Needs Improvement" falseValue=""}}{{/transform}}
+│  
+│  🎯 Development Areas:
+{{#each skill_assessments}}
+│  • {{skill_name}}: {{current_level}}/5 {{#transform type="conditional" condition="target_level > current_level" trueValue="→ Target: " falseValue=""}}{{/transform}}{{#if (gt target_level current_level)}}{{target_level}}/5{{/if}}
+{{/each}}
+│  
+{{#unless @last}}├─────────────────────────────────────────
+{{else}}└─────────────────────────────────────────
+{{/unless}}
+{{/each}}
+
+📊 Department Statistics:
+• Average Tenure: {{#transform type="average" field="years_with_company" precision="1"}}{{employees}}{{/transform}} years
+• Average Performance: {{#transform type="average" field="performance_rating" precision="2"}}{{employees}}{{/transform}}/5.0
+• Total Compensation: ${{#transform type="sum" field="total_compensation"}}{{employees}}{{/transform}}
+• Average Salary: ${{#transform type="average" field="total_compensation" precision="0"}}{{employees}}{{/transform}}
+• Promotion Rate: {{#transform type="percentage" precision="0"}}{{promotion_rate}}{{/transform}}%
+
+🏆 Top Performers (Rating ≥ 4.5):
+{{#each top_performers}}
+• {{name}}: {{performance_rating}}/5.0 - {{achievement_summary}}
+{{/each}}
+
+⚠️  Performance Alerts:
+{{#each performance_alerts}}
+• {{employee_name}}: {{alert_type}} - {{description}}
+  Action Required: {{recommended_action}}
+{{/each}}
+
+💡 Department Recommendations:
+• High Performers for Promotion: {{#transform type="count" condition="performance_rating >= 4.5 AND years_in_role >= 2"}}{{employees}}{{/transform}}
+• Training Investment Needed: {{#transform type="count" condition="performance_rating < 3.5"}}{{employees}}{{/transform}}
+• Retention Risk (High Performers): {{#transform type="count" condition="performance_rating >= 4.0 AND flight_risk_score > 7"}}{{employees}}{{/transform}}
+• Salary Adjustment Candidates: {{#transform type="count" condition="market_percentile < 50 AND performance_rating >= 4.0"}}{{employees}}{{/transform}}
+              `
+            }
+          }
+        }
+      }
+    }
+  ]
+};
+```
+
+### 4. Healthcare Analytics: Patient Care Optimization
+
+```javascript
+const healthcareAnalyticsFlow = {
+  id: "patient-care-analytics",
+  name: "Healthcare Analytics & Patient Care Optimization",
+  description: "Comprehensive patient analytics with care quality metrics, resource utilization, and outcome predictions",
+  
+  steps: [
+    {
+      id: "patient-outcomes",
+      type: "CALL-TOOL",
+      tool: "HealthcareAPI",
+      parameters: {
+        facility_id: "{{facility_id}}",
+        time_period: "quarterly",
+        include_patient_outcomes: true,
+        include_resource_utilization: true
+      },
+      responseMapping: {
+        type: "object",
+        mappings: {
+          "healthcare_dashboard": {
+            transform: {
+              type: "template",
+              template: `
+🏥 Healthcare Analytics Dashboard
+════════════════════════════════════════════
+
+🏢 Facility Overview:
+• Facility: {{facility_name}}
+• Reporting Period: Q{{current_quarter}} {{#transform type="currentYear"}}{{/transform}}
+• Total Patients: {{patients.length}}
+• Average Age: {{#transform type="average" field="age" precision="1"}}{{patients}}{{/transform}} years
+
+👨‍⚕️ Patient Demographics & Outcomes:
+{{#each patients}}
+┌─ Patient ID: {{patient_id}}
+│  📋 Profile:
+│  • Age: {{#transform type="yearDifference" from="../birth_date" precision="0"}}{{/transform}} years
+│  • Gender: {{gender}}
+│  • Primary Condition: {{primary_diagnosis}}
+│  • Admission Date: {{admission_date}}
+│  • Length of Stay: {{#transform type="subtract" value="{{admission_date}}"}}{{discharge_date}}{{/transform}} days
+│  
+│  🎯 Care Metrics:
+│  • Risk Score: {{#transform type="round" precision="1"}}{{risk_score}}{{/transform}}/10
+│  • Severity Level: {{#transform type="conditional" condition="severity_score < 3" trueValue="🟢 Low" falseValue=""}}{{/transform}}{{#transform type="conditional" condition="severity_score >= 3 AND severity_score < 7" trueValue="🟡 Moderate" falseValue=""}}{{/transform}}{{#transform type="conditional" condition="severity_score >= 7" trueValue="🔴 High" falseValue=""}}{{/transform}}
+│  • Care Quality Score: {{care_quality_score}}/100
+│  • Patient Satisfaction: {{patient_satisfaction_score}}/10
+│  
+│  💊 Treatment Effectiveness:
+│  • Medications: {{medications.length}} active prescriptions
+│  • Treatment Response: {{#transform type="percentage" precision="0"}}{{treatment_effectiveness}}{{/transform}}%
+│  • Complication Rate: {{#transform type="percentage" precision="1"}}{{complication_rate}}{{/transform}}%
+│  • Recovery Progress: {{#transform type="conditional" condition="recovery_percentage >= 80" trueValue="🟢 Excellent" falseValue=""}}{{/transform}}{{#transform type="conditional" condition="recovery_percentage >= 60 AND recovery_percentage < 80" trueValue="🟡 Good" falseValue=""}}{{/transform}}{{#transform type="conditional" condition="recovery_percentage < 60" trueValue="🔴 Needs Attention" falseValue=""}}{{/transform}}
+│  
+│  💰 Resource Utilization:
+│  • Total Cost: ${{#transform type="round" precision="0"}}{{total_treatment_cost}}{{/transform}}
+│  • Cost per Day: ${{#transform type="divide" value="{{length_of_stay}}" precision="0"}}{{total_treatment_cost}}{{/transform}}
+│  • Insurance Coverage: {{#transform type="percentage" precision="0"}}{{insurance_coverage_rate}}{{/transform}}%
+│  
+{{#unless @last}}├─────────────────────────────────────────
+{{else}}└─────────────────────────────────────────
+{{/unless}}
+{{/each}}
+
+📊 Facility Performance Metrics:
+• Average Length of Stay: {{#transform type="average" field="length_of_stay" precision="1"}}{{patients}}{{/transform}} days
+• Overall Care Quality: {{#transform type="average" field="care_quality_score" precision="1"}}{{patients}}{{/transform}}/100
+• Patient Satisfaction: {{#transform type="average" field="patient_satisfaction_score" precision="2"}}{{patients}}{{/transform}}/10
+• Complication Rate: {{#transform type="average" field="complication_rate" precision="2"}}{{patients}}{{/transform}}%
+• Average Treatment Cost: ${{#transform type="average" field="total_treatment_cost" precision="0"}}{{patients}}{{/transform}}
+• Bed Utilization: {{#transform type="percentage" precision="0"}}{{bed_utilization_rate}}{{/transform}}%
+
+🎯 Quality Indicators:
+• Readmission Rate (30-day): {{#transform type="percentage" precision="1"}}{{readmission_rate_30day}}{{/transform}}%
+• Mortality Rate: {{#transform type="percentage" precision="2"}}{{mortality_rate}}{{/transform}}%
+• Infection Rate: {{#transform type="percentage" precision="2"}}{{hospital_acquired_infection_rate}}{{/transform}}%
+• Medication Error Rate: {{#transform type="percentage" precision="3"}}{{medication_error_rate}}{{/transform}}%
+
+👥 Staffing Efficiency:
+• Nurse-to-Patient Ratio: 1:{{#transform type="divide" value="{{nursing_staff_count}}" precision="1"}}{{total_patients}}{{/transform}}
+• Physician Utilization: {{#transform type="percentage" precision="0"}}{{physician_utilization_rate}}{{/transform}}%
+• Staff Satisfaction: {{#transform type="average" field="satisfaction_score" precision="1"}}{{staff_metrics}}{{/transform}}/10
+
+⚠️  Clinical Alerts:
+{{#each clinical_alerts}}
+• {{alert_type}}: {{patient_count}} patients affected
+  Priority: {{#transform type="conditional" condition="priority === 'HIGH'" trueValue="🔴 High" falseValue="🟡 Medium"}}{{/transform}}
+  Recommended Action: {{recommended_action}}
+{{/each}}
+
+💡 Optimization Recommendations:
+• High-Risk Patients Requiring Attention: {{#transform type="count" condition="risk_score >= 7"}}{{patients}}{{/transform}}
+• Discharge Planning Candidates: {{#transform type="count" condition="recovery_percentage >= 80 AND length_of_stay >= 5"}}{{patients}}{{/transform}}
+• Cost Optimization Opportunities: {{#transform type="count" condition="total_treatment_cost > average_cost * 1.5"}}{{patients}}{{/transform}}
+• Quality Improvement Cases: {{#transform type="count" condition="care_quality_score < 70"}}{{patients}}{{/transform}}
+              `
+            }
+          }
+        }
+      }
+    }
+  ]
+};
+```
+
+### 5. Supply Chain Management: Logistics Optimization
+
+```javascript
+const supplyChainFlow = {
+  id: "supply-chain-optimization",
+  name: "Supply Chain Analytics & Optimization Engine",
+  description: "Comprehensive supply chain analysis with inventory management, logistics optimization, and predictive analytics",
+  
+  steps: [
+    {
+      id: "supply-chain-analysis",
+      type: "CALL-TOOL",
+      tool: "SupplyChainAPI",
+      parameters: {
+        region: "{{operational_region}}",
+        include_inventory: true,
+        include_logistics: true,
+        include_suppliers: true
+      },
+      responseMapping: {
+        type: "object",
+        mappings: {
+          "supply_chain_dashboard": {
+            transform: {
+              type: "template",
+              template: `
+🚚 Supply Chain Analytics Dashboard
+═══════════════════════════════════════════
+
+🌍 Regional Overview:
+• Region: {{operational_region}}
+• Analysis Date: {{#transform type="currentYear"}}{{/transform}}-{{current_month}}-{{current_day}}
+• Active Warehouses: {{warehouses.length}}
+• Supplier Network: {{suppliers.length}} suppliers
+• Total SKUs: {{#transform type="sum" field="sku_count"}}{{warehouses}}{{/transform}}
+
+📦 Inventory Management:
+{{#each warehouses}}
+┌─ {{warehouse_name}} ({{location}})
+│  📊 Inventory Metrics:
+│  • Total SKUs: {{sku_count}}
+│  • Inventory Value: ${{#transform type="round" precision="0"}}{{total_inventory_value}}{{/transform}}
+│  • Capacity Utilization: {{#transform type="percentage" precision="0"}}{{capacity_utilization}}{{/transform}}%
+│  • Turnover Rate: {{#transform type="round" precision="1"}}{{inventory_turnover_rate}}{{/transform}}x annually
+│  
+│  📈 Performance Indicators:
+│  • Fill Rate: {{#transform type="percentage" precision="1"}}{{order_fill_rate}}{{/transform}}%
+│  • Stockout Incidents: {{stockout_count}}
+│  • Overstock Value: ${{#transform type="round" precision="0"}}{{overstock_value}}{{/transform}}
+│  • Days of Inventory: {{#transform type="round" precision="0"}}{{days_of_inventory}}{{/transform}} days
+│  
+│  🎯 Top Moving Products:
+{{#each top_products}}
+│  • {{product_name}}: {{monthly_velocity}} units/month
+│    Stock Level: {{current_stock}} | Reorder Point: {{reorder_point}}
+│    Status: {{#transform type="conditional" condition="current_stock < reorder_point" trueValue="🔴 Reorder Needed" falseValue="🟢 Adequate"}}{{/transform}}
+{{/each}}
+│  
+{{#unless @last}}├─────────────────────────────────────────
+{{else}}└─────────────────────────────────────────
+{{/unless}}
+{{/each}}
+
+🚛 Logistics Performance:
+• Average Delivery Time: {{#transform type="average" field="delivery_time_days" precision="1"}}{{shipments}}{{/transform}} days
+• On-Time Delivery Rate: {{#transform type="percentage" precision="1"}}{{on_time_delivery_rate}}{{/transform}}%
+• Transportation Cost: ${{#transform type="sum" field="transportation_cost"}}{{shipments}}{{/transform}}
+• Cost per Shipment: ${{#transform type="average" field="transportation_cost" precision="0"}}{{shipments}}{{/transform}}
+• Damage Rate: {{#transform type="percentage" precision="2"}}{{damage_rate}}{{/transform}}%
+
+🏭 Supplier Performance:
+{{#each suppliers}}
+┌─ {{supplier_name}} ({{supplier_id}})
+│  📋 Supplier Metrics:
+│  • Category: {{product_category}}
+│  • Relationship Duration: {{#transform type="yearDifference" from="../partnership_start_date" precision="1"}}{{/transform}} years
+│  • Monthly Volume: ${{#transform type="round" precision="0"}}{{monthly_purchase_volume}}{{/transform}}
+│  
+│  📊 Performance Scores:
+│  • Quality Rating: {{quality_score}}/10
+│  • Delivery Performance: {{#transform type="percentage" precision="0"}}{{delivery_performance}}{{/transform}}%
+│  • Cost Competitiveness: {{cost_rating}}/10
+│  • Risk Score: {{#transform type="conditional" condition="risk_score < 3" trueValue="🟢 Low Risk" falseValue=""}}{{/transform}}{{#transform type="conditional" condition="risk_score >= 3 AND risk_score < 7" trueValue="🟡 Medium Risk" falseValue=""}}{{/transform}}{{#transform type="conditional" condition="risk_score >= 7" trueValue="🔴 High Risk" falseValue=""}}{{/transform}}
+│  
+│  💰 Financial Impact:
+│  • YTD Spend: ${{#transform type="round" precision="0"}}{{ytd_spend}}{{/transform}}
+│  • Cost Savings: ${{#transform type="round" precision="0"}}{{cost_savings_achieved}}{{/transform}}
+│  • Payment Terms: {{payment_terms}} days
+│  
+{{#unless @last}}├─────────────────────────────────────────
+{{else}}└─────────────────────────────────────────
+{{/unless}}
+{{/each}}
+
+📊 Key Performance Indicators:
+• Network Inventory Value: ${{#transform type="sum" field="total_inventory_value"}}{{warehouses}}{{/transform}}
+• Average Days of Inventory: {{#transform type="average" field="days_of_inventory" precision="0"}}{{warehouses}}{{/transform}} days
+• Perfect Order Rate: {{#transform type="percentage" precision="1"}}{{perfect_order_rate}}{{/transform}}%
+• Cash-to-Cash Cycle: {{#transform type="round" precision="0"}}{{cash_to_cash_cycle_days}}{{/transform}} days
+• Supply Chain ROI: {{#transform type="percentage" precision="1"}}{{supply_chain_roi}}{{/transform}}%
+
+🎯 Optimization Opportunities:
+• Reorder Alerts: {{#transform type="count" condition="current_stock < reorder_point"}}{{all_products}}{{/transform}} products
+• Overstock Items: {{#transform type="count" condition="days_of_inventory > 90"}}{{all_products}}{{/transform}} SKUs
+• Supplier Diversification Needed: {{#transform type="count" condition="single_source_risk_score > 7"}}{{product_categories}}{{/transform}} categories
+• Cost Reduction Potential: ${{#transform type="round" precision="0"}}{{cost_reduction_opportunity}}{{/transform}}
+
+⚠️  Supply Chain Alerts:
+{{#each supply_chain_alerts}}
+• {{alert_type}}: {{description}}
+  Impact: {{#transform type="conditional" condition="severity === 'HIGH'" trueValue="🔴 Critical" falseValue="🟡 Monitor"}}{{/transform}}
+  Recommended Action: {{recommended_action}}
+  Timeline: {{resolution_timeline}}
+{{/each}}
+
+🔮 Predictive Insights:
+• Demand Forecast Accuracy: {{#transform type="percentage" precision="0"}}{{forecast_accuracy}}{{/transform}}%
+• Predicted Stockouts (Next 30 days): {{predicted_stockouts_30day}}
+• Seasonal Demand Patterns: {{seasonal_demand_trend}}
+• Supplier Risk Forecast: {{#transform type="count" condition="predicted_risk_score > 6"}}{{suppliers}}{{/transform}} suppliers at risk
+              `
+            }
+          }
+        }
+      }
+    }
+  ]
+};
+```
+
+These comprehensive examples demonstrate the power of the JavaScript Flow Engine's enhanced transformation capabilities across different industry scenarios. Each example showcases:
+
+- **Mathematical Operations**: Complex calculations for pricing, performance metrics, and financial analysis
+- **Statistical Aggregations**: Sum, average, count operations for data analysis  
+- **Advanced Template Processing**: Handlebars-style iteration with context variables
+- **Conditional Logic**: Dynamic content based on business rules and thresholds
+- **Date/Time Processing**: Age calculations, tenure analysis, and temporal metrics
+- **Enhanced Path Resolution**: Array length access and complex object navigation
 
 ## Error Handling
 
@@ -1796,7 +2595,7 @@ This completes the TOOL-CALL support chapter. The system provides enterprise-gra
 
 ## Overview
 
-The Workflow Engine features a **unified expression evaluation system** that handles variable interpolation, mathematical operations, logical expressions, and conditional logic with consistent syntax across all contexts. This system powers everything from simple variable substitution to complex business rule evaluation while maintaining appropriate security controls.
+The JavaScript Flow Engine features a **unified expression evaluation system** that handles variable interpolation, mathematical operations, logical expressions, and conditional logic with consistent syntax across all contexts. This system powers everything from simple variable substitution to complex business rule evaluation while maintaining appropriate security controls.
 
 ## Core Concepts
 
@@ -2368,7 +3167,7 @@ Combine multiple safe methods for complex processing:
 
 ## Overview
 
-Workflows are the core building blocks of the Workflow Engine. They define structured, conversational sequences that guide users through specific tasks or processes. This chapter explains what workflows are, how they're structured, and covers all supported step types that enable sophisticated user interactions.
+Workflows are the core building blocks of the JavaScript Flow Engine. They define structured, conversational sequences that guide users through specific tasks or processes. This chapter explains what workflows are, how they're structured, and covers all supported step types that enable sophisticated user interactions.
 
 ## Understanding Workflows
 
@@ -2763,7 +3562,7 @@ Variables operate at multiple levels:
 
 ## Multi-language Support and Internationalization
 
-The Workflow Engine provides comprehensive internationalization (i18n) support through language-specific properties.
+The JavaScript Flow Engine provides comprehensive internationalization (i18n) support through language-specific properties.
 
 ### Language-Specific Properties
 
@@ -3092,7 +3891,7 @@ This chapter provides the foundation for understanding workflows and step types.
 
 ## Overview
 
-The Workflow Engine provides sophisticated conditional execution capabilities through two primary step types: **SWITCH** and **CASE**. These steps enable complex decision trees, dynamic flow routing, and intelligent branching based on variable values and conditional logic.
+The JavaScript Flow Engine provides sophisticated conditional execution capabilities through two primary step types: **SWITCH** and **CASE**. These steps enable complex decision trees, dynamic flow routing, and intelligent branching based on variable values and conditional logic.
 
 ### Key Concepts
 
@@ -3935,55 +4734,7 @@ Consider testing these scenarios:
 This chapter provides comprehensive coverage of conditional execution in the Workflow Engine. Chapter 5 will explore response mapping, data transformation, and advanced tool integration patterns.
 
 
----
-
-# Chapter 5: Rate Limiting and Performance Management
-
-## Overview
-
-The Workflow Engine includes sophisticated rate limiting capabilities to prevent abuse, manage system resources, and ensure fair usage across users and tools. Based on extensive testing, the engine demonstrates robust rate limiting with configurable limits and intelligent retry mechanisms.
-
-## Rate Limiting Architecture
-
-### Tool-Level Rate Limiting
-
-Each tool can specify its own rate limits to prevent API abuse and manage external service quotas:
-
-```javascript
-{
-  id: "GeneratePaymentLink",
-  name: "Generate Payment Link", 
-  description: "Creates secure payment links for transactions",
-  
-  security: {
-    rateLimit: {
-      requests: 5,          // Maximum requests
-      window: 60000,        // Time window in milliseconds (60 seconds)
-      scope: "per-user"     // "per-user", "global", "per-session"
-    }
-  }
-}
-```
-
-### Rate Limiting Behavior
-
-When rate limits are exceeded, the engine automatically:
-
-1. **Blocks the request** and returns a rate limiting error
-2. **Triggers onFail handlers** if defined in the step
-3. **Logs the violation** for monitoring and debugging
-4. **Provides clear error messages** to help users understand the limitation
-
-### Example from Test Results
-
-```
-warn: Rate limiting error: Rate limit exceeded for Generate Payment Link. Max 5 requests per 60 seconds.
-warn: Error executing tool GeneratePaymentLink: Rate limit check failed for tool GeneratePaymentLink: Rate limit exceeded for Generate Payment Link. Max 5 requests per 60 seconds.
-```
-
----
-
-# Chapter 6: Flow Interruption and Resumption
+# Chapter 5: Flow Interruption and Resumption
 
 ## Overview
 
@@ -4021,7 +4772,7 @@ The engine automatically detects when user input represents a new intent while a
 
 ---
 
-# Chapter 7: Testing and Debugging Workflows
+# Chapter 6: Testing and Debugging Workflows
 
 ## Overview
 
