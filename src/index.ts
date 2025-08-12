@@ -4449,9 +4449,9 @@ async function callHttpTool(tool: any, args: any, userId: string = 'anonymous', 
          }
       }
    } catch (error: any) {
-      logger.warn(`Error calling HTTP tool ${tool.name}: ${error.message}`);
+      logger.info(`Error calling HTTP tool ${tool.name}: ${error.message}`);
       logger.info(`Stack trace: ${error.stack}`);
-      throw new Error(`Failed to call HTTP tool ${tool.name}: ${error.message}`);
+      throw error; // Re-throw to propagate error
    }
 }
 
