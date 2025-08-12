@@ -4848,8 +4848,8 @@ function interpolateTemplateVariables(
     // From that position, find the FIRST }} - this is the matching closing
     const closeIndex = result.indexOf('}}', lastOpenIndex);
     if (closeIndex === -1) {
-      logger.warn(`Found {{ at ${lastOpenIndex} but no matching }} in: ${result}`);
-      break;
+      logger.error(`Found {{ at ${lastOpenIndex} but no matching }} in: ${result}`);
+      return 'Invalid template!';
     }
     
     // Extract the innermost expression
