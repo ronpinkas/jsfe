@@ -6886,12 +6886,15 @@ export class WorkflowEngine implements Engine {
          }
       }
       
-      // Add common runtime variables available in all flows
-      scope.add('user_input');
-      scope.add('current_time');
-      scope.add('session_id');
-      scope.add('user_id');
-      scope.add('flow_start_time');
+      // Add common runtime variables available during template interpolation
+      // These are resolved by resolveEngineSessionVariable() during execution
+      const runtimeVariables = [
+        'userInput', 'lastUserInput', 'sessionId', 'userId', 'flowName',
+        'current_time', 'session_id', 'user_id', 'flow_start_time'
+      ];
+      for (const runtimeVar of runtimeVariables) {
+         scope.add(runtimeVar);
+      }
 
       // Add the global variables if defined
       if (this.globalVariables) {
