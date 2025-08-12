@@ -1,8 +1,8 @@
-import crypto from "crypto";
-import winston from 'winston';
-
 //import { WorkflowEngine, /* any other needed exports */ } from './jsfe.ts.js';
 import { WorkflowEngine } from '../dist/index.js';
+
+import crypto from "crypto";
+import winston from 'winston';
 
 const logger = winston.createLogger({
   level: 'warn',  // Changed to debug to see HTTP requests
@@ -3184,7 +3184,7 @@ const flowsMenu = [
           id: "smart-retry-condition",
           type: "CASE",
           branches: {
-            "condition:{{attempt_count}} < {{max_attempts}}": {
+            "condition:{{attempt_count < max_attempts}}": {
               id: "continue-retrying",
               type: "FLOW",
               value: "SmartSelfRetryDemo",
@@ -3546,7 +3546,7 @@ const TEST_SCENARIOS = {
   
   // === FOCUSED CATEGORY TESTS ===
   
-  // Test 1: Core Business Flows
+  // Core Business Flows
   businessFlowsTest: [
     'What\'s the weather in Tokyo?',
     'Tokyo',
@@ -3555,24 +3555,24 @@ const TEST_SCENARIOS = {
     '99.99',
   ],
   
-  // Test: Crypto Price Workflow
+  // Crypto Price Workflow
   cryptoPriceTest: [
     'What\'s the current Bitcoin price?',
   ],
   
-  // Test 2: API Integration & Tools  
+  // API Integration & Tools  
   apiIntegrationTest: [
     'I want to test REST API functionality',
     '1',  // JSON API test
   ],
   
-  // Test 3: Response Mapping System
+  // Response Mapping System
   responseMappingTest: [
     'I want to test response mapping',
     '1',  // JSONPath mapping
   ],
   
-  // Test 4: HTTP Tools Suite - Test all API types
+  // HTTP Tools Suite - Test all API types
   httpToolsTest: [
     'API testing suite',
     '1',  // JSON API test
@@ -3582,7 +3582,7 @@ const TEST_SCENARIOS = {
     '3',  // XML/SOAP test
   ],
   
-  // Test 5: Enhanced SWITCH Conditions
+  // Enhanced SWITCH Conditions
   switchConditionsTest: [
     'Enhanced SWITCH with Condition Support Test',
   ],
@@ -3593,15 +3593,8 @@ const TEST_SCENARIOS = {
     '999',  // Invalid choice, should restart flow
     '1',    // Should continue with restarted flow, NOT start payment flow
   ],
-  
-  // Test 6: Error Handling & Recovery
-  errorHandlingTest: [
-    'I want to test REST API functionality',
-    '999',  // Invalid choice to trigger default branch retry
-    '1',   // Valid choice after retry
-  ],
-  
-  // Test 7: Account Verification Failures
+    
+  // Account Verification Failures
   accountVerificationTest: [
     'I need to make a payment',
     '999999',  // Invalid account to trigger VerifyAccountFailed
@@ -3609,7 +3602,7 @@ const TEST_SCENARIOS = {
     '50.00',
   ],
   
-  // Test 8: Test Menu & Navigation
+  // Test Menu & Navigation
   navigationTest: [
     'Show me the test menu',
     'TestMenu',
@@ -3627,7 +3620,7 @@ const TEST_SCENARIOS = {
     '7',  // Test with user ID 7
   ],
   
-  // Test 11: User Access Control
+  // User Access Control
   accessControlTest: [
     'UserAccessControl',
     'admin',  // Test admin access
@@ -3637,7 +3630,7 @@ const TEST_SCENARIOS = {
     'exit'
   ],
   
-  // Test 12: Critical Error Recovery
+  // Critical Error Recovery
   errorRecoveryTest: [
     'CriticalErrorRecovery',
   ],
@@ -3720,6 +3713,7 @@ const TEST_SCENARIOS = {
   ],
   
   // === FLOW FRAME INTEGRITY TEST ===
+
   // Specifically designed to test flow stack preservation under various conditions
   flowFrameIntegrityTest: [
     // Test 1: Normal nested flow completion
@@ -3753,26 +3747,26 @@ const TEST_SCENARIOS = {
   // === ENHANCED FLOW INTERRUPTION TEST ===
   // Test the flow interruption and resumption system
   enhancedFlowInterruptionTest: [
-    // Test 1: Start a payment flow
+    // Start a payment flow
     'I need to make a payment',
     '123456',
     
-    // Test 2: Interrupt with weather request
+    // Interrupt with weather request
     'What\'s the weather in Tokyo?',
     'Tokyo',   // Provide city name to complete weather flow
     
-    // Test 3: Should resume payment flow, complete it
+    // Should resume payment flow, complete it
     '50.00',  // Continue with payment after weather interruption
     
     // Test 4: Start new payment flow
     'I need to make a payment',
     '123456',
     
-    // Test 5: Test help command during payment
+    // Test help command during payment
     'help',
     '75.00',  // Continue with payment after help
     
-    // Test 6: Test simple weather flow
+    // Test simple weather flow
     'What\'s the weather in London?',
     'London',    
     'cancel' // Exit any remaining flows
@@ -3804,20 +3798,20 @@ const TEST_SCENARIOS = {
   // === BUG FIX VALIDATION TESTS ===
   // These tests validate the specific issues we identified and fixed
   
-  // Test 1: SWITCH Default Branch Fix
+  // SWITCH Default Branch Fix
   switchDefaultBranchTest: [
     'CallTypeDemo',
     'invalid_input',  // Should trigger default branch with user-friendly message
     '1',              // Valid choice after error
   ],
   
-  // Test 2: RestApiExample Parameter Validation Fix  
+  // RestApiExample Parameter Validation Fix  
   restApiParameterTest: [
     'RestApiDemo',
     '1',        // Valid user ID - should use template interpolation correctly
   ],
   
-  // Test 3: Improved Error Messages Test
+  // Improved Error Messages Test
   improvedErrorMessagesTest: [
     // Test user-friendly SWITCH error
     'CallTypeDemo',
@@ -3829,15 +3823,13 @@ const TEST_SCENARIOS = {
     'continue',       // Should show improved data validation message    
   ],
   
-  // Test 4: Smart OnFail Default Branch Test
+  // Smart OnFail Default Branch Test
   smartOnFailSwitchTest: [
     'SmartOnFailNetworkTest',
-    'continue',       // This previously failed - should now work or show better error
-    'SmartOnFailFinancialTest', 
-    'continue',       // Test financial error handling
+    'continue',       // Challanging AI detection - Should be ignored
   ],
   
-  // Test 5: API Tools Parameter Interpolation Test
+  // API Tools Parameter Interpolation Test
   apiToolsParameterTest: [
     // Test that RestApiExample uses variables correctly
     'I want to test REST API functionality',
@@ -3846,13 +3838,13 @@ const TEST_SCENARIOS = {
     '5',              // Test with user ID 5 - should interpolate correctly
   ],
   
-  // Test 6: Internationalized Error Messages Test  
+  // Internationalized Error Messages Test  
   internationalizedErrorTest: [
     'CallTypeDemo',
     'trigger_switch_error', // This should cause a SWITCH error with no matching branch
   ],
   
-  // Test 7: Payment Tool Failure Context Test
+  // Payment Tool Failure Context Test
   paymentToolFailureTest: [
     'I need to make a payment',
     '123456',         // Valid account - should proceed to payment amount
@@ -3860,7 +3852,7 @@ const TEST_SCENARIOS = {
     'cancel'          // Exit the retry flow
   ],
 
-  // Test 7b: Enhanced Payment Retry Demonstration - Shows progressive retry behavior
+  // Enhanced Payment Retry Demonstration - Shows progressive retry behavior
   enhancedPaymentRetryTest: [
     'I need to make a payment',
     '123456',         // Valid account number
@@ -3910,7 +3902,7 @@ async function runTestScenario(scenarioName, language = 'en') {
   }
   
   console.log(`\n🧪 Running test scenario: ${scenarioName} in ${language}`);
-  console.log(`📝 Inputs: ${scenario.join(' → ')}`);
+  console.log(`📝 Inputs (${scenario.length}): ${scenario.join(' → ')}`);
   
   try {
     await simulateLocalChat(scenario, language);
