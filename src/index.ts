@@ -5081,6 +5081,81 @@ function evaluateFunctionCall(expression: string, variables: Record<string, any>
       return new Date().toISOString();
     }
     
+    // Handle safe standalone functions
+    const safeStandaloneFunctions = ['isNaN', 'parseInt', 'parseFloat', 'Boolean', 'Number', 'String'];
+    
+    // Parse function call with arguments
+    const functionMatch = expression.match(/^(\w+)\((.*)\)$/);
+    if (functionMatch) {
+      const funcName = functionMatch[1];
+      const argsString = functionMatch[2];
+      
+      if (safeStandaloneFunctions.includes(funcName)) {
+        logger.debug(`Evaluating safe standalone function: ${funcName}`);
+        
+        // Parse and evaluate arguments
+        const args: any[] = [];
+        if (argsString.trim()) {
+          // Simple argument parsing (supports literals and variables)
+          const argParts = argsString.split(',').map(arg => arg.trim());
+          for (const argPart of argParts) {
+            let argValue: any;
+            
+            // Handle string literals
+            if ((argPart.startsWith('"') && argPart.endsWith('"')) || 
+                (argPart.startsWith("'") && argPart.endsWith("'"))) {
+              argValue = argPart.slice(1, -1);
+            }
+            // Handle number literals
+            else if (!isNaN(Number(argPart))) {
+              argValue = Number(argPart);
+            }
+            // Handle boolean literals
+            else if (argPart === 'true' || argPart === 'false') {
+              argValue = argPart === 'true';
+            }
+            // Handle variables
+            else {
+              const varResult = resolveSimpleVariable(argPart, variables, contextStack, engine);
+              if (varResult && !varResult.startsWith('[undefined:')) {
+                argValue = varResult;
+              } else if (engine) {
+                const sessionResult = resolveEngineSessionVariable(argPart, engine);
+                argValue = sessionResult !== undefined ? sessionResult : argPart;
+              } else {
+                argValue = argPart;
+              }
+            }
+            args.push(argValue);
+          }
+        }
+        
+        // Execute the safe function
+        try {
+          switch (funcName) {
+            case 'isNaN':
+              return isNaN(args[0]);
+            case 'parseInt':
+              return parseInt(args[0], args[1] || 10);
+            case 'parseFloat':
+              return parseFloat(args[0]);
+            case 'Boolean':
+              return Boolean(args[0]);
+            case 'Number':
+              return Number(args[0]);
+            case 'String':
+              return String(args[0]);
+            default:
+              logger.warn(`Safe function ${funcName} not implemented`);
+              return undefined;
+          }
+        } catch (error: any) {
+          logger.warn(`Error executing safe function ${funcName}: ${error.message}`);
+          return undefined;
+        }
+      }
+    }
+    
     // Handle extractCryptoFromInput(...) function call
     const extractCryptoMatch = expression.match(/^extractCryptoFromInput\((.+)\)$/);
     if (extractCryptoMatch) {
