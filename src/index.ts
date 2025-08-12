@@ -5682,7 +5682,7 @@ async function handleFlowExit(engine: Engine, userId: string, input: string): Pr
   const exitedFlows: string[] = [];
   let flow: FlowFrame | undefined;
   while ((flow = engine.flowStacks?.pop()?.[0])) {
-    logger.warn(`Exiting flow: ${flow.flowName} due to user request`);
+    logger.info(`Exiting flow: ${flow.flowName} due to user request`);
     flow.transaction.fail(`User requested exit: ${input}`);
     exitedFlows.push(flow.flowName);
     auditLogger.logFlowExit(flow.flowName, userId, flow.transaction.id, 'user_requested');
