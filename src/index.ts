@@ -436,15 +436,9 @@ export interface ContextEntry {
   metadata?: Record<string, unknown>;
 }
 
-// AI Intelligence Callback Interface - REQUIRED for engine operation
-// The engine cannot function without this - it's used for critical AI-powered decisions:
-// - Intent detection (determining which workflow to activate)
-// - Smart argument matching when schemas aren't provided  
-// - Flow decision-making that requires natural language understanding
-// Must return specific formatted responses (e.g., 'None' for no intent detected)
-export interface AiCallbackFunction {
-  (systemInstruction: string, userMessage: string): Promise<string>;
-}
+// AI Intelligence Callback Interface - (can be null for demo/test mode)
+// If null, engine will only match flows by exact id or name (no AI intent detection)
+export type AiCallbackFunction = ((systemInstruction: string, userMessage: string) => Promise<string>) | null;
 
 // Engine Session Context - Encapsulates all session-specific state
 // This object should be maintained by the host application for each user session
@@ -569,10 +563,10 @@ export interface Engine {
   addAccumulatedMessage?: (message: string, engineSessionContext?: EngineSessionContext) => void;
   sessionId?: string;
   APPROVED_FUNCTIONS?: ApprovedFunctions;
-  aiCallback: AiCallbackFunction; // REQUIRED - Engine cannot function without AI access for intent detection & smart decisions
+  aiCallback: AiCallbackFunction; // Can be null for demo/test mode (see README)
   lastChatTurn: { user?: ContextEntry; assistant?: ContextEntry }; // Last chat turn when not in a flow
   // Session management methods
-  initSession?: (logger: Logger, userId: string, sessionId?: string) => EngineSessionContext;
+  initSession?: (hostLogger: Logger | null, userId: string, sessionId: string) => EngineSessionContext;
   updateActivity?: (contextEntry: ContextEntry, engineSessionContext?: EngineSessionContext) => Promise<string | null>;
 }
 
@@ -1682,8 +1676,7 @@ function interpolateObject(obj: unknown, data: unknown, args: ArgsType = {}): un
   return obj;
 }
 
-// Define a fake logger that does nothing
-
+// Fake logger that does nothing - in case hostLogger argument to engine.initSession is null
 let logger: Logger = {
   info: () => {},
   warn: () => {},
@@ -2483,6 +2476,10 @@ async function fetchAiResponse(systemInstruction: string, userMessage: string, a
   try {
     logger.debug(`fetchAiResponse called with system instruction length: ${systemInstruction.length}, user message: "${userMessage}"`);
     
+    if (!aiCallback) {
+      throw new Error('aiCallback is null. AI-powered features are not available.');
+    }
+    
     // Use the user-provided AI callback function
     const aiResponse = await aiCallback(systemInstruction, userMessage);
     
@@ -2585,67 +2582,77 @@ async function getFlowForInput(input: string, engine: Engine): Promise<FlowDefin
    // CRITICAL: This function requires AI access via engine.aiCallback
    // Without AI, the engine cannot detect user intent and activate flows
    // Sessions would never be activated as no workflows could be triggered
-   try {
-      logger.info(`getFlowForInput called with input: "${input}"`);
+   // For demo or special use cases we do allow null aiCallback with minimal functionality
+  try {
+    logger.info(`getFlowForInput called with input: "${input}"`);
 
-      if (!input || typeof input !== 'string') {
-         logger.warn(`getFlowForInput received invalid input: ${typeof input} ${input}`);
-         return null;
-      }
+    if (!input || typeof input !== 'string') {
+      logger.warn(`getFlowForInput received invalid input: ${typeof input} ${input}`);
+      return null;
+    }
       
-      const flowsMenu = engine.flowsMenu;
-      if (!flowsMenu || flowsMenu.length === 0) {
-         logger.warn("No flows available in the menu");
-         return null;
-      }
+    const flowsMenu = engine.flowsMenu;
+    if (!flowsMenu || flowsMenu.length === 0) {
+      logger.warn("No flows available in the menu");
+      return null;
+    }
 
-      // First try direct name matching for exact flow names (useful for testing)
-      const directMatch = flowsMenu.find(flow => flow.name === input || flow.name.toLowerCase() === input.toLowerCase());
-      if (directMatch) {
-         logger.info(`Direct flow name match found: ${directMatch.name}`);
-         return directMatch;
-      }
+    // First try direct name or id matching (case-insensitive)
+    const directMatch = flowsMenu.find(flow =>
+      flow.name.toLowerCase() === input.toLowerCase() || (flow.id.toLowerCase() === input.toLowerCase())
+    );
+    if (directMatch) {
+      logger.info(`Direct flow name/id match found: ${directMatch.name} (${directMatch.id})`);
+      return directMatch;
+    }
 
-      const task = "Considering the chat history when available and applicable, decide if the user input should trigger any available flow.";
+    // If no AI callback, only allow exact id or name match (case-insensitive)
+    if (!engine.aiCallback) {
+      logger.info(`No flow matched for input: "${input}" (no AI)`);
+      return null;
+    }
 
-      const rules = `- Return the exact flow name if a match is found
+    // If AI callback is present, use AI for intent detection
+    const task = "Considering the chat history when available and applicable, decide if the user input should trigger any available flow.";
+
+    const rules = `- Return the exact flow name if a match is found
 - Return "None" if no workflow applies
 - Consider user intent and the chat context
 - Prioritize the most relevant flow considering all available flows
 `;
 
-      // Use chat context when not in a flow (this is where lastChatTurn context is relevant)
-      let context = '';
-      if (engine.lastChatTurn && (engine.lastChatTurn.user || engine.lastChatTurn.assistant)) {
-        const chatContext = flattenLastChatTurn(engine.lastChatTurn, true);
-        context = `<chat-history>\n
-          ${chatContext}\n
-          </chat-history>\n\n`;
-      }
+    // Use chat context when not in a flow (this is where lastChatTurn context is relevant)
+    let context = '';
+    if (engine.lastChatTurn && (engine.lastChatTurn.user || engine.lastChatTurn.assistant)) {
+      const chatContext = flattenLastChatTurn(engine.lastChatTurn, true);
+      context = `<chat-history>\n
+       ${chatContext}\n
+       </chat-history>\n\n`;
+    }
 
-      try {    
-         const aiResponse = await fetchAiTask(task, rules, context, input, flowsMenu, undefined, engine.aiCallback);
+    try {    
+      const aiResponse = await fetchAiTask(task, rules, context, input, flowsMenu, undefined, engine.aiCallback);
          
-         if (aiResponse && aiResponse !== 'None' && aiResponse !== 'null') {
-            const flow = flowsMenu.find(flow => flow.name.toLowerCase() === aiResponse.toLowerCase() || flow.id === aiResponse);
-            if (flow) {
-            return flow;
-            } else {
-            logger.error(`Flow "${aiResponse}" not found in flows menu`);
-            }
-         } else {
-            logger.info(`No flow activated for input: "${input}"`);
-         }
-      } catch (error: any) {
-         logger.error("Error in flow detection:", error);
+      if (aiResponse && aiResponse !== 'None' && aiResponse !== 'null') {
+        const flow = flowsMenu.find(flow => flow.name.toLowerCase() === aiResponse.toLowerCase() || flow.id === aiResponse);
+        if (flow) {
+          return flow;
+        } else {
+          logger.error(`Flow "${aiResponse}" not found in flows menu`);
+        }
+      } else {
+        logger.info(`No flow activated for input: "${input}"`);
       }
+    } catch (error: any) {
+      logger.error("Error in flow detection:", error);
+    }
 
-      return null;
-   } catch (error: any) {
-      logger.warn(`Error in getFlowForInput: ${error.message}`);
-      logger.info(`Stack trace: ${error.stack}`);
-      return null;
-   }
+    return null;
+  } catch (error: any) {
+    logger.warn(`Error in getFlowForInput: ${error.message}`);
+    logger.info(`Stack trace: ${error.stack}`);
+    return null;
+  }
 }
 
 // === SMART DEFAULT ONFAIL GENERATOR ===
@@ -5406,9 +5413,20 @@ async function handleIntentInterruption(input: string, engine: Engine, userId: s
   
     
   // Use AI to detect if this is a strong intent for a different flow
-  const intentAnalysis = await analyzeIntentStrength(input, engine);
-
-  logger.debug(`Intent analysis result:`, JSON.stringify(intentAnalysis));
+  let intentAnalysis: any = null;
+  if (engine.aiCallback) {
+    intentAnalysis = await analyzeIntentStrength(input, engine);
+    logger.debug(`Intent analysis result:`, JSON.stringify(intentAnalysis));
+  } else {
+    // Fallback to exact match for non-AI environments
+    const flowsMenu = engine.flowsMenu || [];
+    const matchingFlow = flowsMenu.find(flow => flow.id.toLowerCase() === input.toLowerCase() || flow.name.toLowerCase() === input.toLowerCase());
+    intentAnalysis = {
+      isStrongIntent: !!matchingFlow,
+      targetFlow: matchingFlow ? matchingFlow.id : null
+    };
+    logger.info(`Intent analysis (no AI):`, intentAnalysis);
+  }
 
   if (intentAnalysis.isStrongIntent && intentAnalysis.targetFlow) {
     // Check if the target flow is different from current flow
@@ -5777,54 +5795,76 @@ async function processActivity(input: string, userId: string, engine: Engine): P
 
 // === WORKFLOW ENGINE CLASS ===
 export class WorkflowEngine implements Engine {
-   public flowsMenu: FlowDefinition[];
-   public toolsRegistry: ToolDefinition[];
-   public APPROVED_FUNCTIONS: ApprovedFunctions;
-   public flowStacks: FlowFrame[][];
-   public globalAccumulatedMessages: string[];
-   public sessionId: string;
-   public createdAt: Date;
-   public lastActivity: Date;
-   public language?: string;
-   public messageRegistry?: MessageRegistry;
-   public guidanceConfig?: GuidanceConfig;
-   public globalVariables?: Record<string, unknown>;
-   public aiCallback: AiCallbackFunction;
-   public lastChatTurn: { user?: ContextEntry; assistant?: ContextEntry } = {};
+  public flowsMenu: FlowDefinition[];
+  public toolsRegistry: ToolDefinition[];
+  public APPROVED_FUNCTIONS: ApprovedFunctions;
+  public flowStacks: FlowFrame[][];
+  public globalAccumulatedMessages: string[];
+  public sessionId: string;
+  public createdAt: Date;
+  public lastActivity: Date;
+  public language?: string;
+  public messageRegistry?: MessageRegistry;
+  public guidanceConfig?: GuidanceConfig;
+  public globalVariables?: Record<string, unknown>;
+  public aiCallback: AiCallbackFunction;
+  public lastChatTurn: { user?: ContextEntry; assistant?: ContextEntry } = {};
 
+   /**
+    * Initialize a new EngineSessionContext for a user session.
+    * If hostLogger is null, uses the global default logger.
+    * @param hostLogger - Logger instance for this session. Must implement info, warn, error, and debug methods.
+    * @param aiCallback - Callback function for AI operations
+    * @param flowsMenu - List of available flow definitions
+    * @param toolsRegistry - List of available tool definitions
+    * @param APPROVED_FUNCTIONS - Approved functions for the engine
+    * @param globalVariables - Optional global variables shared across all new flows
+    * @param validateOnInit - Whether to perform validation on initialization (default: true)
+    * @param language - Optional language code for localization
+    * @param messageRegistry - Optional message registry for custom messages
+    * @param guidanceConfig - Optional guidance configuration for AI interactions
+   */
    constructor(
-      aiCallback: AiCallbackFunction, // REQUIRED - Engine cannot function without AI access for intent detection & smart decisions
-      flowsMenu: FlowDefinition[], 
-      toolsRegistry: ToolDefinition[], 
-      APPROVED_FUNCTIONS: ApprovedFunctions, 
+      hostLogger: Logger,
+      aiCallback: AiCallbackFunction,
+      flowsMenu: FlowDefinition[],
+      toolsRegistry: ToolDefinition[],
+      APPROVED_FUNCTIONS: ApprovedFunctions,  
+      globalVariables?: Record<string, unknown>, // Optional global variables shared across all new flows
+      validateOnInit?: boolean,
       language?: string,
       messageRegistry?: MessageRegistry,
       guidanceConfig?: GuidanceConfig,
-      validateOnInit: boolean = true,
-      globalVariables?: Record<string, unknown> // Optional global variables shared across all new flows
    ) {
+      hostLogger = hostLogger || logger; // Fallback to global fake logger if none provided
+      logger = hostLogger; // Assign to global logger
+      
       this.aiCallback = aiCallback;
       this.flowsMenu = flowsMenu;
       this.toolsRegistry = toolsRegistry;
       this.APPROVED_FUNCTIONS = APPROVED_FUNCTIONS;
-      this.flowStacks = [[]]; // Stack of flowFrames stacks for proper flow interruption/resumption
-      this.globalAccumulatedMessages = []; // Global SAY message accumulation across all stacks
-      this.sessionId = crypto.randomUUID();
-      this.createdAt = new Date();
-      this.lastActivity = new Date();
+      this.globalVariables = globalVariables ? { ...globalVariables } : {}; // Copy global variables to prevent external mutations
+
+      // if validateOnInit is not provided, default to true
+      validateOnInit = validateOnInit !== undefined ? validateOnInit : true;
+
       this.language = language;
       this.messageRegistry = messageRegistry;
-      this.globalVariables = globalVariables ? { ...globalVariables } : {}; // Copy global variables to prevent external mutations
+
       this.guidanceConfig = guidanceConfig || {
          enabled: true,
          mode: 'prepend',
          separator: '\n\n',
          contextSelector: 'auto'
       };
-      //this.initializeFlowStacks();
 
-      // Logger will be assigned when initSession is called
-      
+      // Initialize flow stacks and global accumulated messages
+      this.flowStacks = [[]]; // Stack of flowFrames stacks for proper flow interruption/resumption
+      this.globalAccumulatedMessages = []; // Global SAY message accumulation across all stacks
+      this.sessionId = crypto.randomUUID();
+      this.createdAt = new Date();
+      this.lastActivity = new Date();
+            
       // Perform global flow validation on initialization
       if (validateOnInit && flowsMenu.length > 0) {
          this.performInitializationValidation();
@@ -5834,7 +5874,7 @@ export class WorkflowEngine implements Engine {
   /**
    * Initialize a new session context for a user session.
    *
-   * @param logger - Logger instance for this session. Must implement info, warn, error, and debug methods.
+   * @param hostLogger - Logger instance for this session. Must implement info, warn, error, and debug methods.
    * @param userId - User identifier for this session
    * @param sessionId - Unique identifier for the session
    * @returns EngineSessionContext object that should be persisted by the host
@@ -5842,9 +5882,10 @@ export class WorkflowEngine implements Engine {
    *
    * @example
    *   const engine = new WorkflowEngine(...);
-   *   const session = engine.initSession(ConsoleLogger, 'user-123');
+   *   const session = engine.initSession(yourLogger, 'user-123', 'session-456');
    */
-   initSession(hostLogger: Logger, userId: string, sessionId?: string): EngineSessionContext {
+   initSession(hostLogger: Logger | null, userId: string, sessionId: string): EngineSessionContext {
+    hostLogger = hostLogger || logger; // Fallback to global fake logger if none provided
     // Validate logger compatibility
     const requiredMethods = ['info', 'warn', 'error', 'debug'];
     for (const method of requiredMethods) {
@@ -5854,7 +5895,7 @@ export class WorkflowEngine implements Engine {
     }
 
     // Assign the session logger to the global logger
-    logger = hostLogger;
+    logger = hostLogger || logger;
 
     const engineSessionContext: EngineSessionContext = {
       hostLogger: hostLogger,
