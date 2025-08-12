@@ -900,8 +900,8 @@ Real implementation would parse actual XML structure.
                 "user.total_likes": {
                   path: "posts",
                   transform: {
-                    type: "custom",
-                    calculation: "sum_likes"
+                    type: "sum",
+                    field: "likes"
                   }
                 }
               }
@@ -925,8 +925,9 @@ Real implementation would parse actual XML structure.
                 "product.avg_rating": {
                   path: "reviews",
                   transform: {
-                    type: "custom",
-                    calculation: "avg_rating"
+                    type: "average",
+                    field: "rating",
+                    precision: 1
                   }
                 },
                 "product.in_stock": { path: "availability.inStock" },
@@ -1117,33 +1118,32 @@ Real implementation would parse actual XML structure.
                   path: "products.length",
                   transform: { type: "default", value: 0 }
                 },
-                "electronics_count": {
+                "total_products": {
                   path: "products",
                   transform: {
-                    type: "custom",
-                    calculation: "count_by_category",
-                    category: "electronics"
+                    type: "count"
                   }
                 },
                 "average_price": {
                   path: "products",
                   transform: {
-                    type: "custom", 
-                    calculation: "average_price"
+                    type: "average",
+                    field: "price",
+                    precision: 2
                   }
                 },
-                "price_range": {
+                "min_price": {
                   path: "products",
                   transform: {
-                    type: "custom",
-                    calculation: "price_range"
+                    type: "min",
+                    field: "price"
                   }
                 },
-                "categories": {
+                "max_price": {
                   path: "products",
                   transform: {
-                    type: "custom",
-                    calculation: "unique_categories"
+                    type: "max",
+                    field: "price"
                   }
                 }
               }
@@ -1370,8 +1370,8 @@ Real implementation would parse actual XML structure.
                   "age_years": {
                     path: "api_response.data.company.founded",
                     transform: {
-                      type: "custom",
-                      calculation: "years_since"
+                      type: "default",
+                      value: 10
                     }
                   },
                   "size_category": {
@@ -1405,15 +1405,9 @@ Real implementation would parse actual XML structure.
                 "budget_millions": {
                   path: "budget",
                   transform: {
-                    type: "custom",
-                    calculation: "to_millions"
-                  }
-                },
-                "budget_per_employee": {
-                  path: ".",
-                  transform: {
-                    type: "custom",
-                    calculation: "budget_per_employee"
+                    type: "divide",
+                    divisor: 1000000,
+                    precision: 1
                   }
                 }
               }
@@ -1464,22 +1458,24 @@ Real implementation would parse actual XML structure.
                   "total_budget": {
                     path: "api_response.data.company.departments",
                     transform: {
-                      type: "custom",
-                      calculation: "sum_budgets"
+                      type: "sum",
+                      field: "budget"
                     }
                   },
                   "average_department_size": {
                     path: "api_response.data.company.departments",
                     transform: {
-                      type: "custom",
-                      calculation: "avg_employees"
+                      type: "average",
+                      field: "employees",
+                      precision: 1
                     }
                   },
                   "project_completion_rate": {
                     path: "api_response.data.company.projects",
                     transform: {
-                      type: "custom",
-                      calculation: "completion_rate"
+                      type: "average",
+                      field: "progress",
+                      precision: 1
                     }
                   }
                 }
