@@ -4943,7 +4943,7 @@ function evaluateComparisonExpression(
     const result = new Function('return ' + processedExpression)();
     return !!result; // Convert to boolean
   } catch (error: any) {
-    logger.warn(`Comparison evaluation failed for '${expression}':`, error.message);
+    logger.info(`Comparison evaluation failed for '${expression}':`, error.message);
     return false;
   }
 }
@@ -5078,6 +5078,7 @@ function evaluateFunctionCall(expression: string, variables: Record<string, any>
     
     // Handle currentTime() function call
     if (expression === 'currentTime()') {
+      logger.debug(`Returning current time for function call: ${expression}`);
       return new Date().toISOString();
     }
     
@@ -5134,23 +5135,29 @@ function evaluateFunctionCall(expression: string, variables: Record<string, any>
         try {
           switch (funcName) {
             case 'isNaN':
+              logger.debug(`Executing isNaN with args: ${args}`);
               return isNaN(args[0]);
             case 'parseInt':
+              logger.debug(`Executing parseInt with args: ${args}`);
               return parseInt(args[0], args[1] || 10);
             case 'parseFloat':
+              logger.debug(`Executing parseFloat with args: ${args}`);
               return parseFloat(args[0]);
             case 'Boolean':
+              logger.debug(`Executing Boolean with args: ${args}`);
               return Boolean(args[0]);
             case 'Number':
+              logger.debug(`Executing Number with args: ${args}`);
               return Number(args[0]);
             case 'String':
+              logger.debug(`Executing String with args: ${args}`);
               return String(args[0]);
             default:
               logger.warn(`Safe function ${funcName} not implemented`);
               return undefined;
           }
         } catch (error: any) {
-          logger.warn(`Error executing safe function ${funcName}: ${error.message}`);
+          logger.debug(`Error executing safe function ${funcName}: ${error.message}`);
           return undefined;
         }
       }
