@@ -4624,10 +4624,22 @@ function evaluateExpression(
       return opts.returnType === 'boolean' ? false : `[blocked: ${expression}]`;
     }
     
+    // Special handling for boolean return type with template expressions
+    // If the entire expression is wrapped in {{ }} and we want a boolean, 
+    // evaluate the inner expression directly without string conversion
+    if (opts.returnType === 'boolean' && expression.startsWith('{{') && expression.endsWith('}}')) {
+      const innerExpression = expression.slice(2, -2).trim();
+      const result = evaluateExpression(innerExpression, variables, contextStack, {
+        ...opts,
+        returnType: 'boolean'
+      }, engine);
+      return result;
+    }
+    
     // First, check if this is a comparison or logical expression with template variables
     let processedExpression = expression;
     
-    // If it has template variables, interpolate them first
+    // If it has template variables, interpolate them first (for non-boolean contexts)
     while (processedExpression.includes('{{') && processedExpression.includes('}}')) {
       processedExpression = interpolateTemplateVariables(processedExpression, variables, contextStack, opts, engine);
     }
@@ -4905,42 +4917,71 @@ function evaluateComparisonExpression(
   options: Required<ExpressionOptions>,
   engine?: Engine
 ): boolean {
-  // The expression should already be interpolated (no more {{variables}})
-  // but handle any remaining variables just in case
+  // For comparison expressions, we need to handle variable substitution properly
   let processedExpression = expression;
+  
+  // Find all variable references (not in template format) and replace them
+  // This handles cases like "input.toLowerCase()" where input is a variable
+  const variableNames = Object.keys(variables);
+  for (const varName of variableNames) {
+    const varValue = variables[varName];
     
-  // Extract any remaining variables in {{variable}} format and replace with actual values
-  const variableMatches = expression.match(/\{\{([^}]+)\}\}/g);
-    if (variableMatches) {
-      for (const match of variableMatches) {
-        const varName = match.slice(2, -2).trim();
-        let varValue = getNestedValue(variables, varName);
-        logger.debug(`Resolving variable '${varName}' with value:`, varValue);
-        
-        // Check engine session variables if not found
-        if (varValue === undefined && engine) {
-          varValue = resolveEngineSessionVariable(varName, engine);
-        }
-        
-        // Convert value to appropriate type for comparison
-        let replacementValue: string;
-        if (varValue === undefined || varValue === null) {
-          replacementValue = 'undefined';
-        } else if (typeof varValue === 'string') {
-          replacementValue = `"${varValue}"`;
-        } else if (typeof varValue === 'boolean') {
-          replacementValue = varValue.toString();
-        } else {
-          replacementValue = varValue.toString();
-        }
-        
-      processedExpression = processedExpression.replace(match, replacementValue);
+    // Create a regex to match the variable name as a whole word
+    const varRegex = new RegExp(`\\b${varName}\\b`, 'g');
+    
+    // Replace variable references with their values, properly quoted for strings
+    processedExpression = processedExpression.replace(varRegex, (match) => {
+      if (typeof varValue === 'string') {
+        logger.debug(`Replacing variable '${varName}' with string value: ${varValue}`);
+        return `"${varValue}"`;
+      } else if (typeof varValue === 'boolean' || typeof varValue === 'number') {
+        logger.debug(`Replacing variable '${varName}' with value: ${varValue}`);
+        return varValue.toString();
+      } else if (varValue === null || varValue === undefined) {
+        logger.debug(`Replacing variable '${varName}' with null value`);
+        return 'null';
+      } else {
+        logger.debug(`Replacing variable '${varName}' with JSON value:`, varValue);
+        return JSON.stringify(varValue);
       }
+    });
+  }
+  
+  // Handle any remaining {{variable}} template expressions
+  const variableMatches = processedExpression.match(/\{\{([^}]+)\}\}/g);
+  if (variableMatches) {
+    for (const match of variableMatches) {
+      const varName = match.slice(2, -2).trim();
+      let varValue = getNestedValue(variables, varName);
+      logger.debug(`Resolving template variable '${varName}' with value:`, varValue);
+      
+      // Check engine session variables if not found
+      if (varValue === undefined && engine) {
+        varValue = resolveEngineSessionVariable(varName, engine);
+      }
+      
+      // Convert value to appropriate type for comparison
+      let replacementValue: string;
+      if (varValue === undefined || varValue === null) {
+        replacementValue = 'null';
+      } else if (typeof varValue === 'string') {
+        replacementValue = `"${varValue}"`;
+      } else if (typeof varValue === 'boolean') {
+        replacementValue = varValue.toString();
+      } else {
+        replacementValue = varValue.toString();
+      }
+      
+      processedExpression = processedExpression.replace(match, replacementValue);
     }
+  }
+  
+  logger.debug(`Comparison expression after variable substitution: ${processedExpression}`);
     
   try {
-    // Use Function constructor for safe evaluation (restricted context)
+    // Use Function constructor for safe evaluation
     const result = new Function('return ' + processedExpression)();
+    logger.debug(`Comparison evaluation result: ${result}`);
     return !!result; // Convert to boolean
   } catch (error: any) {
     logger.info(`Comparison evaluation failed for '${expression}':`, error.message);
