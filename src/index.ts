@@ -558,7 +558,7 @@ export interface Engine {
   messageRegistry?: MessageRegistry; // Centralized registry for system messages
   guidanceConfig?: GuidanceConfig; // User-controlled guidance integration settings
   globalVariables?: Record<string, unknown>; // Global variables shared across all flows
-  hasAccumulatedMessages?: () => boolean;
+  hasAccumulatedMessages: () => boolean;
   getAndClearAccumulatedMessages?: (engineSessionContext?: EngineSessionContext) => string[];
   addAccumulatedMessage?: (message: string, engineSessionContext?: EngineSessionContext) => void;
   sessionId?: string;
@@ -2311,9 +2311,9 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
       // If there are pending messages, they should be displayed.
       let finalUserMessage = '';
       const accumulatedMessages: string[] = [];
-      
-      // Use only global accumulated messages (simplified)
-      if (engine && typeof engine.hasAccumulatedMessages === 'function' && engine.hasAccumulatedMessages()) {
+            
+      if (engine.hasAccumulatedMessages()) {
+        // If the engine has accumulated messages, we need to flush them
         Array.prototype.push.apply(accumulatedMessages, engine.getAndClearAccumulatedMessages!());
       }
 
@@ -3186,15 +3186,6 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
           if (rebootFlow) {
             const transaction = new FlowTransaction(rebootFlow.name, 'reboot-recovery', currentFlowFrame.userId);
             
-            /* TODO: REVIEW if needed
-            // Prepare tentative flow_init message
-            const tentativeFlowInit = getSystemMessage(engine, 'flow_init', { 
-              flowName: rebootFlow.name,
-              flowPrompt: getFlowPrompt(engine, rebootFlow.name)
-            });
-            engine?.addAccumulatedMessage!(tentativeFlowInit);
-            */
-            
             pushToCurrentStack(engine, {
               flowName: rebootFlow.name,
               flowId: rebootFlow.id,
@@ -3232,15 +3223,6 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
           const onFailFlow = flowsMenu?.find(f => f.name === onFailStep.name);
           if (onFailFlow) {
             const transaction = new FlowTransaction(onFailFlow.name, 'onFail-recovery', currentFlowFrame.userId);
-
-            /* TODO: REVIEW if needed
-            // Prepare tentative flow_init message
-            const tentativeFlowInit = getSystemMessage(engine, 'flow_init', { 
-              flowName: onFailFlow.name,
-              flowPrompt: getFlowPrompt(engine, onFailFlow.name)
-            });
-            engine?.addAccumulatedMessage!(tentativeFlowInit);
-            */
 
             pushToCurrentStack(engine, {
               flowName: onFailFlow.name,
@@ -3323,13 +3305,13 @@ function handleSayGetStep(currentFlowFrame: FlowFrame, engine: Engine): string {
   let finalMessage = interpolated;
   
   // Use global accumulated messages (simplified - no local fallback)
-  if (engine && typeof engine.hasAccumulatedMessages === 'function' && engine.hasAccumulatedMessages()) {
+  if (engine.hasAccumulatedMessages()) {
     const globalMessages = engine.getAndClearAccumulatedMessages!();
     const initMessage = getSystemMessage(engine, 'flow_init', {flowPrompt: getFlowPrompt(engine, currentFlowFrame.flowName)});
     
     // Check if the last global message is the tentative flow_init for this flow
     const hasTentativeFlowInit = globalMessages[globalMessages.length - 1] === initMessage;
-    
+
     if (hasTentativeFlowInit) {
       // Replace tentative flow_init with SAY messages only (guidance will be added by addFlowContextGuidance)
       if (globalMessages.length > 1) {
@@ -3660,15 +3642,6 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
          
          // Start the sub-flow as a new root flow
          const transaction = new FlowTransaction(subFlow.name, 'reboot', currentFlowFrame.userId);
-
-         /* TODO: REVIEW if needed
-         // Prepare tentative flow_init message
-         const tentativeFlowInit = getSystemMessage(engine, 'flow_init', { 
-           flowName: subFlow.name,
-           flowPrompt: getFlowPrompt(engine, subFlow.name)
-         });
-         engine?.addAccumulatedMessage!(tentativeFlowInit);
-         */
          
          pushToCurrentStack(engine, {
             flowName: subFlow.name,
@@ -3710,15 +3683,6 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
       } else { // callType === "call" (default)
          // Normal sub-flow call - create new transaction for sub-flow
          const subTransaction = new FlowTransaction(subFlow.name, 'sub-flow', currentFlowFrame.userId);
-
-         /* TODO: REVIEW if needed
-         // Prepare tentative flow_init message
-         const tentativeFlowInit = getSystemMessage(engine, 'flow_init', { 
-           flowName: subFlow.name,
-           flowPrompt: getFlowPrompt(engine, subFlow.name)
-         });
-         engine?.addAccumulatedMessage!(tentativeFlowInit);
-         */
 
          // Push sub-flow onto stack - INHERIT parent's variables for unified scope
          pushToCurrentStack(engine, {
@@ -5617,15 +5581,6 @@ async function handleRegularFlowInterruption(intentAnalysis: any, engine: Engine
       const targetFlowDefinition = flowsMenu?.find(f => f.name === targetFlow);
       if (targetFlowDefinition) {
         const newTransaction = new FlowTransaction(targetFlow, 'intent-switch', userId);
-
-        /* Switched message added unconditionally - I suspect this is not needed
-        // Prepare tentative flow_init message
-        const tentativeFlowInit = getSystemMessage(engine, 'flow_init', { 
-          flowName: targetFlow,
-          flowPrompt: getFlowPrompt(engine, targetFlow)
-        });
-        engine?.addAccumulatedMessage!(tentativeFlowInit);
-        */
 
         const newFlowFrame: FlowFrame = {
           flowName: targetFlow,
