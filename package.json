@@ -46,5 +46,9 @@
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "winston": "^3.17.0"
+  },
+  "homepage": "https://github.com/ronpinkas/jsfe#readme",
+  "bugs": {
+    "url": "https://github.com/ronpinkas/jsfe/issues"
   }
 }
