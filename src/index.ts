@@ -1940,7 +1940,7 @@ function validateToolArgs(tool: ToolDefinition, args: Record<string, unknown>): 
     const errors = (validate.errors || []).map(err => 
       `${err.instancePath || 'root'} ${err.message}`
     ).join(', ');
-    logger.warn(`Tool argument validation failed for ${tool.name}: ${errors}`);
+    logger.info(`Tool argument validation failed for ${tool.name}: ${errors}`);
     logger.info(`Stack trace: ${new Error().stack}`);
     throw new Error(`Tool argument validation failed: ${errors}`);
   }
