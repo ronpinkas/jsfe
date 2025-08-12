@@ -99,7 +99,20 @@ export function parseFlows(input: string | object): any[] {
     throw new Error('Invalid .flows file format');
 }
 
-// === LOGGER INTERFACE ===
+
+/**
+ * Logger interface for use with WorkflowEngine.
+ *
+ * Any logger passed to initSession must implement these four methods.
+ *
+ * @example
+ * class MyLogger implements Logger {
+ *   info(msg: string) { ... }
+ *   warn(msg: string) { ... }
+ *   error(msg: string) { ... }
+ *   debug(msg: string) { ... }
+ * }
+ */
 export interface Logger {
   info(message: string, ...args: unknown[]): void;
   warn(message: string, ...args: unknown[]): void;
@@ -5818,31 +5831,45 @@ export class WorkflowEngine implements Engine {
       }
    }
 
-   /**
-    * Initialize a new session context for a user session
-    * @param logger - Logger instance for this session
-    * @param userId - User identifier for this session
-    * @param sessionId - Unique identifier for the session
-    * @returns EngineSessionContext object that should be persisted by the host
-    */
+  /**
+   * Initialize a new session context for a user session.
+   *
+   * @param logger - Logger instance for this session. Must implement info, warn, error, and debug methods.
+   * @param userId - User identifier for this session
+   * @param sessionId - Unique identifier for the session
+   * @returns EngineSessionContext object that should be persisted by the host
+   * @throws Error if logger does not implement all required methods
+   *
+   * @example
+   *   const engine = new WorkflowEngine(...);
+   *   const session = engine.initSession(ConsoleLogger, 'user-123');
+   */
    initSession(hostLogger: Logger, userId: string, sessionId?: string): EngineSessionContext {
-      // Assign the session logger to the global logger
-      logger = hostLogger;
-      
-      const engineSessionContext: EngineSessionContext = {
-         hostLogger: hostLogger,
-         sessionId: sessionId || crypto.randomUUID(),
-         userId: userId,
-         createdAt: new Date(),
-         lastActivity: new Date(),
-         flowStacks: [[]],
-         globalAccumulatedMessages: [],
-         lastChatTurn: {},
-         globalVariables: this.globalVariables ? { ...this.globalVariables } : {}
-      };
+    // Validate logger compatibility
+    const requiredMethods = ['info', 'warn', 'error', 'debug'];
+    for (const method of requiredMethods) {
+      if (typeof (hostLogger as any)[method] !== 'function') {
+        throw new Error(`Logger is missing required method: ${method}`);
+      }
+    }
 
-      logger.info(`Engine session initialized: ${engineSessionContext.sessionId} for user: ${userId}`);
-      return engineSessionContext;
+    // Assign the session logger to the global logger
+    logger = hostLogger;
+
+    const engineSessionContext: EngineSessionContext = {
+      hostLogger: hostLogger,
+      sessionId: sessionId || crypto.randomUUID(),
+      userId: userId,
+      createdAt: new Date(),
+      lastActivity: new Date(),
+      flowStacks: [[]],
+      globalAccumulatedMessages: [],
+      lastChatTurn: {},
+      globalVariables: this.globalVariables ? { ...this.globalVariables } : {}
+    };
+
+    logger.info(`Engine session initialized: ${engineSessionContext.sessionId} for user: ${userId}`);
+    return engineSessionContext;
    }
 
    async updateActivity(contextEntry: ContextEntry, engineSessionContext?: EngineSessionContext): Promise<string | null> {
