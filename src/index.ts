@@ -1110,8 +1110,7 @@ function applyTemplateMapping(data: unknown, config: TemplateMappingConfig, args
   
   // Fallback to simple placeholder replacement for basic templates
   template = template.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
-    const resolvedData = config.dataPath ? extractByPath(data as PathTraversableObject, config.dataPath) : data;
-    const value = extractByPath(resolvedData as PathTraversableObject, path.trim());
+    const value = extractByPath(data as PathTraversableObject, path.trim());
     return value !== null && value !== undefined ? String(value) : '';
   });
   
@@ -1266,11 +1265,14 @@ function extractByPath(obj: PathTraversableObject, path: PathExpression): Extrac
         const next = current[part];
         logger.debug(`extractByPath: accessed property ${part}, result: ${JSON.stringify(next)}`);
         current = next;
+      } else if (Array.isArray(current) && part === 'length') {
+        // Special case: allow accessing 'length' property on arrays
+        current = current.length;
+        logger.debug(`extractByPath: accessed array length, result: ${current}`);
       } else {
         logger.debug(`extractByPath: current is not traversable at part ${part}, returning null`);
         return null;
       }
-      logger.debug(`extractByPath: accessed property ${part}, result: ${JSON.stringify(current)}`);
     }
   }
   
