@@ -10,6 +10,19 @@ npm i jsfe
 ## Usage
 \`\`\`ts
 import { WorkflowEngine } from "jsfe";
+const engine = new WorkflowEngine(
+  hostLogger: Logger, // logger instance like winston - supporting .info/.debug/.warn/.error methods
+  aiCallback: AiCallbackFunction, // host provided access to AI fetch function aiFetcher(systemInstructions, userMessage) -> response string
+  flowsMenu: FlowDefinition[], // host defined available flows
+  toolsRegistry: ToolDefinition[], // host defined tools registry
+  APPROVED_FUNCTIONS: ApprovedFunctions, // Optional host provided safe functions map
+  globalVariables?: Record<string, unknown> // Optional global variables shared across all new flows
+  validateOnInit: boolean = true, // Optional validate all flows an enggine initialization
+  language?: string, // Optional language code
+  messageRegistry?: MessageRegistry, // Optional override all engine internationalized messages
+  guidanceConfig?: GuidanceConfig, // Optional overide default internationalized guidance prompts
+);
+
 \`\`\`
 
 /*
@@ -119,12 +132,29 @@ FLOW CONTROL COMMANDS:
 ✅ "help" - Context-sensitive help messages
 ✅ "status" - Current flow state information
 
+
 INTENT INTERRUPTION SYSTEM:
-✅ AI-Powered Intent Detection - Recognize new workflow requests
+✅ AI-Powered Intent Detection - Recognize new workflow requests (when `aiCallback` is provided)
+✅ Fallback Flow Matching - If `aiCallback` is `null`, the engine will match the user input to a flow by id or name (case-insensitive), and if no exact match is found, will attempt a partial match. This allows demos and tests to run without requiring a real AI function.
 ✅ Three-Tier Intent Strength - Weak/Medium/Strong intent classification
 ✅ Financial Flow Protection - Require explicit confirmation
 ✅ Graceful Interruption - Preserve context while switching
 ✅ Smart Resume Logic - Automatic return to suspended flows
+
+---
+
+## ⚡️ Demo/Test Mode: Flow Matching Without AI
+
+For demos, tests, or developer convenience, you can now set `aiCallback` to `null` when constructing the engine. In this mode, intent detection will:
+
+1. **Match by Flow Name or ID (case-insensitive):**
+  - If the user input exactly matches a flow's `name` or `id`, that flow is activated.
+2. **Partial Match Fallback:**
+  - If no exact match is found, the engine will look for a flow whose `name` or `id` contains the input (case-insensitive).
+3. **No Match:**
+  - If no match is found, no flow is activated.
+
+This makes it easy to run demos and tests without requiring a real AI intent detection function. In production, always provide a real `aiCallback` for robust intent detection.
 
 ========================================
 SECURITY & COMPLIANCE FEATURES
