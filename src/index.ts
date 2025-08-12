@@ -738,7 +738,7 @@ export type PathConfig = {
 };
 
 export interface ValueTransformConfig {
-  type: 'parseInt' | 'parseFloat' | 'toLowerCase' | 'toUpperCase' | 'trim' | 'replace' | 'concat' | 'regex' | 'date' | 'default' | 'conditional' | 'substring' | 'split' | 'join' | 'abs' | 'round' | 'floor' | 'ceil' | 'template' | 'sum' | 'average' | 'count' | 'min' | 'max' | 'multiply' | 'divide' | 'percentage' | 'custom';
+  type: 'parseInt' | 'parseFloat' | 'toLowerCase' | 'toUpperCase' | 'trim' | 'replace' | 'concat' | 'regex' | 'date' | 'default' | 'conditional' | 'substring' | 'split' | 'join' | 'abs' | 'round' | 'floor' | 'ceil' | 'template' | 'sum' | 'average' | 'count' | 'min' | 'max' | 'multiply' | 'divide' | 'percentage' | 'add' | 'subtract' | 'currentYear' | 'yearDifference' | 'handlebars' | 'custom';
   fallback?: unknown;
   prefix?: string;
   suffix?: string;
@@ -766,6 +766,10 @@ export interface ValueTransformConfig {
   precision?: number; // For rounding/decimal precision
   divisor?: number; // For division/percentage calculations
   multiplier?: number; // For multiplication operations
+  addend?: number; // For addition operations
+  subtrahend?: number; // For subtraction operations  
+  fromYear?: number; // For year difference calculations
+  dataPath?: string; // For accessing context data in templates
 }
 
 export interface ConditionConfig {
@@ -1374,6 +1378,60 @@ function setByPath(
  * applyValueTransform("test", { type: "concat", prefix: "pre_", suffix: "_post" }) // "pre_test_post"
  * ```
  */
+/**
+ * Process Handlebars-style templates with array iteration support
+ * Supports: {{field}}, {{#each array}}...{{/each}}, {{@index}}, {{@last}}
+ */
+function processHandlebarsTemplate(template: string, data: unknown, rootData: unknown): string {
+  if (!template || typeof template !== 'string') {
+    return String(data || '');
+  }
+  
+  let result = template;
+  
+  // Process {{#each}} blocks first
+  const eachRegex = /\{\{#each\s+([^}]+)\}\}(.*?)\{\{\/each\}\}/gs;
+  result = result.replace(eachRegex, (match, arrayPath, blockContent) => {
+    const arrayData = extractByPath(rootData as Record<string, unknown>, arrayPath.trim());
+    
+    if (!Array.isArray(arrayData)) {
+      logger.warn(`handlebars each: ${arrayPath} is not an array`);
+      return '';
+    }
+    
+    return arrayData.map((item, index) => {
+      let itemResult = blockContent;
+      
+      // Replace {{@index}} with current index
+      itemResult = itemResult.replace(/\{\{@index\}\}/g, String(index));
+      
+      // Replace {{@last}} condition
+      itemResult = itemResult.replace(/\{\{#unless\s+@last\}\}(.*?)\{\{\/unless\}\}/gs, 
+        (_unlessMatch: string, unlessContent: string) => {
+          return index < arrayData.length - 1 ? unlessContent : '';
+        });
+      
+      // Replace field references {{field}} with item properties
+      itemResult = itemResult.replace(/\{\{([^#@/][^}]*)\}\}/g, (_fieldMatch: string, fieldName: string) => {
+        const fieldValue = typeof item === 'object' && item !== null 
+          ? (item as Record<string, unknown>)[fieldName.trim()]
+          : undefined;
+        return fieldValue !== undefined ? String(fieldValue) : '';
+      });
+      
+      return itemResult;
+    }).join('');
+  });
+  
+  // Process simple {{field}} replacements on remaining template
+  result = result.replace(/\{\{([^#@/][^}]*)\}\}/g, (match, fieldName) => {
+    const fieldValue = extractByPath(rootData as Record<string, unknown>, fieldName.trim());
+    return fieldValue !== undefined ? String(fieldValue) : '';
+  });
+  
+  return result;
+}
+
 function applyValueTransform(
   value: ExtractedValue, 
   transform: ValueTransformConfig, 
@@ -1654,6 +1712,39 @@ function applyValueTransform(
         }
         const percentageResult = (Number(value) / transform.divisor) * 100;
         return transform.precision !== undefined ? Number(percentageResult.toFixed(transform.precision)) : percentageResult;
+      
+      // === ADDITIONAL MATHEMATICAL OPERATIONS ===
+      case 'add':
+        const addResult = Number(value) + (transform.addend || 0);
+        return transform.precision !== undefined ? Number(addResult.toFixed(transform.precision)) : addResult;
+      
+      case 'subtract':
+        const subtractResult = Number(value) - (transform.subtrahend || 0);
+        return transform.precision !== undefined ? Number(subtractResult.toFixed(transform.precision)) : subtractResult;
+      
+      // === DATE-BASED CALCULATIONS ===
+      case 'currentYear':
+        return new Date().getFullYear();
+      
+      case 'yearDifference':
+        // Calculate difference between current year and provided year
+        const currentYear = new Date().getFullYear();
+        const yearValue = transform.fromYear || Number(value);
+        return currentYear - yearValue;
+      
+      // === ENHANCED TEMPLATE SYSTEM ===
+      case 'handlebars':
+        // Enhanced template processing with Handlebars-style iteration
+        if (typeof transform.template === 'string' && transform.dataPath) {
+          // Get the data from the specified path for template context
+          let templateData = value;
+          if (typeof value === 'object' && value !== null) {
+            templateData = extractByPath(value as Record<string, unknown>, transform.dataPath);
+          }
+          
+          return processHandlebarsTemplate(transform.template, templateData, value);
+        }
+        return value;
             
       default:
         logger.warn(`Unknown transform type: ${transform.type}`);
