@@ -738,7 +738,7 @@ export type PathConfig = {
 };
 
 export interface ValueTransformConfig {
-  type: 'parseInt' | 'parseFloat' | 'toLowerCase' | 'toUpperCase' | 'trim' | 'replace' | 'concat' | 'regex' | 'date' | 'default' | 'conditional' | 'substring' | 'split' | 'join' | 'abs' | 'round' | 'floor' | 'ceil' | 'template' | 'custom';
+  type: 'parseInt' | 'parseFloat' | 'toLowerCase' | 'toUpperCase' | 'trim' | 'replace' | 'concat' | 'regex' | 'date' | 'default' | 'conditional' | 'substring' | 'split' | 'join' | 'abs' | 'round' | 'floor' | 'ceil' | 'template' | 'sum' | 'average' | 'count' | 'min' | 'max' | 'multiply' | 'divide' | 'percentage' | 'custom';
   fallback?: unknown;
   prefix?: string;
   suffix?: string;
@@ -761,6 +761,11 @@ export interface ValueTransformConfig {
   value?: unknown; // For default transforms
   flags?: string; // For regex flags
   else?: unknown; // For conditional else case
+  // New generic aggregation properties
+  field?: string; // For array aggregations - which field to aggregate
+  precision?: number; // For rounding/decimal precision
+  divisor?: number; // For division/percentage calculations
+  multiplier?: number; // For multiplication operations
 }
 
 export interface ConditionConfig {
@@ -1517,39 +1522,139 @@ function applyValueTransform(
         }
         return value;
       
-      case 'custom':
-        // Handle custom calculations (for demo purposes, implement some common ones)
-        switch (transform.calculation) {
-          case 'sum_likes':
-            if (Array.isArray(value)) {
-              return value.reduce((sum, item) => sum + (item.likes || 0), 0);
-            }
-            return 0;
-          case 'avg_rating':
-            if (Array.isArray(value)) {
-              const ratings = value.map(item => item.rating).filter(r => r);
-              return ratings.length > 0 ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
-            }
-            return 0;
-          case 'years_since':
-            const year = Number(value);
-            return year ? new Date().getFullYear() - year : 0;
-          case 'to_millions':
-            return Number(value) / 1000000;
-          case 'budget_per_employee':
-            if (typeof value === 'object' && value !== null && 
-                'budget' in value && 'employees' in value) {
-              const obj = value as Record<string, unknown>;
-              const budget = Number(obj.budget);
-              const employees = Number(obj.employees);
-              return employees > 0 ? Math.round(budget / employees) : 0;
-            }
-            return 0;
-          default:
-            logger.warn(`Unknown custom calculation: ${transform.calculation}`);
-            return value;
-        }
       
+      // === GENERIC AGGREGATION FUNCTIONS ===
+      case 'sum':
+        if (Array.isArray(value)) {
+          if (transform.field) {
+            // Sum specific field from array of objects
+            return value.reduce((sum, item) => {
+              const fieldValue = typeof item === 'object' && item !== null ? (item as Record<string, unknown>)[transform.field!] : 0;
+              return sum + Number(fieldValue || 0);
+            }, 0);
+          } else {
+            // Sum array of numbers
+            return value.reduce((sum, item) => sum + Number(item || 0), 0);
+          }
+        }
+        logger.warn(`sum transform: value is not an array: ${typeof value}`);
+        return transform.fallback !== undefined ? transform.fallback : 0;
+      
+      case 'average':
+        if (Array.isArray(value) && value.length > 0) {
+          let total = 0;
+          let count = 0;
+          
+          if (transform.field) {
+            // Average specific field from array of objects
+            for (const item of value) {
+              if (typeof item === 'object' && item !== null) {
+                const fieldValue = (item as Record<string, unknown>)[transform.field];
+                if (fieldValue !== null && fieldValue !== undefined) {
+                  total += Number(fieldValue);
+                  count++;
+                }
+              }
+            }
+          } else {
+            // Average array of numbers
+            for (const item of value) {
+              if (item !== null && item !== undefined) {
+                total += Number(item);
+                count++;
+              }
+            }
+          }
+          
+          if (count === 0) {
+            return transform.fallback !== undefined ? transform.fallback : 0;
+          }
+          
+          const avg = total / count;
+          return transform.precision !== undefined ? Number(avg.toFixed(transform.precision)) : avg;
+        }
+        logger.warn(`average transform: value is not a non-empty array: ${typeof value}, length: ${Array.isArray(value) ? value.length : 'N/A'}`);
+        return transform.fallback !== undefined ? transform.fallback : 0;
+      
+      case 'count':
+        if (Array.isArray(value)) {
+          if (transform.field) {
+            // Count non-null/non-undefined values of specific field
+            return value.filter(item => {
+              if (typeof item === 'object' && item !== null) {
+                const fieldValue = (item as Record<string, unknown>)[transform.field!];
+                return fieldValue !== null && fieldValue !== undefined;
+              }
+              return false;
+            }).length;
+          } else {
+            // Count non-null/non-undefined items
+            return value.filter(item => item !== null && item !== undefined).length;
+          }
+        }
+        logger.warn(`count transform: value is not an array: ${typeof value}`);
+        return transform.fallback !== undefined ? transform.fallback : 0;
+      
+      case 'min':
+        if (Array.isArray(value) && value.length > 0) {
+          let numbers: number[];
+          
+          if (transform.field) {
+            // Min of specific field from array of objects
+            numbers = value
+              .map(item => typeof item === 'object' && item !== null ? Number((item as Record<string, unknown>)[transform.field!]) : NaN)
+              .filter(n => !isNaN(n));
+          } else {
+            // Min of array of numbers
+            numbers = value.map(item => Number(item)).filter(n => !isNaN(n));
+          }
+          
+          return numbers.length > 0 ? Math.min(...numbers) : (transform.fallback !== undefined ? transform.fallback : 0);
+        }
+        logger.warn(`min transform: value is not a non-empty array: ${typeof value}`);
+        return transform.fallback !== undefined ? transform.fallback : 0;
+      
+      case 'max':
+        if (Array.isArray(value) && value.length > 0) {
+          let numbers: number[];
+          
+          if (transform.field) {
+            // Max of specific field from array of objects
+            numbers = value
+              .map(item => typeof item === 'object' && item !== null ? Number((item as Record<string, unknown>)[transform.field!]) : NaN)
+              .filter(n => !isNaN(n));
+          } else {
+            // Max of array of numbers
+            numbers = value.map(item => Number(item)).filter(n => !isNaN(n));
+          }
+          
+          return numbers.length > 0 ? Math.max(...numbers) : (transform.fallback !== undefined ? transform.fallback : 0);
+        }
+        logger.warn(`max transform: value is not a non-empty array: ${typeof value}`);
+        return transform.fallback !== undefined ? transform.fallback : 0;
+      
+      // === GENERIC MATHEMATICAL OPERATIONS ===
+      case 'multiply':
+        const multiplyResult = Number(value) * (transform.multiplier || 1);
+        return transform.precision !== undefined ? Number(multiplyResult.toFixed(transform.precision)) : multiplyResult;
+      
+      case 'divide':
+        if (!transform.divisor || transform.divisor === 0) {
+          logger.warn(`divide transform: invalid or zero divisor: ${transform.divisor}`);
+          return transform.fallback !== undefined ? transform.fallback : 0;
+        }
+        const divideResult = Number(value) / transform.divisor;
+        return transform.precision !== undefined ? Number(divideResult.toFixed(transform.precision)) : divideResult;
+      
+      case 'percentage':
+        // Calculate percentage: (value / divisor) * 100
+        if (!transform.divisor || transform.divisor === 0) {
+          logger.warn(`percentage transform: invalid or zero divisor: ${transform.divisor}`);
+          return transform.fallback !== undefined ? transform.fallback : 0;
+        }
+        const percentageResult = (Number(value) / transform.divisor) * 100;
+        return transform.precision !== undefined ? Number(percentageResult.toFixed(transform.precision)) : percentageResult;
+            
       default:
         logger.warn(`Unknown transform type: ${transform.type}`);
         return value;
