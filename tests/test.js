@@ -1370,8 +1370,7 @@ Real implementation would parse actual XML structure.
                   "age_years": {
                     path: "api_response.data.company.founded",
                     transform: {
-                      type: "default",
-                      value: 10
+                      type: "yearDifference"
                     }
                   },
                   "size_category": {
@@ -1445,8 +1444,9 @@ Real implementation would parse actual XML structure.
             }
           },
           "global_presence": {
-            type: "template",
-            template: "Operating in {{api_response.data.company.locations.length}} locations: {{#each api_response.data.company.locations}}{{city}}, {{country}} ({{employees}} employees){{#unless @last}}; {{/unless}}{{/each}}"
+            type: "handlebars",
+            template: "Operating in {{api_response.data.company.locations.length}} locations: {{#each api_response.data.company.locations}}{{city}}, {{country}} ({{employees}} employees){{#unless @last}}; {{/unless}}{{/each}}",
+            dataPath: "api_response.data.company"
           },
           "metrics": {
             type: "conditional",
