@@ -720,6 +720,7 @@ export type ArrayMappingConfig = {
 export type TemplateMappingConfig = {
   type: 'template';
   template: string;
+  dataPath?: string; // Optional path to resolve template data from
 };
 
 export type ConditionalMappingConfig = {
@@ -1098,9 +1099,19 @@ function applyArrayMapping(data: unknown, config: ArrayMappingConfig, args: Args
 function applyTemplateMapping(data: unknown, config: TemplateMappingConfig, args: ArgsType): string {
   let template = config.template;
   
-  // Replace placeholders with actual values
+  // Check if template contains complex Handlebars syntax
+  const hasHandlebarsIteration = /\{\{#each\s+[^}]+\}\}/.test(template);
+  
+  if (hasHandlebarsIteration) {
+    // Use enhanced Handlebars processing for complex templates
+    const templateData = config.dataPath ? extractByPath(data as PathTraversableObject, config.dataPath) : data;
+    return processHandlebarsTemplate(template, templateData, data);
+  }
+  
+  // Fallback to simple placeholder replacement for basic templates
   template = template.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
-  const value = extractByPath(data as PathTraversableObject, path.trim());
+    const resolvedData = config.dataPath ? extractByPath(data as PathTraversableObject, config.dataPath) : data;
+    const value = extractByPath(resolvedData as PathTraversableObject, path.trim());
     return value !== null && value !== undefined ? String(value) : '';
   });
   
