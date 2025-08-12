@@ -7,6 +7,13 @@ ESM TypeScript library for workflow + tool orchestration.
 npm i jsfe
 \`\`\`
 
+## 📖 Documentation
+
+- **[JavaScript Flow Engine User Guide](JavaScript%20Flow%20Engine.md)** - Comprehensive tutorials, examples, and best practices
+- **[README.md](README.md)** - Technical API reference (this document)
+
+*For detailed tutorials, step-by-step examples, and comprehensive workflow patterns, see the **[User Guide](JavaScript%20Flow%20Engine.md)**.*
+
 ## Usage
 \`\`\`ts
 import { WorkflowEngine } from "jsfe";
@@ -114,10 +121,76 @@ STEP TYPE SUPPORT:
 
 ADVANCED SWITCH CONDITIONS:
 ✅ Exact Value Matching - Traditional switch behavior
-✅ Expression Evaluation - Dynamic condition evaluation
+✅ Expression Evaluation - Dynamic condition evaluation using safe JavaScript expressions
 ✅ Mixed Branches - Combine exact matches with conditions
-✅ Secure Evaluation - No code injection, safe expression parsing
-✅ Variable Interpolation - {{variable}} template support
+✅ Secure Evaluation - No eval(), no code injection, safe expression parsing
+✅ Expression Templates - {{variable + otherVar}} and {{complex.expression > threshold}} support
+
+EXPRESSION TEMPLATE SYSTEM:
+The engine supports safe JavaScript expressions within {{}} templates:
+- Simple variables: {{userName}}, {{account.balance}}
+- Arithmetic: {{amount + fee}}, {{price * quantity}}
+- Comparisons: {{age >= 18}}, {{status === 'active'}}
+- Logical: {{isAdmin && hasAccess}}, {{retryCount < maxRetries}}
+- Complex: {{user.permissions.includes('admin') && creditScore > 700}}
+
+SAFE METHOD CALLS:
+The engine includes comprehensive security controls that allow only pre-approved methods:
+
+**String Methods:**
+✅ Case conversion: toLowerCase(), toUpperCase()
+✅ Whitespace: trim(), padStart(), padEnd()
+✅ Access: charAt(), charCodeAt(), indexOf(), lastIndexOf()
+✅ Extraction: substring(), substr(), slice(), split()
+✅ Search: includes(), startsWith(), endsWith(), match(), search()
+✅ Manipulation: replace(), repeat(), concat()
+✅ Utility: toString(), valueOf(), length, localeCompare(), normalize()
+
+**Array Methods:**
+✅ Inspection: length, includes(), indexOf(), lastIndexOf()
+✅ Extraction: slice(), join()
+✅ Conversion: toString(), valueOf()
+
+**Math Methods:**
+✅ Basic: abs(), ceil(), floor(), round()
+✅ Comparison: max(), min()
+✅ Advanced: pow(), sqrt(), random()
+
+**Examples:**
+```javascript
+// String processing
+{{userInput.toLowerCase().trim()}}
+{{email.includes('@') && email.length > 5}}
+{{text.substring(0, 10).padEnd(15, '...')}}
+
+// Array operations  
+{{items.length > 0 && items.includes('premium')}}
+{{categories.slice(0, 3).join(', ')}}
+
+// Mathematical operations
+{{Math.round(price * 1.08)}} // Tax calculation
+{{Math.max(balance, 0)}} // Ensure non-negative
+```
+
+SAFE FUNCTIONS:
+✅ **Built-in Functions:** parseInt(), parseFloat(), isNaN(), isFinite()
+✅ **Type Conversion:** String(), Number(), Boolean() (non-constructor forms)
+✅ **URI Encoding:** encodeURIComponent(), decodeURIComponent(), encodeURI(), decodeURI()
+✅ **User-Defined Functions:** Any functions registered in the APPROVED_FUNCTIONS registry
+
+**Examples:**
+```javascript
+// Type conversion and validation
+{{Number(input) > 0 && !isNaN(Number(input))}}
+{{Boolean(user.isActive && user.hasAccess)}}
+
+// URI encoding for API calls
+{{encodeURIComponent(searchTerm)}}
+
+// User-defined approved functions
+{{currentTime()}} // If registered as approved function
+{{extractCryptoFromInput(userMessage)}} // If registered as approved function to provide Custom business logic
+```
 
 INTELLIGENT ERROR HANDLING:
 ✅ Smart Default OnFail - Context-aware error recovery
@@ -161,8 +234,10 @@ SECURITY & COMPLIANCE FEATURES
 ========================================
 
 EXPRESSION SECURITY:
-✅ Safe Expression Evaluation - No eval(), no code injection
-✅ Pattern-Based Security - Block dangerous function calls
+✅ Safe Expression Evaluation - No eval(), no code injection, allowlist-based safe method calls
+✅ Safe Method Allowlist - Only pre-approved string, array, and math methods allowed
+✅ Safe Function Registry - Built-in safe functions + user-defined approved functions
+✅ Pattern-Based Security - Block dangerous operations (constructors, eval, etc.)
 ✅ Variable Path Validation - Secure nested property access
 ✅ Input Sanitization - Clean and validate all user inputs
 
