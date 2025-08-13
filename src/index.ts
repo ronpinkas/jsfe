@@ -18,48 +18,127 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 **/
 
 /**
- * Flows Engine for any conversational platform
- * ============================================
+ * JavaScript Flow Engine for Conversational Platforms
+ * ==================================================
  *
  * Overview:
  * ---------
- * This module implements a robust, extensible, and secure workflow orchestration engine
- * for conversational and automation platforms. It is designed to power production-grade,
- * multi-flow, multi-step user journeys with advanced interruption, resumption, and tool
- * integration capabilities.
+ * The JavaScript Flow Engine is a sophisticated, host-agnostic workflow orchestration system
+ * designed to serve as a pluggable intent detector and workflows orchestrator for any
+ * conversational platform. Whether integrated with AI chat assistants, live agent systems,
+ * customer service platforms, or any other conversational interface, the engine provides
+ * reliable, secure, and intelligent workflow automation.
  *
  * Key Features:
  * -------------
- * - Stack-of-stacks model for flow frames, enabling nested flows, interruptions, and resumptions.
- * - Modular step handlers for SAY, SAY-GET, SET, SWITCH, TOOL, and SUBFLOW steps.
- * - Secure, pattern-based expression evaluation for variable interpolation and flow logic.
- * - AI-powered intent detection, argument extraction, and flow activation, with robust fallbacks.
- * - Universal flow control commands (help, status, cancel, exit) available at any point in a flow.
- * - Comprehensive error handling, logging, and audit support for production reliability.
- * - Flexible tool integration: supports local functions, HTTP APIs, and mock/test tools withvalidation and authentication.
- * - Metadata-driven flow definitions (risk, auth, category) for security and analytics.
+ * - Advanced response mapping with 25+ transform types including mathematical operations,
+ *   statistical aggregations, date/time processing, and Handlebars-style templates
+ * - Stack-of-stacks architecture for flow frames, enabling nested flows, interruptions, and resumptions
+ * - Comprehensive step handlers: SAY, SAY-GET, SET, SWITCH, CASE, CALL-TOOL, and CALL-FLOW
+ * - Secure, pattern-based expression evaluation for variable interpolation and flow logic
+ * - AI-powered intent detection, argument extraction, and flow activation with robust fallbacks
+ * - Universal flow control commands (help, status, cancel, exit) available at any point in a flow
+ * - Enterprise-grade error handling, logging, and audit support for production reliability
+ * - Flexible tool integration: HTTP APIs, local functions, and mock/test tools with validation
+ * - Comprehensive internationalization (i18n) support with language-specific properties
+ * - Metadata-driven flow definitions (risk, auth, category) for security and analytics
+ *
+ * Enhanced Transformation System:
+ * ------------------------------
+ * - Mathematical Operations: add, subtract, multiply, divide, percentage, abs, round, floor, ceil
+ * - Statistical Functions: sum, average, count, min, max for array aggregations
+ * - Date/Time Processing: currentYear, yearDifference for dynamic temporal calculations
+ * - Advanced Templates: Handlebars-style iteration with {{#each}}, @index, @last context
+ * - Enhanced Path Resolution: Support for array.length and complex object navigation
  *
  * Security Model:
  * --------------
- * - All user-supplied expressions are evaluated with strict pattern checks to prevent code injection or unsafe operations.
- * - No arbitrary code execution is allowed in variable interpolation or flow logic.
- * - Tool calls support secure authentication (Bearer, Basic, HMAC/hash) and header management.
+ * - All user-supplied expressions are evaluated with strict pattern checks to prevent code injection
+ * - No arbitrary code execution is allowed in variable interpolation or flow logic
+ * - Tool calls support secure authentication (Bearer, Basic, API Key) and header management
+ * - Comprehensive input validation with JSON Schema for all tool parameters
  *
  * Usage:
  * ------
- * - Instantiate the WorkflowEngine with a flows menu, tools registry, and approved local functions.
- * - Use `updateActivity(contextEntry, userId)` to share user input before your processing and assistant responses after processing.
- * - For user inputs: contextEntry.role = 'user' - analyzed and optionally triggers full flow logic
- * - For assistant responses: contextEntry.role = 'assistant' - adds to context stack only
- * - Extend with new step handlers or tool integrations as needed for your platform.
+ * ```javascript
+ * // 1. Create the engine
+ * const engine = new WorkflowEngine(
+ *   hostLogger,          // Your logging instance
+ *   aiCallback,          // Your AI communication function
+ *   flowsMenu,           // Array of flow definitions
+ *   toolsRegistry,       // Array of tool definitions
+ *   APPROVED_FUNCTIONS,  // Pre-approved local functions
+ *   globalVariables,     // Optional: Session-wide variables
+ *   validateOnInit,      // Optional: Enable pre-flight validation (default: true)
+ *   language,            // Optional: User's preferred language
+ *   messageRegistry,     // Optional: Custom message templates
+ *   guidanceConfig       // Optional: User assistance configuration
+ * );
+ * 
+ * // 2. Initialize a session for each user
+ * const sessionContext = engine.initSession(yourLogger, 'user-123', 'session-456');
+ * 
+ * // 3. Process user input and assistant responses
+ * const result = await engine.updateActivity(contextEntry, sessionContext);
+ * ```
  *
- * Maintenance:
- * ------------
- * - Review and update security patterns regularly.
- * - Ensure comprehensive test coverage for all step handlers and flow control logic.
- * - Monitor logs and audit trails for production issues and user behavior analytics.
+ * Session Management:
+ * ------------------
+ * - Each user requires a unique session context via `initSession(logger, userId, sessionId)`
+ * - The `EngineSessionContext` object should be persisted by your application
+ * - Pass the same session context to `updateActivity` for conversation continuity
  *
- * Author: instantAIguru.com Team
+ * Context Entry Types:
+ * -------------------
+ * - User input: contextEntry.role = 'user' - analyzed and may trigger flow execution
+ * - Assistant response: contextEntry.role = 'assistant' - added to context for awareness
+ *
+ * ContextEntry Structure:
+ * ----------------------
+ * ```typescript
+ * interface ContextEntry {
+ *   role: 'user' | 'assistant' | 'system' | 'tool';  // Message role type
+ *   content: string | Record<string, unknown>;       // Message content (text, object, etc.)
+ *   timestamp: number;                               // Unix timestamp in milliseconds
+ *   stepId?: string;                                 // Optional: Associated flow step ID
+ *   toolName?: string;                               // Optional: Tool name for tool messages
+ *   metadata?: Record<string, unknown>;              // Optional: Additional context data
+ * }
+ * ```
+ *
+ * Example Usage:
+ * ```javascript
+ * // User message
+ * const userEntry = {
+ *   role: 'user',
+ *   content: 'I need help with my account',
+ *   timestamp: Date.now()
+ * };
+ *
+ * // Assistant response  
+ * const assistantEntry = {
+ *   role: 'assistant',
+ *   content: 'I can help you with your account. What specific issue are you experiencing?',
+ *   timestamp: Date.now(),
+ *   stepId: 'greeting-step'
+ * };
+ * ```
+ *
+ * Production Deployment:
+ * ---------------------
+ * - Comprehensive test coverage with 40+ validation scenarios
+ * - Built-in monitoring and metrics collection
+ * - Containerization support with Docker and Kubernetes
+ * - Horizontal scaling capabilities
+ * - Enterprise security and compliance features
+ *
+ * Documentation:
+ * --------------
+ * - Complete User Guide: JavaScript Flow Engine.md
+ * - API Reference: README.md  
+ * - Examples: Comprehensive test scenarios and real-world implementations
+ *
+ * Author: InstantAIGuru.com Team
  * Last updated: August 2025
  **/
 
