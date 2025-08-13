@@ -114,6 +114,9 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
  *   content: 'I need help with my account',
  *   timestamp: Date.now()
  * };
+ * // Process the message
+ * await engine.updateActivity(userEntry, sessionContext);
+ * 
  *
  * // Assistant response  
  * const assistantEntry = {
@@ -122,6 +125,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
  *   timestamp: Date.now(),
  *   stepId: 'greeting-step'
  * };
+ * // Process the message
+ * await engine.updateActivity(assistantEntry, sessionContext);
  * ```
  *
  * Production Deployment:
