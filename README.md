@@ -201,11 +201,34 @@ const flowsMenu = [
     steps: [
       { type: "SAY", value: "Let's process your payment." },
       { type: "SAY-GET", variable: "amount", value: "Enter amount:" },
-      { type: "CALL-TOOL", tool: "PaymentProcessor", args: {...} }
+      { type: "CALL-TOOL", tool: "PaymentProcessor", args: {...}, variable: "payment_result", }
     ]
   }
 ];
 ```
+#### Referencing Tool Results in Later Steps
+When a CALL-TOOL step finishes, it can store the returned data into a variable you name via the variable property. That variable will hold the entire return object from the tool.
+```javascript
+Using variable
+{
+  "type": "CALL-TOOL",
+  "tool": "CreateSupportTicket",
+  "variable": "ticket_result",
+  "args": {
+    "subject": "{{subject}}",
+    "description": "{{description}}",
+    "customer_email": "{{customer_email}}"
+  }
+},
+{
+  "type": "SAY",
+  "value": "Ticket created: {{ticket_result.ticket.id}} — we'll email updates to {{ticket_result.ticket.customer_email}}."
+}
+```
+##### Important:
+Whatever your tool returns becomes the value of the variable you specify.
+Because you get the raw return object, you do not need to use .result in your template paths—just reference the keys the tool returns (ticket_result.ticket.id, ticket_result.ok, etc.).
+If you omit variable, you won’t be able to access the tool’s output later.
 
 #### 2. **Tools Registry** - External Integrations
 ```javascript
