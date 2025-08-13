@@ -182,6 +182,77 @@ The `validateOnInit` parameter (boolean, default: `true`) controls whether the e
 - Use validation results to improve flow quality and prevent runtime failures
 - Review validation warnings as they often indicate potential improvement areas
 
+### Flow Definition Structure
+
+Each workflow is defined using a comprehensive FlowDefinition interface that supports localization, metadata, and declarative configuration:
+
+```typescript
+interface FlowDefinition {
+  id: string;                          // Unique flow identifier
+  name: string;                        // Human-readable flow name
+  description: string;                 // Clear description of what the flow does
+  version: string;                     // Flow version for compatibility
+  steps: FlowStep[];                   // Array of executable flow steps
+  
+  // Localization Support
+  prompt?: string;                     // Default prompt for the flow
+  prompt_en?: string;                  // English prompt (default)
+  prompt_es?: string;                  // Spanish prompt
+  prompt_pt?: string;                  // Portuguese prompt
+  prompt_fr?: string;                  // French prompt
+  prompt_de?: string;                  // German prompt
+  [key: `prompt_${string}`]: string | undefined; // Support for any language code
+  
+  // Optional Configuration
+  variables?: Record<string, {         // Flow-specific variable definitions
+    type: string;                      // Variable type (string, number, boolean, etc.)
+    scope: string;                     // Variable scope (flow, global, session)
+    value?: unknown;                   // Initial value for the variable
+  }>;
+  
+  metadata?: {                         // Flow metadata for classification
+    riskLevel?: string;                // Risk classification (low, medium, high, critical)
+    category?: string;                 // Flow category (payment, support, information, etc.)
+    [key: string]: unknown;            // Additional custom metadata
+  };
+}
+```
+
+**Key Definition Properties:**
+
+- **Core Identity**: `id`, `name`, `description`, `version` define the flow's identity and purpose
+- **Execution Logic**: `steps` array contains the declarative workflow logic
+- **Multi-language Support**: Engine automatically selects appropriate prompt based on user's language preference
+- **Variable Management**: Define flow-specific variables with types, scopes, and initial values
+- **Risk Classification**: `metadata.riskLevel` enables security-conscious flow handling
+- **Categorization**: `metadata.category` helps with flow organization and discovery
+
+**Localization Example:**
+```javascript
+{
+  id: "payment-flow",
+  name: "ProcessPayment",
+  description: "Handle secure payment processing",
+  prompt: "Let's process your payment",           // Default
+  prompt_en: "Let's process your payment",        // English
+  prompt_es: "Procesemos su pago",               // Spanish  
+  prompt_fr: "Traitons votre paiement",         // French
+  prompt_de: "Lassen Sie uns Ihre Zahlung bearbeiten", // German
+  version: "1.0.0",
+  steps: [
+    { type: "SAY", value: "I'll help you with your payment." },
+    { type: "SAY-GET", variable: "amount", value: "Enter the payment amount:" }
+  ],
+  metadata: {
+    riskLevel: "high",
+    category: "financial"
+  }
+}
+```
+
+**Flow Execution Context:**
+During execution, the engine creates lightweight FlowFrame objects that maintain execution state while accessing FlowDefinition properties dynamically for optimal memory usage and localization support.
+
 ### Integration Pattern: The updateActivity() Method
 
 The engine integrates with host systems through the **`updateActivity()`** method, which handles the complete intent detection and execution cycle:
