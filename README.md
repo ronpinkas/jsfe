@@ -186,6 +186,133 @@ The Flow Engine implements a sophisticated "stack-of-stacks" architecture that a
    - **Security Controls**: Rate limiting, risk classification, audit logging
    - **Error Handling**: Automatic retry logic and graceful degradation
 
+5. **Response Mapping Configuration (MappingConfig Interface)**
+   The comprehensive response mapping system supports multiple transformation types:
+   ```typescript
+   export type MappingConfig =
+     | JsonPathMappingConfig
+     | ObjectMappingConfig  
+     | ArrayMappingConfig
+     | TemplateMappingConfig
+     | ConditionalMappingConfig
+     | PathConfig
+     | string
+     | Record<string, unknown>;
+
+   // JSONPath-based field extraction and transformation
+   export type JsonPathMappingConfig = {
+     type: 'jsonPath';
+     mappings: Record<string, {
+       path: string;                                   // JSONPath expression for data extraction
+       transform?: ValueTransformConfig;               // Optional value transformation
+       fallback?: unknown;                             // Fallback value if path not found
+     }>;
+     strict?: boolean;                                 // Strict mode validation
+   };
+
+   // Object structure mapping with nested support
+   export type ObjectMappingConfig = {
+     type: 'object';
+     mappings: Record<string, string | PathConfig | MappingConfig | object>;
+     strict?: boolean;                                 // Strict mode validation
+   };
+
+   // Array processing with filtering, sorting, and pagination
+   export type ArrayMappingConfig = {
+     type: 'array';
+     source?: string;                                  // Source array path
+     filter?: ConditionConfig;                         // Filtering conditions
+     itemMapping?: MappingConfig;                      // Per-item transformation
+     sort?: { field: string; order?: 'asc' | 'desc' }; // Sorting configuration
+     offset?: number;                                  // Pagination offset
+     limit?: number;                                   // Pagination limit  
+     fallback?: unknown[];                             // Fallback array if source not found
+   };
+
+   // Template-based string generation with variable substitution
+   export type TemplateMappingConfig = {
+     type: 'template';
+     template: string;                                 // Template string with {{variable}} placeholders
+     dataPath?: string;                                // Optional path to resolve template data from
+   };
+
+   // Conditional logic-based mapping selection
+   export type ConditionalMappingConfig = {
+     type: 'conditional';
+     conditions: Array<{
+       if: ConditionConfig;                            // Condition evaluation
+       then: MappingConfig;                            // Mapping to apply if condition true
+     }>;
+     else?: MappingConfig;                             // Default mapping if no conditions match
+   };
+
+   // Path-based value extraction with transformation
+   export type PathConfig = {
+     path: string;                                     // Data path for extraction
+     transform?: ValueTransformConfig;                 // Optional value transformation
+     fallback?: unknown;                               // Fallback value if path not found
+   };
+
+   // Comprehensive value transformation system with 25+ transform types
+   export interface ValueTransformConfig {
+     type: 'parseInt' | 'parseFloat' | 'toLowerCase' | 'toUpperCase' | 'trim' | 
+           'replace' | 'concat' | 'regex' | 'date' | 'default' | 'conditional' | 
+           'substring' | 'split' | 'join' | 'abs' | 'round' | 'floor' | 'ceil' | 
+           'template' | 'sum' | 'average' | 'count' | 'min' | 'max' | 'multiply' | 
+           'divide' | 'percentage' | 'add' | 'subtract' | 'currentYear' | 
+           'yearDifference' | 'handlebars' | 'custom';
+     
+     // Common transformation parameters
+     fallback?: unknown;                               // Default value for failed transforms
+     prefix?: string;                                  // String prefix for concat operations
+     suffix?: string;                                  // String suffix for concat operations
+     pattern?: string;                                 // Regex pattern for replace/match operations
+     replacement?: string;                             // Replacement string for regex operations
+     template?: string;                                // Template string for template transforms
+     value?: unknown;                                  // Static value for default transforms
+     
+     // Mathematical operation parameters
+     precision?: number;                               // Decimal precision for rounding operations
+     divisor?: number;                                 // Divisor for division/percentage operations
+     multiplier?: number;                              // Multiplier for multiplication operations
+     addend?: number;                                  // Value to add for addition operations
+     subtrahend?: number;                              // Value to subtract for subtraction operations
+     
+     // Array and aggregation parameters
+     field?: string;                                   // Field name for array aggregations
+     delimiter?: string;                               // Delimiter for join/split operations
+     index?: number;                                   // Array index for element selection
+     
+     // Conditional and date parameters
+     condition?: ConditionConfig;                      // Condition for conditional transforms
+     fromYear?: number;                                // Start year for year difference calculations
+     dataPath?: string;                                // Path for accessing context data
+   }
+
+   // Flexible condition evaluation system
+   export interface ConditionConfig {
+     field: string;                               // Field path for evaluation
+     operator: 'equals' | 'eq' | 'notEquals' | 'ne' | 'contains' | 'exists' | 
+               'notExists' | 'greaterThan' | 'gt' | 'lessThan' | 'lt' | 
+               'greaterThanOrEqual' | 'gte' | 'lessThanOrEqual' | 'lte' | 
+               'startsWith' | 'endsWith' | 'matches' | 'in' | 'hasLength' | 
+               'isArray' | 'isObject' | 'isString' | 'isNumber';
+     value?: unknown;                             // Comparison value for operators
+   }
+   ```
+   
+   **Response Mapping Technical Features:**
+   - **Type Safety**: Full TypeScript interface definitions with validation
+   - **Declarative Configuration**: No code injection - pure JSON configuration
+   - **Comprehensive Transforms**: 25+ built-in transformation types
+   - **Mathematical Operations**: Arithmetic, statistical, and precision control
+   - **Date Processing**: Dynamic date calculations and formatting
+   - **Template System**: Handlebars-style variable substitution with array iteration
+   - **Conditional Logic**: Complex branching and filtering capabilities
+   - **Array Processing**: Filtering, sorting, pagination, and aggregation
+   - **Path Resolution**: JSONPath support with fallback handling
+   - **Security**: Complete input sanitization and validation
+
 ## Features & Capabilities
 
 ### Flow Execution Modes
