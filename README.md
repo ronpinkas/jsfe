@@ -16,7 +16,7 @@ npm i jsfe
 
 ## Usage
 
-```typescript
+```javascript
 import { WorkflowEngine } from "jsfe";
 
 // 1. Create the engine
@@ -36,9 +36,96 @@ const engine = new WorkflowEngine(
 // 2. Initialize a session for each user
 const sessionContext = engine.initSession(yourLogger, 'user-123', 'session-456');
 
-// 3. Process user input and assistant responses
-const result = await engine.updateActivity(contextEntry, sessionContext);
+// 3. Plug-in the engine to process User message
+const userEntry = {
+  role: 'user',
+  content: 'I need help with my account',
+};
+const result = await engine.updateActivity(contextEntry, context.sessionContext);
+if (result) {
+  // Intent detected and handled no need to proceed to normal response generation
+  return result;
+}
+
+// 4. Call your normal Generate reply process as usual
+const reply = await yourConversationalReply(input);
+
+// 5. Update the engine's context with the generated reply
+const assistantEntry = {
+  role: 'assistant',
+  content: 'I can help you with your account. What specific issue are you experiencing?',
+};
+await engine.updateActivity(assistantEntry, sessionContext);
+
+// Return the generated reply to the user
+return reply;
 ```
+
+## Engine Initialization Parameters
+
+The WorkflowEngine constructor accepts the following parameters in order, each serving a specific purpose in the engine's operation:
+
+**1. hostLogger** (Logger | null)
+- **Purpose**: Primary logging interface for the host application
+- **Requirements**: Must support `.debug()`, `.info()`, `.warn()`, `.error()` methods
+- **Usage**: Engine uses this for all operational logging and debugging output
+- **Example**: Winston, or custom logger implementation
+- **Nullable**: Can be `null` to disable host application logging
+
+**2. aiCallback** (Function)
+- **Purpose**: AI communication function for intent detection and response generation
+- **Signature**: `async (systemInstruction: string, userMessage: string) => string`
+- **Integration**: Engine calls this function when AI analysis is needed
+- **Requirements**: Must return AI response as string, handle errors gracefully
+- **Details**: See dedicated AI Callback Function section below
+
+**3. flowsMenu** (FlowDefinition[])
+- **Purpose**: Array of available workflow definitions
+- **Content**: All workflows that the engine can detect and execute
+- **Validation**: Engine validates flow structure during initialization
+- **Requirements**: Each flow must have valid id, name, description, and steps
+
+**4. toolsRegistry** (ToolDefinition[])
+- **Purpose**: Array of external tool definitions for CALL-TOOL steps
+- **Content**: HTTP APIs, local functions, and mock tools available to workflows
+- **Validation**: Parameter schemas validated against OpenAI Function Calling Standard
+- **Security**: Tools define their own security levels and authentication requirements
+
+**5. APPROVED_FUNCTIONS** (Map<string, Function>)
+- **Purpose**: Secure registry of pre-approved local JavaScript functions
+- **Security**: Only functions in this map can be executed by local-type tools
+- **Format**: `Map` where keys are function names and values are the actual functions
+- **Validation**: Functions must match tool definitions in toolsRegistry
+
+**6. globalVariables** (Record<string, unknown>, optional)
+- **Purpose**: Session-wide variables accessible to all workflows
+- **Scope**: Available to all flows in the session via variable interpolation
+- **Security**: Safe sharing of host application data with workflows
+- **Examples**: User ID, session ID, application configuration, environmental data
+
+**7. validateOnInit** (boolean, optional)
+- **Purpose**: Enable comprehensive flow and tool validation during initialization
+- **Default**: `true` - recommended for development and production
+- **Performance**: Set to `false` only in high-performance scenarios with pre-validated flows
+- **Output**: Detailed validation reports with errors, warnings, and success metrics
+
+**8. language** (string, optional)
+- **Purpose**: User's preferred language for localized messages and prompts
+- **Format**: ISO language code ('en', 'es', 'fr', 'de', etc.)
+- **Default**: 'en' if not specified
+- **Usage**: Engine selects appropriate prompt_xx properties from flow definitions
+
+**9. messageRegistry** (MessageRegistry, optional)
+- **Purpose**: Custom message templates for engine-generated user messages
+- **Format**: Multi-language message registry with customizable system messages
+- **Override**: Allows customization of built-in engine messages
+- **Localization**: Supports multiple languages with fallback to default messages
+
+**10. guidanceConfig** (GuidanceConfig, optional)
+- **Purpose**: Configuration for user guidance and help messages
+- **Features**: Controls how and when the engine provides user assistance
+- **Modes**: Append, prepend, template, or none for guidance integration
+- **Context**: Different guidance for general vs. payment/financial workflows
 
 ### AI Callback Function
 
@@ -99,6 +186,72 @@ Both parameters are carefully engineered by the engine to work together for opti
 **Alternative AI Services:**
 You can integrate any AI service (Claude, Gemini, local LLMs, etc.) by implementing this same interface. The engine only requires a function that takes system instructions and user input, then returns an AI response.
 
+### Core Registries
+
+The engine operates through four primary registries that define its capabilities:
+
+#### 1. **Flows Registry** - Workflow Definitions
+```javascript
+const flowsMenu = [
+  {
+    id: "payment-workflow",
+    name: "ProcessPayment", 
+    prompt: "Process a payment",
+    description: "Handle payment processing with validation",
+    steps: [
+      { type: "SAY", value: "Let's process your payment." },
+      { type: "SAY-GET", variable: "amount", value: "Enter amount:" },
+      { type: "CALL-TOOL", tool: "PaymentProcessor", args: {...} }
+    ]
+  }
+];
+```
+
+#### 2. **Tools Registry** - External Integrations
+```javascript
+const toolsRegistry = [
+  {
+    id: "PaymentProcessor",
+    name: "Process Payment",
+    description: "Processes financial transactions securely",
+    parameters: { /* OpenAI Function Calling Standard Schema */ },
+    implementation: {
+      type: "local", // or "http" for REST APIs
+      function: "processPayment",
+      timeout: 10000
+    },
+    security: {
+      requiresAuth: true,
+      auditLevel: "critical",
+      dataClassification: "financial"
+    }
+  }
+];
+```
+
+#### 3. **Approved Functions Registry** - Secure Local Functions
+```javascript
+const APPROVED_FUNCTIONS = new Map();
+
+// Define secure local functions
+async function processPayment(args) {
+  // Secure payment processing logic
+  return { transactionId: "...", status: "success" };
+}
+
+// Register approved functions
+APPROVED_FUNCTIONS.set('processPayment', processPayment);
+```
+
+#### 4. **Global Variables** - Secure Sharing of Local Data
+```javascript
+const globalVariables = {
+  caller_id: "(555) 123-4567",
+  caller_name: "John Doe", 
+  thread_id: "conversation-123"
+};
+```
+
 ### Session Management
 
 - Each user requires a unique session context via `initSession(logger, userId, sessionId)`
@@ -121,26 +274,6 @@ interface ContextEntry {
   toolName?: string;                               // Optional: Used by the system to record Tool result into the the chat context
   metadata?: Record<string, unknown>;              // Optional: Additional context data
 }
-```
-
-### Example Usage
-
-```typescript
-// User message
-const userEntry = {
-  role: 'user',
-  content: 'I need help with my account',
-};
-// Process the message
-await engine.updateActivity(userEntry, sessionContext);
-
-// Assistant response  
-const assistantEntry = {
-  role: 'assistant',
-  content: 'I can help you with your account. What specific issue are you experiencing?',
-};
-// Process the message
-await engine.updateActivity(assistantEntry, sessionContext);
 ```
 
 ## Architecture Overview
