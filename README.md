@@ -15,22 +15,77 @@ npm i jsfe
 *For detailed tutorials, step-by-step examples, and comprehensive workflow patterns, see the **[User Guide](JavaScript%20Flow%20Engine.md)**.*
 
 ## Usage
-\`\`\`ts
+
+```typescript
 import { WorkflowEngine } from "jsfe";
+
+// 1. Create the engine
 const engine = new WorkflowEngine(
-  hostLogger: Logger, // logger instance like winston - supporting .info/.debug/.warn/.error methods
-  aiCallback: AiCallbackFunction, // host provided access to AI fetch function aiFetcher(systemInstructions, userMessage) -> response string
-  flowsMenu: FlowDefinition[], // host defined available flows
-  toolsRegistry: ToolDefinition[], // host defined tools registry
-  APPROVED_FUNCTIONS: ApprovedFunctions, // Optional host provided safe functions map
-  globalVariables?: Record<string, unknown> // Optional global variables shared across all new flows
-  validateOnInit: boolean = true, // Optional validate all flows an enggine initialization
-  language?: string, // Optional language code
-  messageRegistry?: MessageRegistry, // Optional override all engine internationalized messages
-  guidanceConfig?: GuidanceConfig, // Optional overide default internationalized guidance prompts
+  hostLogger,          // Your logging instance
+  aiCallback,          // Your AI communication function
+  flowsMenu,           // Array of flow definitions
+  toolsRegistry,       // Array of tool definitions
+  APPROVED_FUNCTIONS,  // Pre-approved local functions
+  globalVariables,     // Optional: Session-wide variables
+  validateOnInit,      // Optional: Enable pre-flight validation (default: true)
+  language,            // Optional: User's preferred language
+  messageRegistry,     // Optional: Custom message templates
+  guidanceConfig       // Optional: User assistance configuration
 );
 
-\`\`\`
+// 2. Initialize a session for each user
+const sessionContext = engine.initSession(yourLogger, 'user-123', 'session-456');
+
+// 3. Process user input and assistant responses
+const result = await engine.updateActivity(contextEntry, sessionContext);
+```
+
+### Session Management
+
+- Each user requires a unique session context via `initSession(logger, userId, sessionId)`
+- The `EngineSessionContext` object should be persisted by your application
+- Pass the same session context to `updateActivity` for conversation continuity
+
+### Context Entry Types
+
+- User input: `contextEntry.role = 'user'` - analyzed and may trigger flow execution
+- Assistant response: `contextEntry.role = 'assistant'` - added to context for awareness
+
+### ContextEntry Structure
+
+```typescript
+interface ContextEntry {
+  role: 'user' | 'assistant' | 'system' | 'tool';  // Message role type
+  content: string | Record<string, unknown>;       // Message content (text, object, etc.)
+  timestamp: number;                               // Unix timestamp in milliseconds
+  stepId?: string;                                 // Optional: Associated flow step ID
+  toolName?: string;                               // Optional: Tool name for tool messages
+  metadata?: Record<string, unknown>;              // Optional: Additional context data
+}
+```
+
+### Example Usage
+
+```typescript
+// User message
+const userEntry = {
+  role: 'user',
+  content: 'I need help with my account',
+  timestamp: Date.now()
+};
+// Process the message
+await engine.updateActivity(userEntry, sessionContext);
+
+// Assistant response  
+const assistantEntry = {
+  role: 'assistant',
+  content: 'I can help you with your account. What specific issue are you experiencing?',
+  timestamp: Date.now(),
+  stepId: 'greeting-step'
+};
+// Process the message
+await engine.updateActivity(assistantEntry, sessionContext);
+```
 
 /*
 ==========================================
