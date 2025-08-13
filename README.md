@@ -71,7 +71,6 @@ interface ContextEntry {
 const userEntry = {
   role: 'user',
   content: 'I need help with my account',
-  timestamp: Date.now()
 };
 // Process the message
 await engine.updateActivity(userEntry, sessionContext);
@@ -80,8 +79,6 @@ await engine.updateActivity(userEntry, sessionContext);
 const assistantEntry = {
   role: 'assistant',
   content: 'I can help you with your account. What specific issue are you experiencing?',
-  timestamp: Date.now(),
-  stepId: 'greeting-step'
 };
 // Process the message
 await engine.updateActivity(assistantEntry, sessionContext);
