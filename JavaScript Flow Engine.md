@@ -186,11 +186,60 @@ The `validateOnInit` parameter (boolean, default: `true`) controls whether the e
 
 The engine integrates with host systems through the **`updateActivity()`** method, which handles the complete intent detection and execution cycle:
 
-#### Pre-Processing Integration
+#### Step-by-Step Usage Process
+
+0. **Initialize Engine**: Set up the WorkflowEngine with your configurations
+1. **Initialize Session**: Create a session context for conversation management
+2. **Create ContextEntry**: Format user input as a ContextEntry object  
+3. **Call updateActivity()**: Pass the ContextEntry and session context to the engine
+4. **Handle Response**: Process the workflow result or continue with regular conversation
+
+#### Engine Initialization
 ```javascript
-async function flowEnginePlugin(context, input) {
-  const engine = context.engine;
-  
+import { WorkflowEngine } from './jsfe.ts.js';
+
+// Initialize the engine (typically done once at application startup)
+const engine = new WorkflowEngine(
+  hostLogger,           // Any logger supporting .debug/.info/.warn/.error (or null)
+  aiCallback,           // host provided access to AI function
+  flowsMenu,            // Available workflows
+  toolsRegistry,        // Tool definitions
+  APPROVED_FUNCTIONS,   // Secure local functions
+  logger,               // Logging implementation
+  language,             // Language preference ('en', 'es', etc.)
+  messageRegistry,      // Custom message templates (optional)
+  guidanceConfig,       // User guidance settings (optional)
+  validateOnInit,       // Integrity validation flag (default: true)
+  globalVariables       // Session-wide variables (optional)
+);
+```
+
+#### Session Management
+```javascript
+// Initialize session context (typically done once per conversation)
+const sessionContext = engine.initSession({
+  userId: 'user123',
+  sessionId: 'session456', 
+  conversationId: 'conv789'
+});
+```
+
+#### ContextEntry Structure
+```javascript
+const contextEntry = {
+  role: 'user',              // Required: 'user' or 'assistant'
+  content: 'user message',   // Required: The actual message content
+  timestamp: Date.now(),     // Required: When the message was created
+  metadata: {                // Optional: Additional context
+    source: 'chat_app',
+    userId: 'user123'
+  }
+};
+```
+
+#### Integration Example
+```javascript
+async function handleUserInput(input, sessionContext) {
   // Create ContextEntry for user input
   const contextEntry = {
     role: 'user',
@@ -198,18 +247,10 @@ async function flowEnginePlugin(context, input) {
     timestamp: Date.now()
   };
   
-  // Forward input to engine for conditional processing
-  return await engine.updateActivity(contextEntry, context.userId);
-}
-```
-
-#### Post-Processing Integration 
-```javascript
-async function handleQuery(context, input) {
   // Try workflow engine first
-  const result = await flowEnginePlugin(context, input);
-  if (result) {
-    return result; // Engine handled the request
+  const workflowResult = await engine.updateActivity(contextEntry, sessionContext);
+  if (workflowResult) {
+    return workflowResult; // Engine handled the request
   }
 
   // Handle as regular conversation
@@ -220,7 +261,7 @@ async function handleQuery(context, input) {
     role: 'assistant', 
     content: reply,
     timestamp: Date.now()
-  }, context.userId);
+  }, sessionContext);
 
   return reply;
 }
@@ -294,16 +335,16 @@ class ConversationHandler {
     );
   }
   
-  async processUserInput(input, context) {
+  async processUserInput(input, sessionContext) {
     // Always check for workflow intents first
     const contextEntry = {
       role: 'user',
       content: input,
       timestamp: Date.now(),
-      metadata: { source: 'custom_app', ...context }
+      metadata: { source: 'custom_app' }
     };
     
-    const workflowResponse = await this.engine.updateActivity(contextEntry, context.userId);
+    const workflowResponse = await this.engine.updateActivity(contextEntry, sessionContext);
     
     if (workflowResponse) {
       return { 
