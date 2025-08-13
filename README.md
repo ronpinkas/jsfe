@@ -58,8 +58,8 @@ interface ContextEntry {
   role: 'user' | 'assistant' | 'system' | 'tool';  // Message role type
   content: string | Record<string, unknown>;       // Message content (text, object, etc.)
   timestamp: number;                               // Unix timestamp in milliseconds
-  stepId?: string;                                 // Optional: Associated flow step ID
-  toolName?: string;                               // Optional: Tool name for tool messages
+  stepId?: string;                                 // Optional: Used by the system when a Step calls a Tool
+  toolName?: string;                               // Optional: Used by the system to record Tool result into the the chat context
   metadata?: Record<string, unknown>;              // Optional: Additional context data
 }
 ```
