@@ -253,6 +253,131 @@ interface FlowDefinition {
 **Flow Execution Context:**
 During execution, the engine creates lightweight FlowFrame objects that maintain execution state while accessing FlowDefinition properties dynamically for optimal memory usage and localization support.
 
+### Tool Definition Structure
+
+Tools provide external capabilities that flows can invoke through CALL-TOOL steps. Each tool is defined with comprehensive configuration for security, validation, and integration:
+
+```typescript
+interface ToolDefinition {
+  id: string;                          // Unique tool identifier
+  name: string;                        // Human-readable tool name
+  description: string;                 // Clear description of tool functionality
+  
+  // Parameter Validation (OpenAI Function Calling Standard)
+  parameters?: {
+    type: string;                      // Usually "object"
+    properties?: Record<string, PropertySchema>; // Parameter definitions
+    required?: string[];               // Required parameter names
+    additionalProperties?: boolean;    // Allow additional parameters
+  };
+  
+  // Tool Implementation
+  implementation?: {
+    type: 'local' | 'http';           // Execution type
+    
+    // Local Function Implementation
+    function?: string;                 // Function name in APPROVED_FUNCTIONS
+    
+    // HTTP API Implementation  
+    url?: string;                      // API endpoint URL with {param} placeholders
+    method?: HttpMethod;               // HTTP method (GET, POST, PUT, etc.)
+    contentType?: string;              // Request content type
+    pathParams?: string[];             // Parameters to substitute in URL
+    queryParams?: string[];            // Parameters to add as query string
+    headers?: Record<string, string>;  // Custom headers
+    timeout?: number;                  // Request timeout in milliseconds
+    retries?: number;                  // Number of retry attempts
+    
+    // Response Processing
+    responseMapping?: MappingConfig;   // Transform API response
+  };
+  
+  // Security Configuration
+  apiKey?: string;                     // Bearer token for authentication
+  riskLevel?: 'low' | 'medium' | 'high'; // Security classification
+  category?: string;                   // Tool category (financial, data, etc.)
+  security?: {
+    rateLimit?: {
+      requests: number;                // Max requests
+      window: number;                  // Time window in milliseconds
+    };
+  };
+}
+```
+
+**Key Tool Properties:**
+
+- **Identity & Documentation**: `id`, `name`, `description` define the tool's purpose
+- **Parameter Validation**: OpenAI Function Calling Standard schema for type safety
+- **Flexible Implementation**: Support for both local functions and HTTP APIs
+- **Security Controls**: Rate limiting, risk classification, and authentication
+- **Response Transformation**: Declarative mapping to structure API responses
+
+**Local Function Tool Example:**
+```javascript
+{
+  id: "ValidateAccount",
+  name: "Account Validator",
+  description: "Validates customer account numbers and status",
+  parameters: {
+    type: "object",
+    properties: {
+      accountNumber: {
+        type: "string",
+        description: "Customer account number",
+        pattern: "^[0-9]{6,12}$"
+      }
+    },
+    required: ["accountNumber"]
+  },
+  implementation: {
+    type: "local",
+    function: "validateAccount"  // Must be in APPROVED_FUNCTIONS
+  },
+  riskLevel: "medium",
+  category: "validation"
+}
+```
+
+**HTTP API Tool Example:**
+```javascript
+{
+  id: "WeatherAPI",
+  name: "Weather Information",
+  description: "Get current weather for any city",
+  parameters: {
+    type: "object", 
+    properties: {
+      city: {
+        type: "string",
+        description: "City name for weather lookup"
+      }
+    },
+    required: ["city"]
+  },
+  implementation: {
+    type: "http",
+    url: "https://wttr.in/{city}",
+    method: "GET",
+    pathParams: ["city"],
+    queryParams: ["format"],
+    timeout: 5000,
+    responseMapping: {
+      type: "jsonPath",
+      mappings: {
+        "temperature": "current_condition[0].temp_C",
+        "condition": "current_condition[0].weatherDesc[0].value"
+      }
+    }
+  },
+  riskLevel: "low",
+  category: "information"
+}
+```
+
+**Tool Integration in Flows:**
+Tools are invoked from flows using CALL-TOOL steps, with automatic parameter validation and response handling according to the tool definition.
+
 ### Integration Pattern: The updateActivity() Method
 
 The engine integrates with host systems through the **`updateActivity()`** method, which handles the complete intent detection and execution cycle:
