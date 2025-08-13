@@ -135,19 +135,83 @@ import { WorkflowEngine } from './jsfe.ts.js';
 // Initialize the engine
 context.engine = new WorkflowEngine(
   hostLogger,           // Any logger supporting .debug/.info/.warn/.error (or null)
-  aiCallback,           // host provided acess to AI function that receives <systemInstruction>, <userMessage> and reterning <string response>
+  aiCallback,           // host provided access to AI function that receives <systemInstruction>, <userMessage> and returns <string response>
   flowsMenu,            // Available workflows
   toolsRegistry,        // Tool definitions
   APPROVED_FUNCTIONS,   // Secure local functions
-  logger,               // Logging implementation
-  language,             // Language preference ('en', 'es', etc.)
+  globalVariables,      // Session-wide variables (optional)
+  validateOnInit,       // Integrity validation flag (optional, default: true)
+  language,             // Language preference (optional, 'en', 'es', etc.)
   messageRegistry,      // Custom message templates (optional)
-  guidanceConfig,       // User guidance settings (optional)
-  validateOnInit,       // Integrity validation flag (default: true)
-  globalVariables       // Session-wide variables (optional)
+  guidanceConfig        // User guidance settings (optional)
 );
 ```
 
+#### Engine Initialization Parameters
+
+The WorkflowEngine constructor accepts the following parameters in order, each serving a specific purpose in the engine's operation:
+
+**1. hostLogger** (Logger | null)
+- **Purpose**: Primary logging interface for the host application
+- **Requirements**: Must support `.debug()`, `.info()`, `.warn()`, `.error()` methods
+- **Usage**: Engine uses this for all operational logging and debugging output
+- **Example**: Winston, or custom logger implementation
+- **Nullable**: Can be `null` to disable host application logging
+
+**2. aiCallback** (Function)
+- **Purpose**: AI communication function for intent detection and response generation
+- **Signature**: `async (systemInstruction: string, userMessage: string) => string`
+- **Integration**: Engine calls this function when AI analysis is needed
+- **Requirements**: Must return AI response as string, handle errors gracefully
+- **Details**: See dedicated AI Callback Function section below
+
+**3. flowsMenu** (FlowDefinition[])
+- **Purpose**: Array of available workflow definitions
+- **Content**: All workflows that the engine can detect and execute
+- **Validation**: Engine validates flow structure during initialization
+- **Requirements**: Each flow must have valid id, name, description, and steps
+
+**4. toolsRegistry** (ToolDefinition[])
+- **Purpose**: Array of external tool definitions for CALL-TOOL steps
+- **Content**: HTTP APIs, local functions, and mock tools available to workflows
+- **Validation**: Parameter schemas validated against OpenAI Function Calling Standard
+- **Security**: Tools define their own security levels and authentication requirements
+
+**5. APPROVED_FUNCTIONS** (Map<string, Function>)
+- **Purpose**: Secure registry of pre-approved local JavaScript functions
+- **Security**: Only functions in this map can be executed by local-type tools
+- **Format**: `Map` where keys are function names and values are the actual functions
+- **Validation**: Functions must match tool definitions in toolsRegistry
+
+**6. globalVariables** (Record<string, unknown>, optional)
+- **Purpose**: Session-wide variables accessible to all workflows
+- **Scope**: Available to all flows in the session via variable interpolation
+- **Security**: Safe sharing of host application data with workflows
+- **Examples**: User ID, session ID, application configuration, environmental data
+
+**7. validateOnInit** (boolean, optional)
+- **Purpose**: Enable comprehensive flow and tool validation during initialization
+- **Default**: `true` - recommended for development and production
+- **Performance**: Set to `false` only in high-performance scenarios with pre-validated flows
+- **Output**: Detailed validation reports with errors, warnings, and success metrics
+
+**8. language** (string, optional)
+- **Purpose**: User's preferred language for localized messages and prompts
+- **Format**: ISO language code ('en', 'es', 'fr', 'de', etc.)
+- **Default**: 'en' if not specified
+- **Usage**: Engine selects appropriate prompt_xx properties from flow definitions
+
+**9. messageRegistry** (MessageRegistry, optional)
+- **Purpose**: Custom message templates for engine-generated user messages
+- **Format**: Multi-language message registry with customizable system messages
+- **Override**: Allows customization of built-in engine messages
+- **Localization**: Supports multiple languages with fallback to default messages
+
+**10. guidanceConfig** (GuidanceConfig, optional)
+- **Purpose**: Configuration for user guidance and help messages
+- **Features**: Controls how and when the engine provides user assistance
+- **Modes**: Append, prepend, template, or none for guidance integration
+- **Context**: Different guidance for general vs. payment/financial workflows
 
 ### AI Callback Function
 
@@ -208,39 +272,6 @@ Both parameters are carefully engineered by the engine to work together for opti
 **Alternative AI Services:**
 You can integrate any AI service (Claude, Gemini, local LLMs, etc.) by implementing this same interface. The engine only requires a function that takes system instructions and user input, then returns an AI response.
 
-#### The validateOnInit Parameter
-
-The `validateOnInit` parameter (boolean, default: `true`) controls whether the engine performs comprehensive integrity validation during initialization. When enabled, the engine's validator performs deep analysis of all flows and tools to detect potential execution errors before they occur in production.
-
-**Validation Features:**
-- **Flow Structure Validation**: Ensures all flows have required metadata (id, name, description, steps)
-- **Tool Registry Verification**: Validates that all referenced tools exist in the toolsRegistry
-- **Parameter Schema Checking**: Verifies tool parameters conform to JSON Schema standards
-- **Variable Scope Analysis**: Detects variable usage issues and scope violations
-- **Circular Reference Detection**: Identifies flows that call each other in infinite loops
-- **Step Type Validation**: Ensures all step types are recognized and properly configured
-- **Expression Syntax Checking**: Validates template expressions and variable references
-- **Deep Dependency Analysis**: Recursively validates sub-flows and their dependencies
-
-**Validation Output Examples:**
-```
-✅ All 15 flows passed validation successfully!
-📊 Validation Summary: 15/15 flows valid, 0 errors, 3 warnings
-
-⚠️  Flow "UserOnboarding" has 1 warnings:
-   • Step 5: Variable 'user_email' used before being defined
-
-❌ Flow validation failed: 2 errors, 1 warnings
-❌ Flow "PaymentProcessing" has 2 errors:
-   • Step 3: Tool 'PaymentGateway' not found in toolsRegistry
-   • Step 7: Invalid expression syntax: {{amount + tax}
-```
-
-**Best Practices:**
-- Keep `validateOnInit: true` in development to catch issues early
-- Consider `validateOnInit: false` in high-performance production environments where flows are pre-validated
-- Use validation results to improve flow quality and prevent runtime failures
-- Review validation warnings as they often indicate potential improvement areas
 
 ### Flow Definition Structure
 
@@ -552,6 +583,39 @@ export interface ConditionConfig {
   value?: unknown;                             // Comparison value for operators
 }
 ```
+#### The validateOnInit Parameter
+
+The `validateOnInit` parameter (boolean, default: `true`) controls whether the engine performs comprehensive integrity validation during initialization. When enabled, the engine's validator performs deep analysis of all flows and tools to detect potential execution errors before they occur in production.
+
+**Validation Features:**
+- **Flow Structure Validation**: Ensures all flows have required metadata (id, name, description, steps)
+- **Tool Registry Verification**: Validates that all referenced tools exist in the toolsRegistry
+- **Parameter Schema Checking**: Verifies tool parameters conform to JSON Schema standards
+- **Variable Scope Analysis**: Detects variable usage issues and scope violations
+- **Circular Reference Detection**: Identifies flows that call each other in infinite loops
+- **Step Type Validation**: Ensures all step types are recognized and properly configured
+- **Expression Syntax Checking**: Validates template expressions and variable references
+- **Deep Dependency Analysis**: Recursively validates sub-flows and their dependencies
+
+**Validation Output Examples:**
+```
+✅ All 15 flows passed validation successfully!
+📊 Validation Summary: 15/15 flows valid, 0 errors, 3 warnings
+
+⚠️  Flow "UserOnboarding" has 1 warnings:
+   • Step 5: Variable 'user_email' used before being defined
+
+❌ Flow validation failed: 2 errors, 1 warnings
+❌ Flow "PaymentProcessing" has 2 errors:
+   • Step 3: Tool 'PaymentGateway' not found in toolsRegistry
+   • Step 7: Invalid expression syntax: {{amount + tax}
+```
+
+**Best Practices:**
+- Keep `validateOnInit: true` in development to catch issues early
+- Consider `validateOnInit: false` in high-performance production environments where flows are pre-validated
+- Use validation results to improve flow quality and prevent runtime failures
+- Review validation warnings as they often indicate potential improvement areas
 
 **Configuration Guidance for Developers:**
 
@@ -585,43 +649,36 @@ The engine integrates with host systems through the **`updateActivity()`** metho
 import { WorkflowEngine } from './jsfe.ts.js';
 
 // Initialize the engine (typically done once at application startup)
-const engine = new WorkflowEngine(
-  hostLogger,           // Any logger supporting .debug/.info/.warn/.error (or null)
-  aiCallback,           // host provided access to AI function
-  flowsMenu,            // Available workflows
-  toolsRegistry,        // Tool definitions
-  APPROVED_FUNCTIONS,   // Secure local functions
-  logger,               // Logging implementation
-  language,             // Language preference ('en', 'es', etc.)
-  messageRegistry,      // Custom message templates (optional)
-  guidanceConfig,       // User guidance settings (optional)
-  validateOnInit,       // Integrity validation flag (default: true)
-  globalVariables       // Session-wide variables (optional)
-);
+const engine = new WorkflowEngine(logger, fetchAiResponse, flowsMenu, toolsRegistry, APPROVED_FUNCTIONS, globalVariable, true, parsed.lang);
 ```
 
-#### Session Management
+#### Session Initialization
 ```javascript
-// Initialize session context (typically done once per conversation)
-const sessionContext = engine.initSession({
-  userId: 'user123',
-  sessionId: 'session456', 
-  conversationId: 'conv789'
-});
+// Initialize the session (typically done once per session when supporting multiple user sessions)
+const sessionContext = engine.initSession(logger, 'test-user', 'test-session');
+/*
+  Store the returned context into your host context for the respective session. 
+  It should be passed as argument to all subseqent engine.updateActivity() calls  
+*/
+context.sessionContext = sessionContext
 ```
 
-#### ContextEntry Structure
+#### Create ContextEntry
 ```javascript
 const contextEntry = {
-  role: 'user',              // Required: 'user' or 'assistant'
-  content: 'user message',   // Required: The actual message content
-  timestamp: Date.now(),     // Required: When the message was created
-  metadata: {                // Optional: Additional context
-    source: 'chat_app',
-    userId: 'user123'
-  }
-};
+  role: 'user',
+  content: input,
+  timestamp: Date.now()
 ```
+
+#### Call updateActivity()
+```javascript
+  const result = await engine.updateActivity(contextEntry, context.sessionContext);
+  if (result) {
+    return result;
+  }
+```
+
 
 #### Integration Example
 ```javascript
