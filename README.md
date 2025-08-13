@@ -100,24 +100,37 @@ The Flow Engine implements a sophisticated "stack-of-stacks" architecture that a
    - Automatic stack switching for flow interruption/resumption
    - Proper isolation between different workflow contexts
 
-2. **Flow Frame Structure**
+2. **Flow Frame Structure (Runtime Execution Context)**
    Each flow execution maintains a complete context frame:
    ```typescript
-   {
-     flowName: string,            // Human-readable flow name
-     flowId: string,              // Unique flow identifier
-     flowVersion: string,         // Flow version for compatibility
-     flowStepsStack: [...],       // Remaining steps (reversed)
-     contextStack: [...],         // Complete interaction history
-     inputStack: [...],           // Current input context
-     variables: {},               // Unified variable storage
-     transaction: TransactionObj, // Audit and transaction tracking
-     userId: string,              // User identifier
-     startTime: number,           // Flow start timestamp
-     pendingVariable: string,     // Variable awaiting user input
-     lastSayMessage: string,      // Last SAY step output
-     pendingInterruption: {}      // Interruption state management
+   interface FlowFrame {
+     flowName: string;                              // Human-readable flow name (from FlowDefinition.name)
+     flowId: string;                                // Unique flow identifier (from FlowDefinition.id)
+     flowVersion: string;                           // Flow version for compatibility (from FlowDefinition.version)
+     flowStepsStack: FlowStep[];                    // Remaining steps (reversed for efficient pop)
+     contextStack: ContextEntry[];                  // Complete interaction history with role info
+     inputStack: unknown[];                         // Current input context for step execution
+     variables: Record<string, unknown>;            // Unified variable storage (shared across sub-flows)
+     transaction: TransactionObj;                   // Comprehensive transaction and audit tracking
+     userId: string;                                // User identifier for this flow session
+     startTime: number;                             // Flow start timestamp for timing analysis
+     pendingVariable?: string;                      // Variable name awaiting user input (SAY-GET steps)
+     lastSayMessage?: string;                       // Last SAY step output for context
+     pendingInterruption?: Record<string, unknown>; // Interruption state management
+     accumulatedMessages?: string[];                // Accumulated SAY messages for batching
+     parentTransaction?: string;                    // Parent transaction ID for sub-flow tracking
+     justResumed?: boolean;                         // Flag indicating flow was just resumed
    }
+   ```
+   
+   **Technical Implementation Details:**
+   - **Flow Identity**: `flowName`, `flowId`, `flowVersion` are copied from the FlowDefinition
+   - **Dynamic Properties**: Flow `prompt`, `description`, and localized prompts are accessed dynamically from FlowDefinition
+   - **flowStepsStack**: Steps stored in reverse order for efficient pop operations
+   - **contextStack**: Enhanced with role information for complete conversation context
+   - **variables**: Flat storage shared across sub-flows for seamless data passing
+   - **accumulatedMessages**: SAY steps are batched for efficient output
+   - **justResumed**: Helps engine provide appropriate resumption messages
    ```
 
 3. **Helper Function Architecture**
