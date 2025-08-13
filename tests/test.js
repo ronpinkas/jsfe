@@ -3307,9 +3307,10 @@ async function handleQuery(context, input, chatContextManager) {
     timestamp: Date.now()
   };
   
-  // Firward the input to the engine for conditional processing
+  // Forward the input to the engine for conditional processing
   const result = await engine.updateActivity(contextEntry, context.sessionContext);
   if (result) {
+    // Intent detected and handled, no need to proceed to normal reply generation
     return result;
   }
 
