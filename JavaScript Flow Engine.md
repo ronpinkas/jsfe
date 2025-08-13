@@ -26,7 +26,7 @@
 
 ## What is the JavaScript Flow Engine?
 
-The **JavaScript Flow Engine** is a sophisticated, host-agnostic workflow orchestration system designed to serve as a **pluggable intent detector, and workflows orchestrator** for any conversational platform. Whether integrated with AI chat assistants, live agent systems, customer service platforms, or any other conversational interface, the engine provides reliable, secure, and intelligent workflow automation.
+The **JavaScript Flow Engine** is a sophisticated, host-agnostic workflow orchestration system designed to serve as a **pluggable intent detector and workflow orchestrator** for any conversational platform. Whether integrated with AI chat assistants, live agent systems, customer service platforms, or any other conversational interface, the engine provides reliable, secure, and intelligent workflow automation.
 
 ## Core Concepts
 
