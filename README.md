@@ -140,6 +140,52 @@ The Flow Engine implements a sophisticated "stack-of-stacks" architecture that a
    - `pushToCurrentStack(engine, frame)`: Adds flow to active stack
    - `popFromCurrentStack(engine)`: Removes flow from active stack
 
+4. **Tool Definition Structure (Runtime Integration Context)**
+   Tools provide external capabilities with comprehensive security and validation:
+   ```typescript
+   interface ToolDefinition {
+     id: string;                                    // Unique tool identifier
+     name: string;                                  // Human-readable tool name
+     description: string;                           // Tool functionality description
+     
+     parameters?: {                                 // OpenAI Function Calling Standard schema
+       type: string;                                // Parameter type structure
+       properties?: Record<string, PropertySchema>; // Parameter validation rules
+       required?: string[];                         // Required parameter names
+       additionalProperties?: boolean;              // Additional parameter handling
+     };
+     
+     implementation?: {                             // Execution configuration
+       type: 'local' | 'http';                      // Implementation type
+       function?: string;                           // Local function name (APPROVED_FUNCTIONS)
+       url?: string;                                // HTTP endpoint with {param} placeholders
+       method?: HttpMethod;                         // HTTP method
+       pathParams?: string[];                       // URL parameter substitution
+       queryParams?: string[];                      // Query string parameters
+       responseMapping?: MappingConfig;             // Response transformation config
+       timeout?: number;                            // Request timeout
+       retries?: number;                            // Retry attempts
+     };
+     
+     security?: {                                   // Security controls
+       rateLimit?: {                                // Rate limiting configuration
+         requests: number;                          // Max requests per window
+         window: number;                            // Time window in milliseconds
+       };
+     };
+     apiKey?: string;                               // Authentication token
+     riskLevel?: 'low' | 'medium' | 'high';         // Security classification
+   }
+   ```
+   
+   **Technical Implementation Details:**
+   - **Parameter Validation**: JSON Schema validation with ajv for type safety
+   - **Local Function Execution**: Secure execution through APPROVED_FUNCTIONS registry
+   - **HTTP Integration**: Full REST API support with authentication and retries
+   - **Response Mapping**: Declarative transformation without code injection
+   - **Security Controls**: Rate limiting, risk classification, audit logging
+   - **Error Handling**: Automatic retry logic and graceful degradation
+
 ## Features & Capabilities
 
 ### Flow Execution Modes
