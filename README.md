@@ -41,7 +41,7 @@ const userEntry = {
   role: 'user',
   content: 'I need help with my account',
 };
-const result = await engine.updateActivity(contextEntry, context.sessionContext);
+const result = await engine.updateActivity(userEntry, sessionContext);
 if (result) {
   // Intent detected and handled no need to proceed to normal response generation
   return result;
@@ -271,7 +271,7 @@ interface ContextEntry {
   content: string | Record<string, unknown>;       // Message content (text, object, etc.)
   timestamp: number;                               // Unix timestamp in milliseconds
   stepId?: string;                                 // Optional: Used by the system when a Step calls a Tool
-  toolName?: string;                               // Optional: Used by the system to record Tool result into the the chat context
+  toolName?: string;                               // Optional: Used by the system to record Tool result into the chat context
   metadata?: Record<string, unknown>;              // Optional: Additional context data
 }
 ```
