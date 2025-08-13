@@ -104,19 +104,19 @@ The Flow Engine implements a sophisticated "stack-of-stacks" architecture that a
    Each flow execution maintains a complete context frame:
    ```typescript
    {
-     flowName: string,          // Human-readable flow name
-     flowId: string,            // Unique flow identifier
-     flowVersion: string,       // Flow version for compatibility
-     flowStepsStack: [...],     // Remaining steps (reversed)
-     contextStack: [...],       // Complete interaction history
-     inputStack: [...],         // Current input context
-     variables: {},             // Unified variable storage
+     flowName: string,            // Human-readable flow name
+     flowId: string,              // Unique flow identifier
+     flowVersion: string,         // Flow version for compatibility
+     flowStepsStack: [...],       // Remaining steps (reversed)
+     contextStack: [...],         // Complete interaction history
+     inputStack: [...],           // Current input context
+     variables: {},               // Unified variable storage
      transaction: TransactionObj, // Audit and transaction tracking
-     userId: string,            // User identifier
-     startTime: number,         // Flow start timestamp
-     pendingVariable: string,   // Variable awaiting user input
-     lastSayMessage: string,    // Last SAY step output
-     pendingInterruption: {}    // Interruption state management
+     userId: string,              // User identifier
+     startTime: number,           // Flow start timestamp
+     pendingVariable: string,     // Variable awaiting user input
+     lastSayMessage: string,      // Last SAY step output
+     pendingInterruption: {}      // Interruption state management
    }
    ```
 
