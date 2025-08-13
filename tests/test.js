@@ -3314,9 +3314,10 @@ async function handleQuery(context, input, chatContextManager) {
     return result;
   }
 
-  // Handle as regular query
+  // Call your normal Generate reply process as usual
   const reply = await yourConversationalReply(input);
-  
+
+  // Update the engine's context with the generated reply
   context.engine.updateActivity({
     role: 'assistant',
       content: reply,
