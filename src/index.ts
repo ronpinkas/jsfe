@@ -6652,10 +6652,10 @@ export class WorkflowEngine implements Engine {
       // Role-based processing logic
       if (contextEntry.role === 'user') {         
          // Detect intent to activate a flow or switch flows
-         const flowOrNull =  await processActivity(String(contextEntry.content), userId, this);
+         const responseOrNull =  await processActivity(String(contextEntry.content), userId, this);
 
          // Store user turn in lastChatTurn if not in a flow
-         if (flowOrNull === null) {
+         if (responseOrNull === null) {
             this.lastChatTurn.user = contextEntry;
          }
 
@@ -6666,8 +6666,8 @@ export class WorkflowEngine implements Engine {
             engineSessionContext.globalAccumulatedMessages = this.globalAccumulatedMessages;
             engineSessionContext.lastChatTurn = this.lastChatTurn;
             engineSessionContext.globalVariables = this.globalVariables || {};
-            engineSessionContext.response = flowOrNull; // Store the response from flow processing
-            
+            engineSessionContext.response = responseOrNull; // Store the response from flow processing
+
             // Extract and store completed transactions for host access
             const newCompletedTransactions = extractCompletedTransactions(this.flowStacks);
             if (!engineSessionContext.completedTransactions) {
