@@ -72,6 +72,7 @@ export interface Logger {
   warn(message: string, ...args: unknown[]): void;
   error(message: string, ...args: unknown[]): void;
   debug(message: string, ...args: unknown[]): void;
+  setLevel?(level: string): void;
 }
 
 export type MessageTemplates = Record<string, string>;
@@ -402,10 +403,12 @@ export interface EngineSessionContext {
   userId: string;
   createdAt: Date;
   lastActivity: Date;
-  flowStacks: FlowFrame[][];
+  flowStacks: SerializableFlowFrame[][]; // Use serializable flow frames
   globalAccumulatedMessages: string[];
   lastChatTurn: { user?: ContextEntry; assistant?: ContextEntry };
   globalVariables: Record<string, unknown>;
+  response?: string | null; // Latest response from flow processing
+  completedTransactions?: TransactionData[]; // Completed transactions for host access
   cargo: Record<string, unknown> | undefined; // Additional session data
 }
 
@@ -486,6 +489,141 @@ export interface TransactionObj {
   fail: (reason: string) => void;
 }
 
+// Serializable transaction data (without methods) for session persistence
+export interface TransactionData {
+  id: string;
+  flowName: string;
+  initiator: string;
+  userId: string;
+  steps: TransactionStep[];
+  state: 'active' | 'completed' | 'failed' | 'rolled_back';
+  createdAt: Date;
+  completedAt?: Date;
+  failedAt?: Date;
+  rolledBackAt?: Date;
+  failureReason?: string;
+  metadata: Record<string, unknown>;
+}
+
+// Helper function to extract serializable transaction data
+function extractTransactionData(transaction: TransactionObj): TransactionData {
+  return {
+    id: transaction.id,
+    flowName: transaction.flowName,
+    initiator: transaction.initiator,
+    userId: transaction.userId,
+    steps: transaction.steps,
+    state: transaction.state,
+    createdAt: transaction.createdAt,
+    completedAt: transaction.completedAt,
+    failedAt: transaction.failedAt,
+    rolledBackAt: transaction.rolledBackAt,
+    failureReason: transaction.failureReason,
+    metadata: transaction.metadata
+  };
+}
+
+// Helper function to extract completed transactions from flow stacks
+function extractCompletedTransactions(flowStacks: FlowFrame[][]): TransactionData[] {
+  const completedTransactions: TransactionData[] = [];
+  
+  for (const stack of flowStacks) {
+    for (const frame of stack) {
+      if (frame.transaction && (frame.transaction.state === 'completed' || frame.transaction.state === 'failed')) {
+        completedTransactions.push(extractTransactionData(frame.transaction));
+      }
+    }
+  }
+  
+  return completedTransactions;
+}
+
+// Helper function to convert TransactionData to TransactionObj (recreate methods)
+function createTransactionObj(data: TransactionData): TransactionObj {
+  const transactionObj: TransactionObj = {
+    ...data,
+    addStep: function(step: FlowStep, result: unknown, duration: number, status?: 'success' | 'error') {
+      this.steps.push({
+        stepId: step.id || crypto.randomUUID(),
+        stepType: step.type,
+        tool: step.tool || 'unknown',
+        status: status || 'success',
+        result: result,
+        duration: duration,
+        timestamp: new Date(),
+        error: status === 'error' ? (result as Error)?.message : undefined
+      });
+    },
+    addError: function(step: FlowStep, error: Error, duration: number) {
+      this.steps.push({
+        stepId: step.id || crypto.randomUUID(),
+        stepType: step.type,
+        tool: step.tool || 'unknown',
+        status: 'error',
+        result: null,
+        duration: duration,
+        timestamp: new Date(),
+        error: error.message
+      });
+    },
+    sanitizeForLog: function(data: unknown): unknown {
+      // Basic sanitization - remove sensitive fields
+      if (typeof data === 'object' && data !== null) {
+        const sanitized = { ...data as Record<string, unknown> };
+        const sensitiveKeys = ['password', 'token', 'secret', 'key', 'credential'];
+        for (const key of sensitiveKeys) {
+          if (key in sanitized) {
+            sanitized[key] = '[REDACTED]';
+          }
+        }
+        return sanitized;
+      }
+      return data;
+    },
+    rollback: function() {
+      this.state = 'rolled_back';
+      this.rolledBackAt = new Date();
+    },
+    complete: function() {
+      this.state = 'completed';
+      this.completedAt = new Date();
+    },
+    fail: function(reason: string) {
+      this.state = 'failed';
+      this.failedAt = new Date();
+      this.failureReason = reason;
+    }
+  };
+  
+  return transactionObj;
+}
+
+// Helper function to convert SerializableFlowFrame to FlowFrame (recreate transaction methods)
+function deserializeFlowFrame(serializableFrame: SerializableFlowFrame): FlowFrame {
+  return {
+    ...serializableFrame,
+    transaction: createTransactionObj(serializableFrame.transaction)
+  };
+}
+
+// Helper function to convert FlowFrame to SerializableFlowFrame (extract transaction data)
+function serializeFlowFrame(frame: FlowFrame): SerializableFlowFrame {
+  return {
+    ...frame,
+    transaction: extractTransactionData(frame.transaction)
+  };
+}
+
+// Helper function to convert flow stacks for session storage
+function serializeFlowStacks(flowStacks: FlowFrame[][]): SerializableFlowFrame[][] {
+  return flowStacks.map(stack => stack.map(frame => serializeFlowFrame(frame)));
+}
+
+// Helper function to convert serialized flow stacks back to working flow stacks
+function deserializeFlowStacks(serializableFlowStacks: SerializableFlowFrame[][]): FlowFrame[][] {
+  return serializableFlowStacks.map(stack => stack.map(frame => deserializeFlowFrame(frame)));
+}
+
 export interface FlowFrame {
   flowName: string;
   flowId: string;
@@ -505,6 +643,26 @@ export interface FlowFrame {
   justResumed?: boolean; // Flag to indicate this flow frame was just resumed
 }
 
+// Serializable version of FlowFrame for session context storage
+export interface SerializableFlowFrame {
+  flowName: string;
+  flowId: string;
+  flowVersion: string;
+  flowStepsStack: FlowStep[];
+  contextStack: ContextEntry[];
+  inputStack: unknown[];
+  variables: Record<string, unknown>;
+  transaction: TransactionData; // Serializable transaction data instead of object with methods
+  userId: string;
+  startTime: number;
+  pendingVariable?: string;
+  lastSayMessage?: string;
+  pendingInterruption?: Record<string, unknown>;
+  accumulatedMessages?: string[];
+  parentTransaction?: string;
+  justResumed?: boolean;
+}
+
 export interface Engine {
   flowStacks: FlowFrame[][];
   flowsMenu?: FlowDefinition[];
@@ -521,8 +679,8 @@ export interface Engine {
   aiCallback: AiCallbackFunction; // Can be null for demo/test mode (see README)
   lastChatTurn: { user?: ContextEntry; assistant?: ContextEntry }; // Last chat turn when not in a flow
   // Session management methods
-  initSession?: (hostLogger: Logger | null, userId: string, sessionId: string) => EngineSessionContext;
-  updateActivity?: (contextEntry: ContextEntry, engineSessionContext?: EngineSessionContext) => Promise<string | null>;
+  initSession: (hostLogger: Logger | null, userId: string, sessionId: string) => EngineSessionContext;
+  updateActivity: (contextEntry: ContextEntry, engineSessionContext: EngineSessionContext) => Promise<EngineSessionContext>;
   cargo: Record<string, unknown> | undefined; // Additional session data
 }
 
@@ -759,6 +917,7 @@ function isPathTraversableObject(val: unknown): val is PathTraversableObject {
  * @param data - Source data to transform (typically API response)
  * @param mappingConfig - Mapping configuration specifying how to transform the data
  * @param args - Arguments available for template variables and $args references
+ * @param engine - Engine instance for context and utilities
  * @returns Transformed data according to mapping configuration
  * 
  * @example
@@ -779,7 +938,8 @@ function isPathTraversableObject(val: unknown): val is PathTraversableObject {
 function applyResponseMapping(
   data: PathTraversableObject, 
   mappingConfig: MappingConfig, 
-  args: PathArguments = {}
+  args: PathArguments = {},
+  engine: Engine
 ): ExtractedValue {
   logger.debug(`applyResponseMapping called with: dataType=${typeof data}, data=${JSON.stringify(data)}, mappingConfig=${JSON.stringify(mappingConfig)}, args=${JSON.stringify(args)}`);
   
@@ -803,13 +963,13 @@ function applyResponseMapping(
       case 'jsonPath':
         return applyJsonPathMapping(data, mappingConfig as JsonPathMappingConfig, args);
       case 'object':
-        return applyObjectMapping(data, mappingConfig as ObjectMappingConfig, args);
+        return applyObjectMapping(data, mappingConfig as ObjectMappingConfig, args, engine);
       case 'array':
-        return applyArrayMapping(data, mappingConfig as ArrayMappingConfig, args);
+        return applyArrayMapping(data, mappingConfig as ArrayMappingConfig, args, engine);
       case 'template':
-        return applyTemplateMapping(data, mappingConfig as TemplateMappingConfig, args);
+        return applyTemplateMapping(data, mappingConfig as TemplateMappingConfig, args, engine);
       case 'conditional':
-        return applyConditionalMapping(data, mappingConfig as ConditionalMappingConfig, args);
+        return applyConditionalMapping(data, mappingConfig as ConditionalMappingConfig, args, engine);
     }
   }
   
@@ -931,7 +1091,7 @@ function applyJsonPathMapping(
 }
 
 // Object structure mapping with nested transformations
-function applyObjectMapping(data: unknown, config: ObjectMappingConfig, args: ArgsType): Record<string, unknown> {
+function applyObjectMapping(data: unknown, config: ObjectMappingConfig, args: ArgsType, engine: Engine): Record<string, unknown> {
   const result: Record<string, unknown> = {};
   
   for (const [key, value] of Object.entries(config.mappings)) {
@@ -941,7 +1101,7 @@ function applyObjectMapping(data: unknown, config: ObjectMappingConfig, args: Ar
   result[key] = extractByPath(data as PathTraversableObject, value);
       } else if (typeof value === 'object' && value !== null && 'type' in value) {
         // Nested mapping with type
-  result[key] = applyResponseMapping(data as PathTraversableObject, value as MappingConfig, args);
+  result[key] = applyResponseMapping(data as PathTraversableObject, value as MappingConfig, args, engine);
       } else if (typeof value === 'object' && value !== null && 'path' in value) {
         // Object with path and optional transform
         const pathConfig = value as PathConfig;
@@ -960,7 +1120,7 @@ function applyObjectMapping(data: unknown, config: ObjectMappingConfig, args: Ar
         result[key] = fieldValue;
       } else if (typeof value === 'object' && value !== null) {
         // Static object with potential interpolation
-        result[key] = interpolateObject(value, data, args);
+        result[key] = interpolateObject(value, data, args, engine);
       } else {
         // Literal value
         result[key] = value;
@@ -980,7 +1140,7 @@ function applyObjectMapping(data: unknown, config: ObjectMappingConfig, args: Ar
 }
 
 // Array transformation and filtering
-function applyArrayMapping(data: unknown, config: ArrayMappingConfig, args: ArgsType): unknown[] {
+function applyArrayMapping(data: unknown, config: ArrayMappingConfig, args: ArgsType, engine: Engine): unknown[] {
   const sourceArray = config.source ? extractByPath(data as PathTraversableObject, config.source) : data;
   if (!Array.isArray(sourceArray)) {
     logger.warn(`Array mapping source is not an array:`, sourceArray);
@@ -1006,7 +1166,7 @@ function applyArrayMapping(data: unknown, config: ArrayMappingConfig, args: Args
   if (config.itemMapping) {
     result = result.map((item, index) => {
       try {
-        return applyResponseMapping(item, config.itemMapping!, { ...args, index });
+        return applyResponseMapping(item, config.itemMapping!, { ...args, index }, engine);
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         logger.warn(`Item mapping failed for index ${index}:`, errorMessage);
@@ -1052,7 +1212,7 @@ function applyArrayMapping(data: unknown, config: ArrayMappingConfig, args: Args
 }
 
 // Template-based string interpolation
-function applyTemplateMapping(data: unknown, config: TemplateMappingConfig, args: ArgsType): string {
+function applyTemplateMapping(data: unknown, config: TemplateMappingConfig, args: ArgsType, engine: Engine): string {
   let template = config.template;
   
   // Check if template contains complex Handlebars syntax
@@ -1080,7 +1240,7 @@ function applyTemplateMapping(data: unknown, config: TemplateMappingConfig, args
 }
 
 // Conditional mapping based on data content
-function applyConditionalMapping(data: unknown, config: ConditionalMappingConfig, args: ArgsType): unknown {
+function applyConditionalMapping(data: unknown, config: ConditionalMappingConfig, args: ArgsType, engine: Engine): unknown {
   if (!config.conditions || !Array.isArray(config.conditions)) {
     throw new Error('Conditional mapping requires a conditions array');
   }
@@ -1100,7 +1260,7 @@ function applyConditionalMapping(data: unknown, config: ConditionalMappingConfig
       }
       
       if (conditionResult) {
-  return applyResponseMapping(data as PathTraversableObject, condition.then, args);
+  return applyResponseMapping(data as PathTraversableObject, condition.then, args, engine);
       }
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -1111,7 +1271,7 @@ function applyConditionalMapping(data: unknown, config: ConditionalMappingConfig
   
   // Default case
   if (config.else) {
-  return applyResponseMapping(data as PathTraversableObject, config.else, args);
+  return applyResponseMapping(data as PathTraversableObject, config.else, args, engine);
   }
   
   return data;
@@ -1808,15 +1968,51 @@ function evaluateCondition(data: unknown, condition: ConditionConfig): boolean {
   }
 }
 
-function interpolateObject(obj: unknown, data: unknown, args: ArgsType = {}): unknown {
+function interpolateObject(obj: unknown, data: unknown, args: ArgsType = {}, engine: Engine): unknown {
   if (typeof obj === 'string') {
-    // Handle template strings
+    // Check if the string is ONLY a single template expression (e.g., '{{cargo}}')
+    const singleTemplateMatch = obj.match(/^\{\{([^}]+)\}\}$/);
+    if (singleTemplateMatch) {
+      // This is a single template expression - return the actual value, not a string conversion
+      const path = singleTemplateMatch[1].trim();
+      try {
+        let value: unknown = undefined;
+        if (isPathTraversableObject(data)) {
+          value = extractByPath(data, path);
+        }
+        
+        // If not found in data and engine is available, check engine session variables
+        if ((value === undefined || value === null)) {
+          try {
+            value = resolveEngineSessionVariable(path, engine);
+          } catch (error) {
+            // Ignore engine session variable resolution errors
+          }
+        }
+        
+        return value !== undefined && value !== null ? value : '';
+      } catch (error) {
+        return obj; // Keep original on error
+      }
+    }
+    
+    // Handle template strings with multiple expressions or mixed content
     return obj.replace(/\{\{([^}]+)\}\}/g, (match, path) => {
       try {
         let value: unknown = undefined;
         if (isPathTraversableObject(data)) {
           value = extractByPath(data, path.trim());
         }
+        
+        // If not found in data and engine is available, check engine session variables
+        if ((value === undefined || value === null)) {
+          try {
+            value = resolveEngineSessionVariable(path.trim(), engine);
+          } catch (error) {
+            // Ignore engine session variable resolution errors
+          }
+        }
+        
         return value !== null && value !== undefined ? String(value) : '';
       } catch (error) {
         return match; // Keep original on error
@@ -1830,24 +2026,32 @@ function interpolateObject(obj: unknown, data: unknown, args: ArgsType = {}): un
       }
     });
   } else if (Array.isArray(obj)) {
-    return obj.map(item => interpolateObject(item, data, args));
+    return obj.map(item => interpolateObject(item, data, args, engine));
   } else if (typeof obj === 'object' && obj !== null) {
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(obj)) {
-      result[key] = interpolateObject(value, data, args);
+      result[key] = interpolateObject(value, data, args, engine);
     }
     return result;
   }
   return obj;
 }
 
-// Fake logger that does nothing - in case hostLogger argument to engine.initSession is null
-let logger: Logger = {
-  info: () => {},
-  warn: () => {},
-  error: () => {},
-  debug: () => {}
-};
+function makeLogger(level: string = process.env.LOG_LEVEL || "warn"): Logger {
+	const ORDER: Record<string, number> = { debug: 10, info: 20, warn: 30, error: 40 };
+	let current = ORDER[level] ?? ORDER.warn;
+  const allow = (lvl: string): boolean => ORDER[lvl] >= current;
+	return {
+		setLevel: (lvl: string) => { current = ORDER[lvl] ?? current; },
+    debug: (...a: unknown[]) => { if (allow("debug")) console.debug(...a); },
+    info:  (...a: unknown[])  => { if (allow("info"))  console.info(...a); },
+    warn:  (...a: unknown[])  => { if (allow("warn"))  console.warn(...a); },
+    error: (...a: unknown[]) => { if (allow("error")) console.error(...a); },
+	};
+}
+
+let logger: Logger = makeLogger();
+
 
 // Fallback for any remaining console calls
 if (!(global as Record<string, unknown>).console) {
@@ -3662,12 +3866,12 @@ async function handleSwitchStep(currentFlowFrame: FlowFrame, engine: Engine): Pr
   let selectedStep: FlowStep | null = null;
   let selectedBranch: string | null = null;
   
-  // SWITCH now only supports exact value matching for optimal performance
+  // SWITCH now supports exact value matching for strings, booleans, and numbers
   // For conditional logic, use the CASE step instead
-  if (switchValue !== undefined && typeof switchValue === 'string' && step.branches[switchValue]) {
-    selectedStep = step.branches[switchValue];
+  if (switchValue !== undefined && step.branches[String(switchValue)]) {
+    selectedStep = step.branches[String(switchValue)];
     selectedBranch = String(switchValue);
-    logger.info(`SWITCH: selected exact match branch '${switchValue}'`);
+    logger.info(`SWITCH: selected exact match branch '${switchValue}' (converted to string key '${String(switchValue)}')`);
   }
   
   // If no exact match found, use default
@@ -3915,7 +4119,7 @@ async function generateToolCallAndResponse(
             logger.debug(`Interpolating args templates:`, rawArgs);
             logger.debug(`Available variables:`, variables);
             
-            rawArgs = interpolateObject(rawArgs, variables, variables);
+            rawArgs = interpolateObject(rawArgs, variables, {}, engine);
             logger.debug(`Interpolated args:`, rawArgs);
          } catch (error: any) {
             logger.warn(`Failed to interpolate args templates: ${error.message}`);
@@ -4210,14 +4414,105 @@ async function callTool(engine: Engine, tool: any, args: any, userId: string = '
          
          // Apply timeout if configured
          const timeout = tool.implementation.timeout || 5000;
-         const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error(`Tool execution timeout after ${timeout}ms`)), timeout)
-         );
+         let timeoutId: NodeJS.Timeout | undefined;
+         const timeoutPromise = new Promise((_, reject) => {
+            timeoutId = setTimeout(() => reject(new Error(`Tool execution timeout after ${timeout}ms - ${tool.implementation.function}`)), timeout);
+         });
          
          try {
-            const result = await Promise.race([fn(args), timeoutPromise]);
+            // Determine how to call the function based on its signature and tool schema
+            let result;
+            
+            // Check if the tool schema indicates individual parameters vs object parameter
+            const toolSchema = tool.schema || tool.parameters || tool;
+            
+            // Handle different schema formats:
+            // Format 1: JSONSchema with type="object" -> single object parameter
+            // Format 2: Direct parameters object -> individual parameters
+            let schemaProperties: Record<string, any> = {};
+            let useObjectParameter = false;
+            
+            if (tool.parameters?.type === "object" && tool.parameters?.properties) {
+               // Format 1: JSONSchema format { type: "object", properties: {...} }
+               // Function expects single object parameter
+               schemaProperties = tool.parameters.properties;
+               useObjectParameter = true;
+               logger.debug(`Detected JSONSchema format (type: object) - will use object parameter`);
+            } else if (tool.parameters && typeof tool.parameters === 'object' && !tool.parameters.type) {
+               // Format 2: Direct parameters { param1: {...}, param2: {...} }
+               // Function expects individual parameters
+               schemaProperties = tool.parameters;
+               useObjectParameter = false;
+               logger.debug(`Detected direct parameters format - will use individual parameters`);
+            } else if (toolSchema?.properties) {
+               // Fallback: Standard JSONSchema format
+               schemaProperties = toolSchema.properties;
+               useObjectParameter = toolSchema.type === "object";
+               logger.debug(`Detected schema.properties format - object parameter: ${useObjectParameter}`);
+            }
+            
+            const propertyNames = Object.keys(schemaProperties);
+            
+            // Get function parameter count
+            const fnParamCount = fn.length;
+            
+            logger.debug(`Function ${tool.implementation.function} parameter count: ${fnParamCount}`);
+            logger.debug(`Schema properties count: ${propertyNames.length}`);
+            logger.debug(`Schema properties: ${propertyNames.join(', ')}`);
+            logger.debug(`Use object parameter: ${useObjectParameter}`);
+            
+            // Strategy 1: If schema explicitly indicates object parameter OR function expects 1 param
+            if (useObjectParameter || fnParamCount === 1) {
+               logger.debug(`Calling function with single object parameter`);
+               result = await Promise.race([fn(args), timeoutPromise]);
+            }
+            // Strategy 2: If function expects multiple parameters and we have multiple schema properties
+            else if (fnParamCount > 1 && propertyNames.length > 1) {
+               logger.debug(`Calling function with individual parameters (${fnParamCount} params expected)`);
+               
+               // For tools with 'parameters' property, use the required array or property order
+               let orderedParamNames: string[];
+               if (tool.required && Array.isArray(tool.required)) {
+                  // Use required array order first, then add any optional parameters
+                  const optionalParams = propertyNames.filter(name => !tool.required.includes(name));
+                  orderedParamNames = [...tool.required, ...optionalParams];
+               } else {
+                  // Fall back to property definition order (note: this may not be reliable in all JS engines)
+                  orderedParamNames = propertyNames;
+               }
+               
+               logger.debug(`Parameter order: ${orderedParamNames.join(', ')}`);
+               const orderedArgs = orderedParamNames.map(propName => {
+                  const value = args[propName];
+                  logger.debug(`Parameter ${propName}: ${JSON.stringify(value)}`);
+                  return value;
+               });
+               
+               logger.debug(`Calling ${tool.implementation.function}(${orderedArgs.map(arg => typeof arg === 'object' ? '[object]' : arg).join(', ')})`);
+               result = await Promise.race([fn(...orderedArgs), timeoutPromise]);
+            }
+            // Strategy 3: Function expects 0 parameters, call without arguments
+            else if (fnParamCount === 0) {
+               logger.debug(`Calling function with no parameters`);
+               result = await Promise.race([fn(), timeoutPromise]);
+            }
+            // Fallback: Use object approach
+            else {
+               logger.debug(`Calling function with object parameter (fallback)`);
+               result = await Promise.race([fn(args), timeoutPromise]);
+            }
+            
+            // Clear the timeout since function completed successfully
+            if (timeoutId) {
+               clearTimeout(timeoutId);
+            }
             return result;
          } catch (error: any) {
+            // Clear the timeout on error as well
+            if (timeoutId) {
+               clearTimeout(timeoutId);
+            }
+            
             // Unconditional Retry logic for local functions
             const retries = tool.implementation.retries || 0;
             if (retries > 0) {
@@ -4261,7 +4556,7 @@ async function callHttpTool(tool: any, args: any, userId: string = 'anonymous', 
          // Apply response mapping if configured
          if (implementation.responseMapping) {
             try {
-            const mappedResult = applyResponseMapping(mockData, implementation.responseMapping, args);
+            const mappedResult = applyResponseMapping(mockData, implementation.responseMapping, args, engine);
             logger.info(`[MOCK] Response mapping applied for ${tool.name}`);
             return mappedResult;
             } catch (error: any) {
@@ -4571,7 +4866,7 @@ async function callHttpTool(tool: any, args: any, userId: string = 'anonymous', 
               // Apply declarative response mapping if configured (preferred)
               if (implementation.responseMapping) {
                 try {
-                    return applyResponseMapping(data, implementation.responseMapping, mappingArgs);
+                    return applyResponseMapping(data, implementation.responseMapping, mappingArgs, engine);
                 } catch (error: any) {
                     logger.error(`Response mapping failed:`, error.message);
                     return data; // Fall back to original response
@@ -6286,12 +6581,13 @@ export class WorkflowEngine implements Engine {
    *   const session = engine.initSession(yourLogger, 'user-123', 'session-456');
    */
    initSession(hostLogger: Logger | null, userId: string, sessionId: string): EngineSessionContext {
-    hostLogger = hostLogger || logger; // Fallback to global fake logger if none provided
     // Validate logger compatibility
-    const requiredMethods = ['info', 'warn', 'error', 'debug'];
-    for (const method of requiredMethods) {
-      if (typeof (hostLogger as any)[method] !== 'function') {
-        throw new Error(`Logger is missing required method: ${method}`);
+    if(hostLogger) {
+      const requiredMethods = ['info', 'warn', 'error', 'debug'];
+      for (const method of requiredMethods) {
+        if (typeof (hostLogger as any)[method] !== 'function') {
+          throw new Error(`Logger is missing required method: ${method}`);
+        }
       }
     }
 
@@ -6299,7 +6595,7 @@ export class WorkflowEngine implements Engine {
     logger = hostLogger || logger;
 
     const engineSessionContext: EngineSessionContext = {
-      hostLogger: hostLogger,
+      hostLogger: hostLogger || logger,
       sessionId: sessionId || crypto.randomUUID(),
       userId: userId,
       createdAt: new Date(),
@@ -6308,25 +6604,40 @@ export class WorkflowEngine implements Engine {
       globalAccumulatedMessages: [],
       lastChatTurn: {},
       globalVariables: this.globalVariables ? { ...this.globalVariables } : {},
-      cargo: {}
+      cargo: {},
+      response: null, // Initialize with no response
+      completedTransactions: [] // Initialize with no completed transactions
     };
 
     logger.info(`Engine session initialized: ${engineSessionContext.sessionId} for user: ${userId}`);
     return engineSessionContext;
    }
 
-   async updateActivity(contextEntry: ContextEntry, engineSessionContext?: EngineSessionContext): Promise<string | null> {
+   async updateActivity(contextEntry: ContextEntry, engineSessionContext: EngineSessionContext): Promise<EngineSessionContext> {
+    try {
       // Load session context if provided
-      if (engineSessionContext) {
-         logger = engineSessionContext.hostLogger;
-         this.cargo = engineSessionContext.cargo;
-         this.sessionId = engineSessionContext.sessionId;
-         this.createdAt = engineSessionContext.createdAt;
-         this.flowStacks = engineSessionContext.flowStacks;
-         this.globalAccumulatedMessages = engineSessionContext.globalAccumulatedMessages;
-         this.lastChatTurn = engineSessionContext.lastChatTurn;
-         this.globalVariables = engineSessionContext.globalVariables;
+      let hostLogger: Logger = engineSessionContext.hostLogger || logger; // Fallback to global logger if not provided
+      if (engineSessionContext.hostLogger){
+        const requiredMethods = ['info', 'warn', 'error', 'debug'];
+        for (const method of requiredMethods) {
+          if (typeof (engineSessionContext.hostLogger as any)[method] !== 'function') {
+            hostLogger = logger; // Fallback to global logger if hostLogger is missing methods
+            break; // No need to throw error, just use global logger
+            //throw new Error(`Logger is missing required method: ${method}`);
+          }
+        }
       }
+
+      logger = hostLogger; // Assign to global logger
+      this.cargo = engineSessionContext.cargo;
+      logger.info(`Received Cargo: ${JSON.stringify(this.cargo)}`);
+      this.sessionId = engineSessionContext.sessionId;
+      this.createdAt = engineSessionContext.createdAt;
+      // Convert serializable flow stacks back to working flow stacks with transaction methods
+      this.flowStacks = deserializeFlowStacks(engineSessionContext.flowStacks);
+      this.globalAccumulatedMessages = engineSessionContext.globalAccumulatedMessages;
+      this.lastChatTurn = engineSessionContext.lastChatTurn;
+      this.globalVariables = engineSessionContext.globalVariables;
 
       // Get userId from session context
       const userId = engineSessionContext?.userId || 'anonymous';
@@ -6350,13 +6661,28 @@ export class WorkflowEngine implements Engine {
 
          // Update session context with current state
          if (engineSessionContext) {
-            engineSessionContext.flowStacks = this.flowStacks;
+            // Convert working flow stacks to serializable flow stacks for session storage
+            engineSessionContext.flowStacks = serializeFlowStacks(this.flowStacks);
             engineSessionContext.globalAccumulatedMessages = this.globalAccumulatedMessages;
             engineSessionContext.lastChatTurn = this.lastChatTurn;
             engineSessionContext.globalVariables = this.globalVariables || {};
+            engineSessionContext.response = flowOrNull; // Store the response from flow processing
+            
+            // Extract and store completed transactions for host access
+            const newCompletedTransactions = extractCompletedTransactions(this.flowStacks);
+            if (!engineSessionContext.completedTransactions) {
+              engineSessionContext.completedTransactions = [];
+            }
+            // Add any new completed transactions
+            for (const transaction of newCompletedTransactions) {
+              const existingTransaction = engineSessionContext.completedTransactions.find(t => t.id === transaction.id);
+              if (!existingTransaction) {
+                engineSessionContext.completedTransactions.push(transaction);
+              }
+            }
          }
 
-         return flowOrNull;
+         return engineSessionContext;
       } else if (contextEntry.role === 'assistant') {
          // Check if we're in a flow or not
          if (getCurrentStackLength(this) === 0) {
@@ -6370,18 +6696,44 @@ export class WorkflowEngine implements Engine {
          
          // Update session context with current state
          if (engineSessionContext) {
-            engineSessionContext.flowStacks = this.flowStacks;
+            // Convert working flow stacks to serializable flow stacks for session storage
+            engineSessionContext.flowStacks = serializeFlowStacks(this.flowStacks);
             engineSessionContext.globalAccumulatedMessages = this.globalAccumulatedMessages;
             engineSessionContext.lastChatTurn = this.lastChatTurn;
             engineSessionContext.globalVariables = this.globalVariables || {};
+            engineSessionContext.response = null; // No response for assistant turns
+            
+            // Extract and store completed transactions for host access
+            const newCompletedTransactions = extractCompletedTransactions(this.flowStacks);
+            if (!engineSessionContext.completedTransactions) {
+              engineSessionContext.completedTransactions = [];
+            }
+            // Add any new completed transactions
+            for (const transaction of newCompletedTransactions) {
+              const existingTransaction = engineSessionContext.completedTransactions.find(t => t.id === transaction.id);
+              if (!existingTransaction) {
+                engineSessionContext.completedTransactions.push(transaction);
+              }
+            }
          }
          
-         // Return null to indicate no flow processing needed
-         return null;
+         return engineSessionContext;
       } else {
          // Throw error for unsupported roles
          throw new Error(`Unsupported role '${contextEntry.role}' in updateActivity. Only 'user' and 'assistant' roles are supported.`);
       }
+    } catch (error: any) {
+      if( logger && logger.error) {
+        logger.error(`Error in updateActivity: ${error.message}`);
+      }
+      // Return session context with error information
+      if (engineSessionContext) {
+        engineSessionContext.response = `Error: ${error.message}`;
+        return engineSessionContext;
+      }
+      // If no session context provided, we can't return it - this should not happen
+      throw error;
+    }
    }
 
    // Add a SAY message to global accumulation
