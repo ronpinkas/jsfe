@@ -4832,6 +4832,12 @@ function evaluateExpression(
       return convertReturnType(result, opts.returnType);
     }
     
+    // Handle typeof operator (e.g., "typeof variable", "typeof container")
+    if (processedExpression.trim().startsWith('typeof ')) {
+      const result = evaluateTypeofExpression(processedExpression, variables, contextStack, engine);
+      return convertReturnType(result, opts.returnType);
+    }
+    
     // Handle simple variable paths (e.g., "user.name", "data.items.length")
     if (isSimpleVariablePath(processedExpression)) {
       const result = resolveSimpleVariable(processedExpression, variables, contextStack, engine);
@@ -5645,6 +5651,44 @@ function evaluateSafeMathematicalExpression(expression: string, variables: Recor
   } catch (error: any) {
     logger.warn(`Mathematical expression evaluation error: ${error.message}`);
     return `[math-error: ${expression}]`;
+  }
+}
+
+// Handle typeof operator expressions (e.g., "typeof variable", "typeof container.prop")
+function evaluateTypeofExpression(expression: string, variables: Record<string, any>, contextStack: ContextEntry[], engine: Engine): string {
+  try {
+    // Extract the variable name after "typeof "
+    const typeofMatch = expression.trim().match(/^typeof\s+(.+)$/);
+    if (!typeofMatch) {
+      logger.warn(`Invalid typeof expression: ${expression}`);
+      return 'undefined';
+    }
+    
+    const variablePath = typeofMatch[1].trim();
+    logger.debug(`Evaluating typeof for variable path: ${variablePath}`);
+    
+    // Resolve the variable value
+    let value: any;
+    
+    // Try to resolve from variables first
+    if (variables && Object.keys(variables).length > 0) {
+      value = variablePath.split('.').reduce((obj, part) => obj?.[part], variables);
+    }
+    
+    // If not found in variables, check engine session variables
+    if (value === undefined && engine) {
+      value = resolveEngineSessionVariable(variablePath, engine);
+    }
+    
+    // Return the JavaScript typeof result
+    const typeResult = typeof value;
+    logger.debug(`typeof ${variablePath} = ${typeResult} (value: ${JSON.stringify(value)})`);
+    
+    return typeResult;
+    
+  } catch (error: any) {
+    logger.warn(`Typeof expression evaluation error: ${error.message}`);
+    return 'undefined';
   }
 }
 
