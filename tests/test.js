@@ -3309,16 +3309,17 @@ async function handleQuery(context, input, chatContextManager) {
   
   // Forward the input to the engine for conditional processing
   const result = await engine.updateActivity(contextEntry, context.sessionContext);
-  if (result) {
+  context.sessionContext = result;
+  if (result.response) {
     // Intent detected and handled, no need to proceed to normal reply generation
-    return result;
+    return result.response;
   }
 
   // Call your normal Generate reply process as usual
   const reply = await yourConversationalReply(input);
 
   // Update the engine's context with the generated reply
-  context.engine.updateActivity({
+  context.sessionContext = context.engine.updateActivity({
     role: 'assistant',
       content: reply,
       timestamp: Date.now()
@@ -3926,8 +3927,8 @@ async function runAllTestScenarios(language = 'en') {
     const scenario = TEST_SCENARIOS[scenarioName];
     
     console.log(`\n[${i + 1}/${totalScenarios}] 🧪 Running: ${scenarioName}`);
-    console.log(`📝 Inputs: ${scenario.slice(0, Math.min(3, scenario.length - 1)).join(' → ')}${scenario.length > 4 ? '...' : ''}`);
-    
+    console.log(`📝 Inputs (${scenario.length}): ${scenario.join(' → ')}`);
+
     try {
       await simulateLocalChat(scenario, language);
       console.log(`✅ [${i + 1}/${totalScenarios}] ${scenarioName} - PASSED`);

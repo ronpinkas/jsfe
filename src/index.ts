@@ -403,7 +403,7 @@ export interface EngineSessionContext {
   userId: string;
   createdAt: Date;
   lastActivity: Date;
-  flowStacks: SerializableFlowFrame[][]; // Use serializable flow frames
+  flowStacks: FlowFrame[][]; // Now pure data, always serializable!
   globalAccumulatedMessages: string[];
   lastChatTurn: { user?: ContextEntry; assistant?: ContextEntry };
   globalVariables: Record<string, unknown>;
@@ -468,26 +468,7 @@ export interface TransactionStep {
   retryCount?: number;
 }
 
-export interface TransactionObj {
-  id: string;
-  flowName: string;
-  initiator: string;
-  userId: string;
-  steps: TransactionStep[];
-  state: 'active' | 'completed' | 'failed' | 'rolled_back';
-  createdAt: Date;
-  completedAt?: Date;
-  failedAt?: Date;
-  rolledBackAt?: Date;
-  failureReason?: string;
-  metadata: Record<string, unknown>;
-  addStep: (step: FlowStep, result: unknown, duration: number, status?: 'success' | 'error') => void;
-  addError: (step: FlowStep, error: Error, duration: number) => void;
-  sanitizeForLog: (data: unknown) => unknown;
-  rollback: () => void;
-  complete: () => void;
-  fail: (reason: string) => void;
-}
+
 
 // Serializable transaction data (without methods) for session persistence
 export interface TransactionData {
@@ -505,123 +486,72 @@ export interface TransactionData {
   metadata: Record<string, unknown>;
 }
 
-// Helper function to extract serializable transaction data
-function extractTransactionData(transaction: TransactionObj): TransactionData {
-  return {
-    id: transaction.id,
-    flowName: transaction.flowName,
-    initiator: transaction.initiator,
-    userId: transaction.userId,
-    steps: transaction.steps,
-    state: transaction.state,
-    createdAt: transaction.createdAt,
-    completedAt: transaction.completedAt,
-    failedAt: transaction.failedAt,
-    rolledBackAt: transaction.rolledBackAt,
-    failureReason: transaction.failureReason,
-    metadata: transaction.metadata
-  };
-}
-
-// Helper function to extract completed transactions from flow stacks
-function extractCompletedTransactions(flowStacks: FlowFrame[][]): TransactionData[] {
-  const completedTransactions: TransactionData[] = [];
-  
-  for (const stack of flowStacks) {
-    for (const frame of stack) {
-      if (frame.transaction && (frame.transaction.state === 'completed' || frame.transaction.state === 'failed')) {
-        completedTransactions.push(extractTransactionData(frame.transaction));
-      }
-    }
+// Pure function-based transaction management (no methods, always serializable)
+export class TransactionManager {
+  static create(flowName: string, initiator: string, userId: string): TransactionData {
+    return {
+      id: crypto.randomUUID(),
+      flowName: flowName,
+      initiator: initiator,
+      userId: userId,
+      steps: [],
+      state: 'active',
+      createdAt: new Date(),
+      metadata: {}
+    };
   }
   
-  return completedTransactions;
-}
-
-// Helper function to convert TransactionData to TransactionObj (recreate methods)
-function createTransactionObj(data: TransactionData): TransactionObj {
-  const transactionObj: TransactionObj = {
-    ...data,
-    addStep: function(step: FlowStep, result: unknown, duration: number, status?: 'success' | 'error') {
-      this.steps.push({
-        stepId: step.id || crypto.randomUUID(),
-        stepType: step.type,
-        tool: step.tool || 'unknown',
-        status: status || 'success',
-        result: result,
-        duration: duration,
-        timestamp: new Date(),
-        error: status === 'error' ? (result as Error)?.message : undefined
-      });
-    },
-    addError: function(step: FlowStep, error: Error, duration: number) {
-      this.steps.push({
-        stepId: step.id || crypto.randomUUID(),
-        stepType: step.type,
-        tool: step.tool || 'unknown',
-        status: 'error',
-        result: null,
-        duration: duration,
-        timestamp: new Date(),
-        error: error.message
-      });
-    },
-    sanitizeForLog: function(data: unknown): unknown {
-      // Basic sanitization - remove sensitive fields
-      if (typeof data === 'object' && data !== null) {
-        const sanitized = { ...data as Record<string, unknown> };
-        const sensitiveKeys = ['password', 'token', 'secret', 'key', 'credential'];
-        for (const key of sensitiveKeys) {
-          if (key in sanitized) {
-            sanitized[key] = '[REDACTED]';
-          }
-        }
-        return sanitized;
-      }
-      return data;
-    },
-    rollback: function() {
-      this.state = 'rolled_back';
-      this.rolledBackAt = new Date();
-    },
-    complete: function() {
-      this.state = 'completed';
-      this.completedAt = new Date();
-    },
-    fail: function(reason: string) {
-      this.state = 'failed';
-      this.failedAt = new Date();
-      this.failureReason = reason;
+  static addStep(transaction: TransactionData, step: FlowStep, result: unknown, duration: number, status: 'success' | 'error' = 'success'): void {
+    const transactionStep: TransactionStep = {
+      stepId: step.id || crypto.randomUUID(),
+      stepType: step.type || 'unknown',
+      timestamp: new Date(),
+      duration: duration,
+      status: status,
+      result: TransactionManager.sanitizeForLog(result)
+    };
+    
+    if (status === 'error' && result instanceof Error) {
+      transactionStep.error = result.message;
     }
-  };
+    
+    transaction.steps.push(transactionStep);
+  }
   
-  return transactionObj;
-}
-
-// Helper function to convert SerializableFlowFrame to FlowFrame (recreate transaction methods)
-function deserializeFlowFrame(serializableFrame: SerializableFlowFrame): FlowFrame {
-  return {
-    ...serializableFrame,
-    transaction: createTransactionObj(serializableFrame.transaction)
-  };
-}
-
-// Helper function to convert FlowFrame to SerializableFlowFrame (extract transaction data)
-function serializeFlowFrame(frame: FlowFrame): SerializableFlowFrame {
-  return {
-    ...frame,
-    transaction: extractTransactionData(frame.transaction)
-  };
-}
-
-// Helper function to convert flow stacks for session storage
-function serializeFlowStacks(flowStacks: FlowFrame[][]): SerializableFlowFrame[][] {
-  return flowStacks.map(stack => stack.map(frame => serializeFlowFrame(frame)));
-}
-
-// Helper function to convert serialized flow stacks back to working flow stacks
-function deserializeFlowStacks(serializableFlowStacks: SerializableFlowFrame[][]): FlowFrame[][] {
-  return serializableFlowStacks.map(stack => stack.map(frame => deserializeFlowFrame(frame)));
+  static addError(transaction: TransactionData, step: FlowStep, error: Error, duration: number): void {
+    TransactionManager.addStep(transaction, step, error, duration, 'error');
+  }
+  
+  static sanitizeForLog(data: unknown): unknown {
+    if (typeof data === 'string') {
+      return data.length > 500 ? data.substring(0, 500) + '...' : data;
+    }
+    if (typeof data === 'object' && data !== null) {
+      try {
+        const jsonStr = JSON.stringify(data);
+        return jsonStr.length > 500 ? jsonStr.substring(0, 500) + '...' : data;
+      } catch {
+        return '[Circular or non-serializable object]';
+      }
+    }
+    return data;
+  }
+  
+  static rollback(transaction: TransactionData): void {
+    transaction.state = 'rolled_back';
+    transaction.rolledBackAt = new Date();
+  }
+  
+  static complete(transaction: TransactionData): void {
+    transaction.state = 'completed';
+    transaction.completedAt = new Date();
+  }
+  
+  static fail(transaction: TransactionData, reason: string): void {
+    transaction.state = 'failed';
+    transaction.failedAt = new Date();
+    transaction.failureReason = reason;
+  }
 }
 
 export interface FlowFrame {
@@ -632,7 +562,7 @@ export interface FlowFrame {
   contextStack: ContextEntry[];  // Enhanced with role information
   inputStack: unknown[];
   variables: Record<string, unknown>;
-  transaction: TransactionObj;
+  transaction: TransactionData; // Pure data only, no methods
   userId: string;
   startTime: number;
   pendingVariable?: string;
@@ -641,26 +571,6 @@ export interface FlowFrame {
   accumulatedMessages?: string[];
   parentTransaction?: string;
   justResumed?: boolean; // Flag to indicate this flow frame was just resumed
-}
-
-// Serializable version of FlowFrame for session context storage
-export interface SerializableFlowFrame {
-  flowName: string;
-  flowId: string;
-  flowVersion: string;
-  flowStepsStack: FlowStep[];
-  contextStack: ContextEntry[];
-  inputStack: unknown[];
-  variables: Record<string, unknown>;
-  transaction: TransactionData; // Serializable transaction data instead of object with methods
-  userId: string;
-  startTime: number;
-  pendingVariable?: string;
-  lastSayMessage?: string;
-  pendingInterruption?: Record<string, unknown>;
-  accumulatedMessages?: string[];
-  parentTransaction?: string;
-  justResumed?: boolean;
 }
 
 export interface Engine {
@@ -2037,7 +1947,7 @@ function interpolateObject(obj: unknown, data: unknown, args: ArgsType = {}, eng
   return obj;
 }
 
-function makeLogger(level: string = process.env.LOG_LEVEL || "warn"): Logger {
+function makeLogger(level: string = process.env.LOG_LEVEL || "debug"): Logger {
 	const ORDER: Record<string, number> = { debug: 10, info: 20, warn: 30, error: 40 };
 	let current = ORDER[level] ?? ORDER.warn;
   const allow = (lvl: string): boolean => ORDER[lvl] >= current;
@@ -2061,90 +1971,6 @@ if (!(global as Record<string, unknown>).console) {
     error: (...args: unknown[]) => logger.error(args.join(' ')),
     info: (...args: unknown[]) => logger.info(args.join(' '))
   };
-}
-
-// === TRANSACTION MANAGEMENT CLASS ===
-class FlowTransaction implements TransactionObj {
-  id: string;
-  flowName: string;
-  initiator: string;
-  userId: string;
-  steps: TransactionStep[] = [];
-  state: 'active' | 'completed' | 'failed' | 'rolled_back' = 'active';
-  createdAt: Date;
-  completedAt?: Date;
-  failedAt?: Date;
-  rolledBackAt?: Date;
-  failureReason?: string;
-  metadata: Record<string, unknown> = {};
-
-  constructor(flowName: string, initiator: string, userId: string = 'anonymous') {
-    this.id = crypto.randomUUID();
-    this.flowName = flowName;
-    this.initiator = initiator;
-    this.userId = userId;
-    this.steps = [];
-    this.state = 'active';
-    this.createdAt = new Date();
-    this.metadata = {};
-  }
-  
-  addStep(step: FlowStep, result: unknown, duration: number, status: 'success' | 'error' = 'success') {
-    this.steps.push({
-      stepId: step.id || step.type,
-      stepType: step.type,
-      tool: step.tool,
-      result: this.sanitizeForLog(result),
-      duration,
-      status,
-      timestamp: new Date(),
-      retryCount: step.retryCount || 0
-    });
-  }
-  
-  addError(step: FlowStep, error: Error, duration: number) {
-    this.steps.push({
-      stepId: step.id || step.type,
-      stepType: step.type,
-      tool: step.tool,
-      error: error.message,
-      duration,
-      status: 'error',
-      timestamp: new Date()
-    });
-  }
-  
-  sanitizeForLog(data: unknown): unknown {
-    if (typeof data === 'object' && data !== null) {
-      const sanitized = { ...(data as Record<string, unknown>) };
-      // Remove sensitive fields
-      delete sanitized.signature;
-      delete sanitized.password;
-      delete sanitized.token;
-      return sanitized;
-    }
-    return data;
-  }
-  
-  rollback() {
-    // In a real implementation, this would execute compensating actions
-    this.state = 'rolled_back';
-    this.rolledBackAt = new Date();
-    auditLogger.logTransactionRollback(this);
-  }
-  
-  complete() {
-    this.state = 'completed';
-    this.completedAt = new Date();
-    auditLogger.logTransactionComplete(this);
-  }
-  
-  fail(reason: string) {
-    this.state = 'failed';
-    this.failedAt = new Date();
-    this.failureReason = reason;
-    auditLogger.logTransactionFailed(this);
-  }
 }
 
 // === COMPREHENSIVE AUDIT LOGGING ===
@@ -2191,7 +2017,7 @@ const auditLogger = {
     logger.info(`[AUDIT] ${JSON.stringify(logEntry)}`);
   },
   
-  logTransactionComplete(transaction: FlowTransaction) {
+  logTransactionComplete(transaction: TransactionData) {
     const logEntry = {
       event: "transaction_completed",
       transactionId: transaction.id,
@@ -2204,7 +2030,7 @@ const auditLogger = {
     logger.info(`[AUDIT] ${JSON.stringify(logEntry)}`);
   },
   
-  logTransactionFailed(transaction: FlowTransaction) {
+  logTransactionFailed(transaction: TransactionData) {
     const logEntry = {
       event: "transaction_failed",
       transactionId: transaction.id,
@@ -2217,7 +2043,7 @@ const auditLogger = {
     logger.info(`[AUDIT] ${JSON.stringify(logEntry)}`);
   },
   
-  logTransactionRollback(transaction: FlowTransaction) {
+  logTransactionRollback(transaction: TransactionData) {
     const logEntry = {
       event: "transaction_rollback",
       transactionId: transaction.id,
@@ -2496,8 +2322,12 @@ function pushToCurrentStack(engine: Engine, flowFrame: FlowFrame) {
    getCurrentStack(engine).push(flowFrame);
 }
 
-function popFromCurrentStack(engine: Engine): FlowFrame | undefined {
-  return getCurrentStack(engine).pop();
+function popFromCurrentStack(engine: Engine): FlowFrame {
+  const result = getCurrentStack(engine).pop();
+  if (!result) {
+    throw new Error('Cannot pop from empty stack');
+  }
+  return result;
 }
 
 function createNewStack(engine: Engine): number {
@@ -2580,7 +2410,7 @@ async function isFlowActivated(input: string, engine: Engine, userId: string = '
   const flow = await getFlowForInput(input, engine);
   
   if (flow) {
-    const transaction = new FlowTransaction(flow.name, 'user-input', userId);
+    const transaction = TransactionManager.create(flow.name, 'user-input', userId);
     
     // Prepare tentative flow_init message that will be replaced by SAY-GET guidance if present
     const tentativeFlowInit = getSystemMessage(engine, 'flow_init', { 
@@ -2627,7 +2457,7 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
       // Do we need this?
       //currentFlowFrame.contextStack.push(error.message);
       
-      currentFlowFrame.transaction.fail("Max recursion depth exceeded");
+      TransactionManager.fail(currentFlowFrame.transaction, "Max recursion depth exceeded");
     }
     
     throw error;
@@ -2670,7 +2500,7 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
     if (currentFlowFrame.flowStepsStack.length === 0) {
       logger.info(`Flow ${currentFlowFrame.flowName} completed, popping from stack (steps length: ${currentFlowFrame.flowStepsStack.length})`);
       const completedFlow = popFromCurrentStack(engine)!;
-      completedFlow.transaction.complete();
+      TransactionManager.complete(completedFlow.transaction);
       
       // When a flow completes, it doesn't "return" a value in the traditional sense.
       // It communicates results by setting variables in the shared `variables` object,
@@ -2733,6 +2563,8 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
                }
                
                continue;
+            } else {
+              logger.error(`Failed to resume flow - no flow frames available after switching stacks.`);
             }
          } else {
             logger.info(`No more flow frames to process, all flows completed.`);
@@ -2751,7 +2583,7 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
       const result = await playStep(currentFlowFrame, engine);
       const duration = Date.now() - startTime;
       
-      currentFlowFrame.transaction.addStep(step, result, duration, 'success');
+      TransactionManager.addStep(currentFlowFrame.transaction, step, result, duration, 'success');
       logger.info(`Step ${step.type} executed successfully, result: ${typeof result === 'object' ? '[object]' : result}`);
       
       // If this was a SAY-GET step, return and wait for user input
@@ -2760,7 +2592,7 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
         if (currentFlowFrame.flowStepsStack.length === 0) {
           logger.info(`SAY-GET step was final step, flow ${currentFlowFrame.flowName} completed`);
           const completedFlow = popFromCurrentStack(engine)!;
-          completedFlow.transaction.complete();
+          TransactionManager.complete(completedFlow.transaction);
           return result;
         }
         return result;
@@ -2771,7 +2603,7 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
       
     } catch (error: any) {
       const duration = Date.now() - startTime;
-      currentFlowFrame.transaction.addError(step, error, duration);
+      TransactionManager.addError(currentFlowFrame.transaction, step, error, duration);
       
       logger.error(`Step ${step.type} failed: ${error.message}`);
       logger.info(`Stack trace: ${error.stack}`);
@@ -3538,19 +3370,19 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
       
       if (callType === "reboot") {
         // Clear all flows and start fresh with the onFail flow
-        logger.info(`Rebooting with flow: ${onFailStep.name || onFailStep.type}`);
-        
+        logger.info(`Rebooted due to 'reboot' type of onFail step: ${onFailStep.name} in flow ${currentFlowFrame.flowName} for tool ${step.tool}`);
+
         // Clean up all existing flows
         while (getCurrentStackLength(engine) > 0) {
           const flow = popFromCurrentStack(engine)!;
-          flow.transaction.fail(`Rebooted due to critical failure in ${step.tool}`);
+          TransactionManager.fail(flow.transaction, `Rebooted due to 'reboot' type of onFail step: ${onFailStep.name} in flow ${flow?.flowName} for tool ${step.tool}`);
         }
         
         // Start the onFail flow as a new root flow
         if (onFailStep.type === "FLOW") {
           const rebootFlow = flowsMenu?.find(f => f.name === onFailStep.name);
           if (rebootFlow) {
-            const transaction = new FlowTransaction(rebootFlow.name, 'reboot-recovery', currentFlowFrame.userId);
+            const transaction = TransactionManager.create(rebootFlow.name, 'reboot-recovery', currentFlowFrame.userId);
             
             pushToCurrentStack(engine, {
               flowName: rebootFlow.name,
@@ -3571,7 +3403,7 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
           currentFlowFrame.flowStepsStack = [onFailStep];
         }
         
-        return `System rebooted due to critical failure in ${step.tool}`;
+        return `System rebooted due to onFail step for tool ${step.tool}. Starting recovery flow ${onFailStep.name}`;
         
       } else if (callType === "replace") {
         // Current behavior - replace remaining steps in current flow
@@ -3588,7 +3420,7 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
             // Push onFail flow as sub-flow
           const onFailFlow = flowsMenu?.find(f => f.name === onFailStep.name);
           if (onFailFlow) {
-            const transaction = new FlowTransaction(onFailFlow.name, 'onFail-recovery', currentFlowFrame.userId);
+            const transaction = TransactionManager.create(onFailFlow.name, 'onFail-recovery', currentFlowFrame.userId);
 
             pushToCurrentStack(engine, {
               flowName: onFailFlow.name,
@@ -3998,16 +3830,15 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
          // Clean up all existing flows
          while (getCurrentStackLength(engine) > 0) {
             const flow = popFromCurrentStack(engine)!;
-            flow.transaction.fail(`Rebooted to flow ${subFlow.name}`);
+            TransactionManager.fail(flow.transaction, `Rebooted to flow ${subFlow.name}`);
          }
          
-         // Reset to empty stacks
-         // flowStacks = [[]];
          // We must keep same reference to allow proper stack switching
-         initializeFlowStacks(engine);
-         
+         //initializeFlowStacks(engine);
+         engine.flowStacks.push([]);
+
          // Start the sub-flow as a new root flow
-         const transaction = new FlowTransaction(subFlow.name, 'reboot', currentFlowFrame.userId);
+         const transaction = TransactionManager.create(subFlow.name, 'reboot', currentFlowFrame.userId);
          
          pushToCurrentStack(engine, {
             flowName: subFlow.name,
@@ -4039,8 +3870,8 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
          currentFlowFrame.inputStack.push(input);
          
          // Update transaction
-         currentFlowFrame.transaction.fail(`Replaced by flow ${subFlow.name}`);
-         currentFlowFrame.transaction = new FlowTransaction(subFlow.name, 'replacement', currentFlowFrame.userId);
+         TransactionManager.fail(currentFlowFrame.transaction, `Replaced by flow ${subFlow.name}`);
+         currentFlowFrame.transaction = TransactionManager.create(subFlow.name, 'replacement', currentFlowFrame.userId);
          
          auditLogger.logFlowStart(subFlow.name, input, currentFlowFrame.userId, currentFlowFrame.transaction.id);
          logger.debug(`About to return from handleSubFlowStep replacement, flowStepsStack length: ${currentFlowFrame.flowStepsStack.length}`);
@@ -4048,7 +3879,7 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
          
       } else { // callType === "call" (default)
          // Normal sub-flow call - create new transaction for sub-flow
-         const subTransaction = new FlowTransaction(subFlow.name, 'sub-flow', currentFlowFrame.userId);
+         const subTransaction = TransactionManager.create(subFlow.name, 'sub-flow', currentFlowFrame.userId);
 
          // Push sub-flow onto stack - INHERIT parent's variables for unified scope
          pushToCurrentStack(engine, {
@@ -4086,7 +3917,7 @@ async function generateToolCallAndResponse(
   contextStack: ContextEntry[] = [], 
   userId: string = 'anonymous', 
   transactionId: string | null = null, 
-  flowFrame: FlowFrame | null = null, 
+  flowFrame: FlowFrame, 
   explicitArgs?: Record<string, unknown>
 ): Promise<unknown> {
    try {
@@ -4136,7 +3967,7 @@ async function generateToolCallAndResponse(
    }
 }
 
-async function generateToolArgs(schema: any, input: any, contextStack: ContextEntry[] = [], flowFrame: FlowFrame | null = null, engine: Engine): Promise<any> {
+async function generateToolArgs(schema: any, input: any, contextStack: ContextEntry[] = [], flowFrame: FlowFrame, engine: Engine): Promise<any> {
    try {
       if (!schema || typeof schema !== 'object') {
          logger.warn(`Invalid schema provided for argument generation: ${schema}`);
@@ -4182,7 +4013,7 @@ async function generateToolArgs(schema: any, input: any, contextStack: ContextEn
    }
 }
 
-async function generateArgsWithAI(schema: any, input: any, contextStack: ContextEntry[], flowFrame: FlowFrame | null = null, engine: Engine): Promise<any> {
+async function generateArgsWithAI(schema: any, input: any, contextStack: ContextEntry[], flowFrame: FlowFrame, engine: Engine): Promise<any> {
   const properties = schema.properties || {};
   const required = schema.required || [];
   
@@ -4278,7 +4109,7 @@ Context Extraction Examples:
 }
 
 // Enhanced pattern-based fallback that uses variables and input parsing
-function generateEnhancedFallbackArgs(schema: any, input: any, flowFrame: FlowFrame | null = null): any {
+function generateEnhancedFallbackArgs(schema: any, input: any, flowFrame: FlowFrame): any {
   const properties = schema.properties || {};
   const required = schema.required || [];
   const args: any = {};
@@ -6225,7 +6056,7 @@ async function handlePendingInterruptionSwitch(engine: Engine, userId: string): 
   }
   
   // Clean up current flow
-  currentFlowFrame.transaction.fail("User confirmed flow switch");
+  TransactionManager.fail(currentFlowFrame.transaction, "User confirmed flow switch");
   popFromCurrentStack(engine);
   
   logger.info(`🔄 User confirmed switch from "${currentFlowName}" to "${targetFlow}"`);
@@ -6236,7 +6067,7 @@ async function handlePendingInterruptionSwitch(engine: Engine, userId: string): 
     return getSystemMessage(engine, 'flow_switch_error', { targetFlow });
   }
   
-  const newTransaction = new FlowTransaction(targetFlow, 'confirmed-switch', userId);
+  const newTransaction = TransactionManager.create(targetFlow, 'confirmed-switch', userId);
   
   const newFlowFrame: FlowFrame = {
     flowName: targetFlow,
@@ -6294,7 +6125,7 @@ async function handleRegularFlowInterruption(intentAnalysis: any, engine: Engine
       logger.info(`🔄 Processing flow interruption: "${userInput}" -> ${targetFlow}`);
       
       // For non-financial flows, allow graceful switching with option to resume
-      currentFlowFrame.transaction.complete();
+      TransactionManager.complete(currentFlowFrame.transaction);
       
       // IMPORTANT: Clear pendingVariable from interrupted flow to avoid stale state when resuming
       if (currentFlowFrame.pendingVariable) {
@@ -6320,7 +6151,7 @@ async function handleRegularFlowInterruption(intentAnalysis: any, engine: Engine
       // Activate the new flow
       const targetFlowDefinition = flowsMenu?.find(f => f.name === targetFlow);
       if (targetFlowDefinition) {
-        const newTransaction = new FlowTransaction(targetFlow, 'intent-switch', userId);
+        const newTransaction = TransactionManager.create(targetFlow, 'intent-switch', userId);
 
         const newFlowFrame: FlowFrame = {
           flowName: targetFlow,
@@ -6375,10 +6206,15 @@ async function handleFlowExit(engine: Engine, userId: string, input: string): Pr
     
   // Clean up all flows with proper transaction logging
   const exitedFlows: string[] = [];
-  let flow: FlowFrame | undefined;
-  while ((flow = engine.flowStacks?.pop()?.[0])) {
+  let flow: FlowFrame;
+  while (engine.flowStacks.length > 0) {
+    const poppedStack = engine.flowStacks.pop();
+    if (!poppedStack || poppedStack.length === 0) {
+      break;
+    }
+    flow = poppedStack[0];
     logger.info(`Exiting flow: ${flow.flowName} due to user request`);
-    flow.transaction.fail(`User requested exit: ${input}`);
+    TransactionManager.fail(flow.transaction, `User requested exit: ${input}`);
     exitedFlows.push(flow.flowName);
     auditLogger.logFlowExit(flow.flowName, userId, flow.transaction.id, 'user_requested');
   }  
@@ -6446,7 +6282,7 @@ async function processActivity(input: string, userId: string, engine: Engine): P
          // Clean up failed flow
          if (getCurrentStackLength(engine) > 0) {
             const failedFrame = popFromCurrentStack(engine)!;
-            failedFrame.transaction.fail(error.message);
+            TransactionManager.fail(failedFrame.transaction, error.message);
          }
          
          return `I encountered an error: ${error.message}. Please try again or contact support if the issue persists.`;
@@ -6600,7 +6436,7 @@ export class WorkflowEngine implements Engine {
       userId: userId,
       createdAt: new Date(),
       lastActivity: new Date(),
-      flowStacks: [[]],
+      flowStacks: [[]], // Initialize as array with one empty stack (pure data)
       globalAccumulatedMessages: [],
       lastChatTurn: {},
       globalVariables: this.globalVariables ? { ...this.globalVariables } : {},
@@ -6633,8 +6469,7 @@ export class WorkflowEngine implements Engine {
       logger.info(`Received Cargo: ${JSON.stringify(this.cargo)}`);
       this.sessionId = engineSessionContext.sessionId;
       this.createdAt = engineSessionContext.createdAt;
-      // Convert serializable flow stacks back to working flow stacks with transaction methods
-      this.flowStacks = deserializeFlowStacks(engineSessionContext.flowStacks);
+      this.flowStacks = engineSessionContext.flowStacks;
       this.globalAccumulatedMessages = engineSessionContext.globalAccumulatedMessages;
       this.lastChatTurn = engineSessionContext.lastChatTurn;
       this.globalVariables = engineSessionContext.globalVariables;
@@ -6659,17 +6494,23 @@ export class WorkflowEngine implements Engine {
             this.lastChatTurn.user = contextEntry;
          }
 
-         // Update session context with current state
+         // Update session context with current state (no conversion needed!)
          if (engineSessionContext) {
-            // Convert working flow stacks to serializable flow stacks for session storage
-            engineSessionContext.flowStacks = serializeFlowStacks(this.flowStacks);
+            engineSessionContext.flowStacks = this.flowStacks;
             engineSessionContext.globalAccumulatedMessages = this.globalAccumulatedMessages;
             engineSessionContext.lastChatTurn = this.lastChatTurn;
             engineSessionContext.globalVariables = this.globalVariables || {};
             engineSessionContext.response = responseOrNull; // Store the response from flow processing
-
+            
             // Extract and store completed transactions for host access
-            const newCompletedTransactions = extractCompletedTransactions(this.flowStacks);
+            const newCompletedTransactions: TransactionData[] = [];
+            for (const stack of this.flowStacks) {
+              for (const frame of stack) {
+                if (frame.transaction && (frame.transaction.state === 'completed' || frame.transaction.state === 'failed')) {
+                  newCompletedTransactions.push(frame.transaction);
+                }
+              }
+            }
             if (!engineSessionContext.completedTransactions) {
               engineSessionContext.completedTransactions = [];
             }
@@ -6681,7 +6522,6 @@ export class WorkflowEngine implements Engine {
               }
             }
          }
-
          return engineSessionContext;
       } else if (contextEntry.role === 'assistant') {
          // Check if we're in a flow or not
@@ -6694,17 +6534,23 @@ export class WorkflowEngine implements Engine {
             addToContextStack(currentFlowFrame.contextStack, 'assistant', contextEntry.content, contextEntry.stepId, contextEntry.toolName, contextEntry.metadata);
          }
          
-         // Update session context with current state
+         // Update session context with current state (no conversion needed!)
          if (engineSessionContext) {
-            // Convert working flow stacks to serializable flow stacks for session storage
-            engineSessionContext.flowStacks = serializeFlowStacks(this.flowStacks);
+            engineSessionContext.flowStacks = this.flowStacks;
             engineSessionContext.globalAccumulatedMessages = this.globalAccumulatedMessages;
             engineSessionContext.lastChatTurn = this.lastChatTurn;
             engineSessionContext.globalVariables = this.globalVariables || {};
             engineSessionContext.response = null; // No response for assistant turns
             
             // Extract and store completed transactions for host access
-            const newCompletedTransactions = extractCompletedTransactions(this.flowStacks);
+            const newCompletedTransactions: TransactionData[] = [];
+            for (const stack of this.flowStacks) {
+              for (const frame of stack) {
+                if (frame.transaction && (frame.transaction.state === 'completed' || frame.transaction.state === 'failed')) {
+                  newCompletedTransactions.push(frame.transaction);
+                }
+              }
+            }
             if (!engineSessionContext.completedTransactions) {
               engineSessionContext.completedTransactions = [];
             }
@@ -6798,7 +6644,7 @@ export class WorkflowEngine implements Engine {
       pushToCurrentStack(this, flowFrame);
    }
 
-   popFromCurrentStack(): FlowFrame | undefined {
+   popFromCurrentStack(): FlowFrame {
       return popFromCurrentStack(this);
    }
 
