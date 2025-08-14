@@ -3369,14 +3369,26 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
       const callType = onFailStep.callType || "replace"; // Default to current behavior
       
       if (callType === "reboot") {
-        // Clear all flows and start fresh with the onFail flow
+        // Clear ALL flows across ALL stacks and start completely fresh with the onFail flow
         logger.info(`Rebooted due to 'reboot' type of onFail step: ${onFailStep.name} in flow ${currentFlowFrame.flowName} for tool ${step.tool}`);
 
-        // Clean up all existing flows
-        while (getCurrentStackLength(engine) > 0) {
-          const flow = popFromCurrentStack(engine)!;
-          TransactionManager.fail(flow.transaction, `Rebooted due to 'reboot' type of onFail step: ${onFailStep.name} in flow ${flow?.flowName} for tool ${step.tool}`);
+        // Clean up ALL existing flows across ALL stacks (using proven user exit pattern)
+        const exitedFlows: string[] = [];
+        while (engine.flowStacks.length > 0) {
+          const poppedStack = engine.flowStacks.pop();
+          if (!poppedStack || poppedStack.length === 0) {
+            continue;
+          }
+          // Process all flows in this stack
+          for (const flow of poppedStack) {
+            TransactionManager.fail(flow.transaction, `Rebooted due to 'reboot' type of onFail step: ${onFailStep.name} in flow ${flow?.flowName} for tool ${step.tool}`);
+            exitedFlows.push(flow.flowName);
+            auditLogger.logFlowExit(flow.flowName, currentFlowFrame.userId, flow.transaction.id, 'onFail_reboot');
+          }
         }
+        
+        // Initialize completely fresh stack system (using proven pattern)
+        initializeFlowStacks(engine);
         
         // Start the onFail flow as a new root flow
         if (onFailStep.type === "FLOW") {
@@ -3403,6 +3415,7 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
           currentFlowFrame.flowStepsStack = [onFailStep];
         }
         
+        logger.info(`System completely rebooted due to onFail step for tool ${step.tool}. Exited flows: ${exitedFlows.join(', ')}`);
         return `System rebooted due to onFail step for tool ${step.tool}. Starting recovery flow ${onFailStep.name}`;
         
       } else if (callType === "replace") {
@@ -3824,20 +3837,28 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
       logger.info(`Starting sub-flow ${subFlow.name} with callType: ${callType}, input: ${input}`);
       
       if (callType === "reboot") {
-         // Clear all flows and start fresh
-         logger.info(`Rebooting with flow: ${subFlow.name}`);
+         // Clear ALL flows across ALL stacks and start completely fresh
+         logger.info(`Rebooting system with flow: ${subFlow.name}`);
          
-         // Clean up all existing flows
-         while (getCurrentStackLength(engine) > 0) {
-            const flow = popFromCurrentStack(engine)!;
-            TransactionManager.fail(flow.transaction, `Rebooted to flow ${subFlow.name}`);
+         // Clean up ALL existing flows across ALL stacks (using proven user exit pattern)
+         const exitedFlows: string[] = [];
+         while (engine.flowStacks.length > 0) {
+            const poppedStack = engine.flowStacks.pop();
+            if (!poppedStack || poppedStack.length === 0) {
+               continue;
+            }
+            // Process all flows in this stack
+            for (const flow of poppedStack) {
+               TransactionManager.fail(flow.transaction, `System rebooted to flow ${subFlow.name}`);
+               exitedFlows.push(flow.flowName);
+               auditLogger.logFlowExit(flow.flowName, currentFlowFrame.userId, flow.transaction.id, 'system_reboot');
+            }
          }
          
-         // We must keep same reference to allow proper stack switching
-         //initializeFlowStacks(engine);
-         engine.flowStacks.push([]);
+         // Initialize completely fresh stack system (using proven pattern)
+         initializeFlowStacks(engine);
 
-         // Start the sub-flow as a new root flow
+         // Start the reboot flow as the only flow in the system
          const transaction = TransactionManager.create(subFlow.name, 'reboot', currentFlowFrame.userId);
          
          pushToCurrentStack(engine, {
@@ -3854,6 +3875,7 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
          });
          
          auditLogger.logFlowStart(subFlow.name, input, currentFlowFrame.userId, transaction.id);
+         logger.info(`System completely rebooted to flow ${subFlow.name}. Exited flows: ${exitedFlows.join(', ')}`);
          return `System rebooted to flow ${subFlow.name}`;
          
       } else if (callType === "replace") {
