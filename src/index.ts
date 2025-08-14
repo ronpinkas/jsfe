@@ -6352,8 +6352,6 @@ export class WorkflowEngine implements Engine {
   public flowsMenu: FlowDefinition[];
   public toolsRegistry: ToolDefinition[];
   public APPROVED_FUNCTIONS: ApprovedFunctions;
-  public flowStacks: FlowFrame[][];
-  public globalAccumulatedMessages: string[];
   public sessionId: string;
   public createdAt: Date;
   public lastActivity: Date;
@@ -6362,7 +6360,22 @@ export class WorkflowEngine implements Engine {
   public guidanceConfig?: GuidanceConfig;
   public globalVariables?: Record<string, unknown>;
   public aiCallback: AiCallbackFunction;
-  public lastChatTurn: { user?: ContextEntry; assistant?: ContextEntry } = {};
+  
+  // Private session context - engine works directly with session data (no copying!)
+  private sessionContext: EngineSessionContext | null = null;
+  
+  // Session-specific properties as getters - work directly with session data
+  get flowStacks(): FlowFrame[][] {
+    return this.sessionContext?.flowStacks || [[]];
+  }
+  
+  get globalAccumulatedMessages(): string[] {
+    return this.sessionContext?.globalAccumulatedMessages || [];
+  }
+  
+  get lastChatTurn(): { user?: ContextEntry; assistant?: ContextEntry } {
+    return this.sessionContext?.lastChatTurn || {};
+  }
 
    /**
     * Initialize a new EngineSessionContext for a user session.
@@ -6412,9 +6425,7 @@ export class WorkflowEngine implements Engine {
          contextSelector: 'auto'
       };
 
-      // Initialize flow stacks and global accumulated messages
-      this.flowStacks = [[]]; // Stack of flowFrames stacks for proper flow interruption/resumption
-      this.globalAccumulatedMessages = []; // Global SAY message accumulation across all stacks
+      // No longer initialize session-specific data in constructor - it's now in sessionContext
       this.sessionId = crypto.randomUUID();
       this.createdAt = new Date();
       this.lastActivity = new Date();
@@ -6492,26 +6503,31 @@ export class WorkflowEngine implements Engine {
       this.sessionId = engineSessionContext.sessionId;
       this.createdAt = engineSessionContext.createdAt;
       
-      // CRITICAL: Deep copy flowStacks for session isolation - no shared references!
-      if (engineSessionContext.flowStacks && Array.isArray(engineSessionContext.flowStacks)) {
-        // Use deep copy to prevent session contamination
-        this.flowStacks = JSON.parse(JSON.stringify(engineSessionContext.flowStacks));
-      } else {
-        // Initialize with fresh empty stack if no valid session data
-        this.flowStacks = [[]];
+      // Store reference to session context - no copying needed! Engine works directly with session data
+      this.sessionContext = engineSessionContext;
+      
+      // Ensure session context has proper initialization
+      if (!this.sessionContext.flowStacks || !Array.isArray(this.sessionContext.flowStacks)) {
+        this.sessionContext.flowStacks = [[]];
         logger.warn('engineSessionContext.flowStacks was invalid, initialized fresh flowStacks');
       }
       
-      // Deep copy all session data for isolation
-      this.globalAccumulatedMessages = [...(engineSessionContext.globalAccumulatedMessages || [])];
-      this.lastChatTurn = JSON.parse(JSON.stringify(engineSessionContext.lastChatTurn || {}));
-      this.globalVariables = JSON.parse(JSON.stringify(engineSessionContext.globalVariables || {}));
+      if (!this.sessionContext.globalAccumulatedMessages) {
+        this.sessionContext.globalAccumulatedMessages = [];
+      }
+      
+      if (!this.sessionContext.lastChatTurn) {
+        this.sessionContext.lastChatTurn = {};
+      }
+      
+      if (!this.sessionContext.globalVariables) {
+        this.sessionContext.globalVariables = {};
+      }
 
       // Safety check: ensure flowStacks is always properly initialized
-      if (!this.flowStacks || !Array.isArray(this.flowStacks) || this.flowStacks.length === 0) {
-        logger.warn('flowStacks was corrupted, reinitializing...');
-        this.flowStacks.length = 0; // Clear while preserving reference
-        this.flowStacks.push([]); // Add empty stack
+      if (this.sessionContext.flowStacks.length === 0) {
+        logger.warn('flowStacks was empty, adding initial stack...');
+        this.sessionContext.flowStacks.push([]); // Add empty stack
       }
 
       // Get userId from session context
@@ -6531,15 +6547,11 @@ export class WorkflowEngine implements Engine {
 
          // Store user turn in lastChatTurn if not in a flow
          if (responseOrNull === null) {
-            this.lastChatTurn.user = contextEntry;
+            this.sessionContext!.lastChatTurn.user = contextEntry;
          }
 
-         // Update session context with current state using deep copies for session isolation
+         // No copying needed! Session context already contains the latest data
          if (engineSessionContext) {
-            engineSessionContext.flowStacks = JSON.parse(JSON.stringify(this.flowStacks));
-            engineSessionContext.globalAccumulatedMessages = [...this.globalAccumulatedMessages];
-            engineSessionContext.lastChatTurn = JSON.parse(JSON.stringify(this.lastChatTurn));
-            engineSessionContext.globalVariables = JSON.parse(JSON.stringify(this.globalVariables || {}));
             engineSessionContext.response = responseOrNull; // Store the response from flow processing
             
             // Extract and store completed transactions for host access
@@ -6567,19 +6579,15 @@ export class WorkflowEngine implements Engine {
          // Check if we're in a flow or not
          if (getCurrentStackLength(this) === 0) {
             // Not in a flow - store in lastChatTurn for context
-            this.lastChatTurn.assistant = contextEntry;
+            this.sessionContext!.lastChatTurn.assistant = contextEntry;
          } else {
             // In a flow - add to current flow's context stack
             const currentFlowFrame = getCurrentFlowFrame(this);
             addToContextStack(currentFlowFrame.contextStack, 'assistant', contextEntry.content, contextEntry.stepId, contextEntry.toolName, contextEntry.metadata);
          }
          
-         // Update session context with current state using deep copies for session isolation
+         // No copying needed! Session context already contains the latest data
          if (engineSessionContext) {
-            engineSessionContext.flowStacks = JSON.parse(JSON.stringify(this.flowStacks));
-            engineSessionContext.globalAccumulatedMessages = [...this.globalAccumulatedMessages];
-            engineSessionContext.lastChatTurn = JSON.parse(JSON.stringify(this.lastChatTurn));
-            engineSessionContext.globalVariables = JSON.parse(JSON.stringify(this.globalVariables || {}));
             engineSessionContext.response = null; // No response for assistant turns
             
             // Extract and store completed transactions for host access
@@ -6623,34 +6631,32 @@ export class WorkflowEngine implements Engine {
    }
 
    // Add a SAY message to global accumulation
-   addAccumulatedMessage(message: string, engineSessionContext?: EngineSessionContext): void {
-      // Load session context if provided
-      if (engineSessionContext) {
-         this.globalAccumulatedMessages = engineSessionContext.globalAccumulatedMessages;
+   addAccumulatedMessage(message: string): void {
+      if (!this.sessionContext) {
+        logger.warn('No session context available for addAccumulatedMessage');
+        return;
       }
       
-      this.globalAccumulatedMessages.push(message);
-      
-      // Update session context with new message
-      if (engineSessionContext) {
-         engineSessionContext.globalAccumulatedMessages = this.globalAccumulatedMessages;
+      if (!this.sessionContext.globalAccumulatedMessages) {
+        this.sessionContext.globalAccumulatedMessages = [];
       }
+      
+      this.sessionContext.globalAccumulatedMessages.push(message);
    }
 
    // Get and clear all accumulated messages
-   getAndClearAccumulatedMessages(engineSessionContext?: EngineSessionContext): string[] {
-      // Load session context if provided
-      if (engineSessionContext) {
-         this.globalAccumulatedMessages = engineSessionContext.globalAccumulatedMessages;
+   getAndClearAccumulatedMessages(): string[] {
+      if (!this.sessionContext) {
+        logger.warn('No session context available for getAndClearAccumulatedMessages');
+        return [];
       }
       
-      const messages = [...this.globalAccumulatedMessages];
-      this.globalAccumulatedMessages = [];
-      
-      // Update session context with cleared messages
-      if (engineSessionContext) {
-         engineSessionContext.globalAccumulatedMessages = this.globalAccumulatedMessages;
+      if (!this.sessionContext.globalAccumulatedMessages) {
+        this.sessionContext.globalAccumulatedMessages = [];
       }
+      
+      const messages = [...this.sessionContext.globalAccumulatedMessages];
+      this.sessionContext.globalAccumulatedMessages = [];
       
       return messages;
    }
