@@ -6491,10 +6491,28 @@ export class WorkflowEngine implements Engine {
       logger.info(`Received Cargo: ${JSON.stringify(this.cargo)}`);
       this.sessionId = engineSessionContext.sessionId;
       this.createdAt = engineSessionContext.createdAt;
-      this.flowStacks = engineSessionContext.flowStacks;
-      this.globalAccumulatedMessages = engineSessionContext.globalAccumulatedMessages;
-      this.lastChatTurn = engineSessionContext.lastChatTurn;
-      this.globalVariables = engineSessionContext.globalVariables;
+      
+      // CRITICAL: Deep copy flowStacks for session isolation - no shared references!
+      if (engineSessionContext.flowStacks && Array.isArray(engineSessionContext.flowStacks)) {
+        // Use deep copy to prevent session contamination
+        this.flowStacks = JSON.parse(JSON.stringify(engineSessionContext.flowStacks));
+      } else {
+        // Initialize with fresh empty stack if no valid session data
+        this.flowStacks = [[]];
+        logger.warn('engineSessionContext.flowStacks was invalid, initialized fresh flowStacks');
+      }
+      
+      // Deep copy all session data for isolation
+      this.globalAccumulatedMessages = [...(engineSessionContext.globalAccumulatedMessages || [])];
+      this.lastChatTurn = JSON.parse(JSON.stringify(engineSessionContext.lastChatTurn || {}));
+      this.globalVariables = JSON.parse(JSON.stringify(engineSessionContext.globalVariables || {}));
+
+      // Safety check: ensure flowStacks is always properly initialized
+      if (!this.flowStacks || !Array.isArray(this.flowStacks) || this.flowStacks.length === 0) {
+        logger.warn('flowStacks was corrupted, reinitializing...');
+        this.flowStacks.length = 0; // Clear while preserving reference
+        this.flowStacks.push([]); // Add empty stack
+      }
 
       // Get userId from session context
       const userId = engineSessionContext?.userId || 'anonymous';
@@ -6516,12 +6534,12 @@ export class WorkflowEngine implements Engine {
             this.lastChatTurn.user = contextEntry;
          }
 
-         // Update session context with current state (no conversion needed!)
+         // Update session context with current state using deep copies for session isolation
          if (engineSessionContext) {
-            engineSessionContext.flowStacks = this.flowStacks;
-            engineSessionContext.globalAccumulatedMessages = this.globalAccumulatedMessages;
-            engineSessionContext.lastChatTurn = this.lastChatTurn;
-            engineSessionContext.globalVariables = this.globalVariables || {};
+            engineSessionContext.flowStacks = JSON.parse(JSON.stringify(this.flowStacks));
+            engineSessionContext.globalAccumulatedMessages = [...this.globalAccumulatedMessages];
+            engineSessionContext.lastChatTurn = JSON.parse(JSON.stringify(this.lastChatTurn));
+            engineSessionContext.globalVariables = JSON.parse(JSON.stringify(this.globalVariables || {}));
             engineSessionContext.response = responseOrNull; // Store the response from flow processing
             
             // Extract and store completed transactions for host access
@@ -6556,12 +6574,12 @@ export class WorkflowEngine implements Engine {
             addToContextStack(currentFlowFrame.contextStack, 'assistant', contextEntry.content, contextEntry.stepId, contextEntry.toolName, contextEntry.metadata);
          }
          
-         // Update session context with current state (no conversion needed!)
+         // Update session context with current state using deep copies for session isolation
          if (engineSessionContext) {
-            engineSessionContext.flowStacks = this.flowStacks;
-            engineSessionContext.globalAccumulatedMessages = this.globalAccumulatedMessages;
-            engineSessionContext.lastChatTurn = this.lastChatTurn;
-            engineSessionContext.globalVariables = this.globalVariables || {};
+            engineSessionContext.flowStacks = JSON.parse(JSON.stringify(this.flowStacks));
+            engineSessionContext.globalAccumulatedMessages = [...this.globalAccumulatedMessages];
+            engineSessionContext.lastChatTurn = JSON.parse(JSON.stringify(this.lastChatTurn));
+            engineSessionContext.globalVariables = JSON.parse(JSON.stringify(this.globalVariables || {}));
             engineSessionContext.response = null; // No response for assistant turns
             
             // Extract and store completed transactions for host access
