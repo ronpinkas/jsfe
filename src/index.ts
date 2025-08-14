@@ -573,26 +573,8 @@ export interface FlowFrame {
   justResumed?: boolean; // Flag to indicate this flow frame was just resumed
 }
 
-export interface Engine {
-  flowStacks: FlowFrame[][];
-  flowsMenu?: FlowDefinition[];
-  toolsRegistry?: ToolDefinition[];
-  language?: string; // Optional language support
-  messageRegistry?: MessageRegistry; // Centralized registry for system messages
-  guidanceConfig?: GuidanceConfig; // User-controlled guidance integration settings
-  globalVariables?: Record<string, unknown>; // Global variables shared across all flows
-  hasAccumulatedMessages: () => boolean;
-  getAndClearAccumulatedMessages?: (engineSessionContext?: EngineSessionContext) => string[];
-  addAccumulatedMessage?: (message: string, engineSessionContext?: EngineSessionContext) => void;
-  sessionId?: string;
-  APPROVED_FUNCTIONS?: ApprovedFunctions;
-  aiCallback: AiCallbackFunction; // Can be null for demo/test mode (see README)
-  lastChatTurn: { user?: ContextEntry; assistant?: ContextEntry }; // Last chat turn when not in a flow
-  // Session management methods
-  initSession: (hostLogger: Logger | null, userId: string, sessionId: string) => EngineSessionContext;
-  updateActivity: (contextEntry: ContextEntry, engineSessionContext: EngineSessionContext) => Promise<EngineSessionContext>;
-  cargo: Record<string, unknown> | undefined; // Additional session data
-}
+// Engine is now just an alias for WorkflowEngine since we only have one implementation
+export type Engine = WorkflowEngine;
 
 export interface FlowDefinition {
   id: string;
@@ -2306,7 +2288,8 @@ function exportConversationHistory(contextStack: ContextEntry[], format: 'openai
 
 function initializeFlowStacks(engine: Engine) {
    try {
-      engine.flowStacks = [[]];
+      // Use the engine method directly since Engine is now an alias for WorkflowEngine
+      engine.initializeFlowStacks();
    } catch (error: any) {
       logger.error("Failed to initialize flow stacks:", error.message);
       logger.error(error.stack);
@@ -6246,7 +6229,7 @@ async function handleFlowExit(engine: Engine, userId: string, input: string): Pr
   return getSystemMessage(engine, 'cmd_flow_exited', { flowName: exitedFlows[exitedFlows.length - 1] });
 }
 
-async function processActivity(input: string, userId: string, engine: Engine): Promise<string | null> {
+async function processActivity(input: string, userId: string, engine: WorkflowEngine): Promise<string | null> {
    try {
       // Custom logic for processing user activity
       logger.info(`Processing activity for user ${userId}: ${input}`);
@@ -6320,7 +6303,12 @@ async function processActivity(input: string, userId: string, engine: Engine): P
             logger.info(`Flow activated: ${activatedFlow.name}`);
             
             // Clear lastChatTurn since we now have flow context
-            engine.lastChatTurn = {};
+            const lastChatTurn = engine.lastChatTurn;
+            if (lastChatTurn) {
+                // Clear the existing properties
+                delete lastChatTurn.user;
+                delete lastChatTurn.assistant;
+            }
             logger.debug(`Cleared lastChatTurn - now using flow context for AI operations`);
             
             const response = await playFlowFrame(engine);
@@ -6667,7 +6655,11 @@ export class WorkflowEngine implements Engine {
    }
 
    initializeFlowStacks(): void {
-      initializeFlowStacks(this);
+      if (this.sessionContext) {
+         this.sessionContext.flowStacks = [[]];
+      } else {
+         logger.warn('No session context available for initializeFlowStacks');
+      }
    }
    
    getCurrentStack(): FlowFrame[] {
