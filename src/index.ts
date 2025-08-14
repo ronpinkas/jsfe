@@ -17,136 +17,6 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **/
 
-/**
- * JavaScript Flow Engine for Conversational Platforms
- * ==================================================
- *
- * Overview:
- * ---------
- * The JavaScript Flow Engine is a sophisticated, host-agnostic workflow orchestration system
- * designed to serve as a pluggable intent detector and workflows orchestrator for any
- * conversational platform. Whether integrated with AI chat assistants, live agent systems,
- * customer service platforms, or any other conversational interface, the engine provides
- * reliable, secure, and intelligent workflow automation.
- *
- * Key Features:
- * -------------
- * - Advanced response mapping with 25+ transform types including mathematical operations,
- *   statistical aggregations, date/time processing, and Handlebars-style templates
- * - Stack-of-stacks architecture for flow frames, enabling nested flows, interruptions, and resumptions
- * - Comprehensive step handlers: SAY, SAY-GET, SET, SWITCH, CASE, CALL-TOOL, and CALL-FLOW
- * - Secure, pattern-based expression evaluation for variable interpolation and flow logic
- * - AI-powered intent detection, argument extraction, and flow activation with robust fallbacks
- * - Universal flow control commands (help, status, cancel, exit) available at any point in a flow
- * - Enterprise-grade error handling, logging, and audit support for production reliability
- * - Flexible tool integration: HTTP APIs, local functions, and mock/test tools with validation
- * - Comprehensive internationalization (i18n) support with language-specific properties
- * - Metadata-driven flow definitions (risk, auth, category) for security and analytics
- *
- * Enhanced Transformation System:
- * ------------------------------
- * - Mathematical Operations: add, subtract, multiply, divide, percentage, abs, round, floor, ceil
- * - Statistical Functions: sum, average, count, min, max for array aggregations
- * - Date/Time Processing: currentYear, yearDifference for dynamic temporal calculations
- * - Advanced Templates: Handlebars-style iteration with {{#each}}, @index, @last context
- * - Enhanced Path Resolution: Support for array.length and complex object navigation
- *
- * Security Model:
- * --------------
- * - All user-supplied expressions are evaluated with strict pattern checks to prevent code injection
- * - No arbitrary code execution is allowed in variable interpolation or flow logic
- * - Tool calls support secure authentication (Bearer, Basic, API Key) and header management
- * - Comprehensive input validation with JSON Schema for all tool parameters
- *
- * Usage:
- * ------
- * ```javascript
- * // 1. Create the engine
- * const engine = new WorkflowEngine(
- *   hostLogger,          // Your logging instance
- *   aiCallback,          // Your AI communication function
- *   flowsMenu,           // Array of flow definitions
- *   toolsRegistry,       // Array of tool definitions
- *   APPROVED_FUNCTIONS,  // Pre-approved local functions
- *   globalVariables,     // Optional: Session-wide variables
- *   validateOnInit,      // Optional: Enable pre-flight validation (default: true)
- *   language,            // Optional: User's preferred language
- *   messageRegistry,     // Optional: Custom message templates
- *   guidanceConfig       // Optional: User assistance configuration
- * );
- * 
- * // 2. Initialize a session for each user
- * const sessionContext = engine.initSession(yourLogger, 'user-123', 'session-456');
- * 
- * // 3. Process user input and assistant responses
- * const result = await engine.updateActivity(contextEntry, sessionContext);
- * ```
- *
- * Session Management:
- * ------------------
- * - Each user requires a unique session context via `initSession(logger, userId, sessionId)`
- * - The `EngineSessionContext` object should be persisted by your application
- * - Pass the same session context to `updateActivity` for conversation continuity
- *
- * Context Entry Types:
- * -------------------
- * - User input: contextEntry.role = 'user' - analyzed and may trigger flow execution
- * - Assistant response: contextEntry.role = 'assistant' - added to context for awareness
- *
- * ContextEntry Structure:
- * ----------------------
- * ```typescript
- * interface ContextEntry {
- *   role: 'user' | 'assistant' | 'system' | 'tool';  // Message role type
- *   content: string | Record<string, unknown>;       // Message content (text, object, etc.)
- *   timestamp: number;                               // Unix timestamp in milliseconds
- *   stepId?: string;                                 // Optional: Associated flow step ID
- *   toolName?: string;                               // Optional: Tool name for tool messages
- *   metadata?: Record<string, unknown>;              // Optional: Additional context data
- * }
- * ```
- *
- * Example Usage:
- * ```javascript
- * // User message
- * const userEntry = {
- *   role: 'user',
- *   content: 'I need help with my account',
- *   timestamp: Date.now()
- * };
- * // Process the message
- * await engine.updateActivity(userEntry, sessionContext);
- * 
- *
- * // Assistant response  
- * const assistantEntry = {
- *   role: 'assistant',
- *   content: 'I can help you with your account. What specific issue are you experiencing?',
- *   timestamp: Date.now(),
- *   stepId: 'greeting-step'
- * };
- * // Process the message
- * await engine.updateActivity(assistantEntry, sessionContext);
- * ```
- *
- * Production Deployment:
- * ---------------------
- * - Comprehensive test coverage with 40+ validation scenarios
- * - Built-in monitoring and metrics collection
- * - Containerization support with Docker and Kubernetes
- * - Horizontal scaling capabilities
- * - Enterprise security and compliance features
- *
- * Documentation:
- * --------------
- * - Complete User Guide: JavaScript Flow Engine.md
- * - API Reference: README.md  
- * - Examples: Comprehensive test scenarios and real-world implementations
- *
- * Author: InstantAIGuru.com Team
- * Last updated: August 2025
- **/
-
 import * as crypto from "crypto";
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
@@ -536,6 +406,7 @@ export interface EngineSessionContext {
   globalAccumulatedMessages: string[];
   lastChatTurn: { user?: ContextEntry; assistant?: ContextEntry };
   globalVariables: Record<string, unknown>;
+  cargo: Record<string, unknown> | undefined; // Additional session data
 }
 
 export interface FlowStep {
@@ -652,6 +523,7 @@ export interface Engine {
   // Session management methods
   initSession?: (hostLogger: Logger | null, userId: string, sessionId: string) => EngineSessionContext;
   updateActivity?: (contextEntry: ContextEntry, engineSessionContext?: EngineSessionContext) => Promise<string | null>;
+  cargo: Record<string, unknown> | undefined; // Additional session data
 }
 
 export interface FlowDefinition {
@@ -5374,6 +5246,9 @@ function resolveEngineSessionVariable(expression: string, engine: Engine): any {
     const currentFlowFrame = getCurrentFlowFrame(engine);
     
     switch (expression) {
+      case 'cargo':
+        return engine.cargo || {};
+
       case 'userInput':
       case 'lastUserInput':
         // Get the most recent user input from context stack
@@ -6216,6 +6091,7 @@ async function processActivity(input: string, userId: string, engine: Engine): P
 
 // === WORKFLOW ENGINE CLASS ===
 export class WorkflowEngine implements Engine {
+  public cargo: Record<string, unknown> | undefined;
   public flowsMenu: FlowDefinition[];
   public toolsRegistry: ToolDefinition[];
   public APPROVED_FUNCTIONS: ApprovedFunctions;
@@ -6327,7 +6203,8 @@ export class WorkflowEngine implements Engine {
       flowStacks: [[]],
       globalAccumulatedMessages: [],
       lastChatTurn: {},
-      globalVariables: this.globalVariables ? { ...this.globalVariables } : {}
+      globalVariables: this.globalVariables ? { ...this.globalVariables } : {},
+      cargo: {}
     };
 
     logger.info(`Engine session initialized: ${engineSessionContext.sessionId} for user: ${userId}`);
@@ -6338,6 +6215,7 @@ export class WorkflowEngine implements Engine {
       // Load session context if provided
       if (engineSessionContext) {
          logger = engineSessionContext.hostLogger;
+         this.cargo = engineSessionContext.cargo;
          this.sessionId = engineSessionContext.sessionId;
          this.createdAt = engineSessionContext.createdAt;
          this.flowStacks = engineSessionContext.flowStacks;
