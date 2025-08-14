@@ -5244,9 +5244,62 @@ function resolveSimpleVariable(expression: string, variables: Record<string, any
 function resolveEngineSessionVariable(expression: string, engine: Engine): any {
   try {
     const currentFlowFrame = getCurrentFlowFrame(engine);
+
+    logger.debug(`Resolving engine session variable: ${expression} in flow frame: ${currentFlowFrame.flowName}`);
     
+    // Handle property access (e.g., cargo.someVar)
+    if (expression.includes('.')) {
+      const parts = expression.split('.');
+      const baseVariable = parts[0];
+      const propertyPath = parts.slice(1).join('.');
+      
+      let baseValue: any;
+      
+      // Get the base engine session variable
+      switch (baseVariable) {
+        case 'cargo':
+          baseValue = engine.cargo || {};
+          break;
+        case 'userInput':
+        case 'lastUserInput':
+          const userEntries = currentFlowFrame.contextStack.filter(entry => entry.role === 'user');
+          if (userEntries.length > 0) {
+            const lastUserEntry = userEntries[userEntries.length - 1];
+            baseValue = typeof lastUserEntry.content === 'string' ? lastUserEntry.content : String(lastUserEntry.content);
+          } else {
+            baseValue = undefined;
+          }
+          break;
+        case 'sessionId':
+          baseValue = engine.sessionId;
+          break;
+        case 'userId':
+          baseValue = currentFlowFrame.userId;
+          break;
+        case 'flowName':
+          baseValue = currentFlowFrame.flowName;
+          break;
+        default:
+          logger.debug(`Unknown base engine session variable: ${baseVariable}`);
+          return undefined;
+      }
+      
+      // If base value is undefined, return undefined
+      if (baseValue === undefined || baseValue === null) {
+        logger.debug(`Base engine session variable '${baseVariable}' is undefined/null`);
+        return undefined;
+      }
+      
+      // Navigate through the property path using getNestedValue
+      const result = getNestedValue(baseValue, propertyPath);
+      logger.debug(`Engine session variable '${expression}' resolved to:`, result);
+      return result;
+    }
+    
+    // Handle direct variable access (no dots)
     switch (expression) {
       case 'cargo':
+        logger.debug(`Returning cargo from engine session variable: ${expression}`);
         return engine.cargo || {};
 
       case 'userInput':
@@ -5254,24 +5307,31 @@ function resolveEngineSessionVariable(expression: string, engine: Engine): any {
         // Get the most recent user input from context stack
         const userEntries = currentFlowFrame.contextStack.filter(entry => entry.role === 'user');
         if (userEntries.length > 0) {
+          logger.debug(`Returning last user input from engine session variable: ${expression}`);
           const lastUserEntry = userEntries[userEntries.length - 1];
           return typeof lastUserEntry.content === 'string' ? lastUserEntry.content : String(lastUserEntry.content);
         }
+        logger.debug(`No user input found in context stack for engine session variable: ${expression}`);
         return undefined;
         
       case 'currentTime()':
+        logger.debug(`Returning current time for engine session variable: ${expression}`);
         return new Date().toISOString();
         
       case 'sessionId':
+        logger.debug(`Returning session ID for engine session variable: ${expression}`);
         return engine.sessionId;
         
       case 'userId':
+        logger.debug(`Returning user ID for engine session variable: ${expression}`);
         return currentFlowFrame.userId;
         
       case 'flowName':
+        logger.debug(`Returning flow name for engine session variable: ${expression}`);
         return currentFlowFrame.flowName;
         
       default:
+        logger.debug(`No specific engine session variable found for: ${expression}`);
         return undefined;
     }
   } catch (error) {
@@ -7058,7 +7118,7 @@ export class WorkflowEngine implements Engine {
       // These are resolved by resolveEngineSessionVariable() during execution
       const runtimeVariables = [
         'userInput', 'lastUserInput', 'sessionId', 'userId', 'flowName',
-        'current_time', 'session_id', 'user_id', 'flow_start_time'
+        'current_time', 'session_id', 'user_id', 'flow_start_time', 'cargo'
       ];
       for (const runtimeVar of runtimeVariables) {
          scope.add(runtimeVar);
