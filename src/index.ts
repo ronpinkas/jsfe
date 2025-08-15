@@ -1929,7 +1929,7 @@ function interpolateObject(obj: unknown, data: unknown, args: ArgsType = {}, eng
   return obj;
 }
 
-function makeLogger(level: string = process.env.LOG_LEVEL || "debug"): Logger {
+function makeLogger(level: string = process.env.LOG_LEVEL || "warn"): Logger {
 	const ORDER: Record<string, number> = { debug: 10, info: 20, warn: 30, error: 40 };
 	let current = ORDER[level] ?? ORDER.warn;
   const allow = (lvl: string): boolean => ORDER[lvl] >= current;
