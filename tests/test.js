@@ -3930,6 +3930,9 @@ async function runAllTestScenarios(language = 'en') {
     console.log(`📝 Inputs (${scenario.length}): ${scenario.join(' → ')}`);
 
     try {
+      // CRITICAL FIX: Create fresh session context for each test to prevent contamination
+      context.sessionContext = engine.initSession(logger, 'test-user', `test-session-${i+1}`);
+      
       await simulateLocalChat(scenario, language);
       console.log(`✅ [${i + 1}/${totalScenarios}] ${scenarioName} - PASSED`);
       passed++;

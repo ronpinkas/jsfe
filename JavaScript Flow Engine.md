@@ -49,6 +49,25 @@ The engine makes **no assumptions about its hosting environment** (Node and Brow
 - **Custom Applications**: Any system that processes user intent and requires workflow execution
 - **Hybrid Systems**: Mixed human-AI environments where workflows can be triggered by either
 
+## ⚠️ Critical Session Management Notice
+
+**IMPORTANT**: All code examples in this guide have been updated to reflect the correct session management pattern. The `updateActivity()` method returns an updated `EngineSessionContext` that **must be captured and used** for all subsequent calls to prevent session corruption.
+
+### Key Pattern to Remember:
+```javascript
+// ✅ ALWAYS capture the returned session context
+sessionContext = await engine.updateActivity(entry, sessionContext);
+
+// ✅ ALWAYS check for workflow responses  
+if (sessionContext.response) {
+  return sessionContext.response;
+}
+```
+
+**Never use `const` for session context** - always use `let` so you can update the reference. See the [Critical Session Management Patterns](#critical-session-management-patterns) section for comprehensive details.
+
+---
+
 ### Intent Detection and Execution Flow
 
 ```
@@ -188,6 +207,54 @@ The WorkflowEngine constructor accepts the following parameters in order, each s
 - **Scope**: Available to all flows in the session via variable interpolation
 - **Security**: Safe sharing of host application data with workflows
 - **Examples**: User ID, session ID, application configuration, environmental data
+- **Nature**: **STATIC** - Set during engine initialization, same for all sessions
+
+### Dynamic Session Data: The `cargo` Property
+
+While `globalVariables` are static and shared across all sessions, each `EngineSessionContext` has a `cargo` property for **dynamic, session-specific data sharing**:
+
+```javascript
+// After initSession, you can set dynamic session data
+let sessionContext = engine.initSession(logger, 'user-123', 'session-456');
+
+// Set dynamic data that workflows can access
+sessionContext.cargo.userProfile = {
+  name: 'Alice Johnson',
+  tier: 'premium',
+  preferences: { theme: 'dark', notifications: true }
+};
+
+sessionContext.cargo.currentTransaction = {
+  id: 'TXN-789',
+  amount: 150.00,
+  status: 'pending'
+};
+
+sessionContext.cargo.temporaryState = {
+  lastSearchQuery: 'laptop deals',
+  cartItems: 3,
+  sessionStartTime: Date.now()
+};
+
+// Workflows can reference cargo data with variable interpolation
+// Example flow step:
+// { type: "SAY", value: "Welcome back {{cargo.userProfile.name}}! You have {{cargo.cartItems}} items in your cart." }
+```
+
+**Key Differences: `globalVariables` vs `cargo`**
+
+| Feature            | `globalVariables`.            | `cargo`                       |
+|--------------------|-------------------------------|-------------------------------|
+| **Scope**          | Engine-wide, all sessions     | Session-specific              |
+| **Mutability**     | Static, set at initialization | Dynamic, modifiable anytime   |
+| **Lifecycle**      | Exists for engine lifetime    | Exists for session lifetime   |
+| **Use Cases**      | API keys, system config.      | User data, conversation state |
+| **Access Pattern** | `{{globalVar}}`               | `{{cargo.property}}`          |
+| **Example**        | `{{app_name}}`                | `{{cargo.user.name}}`         |
+
+**When to Use Each:**
+- **globalVariables**: Configuration, constants, application metadata that doesn't change
+- **cargo**: User-specific data, conversation context, dynamic state that changes during interaction
 
 **7. validateOnInit** (boolean, optional)
 - **Purpose**: Enable comprehensive flow and tool validation during initialization
@@ -655,10 +722,11 @@ const engine = new WorkflowEngine(logger, fetchAiResponse, flowsMenu, toolsRegis
 #### Session Initialization
 ```javascript
 // Initialize the session (typically done once per session when supporting multiple user sessions)
-const sessionContext = engine.initSession(logger, 'test-user', 'test-session');
+let sessionContext = engine.initSession(logger, 'test-user', 'test-session');
 /*
   Store the returned context into your host context for the respective session. 
-  It should be passed as argument to all subseqent engine.updateActivity() calls  
+  It should be passed as argument to all subsequent engine.updateActivity() calls  
+  CRITICAL: Always update your session reference after each updateActivity() call
 */
 context.sessionContext = sessionContext
 ```
@@ -673,9 +741,12 @@ const contextEntry = {
 
 #### Call updateActivity()
 ```javascript
-  const result = await engine.updateActivity(contextEntry, context.sessionContext);
-  if (result) {
-    return result;
+  const updatedSessionContext = await engine.updateActivity(contextEntry, context.sessionContext);
+  context.sessionContext = updatedSessionContext; // CRITICAL: Always update your session reference
+  
+  // If flow activated you should not proceed to your normal handling
+  if (updatedSessionContext.response) {
+    return updatedSessionContext.response;
   }
 ```
 
@@ -690,17 +761,19 @@ async function handleUserInput(input, sessionContext) {
     timestamp: Date.now()
   };
   
-  // Try workflow engine first
-  const workflowResult = await engine.updateActivity(contextEntry, sessionContext);
-  if (workflowResult) {
-    return workflowResult; // Engine handled the request
+  // Try workflow engine first and update session context
+  const updatedSessionContext = await engine.updateActivity(contextEntry, sessionContext);
+  sessionContext = updatedSessionContext; // CRITICAL: Update session reference
+  
+  if (updatedSessionContext.response) {
+    return updatedSessionContext.response; // Engine handled the request
   }
 
   // Handle as regular conversation
   const reply = await generateAIResponse(input);
   
   // Update engine with assistant response for context
-  engine.updateActivity({
+  sessionContext = await engine.updateActivity({
     role: 'assistant', 
     content: reply,
     timestamp: Date.now()
@@ -709,6 +782,184 @@ async function handleUserInput(input, sessionContext) {
   return reply;
 }
 ```
+
+## Critical Session Management Patterns
+
+### Understanding Session Context Updates
+
+The `updateActivity()` method returns an **updated `EngineSessionContext`** that must be captured and used for all subsequent calls. This is critical for maintaining workflow state and preventing session corruption.
+
+#### ❌ Common Mistake - Not Updating Session Reference
+```javascript
+// WRONG - This causes session corruption
+const sessionContext = engine.initSession(logger, 'user-123', 'session-456');
+
+await engine.updateActivity(userEntry, sessionContext); // Session state lost!
+// Subsequent calls will have corrupted or invalid session state
+```
+
+#### ✅ Correct Pattern - Always Update Session Reference
+```javascript
+// CORRECT - Session state maintained properly
+let sessionContext = engine.initSession(logger, 'user-123', 'session-456');
+
+// Always capture the returned session context
+sessionContext = await engine.updateActivity(userEntry, sessionContext);
+
+// Check for workflow response
+if (sessionContext.response) {
+  return sessionContext.response;
+}
+
+// ... you normal processing
+
+// Record response of your normal process to the sessionContext
+sessionContext = await engine.updateActivity(assistantEntry, sessionContext);
+```
+
+### Session Isolation for Multiple Users
+
+When handling multiple users or sessions, ensure complete isolation:
+
+```javascript
+// Maintain session per user/conversation
+const userSessions = new Map();
+
+async function handleUserMessage(userId, sessionId, message) {
+  // Get or create session for this user
+  const sessionKey = `${userId}-${sessionId}`;
+  let sessionContext = userSessions.get(sessionKey);
+  
+  if (!sessionContext) {
+    sessionContext = engine.initSession(logger, userId, sessionId);
+  }
+  
+  // Process message and update session
+  sessionContext = await engine.updateActivity({
+    role: 'user',
+    content: message,
+    timestamp: Date.now()
+  }, sessionContext);
+  
+  // Store updated session
+  userSessions.set(sessionKey, sessionContext);
+  
+  // Return response if workflow was triggered
+  if (sessionContext.response) {
+    return sessionContext.response;
+  }
+  
+  // Handle normal conversation...
+  // ...
+
+  // Update engine with assistant response for context
+  sessionContext = await engine.updateActivity({
+    role: 'assistant', 
+    content: reply, // The reply generated by your process
+    timestamp: Date.now()
+  }, sessionContext);
+}
+```
+
+### Session Cargo: Dynamic Data Management
+
+Each session context includes a `cargo` property for dynamic, session-specific data sharing between your application and workflows:
+
+```javascript
+// Initialize session
+let sessionContext = engine.initSession(logger, 'user-123', 'session-456');
+
+// Set dynamic session data before or during conversation
+sessionContext.cargo.userProfile = {
+  name: 'Alice Johnson',
+  accountType: 'premium',
+  lastLogin: new Date().toISOString()
+};
+
+sessionContext.cargo.currentOrder = {
+  id: 'ORD-789',
+  items: 3,
+  total: 249.99,
+  status: 'in_cart'
+};
+
+sessionContext.cargo.conversationState = {
+  topic: 'billing_inquiry',
+  priority: 'high',
+  agentRequired: false
+};
+
+// Workflows can access cargo data in any step
+// Flow example:
+// { type: "SAY", value: "Hello {{cargo.userProfile.name}}! Your order {{cargo.currentOrder.id}} is ready." }
+
+// Update cargo during conversation as needed
+async function updateUserContext(userId, sessionContext) {
+  // Fetch fresh user data from your system
+  const userProfile = await getUserProfile(userId);
+  const currentOrder = await getCurrentOrder(userId);
+  
+  // Update session cargo with fresh data
+  sessionContext.cargo.userProfile = userProfile;
+  sessionContext.cargo.currentOrder = currentOrder;
+  
+  return sessionContext;
+}
+
+// Example: Update cargo before processing user message
+sessionContext = await updateUserContext('user-123', sessionContext);
+sessionContext = await engine.updateActivity(userEntry, sessionContext);
+```
+
+**Cargo Use Cases:**
+- **User Context**: Profile data, preferences, account status
+- **Transaction State**: Current orders, cart contents, payment status  
+- **Conversation Data**: Topic tracking, escalation flags, temporary values
+- **Application State**: Feature flags, permissions, session metadata
+
+**Cargo vs Global Variables:**
+- **Global Variables**: Static app config (`{{app_name}}`, `{{support_email}}`)
+- **Cargo**: Dynamic session data (`{{cargo.user.name}}`, `{{cargo.order.total}}`)
+
+### Test Suite Session Management
+
+When creating test suites, **create fresh sessions for each test** to prevent contamination:
+
+```javascript
+// ❌ Wrong - Shared session causes test failures
+const globalSession = engine.initSession(logger, 'test-user', 'test-session');
+
+for (const testCase of testCases) {
+  // This will cause session corruption between tests!
+  await runTest(testCase, globalSession);
+}
+
+// ✅ Correct - Fresh session per test
+for (let i = 0; i < testCases.length; i++) {
+  const testCase = testCases[i];
+  
+  // Create fresh session for each test
+  let sessionContext = engine.initSession(logger, 'test-user', `test-session-${i+1}`);
+  
+  await runTest(testCase, sessionContext);
+}
+
+async function runTest(inputs, sessionContext) {
+  for (const input of inputs) {
+    // Always update session context in tests
+    sessionContext = await engine.updateActivity({
+      role: 'user',
+      content: input,
+      timestamp: Date.now()
+    }, sessionContext);
+    
+    if (sessionContext.response) {
+      console.log('Test Response:', sessionContext.response);
+    }
+  }
+}
+```
+`
 
 ## Engine Behavior and Intelligence
 
@@ -759,52 +1010,7 @@ Safe expression evaluation with multiple security levels:
 - **Input Sanitization**: Safe handling of user-provided data
 - **No Code Execution**: Template expressions cannot execute arbitrary code
 
-### Custom Application Integration
-```javascript
-// In any conversational application
-class ConversationHandler {
-  constructor(workflowEngine) {
-    this.engine = new WorkflowEngine(
-      aiCallback,           // AI communication function
-      flowsMenu,            // Available workflows
-      toolsRegistry,        // Tool definitions
-      APPROVED_FUNCTIONS,   // Secure local functions
-      logger,               // Logging implementation
-      language,             // Language preference ('en', 'es', etc.)
-      messageRegistry,      // Custom message templates (optional)
-      guidanceConfig,       // User guidance settings (optional)
-      validateOnInit,       // Integrity validation flag (default: true)
-      globalVariables       // Session-wide variables (optional)
-    );
-  }
-  
-  async processUserInput(input, sessionContext) {
-    // Always check for workflow intents first
-    const contextEntry = {
-      role: 'user',
-      content: input,
-      timestamp: Date.now(),
-      metadata: { source: 'custom_app' }
-    };
-    
-    const workflowResponse = await this.engine.updateActivity(contextEntry, sessionContext);
-    
-    if (workflowResponse) {
-      return { 
-        handled: true, 
-        response: workflowResponse,
-        source: 'workflow_engine'
-      };
-    }
-    
-    // Handle through your application logic
-    return { 
-      handled: false, 
-      requiresProcessing: true 
-    };
-  }
-}
-```
+
 
 ## Benefits of the Flow Engine Approach
 
@@ -1414,6 +1620,112 @@ responseMapping: {
   }
 }
 ```
+
+### Complete Support Ticket Example with Cargo
+
+This example demonstrates how to use session cargo for dynamic data sharing in a support ticket workflow:
+
+```javascript
+// Initialize session with dynamic user data
+let sessionContext = engine.initSession(logger, 'user-123', 'session-456');
+
+// Set initial cargo data (could come from your user database)
+sessionContext.cargo.userProfile = {
+  name: 'Sarah Chen',
+  email: 'sarah.chen@company.com',
+  accountType: 'enterprise',
+  supportTier: 'priority'
+};
+
+sessionContext.cargo.systemInfo = {
+  lastLogin: '2024-08-14T10:30:00Z',
+  browserAgent: 'Chrome/115.0',
+  ipAddress: '192.168.1.100'
+};
+
+// Define flow that uses cargo data
+const supportTicketFlow = {
+  id: "support-ticket-with-cargo",
+  name: "Support Ticket Creation",
+  prompt: "create support ticket|need help|technical issue",
+  steps: [
+    { 
+      type: "SAY", 
+      value: "Hello {{cargo.userProfile.name}}! I'll help you create a {{cargo.userProfile.supportTier}} support ticket." 
+    },
+    { 
+      type: "SAY-GET", 
+      variable: "issue_description", 
+      value: "Please describe your technical issue:" 
+    },
+    {
+      type: "CALL-TOOL",
+      tool: "CreateSupportTicket",
+      variable: "ticket_result",
+      args: {
+        customer_name: "{{cargo.userProfile.name}}",
+        customer_email: "{{cargo.userProfile.email}}",
+        account_type: "{{cargo.userProfile.accountType}}",
+        priority: "{{cargo.userProfile.supportTier}}",
+        description: "{{issue_description}}",
+        system_info: {
+          last_login: "{{cargo.systemInfo.lastLogin}}",
+          browser: "{{cargo.systemInfo.browserAgent}}",
+          ip: "{{cargo.systemInfo.ipAddress}}"
+        }
+      }
+    },
+    {
+      type: "SET",
+      variable: "ticket_created",
+      value: "{{ticket_result.success}}"
+    },
+    {
+      type: "SWITCH",
+      variable: "ticket_created",
+      branches: {
+        true: {
+          type: "SAY",
+          value: "✅ {{cargo.userProfile.supportTier}} ticket {{ticket_result.ticket.id}} created successfully! We'll contact you at {{cargo.userProfile.email}} within our SLA timeframe."
+        },
+        default: {
+          type: "SAY", 
+          value: "❌ Failed to create ticket: {{ticket_result.error}}. Please contact {{cargo.userProfile.supportTier}} support directly."
+        }
+      }
+    }
+  ]
+};
+
+// Usage in conversation handler
+async function handleUserMessage(userId, message) {
+  // Update cargo with fresh user data if needed
+  const userProfile = await fetchUserProfile(userId);
+  const systemInfo = await getSystemInfo(userId);
+  
+  sessionContext.cargo.userProfile = userProfile;
+  sessionContext.cargo.systemInfo = systemInfo;
+  
+  // Process the message
+  sessionContext = await engine.updateActivity({
+    role: 'user',
+    content: message
+  }, sessionContext);
+  
+  if (sessionContext.response) {
+    return sessionContext.response; // Workflow handled it with cargo data
+  }
+  
+  // Continue with normal conversation...
+}
+```
+
+**Key Benefits of Cargo:**
+- **Dynamic Data**: Update user context in real-time during conversation
+- **Rich Context**: Workflows have access to complete user and session state
+- **Personalization**: Responses automatically include user-specific information
+- **System Integration**: Include system metadata and operational data
+- **Session Isolation**: Each user's cargo is completely separate
 
 ### Real-World Example: E-commerce Order Processing
 
@@ -5310,6 +5622,122 @@ const testScenario = {
 - No error testing
 - No edge case coverage
 ```
+
+## Troubleshooting Common Issues
+
+### Session Management Problems
+
+#### Problem: "engineSessionContext.flowStacks was invalid, initialized fresh flowStacks"
+
+**Root Cause**: Session context corruption due to improper session management patterns.
+
+**Solutions**:
+
+1. **Always capture updateActivity() return value**:
+   ```javascript
+   // ❌ Wrong - Session state lost
+   await engine.updateActivity(entry, sessionContext);
+   
+   // ✅ Correct - Session state maintained
+   sessionContext = await engine.updateActivity(entry, sessionContext);
+   ```
+
+2. **Use unique sessions for each user/test**:
+   ```javascript
+   // ❌ Wrong - Shared sessions cause contamination
+   const sharedSession = engine.initSession(logger, 'shared', 'shared');
+   
+   // ✅ Correct - Isolated sessions
+   const userSession = engine.initSession(logger, `user-${userId}`, `session-${sessionId}`);
+   ```
+
+3. **Create fresh sessions for each test case**:
+   ```javascript
+   // ✅ Correct test pattern
+   for (let i = 0; i < testCases.length; i++) {
+     let sessionContext = engine.initSession(logger, 'test-user', `test-session-${i+1}`);
+     await runTestCase(testCases[i], sessionContext);
+   }
+   ```
+
+#### Problem: Workflows not triggering or receiving mock responses
+
+**Root Cause**: Corrupted session state preventing proper flow execution.
+
+**Solution**: Implement proper session lifecycle management:
+```javascript
+// Initialize session once per user/conversation
+let sessionContext = engine.initSession(logger, userId, sessionId);
+
+// Always update session for every interaction
+sessionContext = await engine.updateActivity(userInput, sessionContext);
+
+// Check for workflow responses
+if (sessionContext.response) {
+  return sessionContext.response;
+}
+
+// Continue with regular conversation
+sessionContext = await engine.updateActivity(assistantResponse, sessionContext);
+```
+
+#### Problem: State bleeding between different users or test runs
+
+**Root Cause**: Shared session contexts between different users, conversations, or test cases.
+
+**Solution**: Maintain strict session isolation:
+```javascript
+class SessionManager {
+  constructor() {
+    this.sessions = new Map();
+  }
+  
+  getSessionKey(userId, sessionId) {
+    return `${userId}-${sessionId}`;
+  }
+  
+  async processMessage(userId, sessionId, message) {
+    const key = this.getSessionKey(userId, sessionId);
+    let sessionContext = this.sessions.get(key);
+    
+    if (!sessionContext) {
+      sessionContext = engine.initSession(logger, userId, sessionId);
+    }
+    
+    // Process and update session
+    sessionContext = await engine.updateActivity({
+      role: 'user',
+      content: message,
+      timestamp: Date.now()
+    }, sessionContext);
+    
+    // Store updated session
+    this.sessions.set(key, sessionContext);
+    
+    return sessionContext.response;
+  }
+}
+```
+
+### Best Practices Summary
+
+1. **Session Management**:
+   - Always use `let` instead of `const` for session context variables
+   - Always capture and update session context from `updateActivity()` calls
+   - Create unique sessions for each user, conversation, and test case
+   - Implement proper session persistence in production environments
+
+2. **Testing**:
+   - Isolate test cases with fresh session contexts
+   - Test session management patterns explicitly
+   - Include session corruption scenarios in your test suite
+   - Verify session state preservation across workflow interruptions
+
+3. **Production Deployment**:
+   - Implement session persistence and recovery
+   - Monitor for session corruption warnings in logs
+   - Use proper session key strategies for multi-tenant systems
+   - Include session management in your monitoring and alerting
 
 ---
 

@@ -152,7 +152,7 @@ const engine = new WorkflowEngine(
 
 /* ---------- Simple REPL ---------- */
 async function main() {
-	const session = engine.initSession(logger, "user-001", "session-001");
+	let session = engine.initSession(logger, "user-001", "session-001");
   // You can set session variables like this:
   session.cargo.test_var = "test value";
 
@@ -162,8 +162,9 @@ async function main() {
 	while (true) {
 		const user = await rl.question("> ");
 		const result = await engine.updateActivity({ role: "user", content: user }, session);
-    if (typeof result === "string" && result.length) {
-      console.log(result);
+    session = result
+    if (result.response) {
+      console.log(result.response);
     } else {
       console.log("You said:", user);
     }
