@@ -1,0 +1,535 @@
+// support-ticket.js
+import { WorkflowEngine } from '../dist/index.js';
+//import { WorkflowEngine } from "jsfe";
+
+import readline from "node:readline/promises";
+
+import winston from 'winston';
+
+const logger = winston.createLogger({
+  level: 'debug',  // Changed to debug to see HTTP requests
+  format: winston.format.printf(({ level, message }) => {
+    return `${level}: ${message}`;
+  }),
+  transports: [
+    new winston.transports.Console()
+  ]
+});
+
+/* ---------- AI callback ---------- */
+async function aiCallback(systemInstruction, userMessage) {
+	const apiKey = process.env.OPENAI_API_KEY;
+	if (!apiKey) throw new Error("OPENAI_API_KEY env var is required");
+
+	const res = await fetch("https://api.openai.com/v1/chat/completions", {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+			"Authorization": `Bearer ${apiKey}`,
+		},
+		body: JSON.stringify({
+			model: "gpt-4o-mini",
+			messages: [
+				{ role: "system", content: systemInstruction },
+				{ role: "user", content: userMessage },
+			],
+			temperature: 0.1,
+			max_tokens: 200,
+		}),
+	});
+
+	if (!res.ok) {
+      throw new Error(`AI API failed: ${res.status} ${res.statusText}`);
+	}
+
+	const data = await res.json();
+	return data?.choices?.[0]?.message?.content?.trim() || "";
+}
+
+/* ---------- Functions ---------- */
+function validateDigits(input, minDigits, maxDigits) {
+   const digitRegex = /^\d+$/;
+
+   if (!digitRegex.test(input)) {
+      logger.debug(`Invalid input: ${input}`);
+      return false;
+   }
+
+   const length = input.length;
+   return length >= minDigits && length <= maxDigits;
+}
+
+function validate_phone_format(phone) {
+   // Remove any non-digit characters for validation
+   const cleaned = phone.replace(/\D/g, '');
+   
+   // US phone number: 10 digits
+   if (cleaned.length === 10) {
+      return true;
+   }
+   
+   // International format: 11+ digits
+   if (cleaned.length >= 11 && cleaned.length <= 15) {
+      return true;
+   }
+   
+   return false;
+}
+
+function valid_email(email) {
+   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+   return emailRegex.test(email);
+}
+
+async function genAndSendPaymentLink(params) {
+   const acct_number = params.acct_number;
+   const cell_number = params.cell_number || params.cell;
+   const email = params.email;
+   
+   logger.info(`Generating payment link - account: ${acct_number}, cell: ${cell_number}, email: ${email}`);
+   
+   try {
+      // Simulate payment link generation
+      const paymentId = `PAY-${Date.now()}`;
+      const paymentLink = `https://secure.payment.com/pay/${paymentId}`;
+      
+      // Handle the three scenarios: account lookup, cell direct, or email direct
+      let contactInfo = {};
+      
+      if (acct_number) {
+         // Scenario 1: Account-based lookup - simulate looking up customer contact info
+         contactInfo = await lookupCustomerByAccount(acct_number);
+         logger.info(`Found customer contact info for account ${acct_number}: ${JSON.stringify(contactInfo)}`);
+      } else if (cell_number) {
+         // Scenario 2: Cell-based direct
+         contactInfo = { cell: cell_number, method: 'cell' };
+      } else if (email) {
+         // Scenario 3: Email-based direct  
+         contactInfo = { email: email, method: 'email' };
+      } else {
+         throw new Error("Must provide either account_number, cell_number, or email");
+      }
+      
+      // Send payment link to the appropriate contact method(s)
+      const sendResults = {};
+      
+      if (contactInfo.cell) {
+         sendResults.sms = await sendSMS(contactInfo.cell, `Payment link: ${paymentLink}`);
+      }
+      
+      if (contactInfo.email) {
+         sendResults.email = await sendEmail(contactInfo.email, "Payment Link", `Your payment link: ${paymentLink}`);
+      }
+      
+      // Determine primary contact method used
+      const primaryContact = contactInfo.cell || contactInfo.email;
+      const primaryMethod = contactInfo.cell ? 'SMS' : 'Email';
+      
+      return {
+         ok: true,
+         payment_id: paymentId,
+         payment_link: paymentLink,
+         contact_method: primaryMethod,
+         api_response: {
+         DATA: {
+            TWILIOINFO: {
+               to: contactInfo.cell || "not provided",
+               status: contactInfo.cell ? "sent" : "skipped"
+            },
+            EMAILINFO: {
+               to: contactInfo.email || "not provided", 
+               status: contactInfo.email ? "sent" : "skipped"
+            }
+         }
+         }
+      };
+   } catch (error) {
+      logger.error(`Payment link generation failed: ${error.message}`);
+      return {
+         ok: false,
+         error: error.message
+      };
+   }
+}
+
+// Mock function to simulate customer lookup by account number
+async function lookupCustomerByAccount(accountNumber) {
+   // Simulate database lookup - in real implementation this would query your customer database
+   logger.info(`Looking up customer info for account: ${accountNumber}`);
+   
+   // Simulate finding customer contact info based on account
+   // In a real system, this would query your customer database
+   const mockCustomerData = {
+      "123456": { cell: "555-123-4567", email: "customer1@example.com" },
+      "789012": { cell: "555-987-6543", email: "customer2@example.com" },
+      "345678": { cell: "555-345-6789" }, // Cell only
+      "901234": { email: "customer4@example.com" }, // Email only
+   };
+   
+   const customerInfo = mockCustomerData[accountNumber];
+   if (!customerInfo) {
+      throw new Error(`No customer found for account number: ${accountNumber}`);
+   }
+   
+   return customerInfo;
+}
+
+// Mock SMS sending function
+async function sendSMS(phone, message) {
+   logger.info(`SMS sent to ${phone}: ${message}`);
+   return { status: "sent", to: phone };
+}
+
+// Mock email sending function  
+async function sendEmail(email, subject, body) {
+  logger.info(`Email sent to ${email}: ${subject}`);
+  return { status: "sent", to: email };
+}
+
+/* ---------- Registries ---------- */
+const APPROVED_FUNCTIONS = new Map([
+   ["validateDigits", validateDigits],
+   ["validate_phone_format", validate_phone_format],
+   ["valid_email", valid_email],
+   ["genAndSendPaymentLink", genAndSendPaymentLink]
+]);
+
+const toolsRegistry = [
+	{
+		id: "get-otp-link",
+		name: "Get OTP Link",
+		description: "Generates a one-time payment link and sends it to the user via SMS and optionally email",
+      parameters: {
+         type: "object",
+         properties: {
+            acct_number: { type: "string", description: "Account Number" },
+            cell_number: { type: "string", description: "Customer's phone number" },
+            email: { type: "string", description: "Customer's email address" }
+         },
+         required: [],
+         additionalProperties: false
+      },
+      implementation: { type: "local", function: "genAndSendPaymentLink", timeout: 5000 },
+      security: { requiresAuth: false },
+	},
+];
+
+const flowsMenu = [
+   {
+      id: "start-payment",
+      name: "StartPayment",
+      version: "1.0.0",
+      description: "Start payment process",
+      prompt: "Accepting payment",
+      variables: {
+         know_acct_yes_or_no: { type: "string", description: "User response for knowing account number" },
+         acct_number: { type: "string", description: "Customer account number" },
+         cell_or_email: { type: "string", description: "User choice between cell or email" },
+         cell_number: { type: "string", description: "Customer cell phone number" },
+         email: { type: "string", description: "Customer email address" },
+         otp_link_result: { type: "object", description: "Result from OTP link generation" }
+      },
+      steps: [
+         {
+            id: "ask_known_account",
+            type: "SAY-GET",
+            variable: "know_acct_yes_or_no",
+            value: "Press 1 or say YES if you know your account number - press 2 or say NO if you don't."
+         },
+         {
+            id: "branch_on_account_knowledge",
+            type: "CASE",
+            branches: {
+               "condition: {{know_acct_yes_or_no}} == 1 || {{know_acct_yes_or_no}} == 'yes'": {
+                  id: "goto_acct_flow",
+                  type: "FLOW",
+                  value: "get-acct-number-and-generate-link",
+                  mode: "call"
+               },
+               "condition: {{know_acct_yes_or_no}} == '2' || {{know_acct_yes_or_no}} == 'no'": {
+                  id: "goto_cell_or_email_flow",
+                  type: "FLOW",
+                  value: "get-cell-or-email-and-generate-link",
+                  mode: "call"
+               },
+               "default": {
+                  id: "retry_start_payment",
+                  type: "FLOW",
+                  value: "retry-start-payment",
+                  mode: "replace"
+               }
+            }
+         },
+         {
+            id: "validate_payment_link",
+            type: "FLOW",
+            value: "validate-payment-link",
+            mode: "call"
+         }
+      ]
+   },
+
+   {
+      id: "retry-start-payment",
+      name: "RetryStartPayment",
+      version: "1.0.0",
+      description: "Retry the payment process after an error",
+      steps: [
+         { id: "retry_msg", type: "SAY", value: "Oops, sorry, something went wrong - let's try again..." },
+         { id: "restart_payment", type: "FLOW", value: "start-payment", mode: "replace" }
+      ]
+   },
+
+   {
+      id: "get-acct-number-and-generate-link",
+      name: "GetAcctNumberAndGenerateLink",
+      version: "1.0.0",
+      description: "Collect account number and generate payment link",
+      steps: [
+         {
+         id: "ask_acct_number",
+         type: "SAY-GET",
+         variable: "acct_number",
+         value: "Please say or enter your account number"
+         },
+         {
+         id: "branch_on_account_number",
+         type: "CASE",
+         branches: {
+            "condition: validateDigits({{acct_number}}, {{global_acct_required_digits}}, {{global_acct_max_digits}})": {
+               id: "call_get_otp_link",
+               type: "CALL-TOOL",
+               tool: "get-otp-link",
+               variable: "otp_link_result",
+               parameters: {
+                  acct_number: "{{acct_number}}"
+               }
+            },
+            "default": {
+               id: "retry_acct_number_flow",
+               type: "FLOW",
+               value: "retry-get-acct-number-and-generate-link",
+               mode: "replace"
+            }
+         }
+         }
+      ]
+   },
+
+   {
+      id: "retry-get-acct-number-and-generate-link",
+      name: "RetryGetAcctNumberAndGenerateLink",
+      version: "1.0.0",
+      description: "Retry collecting account number after validation error",
+      steps: [
+         { id: "retry_msg", type: "SAY", value: "Oops, sorry, something went wrong - let's try again..." },
+         { id: "retry_flow", type: "FLOW", value: "get-acct-number-and-generate-link", mode: "replace" }
+      ]
+   },
+
+   {
+      id: "get-cell-or-email-and-generate-link",
+      name: "GetCellOrEmailAndGenerateLink",
+      version: "1.0.0",
+      description: "Let user choose between cell phone or email for payment link delivery",
+      steps: [
+         {
+         id: "ask_cell_or_email",
+         type: "SAY-GET",
+         variable: "cell_or_email",
+         value: "To locate your account we need to validate your cell or email. Press 1 or say CELL to proceed using your phone - Press 2 or say EMAIL to proceed by email."
+         },
+         {
+         id: "branch_on_cell_or_email",
+         type: "CASE",
+         branches: {
+            "condition:{{cell_or_email}} == '1' || {{cell_or_email}} == 'cell' || {{cell_or_email}} == 'phone' || {{cell_or_email}} == 'mobile'": {
+               id: "goto_cell_flow",
+               type: "FLOW",
+               value: "get-cell-and-generate-link"
+            },
+            "condition:{{cell_or_email}} == '2' || {{cell_or_email}} == 'email'": {
+               id: "goto_email_flow",
+               type: "FLOW",
+               value: "get-email-and-generate-link"
+            },
+            "default": {
+               id: "retry_cell_or_email",
+               type: "FLOW",
+               value: "retry-get-cell-or-email-and-generate-link",
+               mode: "replace"
+            }
+         }
+         }
+      ]
+   },
+
+   {
+      id: "retry-get-cell-or-email-and-generate-link",
+      name: "RetryGetCellOrEmailAndGenerateLink",
+      version: "1.0.0",
+      description: "Retry choosing between cell phone or email after invalid input",
+      steps: [
+         { id: "retry_msg", type: "SAY", value: "Oops, sorry, something went wrong - let's try again..." },
+         { id: "retry_flow", type: "FLOW", value: "get-cell-or-email-and-generate-link", mode: "replace" }
+      ]
+   },
+
+   {
+      id: "get-cell-and-generate-link",
+      name: "GetCellAndGenerateLink",
+      version: "1.0.0",
+      description: "Collect cell number and generate payment link",
+      steps: [
+         {
+         id: "ask_cell_number",
+         type: "SAY-GET",
+         variable: "cell_number",
+         value: "Please say or enter your cell number"
+         },
+         {
+         id: "branch_on_cell_number",
+         type: "CASE",
+         branches: {
+            "condition:validate_phone_format({{cell_number}})": {
+               id: "call_get_otp_link_cell",
+               type: "CALL-TOOL",
+               tool: "get-otp-link",
+               variable: "otp_link_result",
+               parameters: { cell_number: "{{cell_number}}" }
+            },
+            "default": {
+               id: "retry_cell_flow",
+               type: "FLOW",
+               value: "retry-get-cell-and-generate-link",
+               mode: "replace"
+            }
+         }
+         }
+      ]
+   },
+
+   {
+      id: "retry-get-cell-and-generate-link",
+      name: "RetryGetCellAndGenerateLink",
+      version: "1.0.0",
+      description: "Retry collecting cell number after validation error",
+      steps: [
+         { id: "retry_msg", type: "SAY", value: "Oops, sorry, something went wrong - let's try again..." },
+         { id: "retry_flow", type: "FLOW", value: "get-cell-and-generate-link", mode: "replace" }
+      ]
+   },
+
+   {
+      id: "get-email-and-generate-link",
+      name: "GetEmailAndGenerateLink",
+      version: "1.0.0",
+      description: "Collect email and generate payment link",
+      steps: [
+         {
+         id: "ask_email",
+         type: "SAY-GET",
+         variable: "email",
+         value: "Please say your email"
+         },
+         {
+         id: "branch_on_email",
+         type: "CASE",
+         branches: {
+            "condition:valid_email({{email}})": {
+               id: "call_get_otp_link_email",
+               type: "CALL-TOOL",
+               tool: "get-otp-link",
+               variable: "otp_link_result",
+               parameters: { email: "{{email}}" }
+            },
+            "default": {
+               id: "retry_email_flow",
+               type: "FLOW",
+               value: "retry-get-email-and-generate-link",
+               mode: "replace"
+            }
+         }
+         }
+      ]
+   },
+
+   {
+      id: "retry-get-email-and-generate-link",
+      name: "RetryGetEmailAndGenerateLink",
+      version: "1.0.0",
+      description: "Retry collecting email after validation error",
+      steps: [
+         { id: "retry_msg", type: "SAY", value: "Oops, sorry, something went wrong - let's try again..." },
+         { id: "retry_flow", type: "FLOW", value: "get-email-and-generate-link", mode: "replace" }
+      ]
+   },
+
+   {
+      id: "validate-payment-link",
+      name: "ValidatePaymentLink",
+      version: "1.0.0", 
+      description: "Validate OTP link generation result and provide appropriate response",
+      steps: [
+         {
+         id: "validate_otp_result",
+         type: "CASE",
+         branches: {
+            "condition:{{otp_link_result.ok}}": {
+               id: "success_msg",
+               type: "SAY",
+               value: "Payment link was sent to {{otp_link_result.api_response.DATA.TWILIOINFO.to}}"
+            },
+            "default": {
+               id: "retry_payment",
+               type: "FLOW",
+               value: "retry-start-payment",
+               mode: "replace"
+            }
+         }
+         }
+      ]
+   }
+];
+
+/* ---------- Global Variables ---------- */
+const globalVariables = {
+  global_acct_required_digits: 6,
+  global_acct_max_digits: 12
+};
+
+/* ---------- Engine Boot ---------- */
+const engine = new WorkflowEngine(
+	logger,
+	aiCallback,
+	flowsMenu,
+	toolsRegistry,
+	APPROVED_FUNCTIONS,
+	globalVariables
+);
+
+/* ---------- Simple REPL ---------- */
+async function main() {
+	let session = engine.initSession(logger, "user-001", "session-001");
+  // You can set session variables like this:
+  session.cargo.test_var = "test value";
+
+	console.log("Type anything like: 'I need to open a support ticket'");
+
+	const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+	while (true) {
+		const user = await rl.question("> ");
+		const result = await engine.updateActivity({ role: "user", content: user }, session);
+    session = result
+    if (result.response) {
+      console.log(result.response);
+    } else {
+      console.log("You said:", user);
+    }
+	}
+}
+
+main().catch(err => {
+	logger.error("Fatal:", err);
+	process.exit(1);
+});
