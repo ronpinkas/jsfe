@@ -5232,37 +5232,75 @@ function evaluateLogicalExpression(
   options: Required<ExpressionOptions>,
   engine: Engine
 ): any {
-  // Handle OR expressions for BOOLEAN logic (not template fallback)
+  // Handle OR expressions
   if (expression.includes('||')) {
     const parts = expression.split('||').map(part => part.trim());
-    for (const part of parts) {
-      const partResult = evaluateExpression(part, variables, contextStack, {
-        ...options,
-        returnType: 'boolean'
-      }, engine);
-      logger.debug(`OR part "${part}" evaluated to: ${partResult}`);
-      if (partResult) {
-        logger.debug(`OR expression "${expression}" evaluated to true (short-circuit)`);
-        return true;
+    
+    // In template contexts, OR expressions are often used for fallback values
+    // We should return the actual value, not just boolean true/false
+    if (options.context === 'template-interpolation') {
+      for (const part of parts) {
+        const partResult = evaluateExpression(part, variables, contextStack, {
+          ...options,
+          returnType: 'auto' // Get the actual value
+        }, engine);
+        logger.debug(`OR part "${part}" evaluated to: ${typeof partResult === 'object' ? '[object Object]' : partResult}`);
+        if (partResult) {
+          logger.debug(`OR expression "${expression}" returning first truthy value`);
+          return partResult; // Return the actual value
+        }
       }
+      logger.debug(`OR expression "${expression}" evaluated to false (all parts false)`);
+      return false;
+    } else {
+      // In boolean contexts, return true/false
+      for (const part of parts) {
+        const partResult = evaluateExpression(part, variables, contextStack, {
+          ...options,
+          returnType: 'boolean'
+        }, engine);
+        logger.debug(`OR part "${part}" evaluated to: ${partResult}`);
+        if (partResult) {
+          logger.debug(`OR expression "${expression}" evaluated to true (short-circuit)`);
+          return true;
+        }
+      }
+      logger.debug(`OR expression "${expression}" evaluated to false (all parts false)`);
+      return false;
     }
-    logger.debug(`OR expression "${expression}" evaluated to false (all parts false)`);
-    return false;
   }
   
   // Handle AND expressions
   if (expression.includes('&&')) {
     const parts = expression.split('&&').map(part => part.trim());
-    for (const part of parts) {
-      const partResult = evaluateExpression(part, variables, contextStack, {
-        ...options,
-        returnType: 'boolean'
-      }, engine);
-      if (!partResult) {
-        return false;
+    
+    // In template contexts, AND expressions return the last truthy value
+    if (options.context === 'template-interpolation') {
+      let lastTruthy = false;
+      for (const part of parts) {
+        const partResult = evaluateExpression(part, variables, contextStack, {
+          ...options,
+          returnType: 'auto'
+        }, engine);
+        if (!partResult) {
+          return false;
+        }
+        lastTruthy = partResult;
       }
+      return lastTruthy;
+    } else {
+      // In boolean contexts, return true/false
+      for (const part of parts) {
+        const partResult = evaluateExpression(part, variables, contextStack, {
+          ...options,
+          returnType: 'boolean'
+        }, engine);
+        if (!partResult) {
+          return false;
+        }
+      }
+      return true;
     }
-    return true;
   }
   
   return false;

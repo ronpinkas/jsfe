@@ -3605,7 +3605,7 @@ async function handleQuery(context, input, chatContextManager) {
   const reply = await yourConversationalReply(input);
 
   // Update the engine's context with the generated reply
-  context.sessionContext = context.engine.updateActivity({
+  context.sessionContext = await context.engine.updateActivity({
     role: 'assistant',
       content: reply,
       timestamp: Date.now()
