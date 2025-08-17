@@ -1781,6 +1781,7 @@ function evaluateCondition(data: unknown, condition: ConditionConfig): boolean {
   if (!condition || typeof condition !== 'object') return false;
   
   const { field, operator, value } = condition;
+  logger.debug(`evaluateCondition called with field: ${field}, operator: ${operator}, value: ${value}`);
   
   try {
     let fieldValue: unknown = undefined;
@@ -1791,60 +1792,77 @@ function evaluateCondition(data: unknown, condition: ConditionConfig): boolean {
     switch (operator) {
       case 'equals':
       case 'eq':
+        logger.debug(`evaluateCondition: checking equality for field ${field} with value ${value}`);
         return fieldValue === value;
       
       case 'notEquals':
       case 'ne':
+        logger.debug(`evaluateCondition: checking inequality for field ${field} with value ${value}`);
         return fieldValue !== value;
       
       case 'contains':
+        logger.debug(`evaluateCondition: checking containment for field ${field} with value ${value}`);
         return String(fieldValue).includes(String(value));
       
       case 'exists':
+        logger.debug(`evaluateCondition: checking existence for field ${field}`);
         return fieldValue !== null && fieldValue !== undefined;
       
       case 'notExists':
+        logger.debug(`evaluateCondition: checking non-existence for field ${field}`);
         return fieldValue === null || fieldValue === undefined;
       
       case 'greaterThan':
       case 'gt':
+        logger.debug(`evaluateCondition: checking greaterThan for field ${field} with value ${value}`);
         return Number(fieldValue) > Number(value);
       
       case 'lessThan':
       case 'lt':
+        logger.debug(`evaluateCondition: checking lessThan for field ${field} with value ${value}`);
         return Number(fieldValue) < Number(value);
       
       case 'greaterThanOrEqual':
       case 'gte':
+        logger.debug(`evaluateCondition: checking greaterThanOrEqual for field ${field} with value ${value}`);
         return Number(fieldValue) >= Number(value);
       
       case 'lessThanOrEqual':
       case 'lte':
+        logger.debug(`evaluateCondition: checking lessThanOrEqual for field ${field} with value ${value}`);
         return Number(fieldValue) <= Number(value);
       
       case 'startsWith':
+        logger.debug(`evaluateCondition: checking startsWith for field ${field} with value ${value}`);
         return String(fieldValue).startsWith(String(value));
       
       case 'endsWith':
+        logger.debug(`evaluateCondition: checking endsWith for field ${field} with value ${value}`);
         return String(fieldValue).endsWith(String(value));
       
       case 'matches':
+        logger.debug(`evaluateCondition: checking regex match for field ${field} with value ${value}`);
         return new RegExp(String(value)).test(String(fieldValue));
       
       case 'in':
+        logger.debug(`evaluateCondition: checking inclusion for field ${field} with value ${value}`);
         return Array.isArray(value) && value.includes(fieldValue);
       
       case 'hasLength':
         const length = Array.isArray(fieldValue) ? fieldValue.length : String(fieldValue).length;
+        logger.debug(`evaluateCondition: checking length for field ${field} with value ${value}, actual length: ${length}`);
         return length === Number(value);
       
       case 'isArray':
+        logger.debug(`evaluateCondition: checking if field ${field} is an array`);
         return Array.isArray(fieldValue);
       
       case 'isObject':
+        logger.debug(`evaluateCondition: checking if field ${field} is an object`);
         return typeof fieldValue === 'object' && fieldValue !== null && !Array.isArray(fieldValue);
       
       case 'isString':
+        logger.debug(`evaluateCondition: checking if field ${field} is a string`);
         return typeof fieldValue === 'string';
       
       case 'isNumber':
@@ -3809,7 +3827,7 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
       const flowsMenu = engine.flowsMenu; // Access the global flows menu
       
       const subFlowName = step.value || step.name || step.nextFlow;
-      const subFlow = flowsMenu?.find(f => f.name === subFlowName);
+      const subFlow = flowsMenu?.find(f => f.name === subFlowName || f.id === subFlowName);
       
       if (!subFlow) {
          return getSystemMessage(engine, 'subflow_not_found', { subFlowName });
@@ -5188,9 +5206,22 @@ function evaluateLogicalExpression(
   options: Required<ExpressionOptions>,
   engine: Engine
 ): any {
-  // Handle OR expressions
+  // Handle OR expressions for BOOLEAN logic (not template fallback)
   if (expression.includes('||')) {
-    return evaluateSafeOrExpression(expression, variables, contextStack, engine);
+    const parts = expression.split('||').map(part => part.trim());
+    for (const part of parts) {
+      const partResult = evaluateExpression(part, variables, contextStack, {
+        ...options,
+        returnType: 'boolean'
+      }, engine);
+      logger.debug(`OR part "${part}" evaluated to: ${partResult}`);
+      if (partResult) {
+        logger.debug(`OR expression "${expression}" evaluated to true (short-circuit)`);
+        return true;
+      }
+    }
+    logger.debug(`OR expression "${expression}" evaluated to false (all parts false)`);
+    return false;
   }
   
   // Handle AND expressions
@@ -6784,7 +6815,8 @@ export class WorkflowEngine implements Engine {
          flowCallGraph: new Map<string, string[]>(),
          currentDepth: 0,
          variableScopes: new Map<string, Set<string>>(),
-         toolRegistry: new Set(this.toolsRegistry.map((t: any) => t.id))
+         toolRegistry: new Set(this.toolsRegistry.map((t: any) => t.id)),
+         flowCallStack: [] as string[]  // Track parent flow chain for variable inheritance
       };
 
       try {
@@ -6829,7 +6861,7 @@ export class WorkflowEngine implements Engine {
       }
 
       // Find the flow definition
-      const flowDef = this.flowsMenu.find((f: any) => f.name === flowName);
+      const flowDef = this.flowsMenu.find((f: any) => f.id === flowName || f.name === flowName);
       if (!flowDef) {
          state.errors.push(`Flow not found: ${flowName}`);
          return;
@@ -6838,6 +6870,9 @@ export class WorkflowEngine implements Engine {
       // Mark as visited
       state.visitedFlows.add(flowName);
       state.currentDepth++;
+      
+      // Add to flow call stack for variable inheritance tracking
+      state.flowCallStack.push(flowName);
 
       // Initialize flow call graph
       if (!state.flowCallGraph.has(flowName)) {
@@ -6872,6 +6907,8 @@ export class WorkflowEngine implements Engine {
          }
       }
 
+      // Remove from flow call stack when exiting this flow
+      state.flowCallStack.pop();
       state.currentDepth--;
    }
 
@@ -7322,7 +7359,7 @@ export class WorkflowEngine implements Engine {
       logger.info('🔍 Phase 2: Validating top-level flows...');
       
       for (const flow of this.flowsMenu) {
-         if (referencedSubFlows.has(flow.name)) {
+         if (referencedSubFlows.has(flow.name) || referencedSubFlows.has(flow.id)) {
             // Skip validation of sub-flows - they'll be validated in parent context
             logger.info(`⏭️  Skipping sub-flow "${flow.name}" - will be validated in parent context`);
             results.skippedSubFlows.push(flow.name);
@@ -7382,12 +7419,26 @@ export class WorkflowEngine implements Engine {
 
    /**
     * Gets the current variable scope available at a specific step
-    * This includes variables defined in flow definition + variables created by previous steps
+    * This includes variables defined in flow definition + variables created by previous steps + parent flow variables
     */
    private _getCurrentStepScope(flowDef: any, stepIndex: number, state: any): Set<string> {
       const scope = new Set<string>();
       
-      // Add flow-defined variables
+      // Add parent flow variables (variable inheritance from call stack)
+      if (state.flowCallStack && state.flowCallStack.length > 0) {
+         // Iterate through parent flows in the call stack (excluding current flow)
+         for (let i = 0; i < state.flowCallStack.length - 1; i++) {
+            const parentFlowName = state.flowCallStack[i];
+            const parentFlowDef = this.flowsMenu.find((f: any) => f.id === parentFlowName || f.name === parentFlowName);
+            if (parentFlowDef && parentFlowDef.variables) {
+               for (const varName of Object.keys(parentFlowDef.variables)) {
+                  scope.add(varName);
+               }
+            }
+         }
+      }
+      
+      // Add flow-defined variables (current flow)
       if (flowDef.variables) {
          for (const varName of Object.keys(flowDef.variables)) {
             scope.add(varName);
