@@ -2335,8 +2335,8 @@ const flowsMenu = [
       {
         id: "json-test-summary",
         type: "SAY",
-        value: "JSON API Test Complete!\nResult: {{json_result.status || 'Failed'}}\nUser: {{json_result.login || 'Unknown'}}\nName: {{json_result.name || 'N/A'}}",
-        value_es: "¡Prueba de API JSON completada!\nResultado: {{json_result.status || 'Falló'}}\nUsuario: {{json_result.login || 'Desconocido'}}\nNombre: {{json_result.name || 'N/A'}}"
+        value: "JSON API Test Complete!\nResult: {{json_result.status || 'Failed'}}\nUser: {{json_result.username || 'Unknown'}}\nName: {{json_result.name || 'N/A'}}",
+        value_es: "¡Prueba de API JSON completada!\nResultado: {{json_result.status || 'Falló'}}\nUsuario: {{json_result.username || 'Desconocido'}}\nNombre: {{json_result.name || 'N/A'}}"
       }
     ]
   },
@@ -2371,8 +2371,8 @@ const flowsMenu = [
       {
         id: "form-test-summary",
         type: "SAY",
-        value: "Form Data Test Complete!\nResult: {{form_result.status || 'Failed'}}\nEndpoint: {{form_result.endpoint || 'Unknown'}}\nMethod: {{form_result.method || 'N/A'}}",
-        value_es: "¡Prueba de datos de formulario completada!\nResultado: {{form_result.status || 'Falló'}}\nEndpoint: {{form_result.endpoint || 'Desconocido'}}\nMétodo: {{form_result.method || 'N/A'}}"
+        value: "Form Data Test Complete!\nResult: {{form_result.status || 'Failed'}}\nEndpoint: {{form_result.endpoint || 'Unknown'}}\nMethod: POST",
+        value_es: "¡Prueba de datos de formulario completada!\nResultado: {{form_result.status || 'Falló'}}\nEndpoint: {{form_result.endpoint || 'Desconocido'}}\nMétodo: POST"
       }
     ]
   },
