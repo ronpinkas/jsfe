@@ -80,8 +80,22 @@ function currentTime() {
   return new Date().toLocaleString();
 }
 
+// Rate limit test function - always succeeds but is rate limited
+async function rateLimitTestFunction({ message }) {
+  // Simulate minimal processing time
+  await new Promise(resolve => setTimeout(resolve, 50));
+  
+  return {
+    success: true,
+    message: `Rate limit test processed: ${message}`,
+    timestamp: new Date().toISOString(),
+    processed: true
+  };
+}
+
 APPROVED_FUNCTIONS.set('extractCryptoFromInput', extractCryptoFromInput);
 APPROVED_FUNCTIONS.set('currentTime', currentTime);
+APPROVED_FUNCTIONS.set('rateLimitTestFunction', rateLimitTestFunction);
 
 // === TOOL REGISTRY WITH OPENAI FUNCTION CALLING STANDARD ===
 const toolsRegistry = [
@@ -163,7 +177,41 @@ const toolsRegistry = [
       requiresAuth: true,
       auditLevel: "critical",
       dataClassification: "financial",
-      rateLimit: { requests: 5, window: 60000 } // 5 requests per minute
+      rateLimit: { requests: 50, window: 60000 } // 50 requests per minute for testing - prevents unintended rate limiting during test runs
+    }
+  },
+  {
+    id: "RateLimitTestTool",
+    name: "Rate Limit Test Tool",
+    description: "A tool specifically designed to test rate limiting functionality with very low limits",
+    version: "1.0.0",
+    
+    parameters: {
+      type: "object",
+      properties: {
+        message: {
+          type: "string",
+          description: "Test message to process",
+          minLength: 1,
+          maxLength: 100
+        }
+      },
+      required: ["message"],
+      additionalProperties: false
+    },
+    
+    implementation: {
+      type: "local",
+      function: "rateLimitTestFunction",
+      timeout: 1000,
+      retries: 0 // No retries for rate limit testing
+    },
+    
+    security: {
+      requiresAuth: false,
+      auditLevel: "low",
+      dataClassification: "test",
+      rateLimit: { requests: 2, window: 10000 } // Very restrictive: 2 requests per 10 seconds for testing rate limits
     }
   },
   {
@@ -1620,6 +1668,7 @@ const flowsMenu = [
     description: "Complete payment processing workflow with enhanced validation",
     prompt: "Make a payment",
     prompt_es: "Hacer un pago",
+    interruptable: true,
     
     metadata: {
       author: "system",
@@ -1733,7 +1782,8 @@ const flowsMenu = [
     description: "Enhanced account verification with retry logic",
     prompt: "Verify account",
     prompt_es: "Verificar cuenta",
-    
+    interruptable: true,
+
     metadata: {
       author: "system",
       category: "security",
@@ -1763,7 +1813,7 @@ const flowsMenu = [
           callType: "replace"
         }
       }
-    ]
+    ]    
   },
   {
     id: "account-verification-failed-v1.0",
@@ -3252,6 +3302,242 @@ const flowsMenu = [
       }
     ]
   },
+  
+  // === RATE LIMIT TESTING FLOWS ===
+  {
+    id: "rate-limit-basic-test",
+    name: "RateLimitBasicTest",
+    version: "1.0.0",
+    description: "Basic rate limit testing - should succeed on first few calls, then fail",
+    prompt: "Test basic rate limiting",
+    prompt_es: "Probar limitación de tasa básica",
+    interruptable: true,
+    
+    metadata: {
+      author: "system",
+      category: "testing",
+      riskLevel: "low",
+      requiresApproval: false,
+      auditRequired: false,
+      testPurpose: "rate_limiting"
+    },
+    
+    steps: [
+      {
+        id: "rate-limit-test-1",
+        type: "CALL-TOOL",
+        tool: "RateLimitTestTool",
+        args: {
+          message: "First rate limit test call"
+        },
+        variable: "result1"
+      },
+      {
+        id: "rate-limit-test-2", 
+        type: "CALL-TOOL",
+        tool: "RateLimitTestTool",
+        args: {
+          message: "Second rate limit test call"
+        },
+        variable: "result2"
+      },
+      {
+        id: "rate-limit-test-3",
+        type: "CALL-TOOL",
+        tool: "RateLimitTestTool",
+        args: {
+          message: "Third rate limit test call - should trigger rate limit"
+        },
+        variable: "result3",
+        onFail: {
+          id: "rate-limit-detected-handler",
+          type: "FLOW",
+          name: "RateLimitDetectedFlow",
+          value: "RateLimitDetectedFlow",
+          callType: "replace"
+        }
+      },
+      {
+        id: "unexpected-success",
+        type: "SAY",
+        value: "⚠️  WARNING: Rate limit was not triggered as expected. All three calls succeeded."
+      }
+    ]
+  },
+  
+  {
+    id: "rate-limit-recovery-test",
+    name: "RateLimitRecoveryTest", 
+    version: "1.0.0",
+    description: "Test that explicit onFail handlers work for rate limiting",
+    prompt: "Test rate limit onFail handling",
+    prompt_es: "Probar manejo onFail de limitación de tasa",
+    interruptable: true,
+    
+    metadata: {
+      author: "system",
+      category: "testing", 
+      riskLevel: "low",
+      requiresApproval: false,
+      auditRequired: false,
+      testPurpose: "rate_limiting_onfail"
+    },
+    
+    steps: [
+      {
+        id: "initial-calls",
+        type: "SAY",
+        value: "🧪 Rate Limit onFail Test\n\nMaking rapid calls to trigger rate limit and test explicit onFail handler..."
+      },
+      {
+        id: "rapid-call-1",
+        type: "CALL-TOOL",
+        tool: "RateLimitTestTool", 
+        args: {
+          message: "Rapid call 1"
+        },
+        variable: "rapid1"
+      },
+      {
+        id: "rapid-call-2",
+        type: "CALL-TOOL",
+        tool: "RateLimitTestTool",
+        args: {
+          message: "Rapid call 2"
+        }, 
+        variable: "rapid2"
+      },
+      {
+        id: "rapid-call-3",
+        type: "CALL-TOOL",
+        tool: "RateLimitTestTool",
+        args: {
+          message: "Rapid call 3 - should hit rate limit"
+        },
+        variable: "rapid3",
+        onFail: {
+          id: "rate-limit-hit-handler",
+          type: "FLOW",
+          name: "RateLimitHitFlow",
+          value: "RateLimitHitFlow",
+          callType: "replace"
+        }
+      },
+      {
+        id: "no-rate-limit-detected",
+        type: "SAY",
+        value: "⚠️  No rate limit detected. Test may need adjustment."
+      }
+    ]
+  },
+  
+  // Rate limit detected flow for basic test
+  {
+    id: "rate-limit-detected-flow",
+    name: "RateLimitDetectedFlow",
+    version: "1.0.0",
+    description: "Handles rate limit detection in basic test",
+    prompt: "",
+    interruptable: false,
+    
+    steps: [
+      {
+        id: "rate-limit-detected",
+        type: "SAY",
+        value: "✅ Rate limit detected correctly! The third call was blocked as expected.\n\nRate limit test completed successfully."
+      }
+    ]
+  },
+  
+  // Rate limit hit flow for recovery test  
+  {
+    id: "rate-limit-hit-flow",
+    name: "RateLimitHitFlow",
+    version: "1.0.0", 
+    description: "Handles rate limit hit in recovery test",
+    prompt: "",
+    interruptable: false,
+    
+    steps: [
+      {
+        id: "rate-limit-hit",
+        type: "SAY",
+        value: "✅ Rate limit onFail handler triggered as expected!\n\nThis demonstrates that explicit onFail handlers work correctly for rate limiting scenarios."
+      }
+    ]
+  },
+  
+  // === SMART AUTO-GENERATED ONFAIL TESTS ===
+  
+  // Test for smart auto-generated onFail with rate limiting (no explicit onFail)
+  {
+    id: "smart-rate-limit-test",
+    name: "SmartRateLimitTest",
+    version: "1.0.0",
+    description: "Tests that automated onFail considers rate limiting as not immediately recoverable",
+    prompt: "Test automated rate limit handling",
+    interruptable: true,
+    
+    metadata: {
+      author: "system",
+      category: "testing",
+      riskLevel: "low",
+      requiresApproval: false,
+      auditRequired: false,
+      testPurpose: "smart_onfail_rate_limiting"
+    },
+    
+    steps: [
+      {
+        id: "smart-test-intro",
+        type: "SAY",
+        value: "🧪 Automated Rate Limit Test\n\nTesting that automated onFail treats rate limiting as not immediately recoverable...\n\nMaking calls to hit rate limit..."
+      },
+      {
+        id: "smart-call-1",
+        type: "CALL-TOOL",
+        tool: "RateLimitTestTool",
+        args: {
+          message: "Smart test call 1"
+        },
+        variable: "smart1"
+      },
+      {
+        id: "call-1-result",
+        type: "SAY",
+        value: "Call 1 result: {{smart1.message}}"
+      },
+      {
+        id: "smart-call-2",
+        type: "CALL-TOOL", 
+        tool: "RateLimitTestTool",
+        args: {
+          message: "Smart test call 2"
+        },
+        variable: "smart2"
+      },
+      {
+        id: "call-2-result",
+        type: "SAY",
+        value: "Call 2 result: {{smart2.message}}"
+      },
+      {
+        id: "smart-call-3",
+        type: "CALL-TOOL",
+        tool: "RateLimitTestTool",
+        args: {
+          message: "Smart test call 3 - should trigger automated onFail"
+        },
+        variable: "smart3"
+        // NO onFail specified - should trigger automated behavior
+      },
+      {
+        id: "after-rate-limit-call",
+        type: "SAY",
+        value: "📊 This message should NOT appear because automated onFail should have terminated the flow.\n\nIf you see this, the automated onFail did not work as expected."
+      }
+    ]
+  }
 ];
 
 //Get key from environment variable or configuration
@@ -3884,6 +4170,24 @@ const TEST_SCENARIOS = {
     '888',  // Invalid user ID - attempt 2
     '777',  // Invalid user ID - attempt 3
     'baduser666',  // Invalid - should reach max attempts and stop
+  ],
+  
+  // === RATE LIMIT TESTING SCENARIOS ===
+  
+  // Test basic rate limiting behavior
+  rateLimitBasicTest: [
+    'Test basic rate limiting',
+  ],
+  
+  // Test rate limit recovery
+  rateLimitRecoveryTest: [
+    'Test rate limit recovery',
+    'continue', // Proceed with recovery test after waiting period
+  ],
+  
+  // Test smart auto-generated onFail for rate limiting
+  smartRateLimitTest: [
+    'Test smart rate limit handling',
   ],
   
   // NOTE: Advanced self-retry tests removed - they were redundant as the "backoff strategies" 

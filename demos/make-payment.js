@@ -62,17 +62,21 @@ function validateDigits(input, minDigits, maxDigits) {
 function validate_phone_format(phone) {
    // Remove any non-digit characters for validation
    const cleaned = phone.replace(/\D/g, '');
-   
-   // US phone number: 10 digits
-   if (cleaned.length === 10) {
+   logger.debug(`Validating phone format: ${cleaned}`);
+
+   // US phone number: 10 digits or 11 if country code is included
+   if (cleaned.length === 10 || (cleaned.length === 11 && cleaned.startsWith('1'))) {
+      logger.debug(`Valid US phone number: ${cleaned}`);
       return true;
    }
    
    // International format: 11+ digits
    if (cleaned.length >= 11 && cleaned.length <= 15) {
+      logger.debug(`Valid international phone number: ${cleaned}`);
       return true;
    }
-   
+
+   logger.debug(`Invalid phone number format: ${cleaned}`);
    return false;
 }
 
@@ -240,13 +244,13 @@ const flowsMenu = [
             id: "branch_on_account_knowledge",
             type: "CASE",
             branches: {
-               "condition: {{know_acct_yes_or_no}} == 1 || {{know_acct_yes_or_no}} == 'yes'": {
+               "condition: {{know_acct_yes_or_no}} === '1' || {{know_acct_yes_or_no.trim().toLowerCase()}} === 'yes'": {
                   id: "goto_acct_flow",
                   type: "FLOW",
                   value: "get-acct-number-and-generate-link",
                   mode: "call"
                },
-               "condition: {{know_acct_yes_or_no}} == '2' || {{know_acct_yes_or_no}} == 'no'": {
+               "condition: {{know_acct_yes_or_no}} === '2' || {{know_acct_yes_or_no.trim().toLowerCase()}} === 'no'": {
                   id: "goto_cell_or_email_flow",
                   type: "FLOW",
                   value: "get-cell-or-email-and-generate-link",
@@ -343,12 +347,12 @@ const flowsMenu = [
          id: "branch_on_cell_or_email",
          type: "CASE",
          branches: {
-            "condition:{{cell_or_email}} == '1' || {{cell_or_email}} == 'cell' || {{cell_or_email}} == 'phone' || {{cell_or_email}} == 'mobile'": {
+            "condition:{{cell_or_email}} === '1' || ['cell', 'phone', 'mobile'].includes({{cell_or_email}}.trim().toLowerCase())": {
                id: "goto_cell_flow",
                type: "FLOW",
                value: "get-cell-and-generate-link"
             },
-            "condition:{{cell_or_email}} == '2' || {{cell_or_email}} == 'email'": {
+            "condition:{{cell_or_email}} === '2' || {{cell_or_email}} === 'email'": {
                id: "goto_email_flow",
                type: "FLOW",
                value: "get-email-and-generate-link"

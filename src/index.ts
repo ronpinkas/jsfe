@@ -588,6 +588,7 @@ export interface FlowDefinition {
   [key: `prompt_${string}`]: string | undefined; // Support for any language code
   description: string;
   version: string;
+  interruptable?: boolean; // Whether this flow can be interrupted by AI intent detection (default: false)
   steps: FlowStep[];
   variables?: Record<string, {
     type: string;
@@ -2860,7 +2861,7 @@ async function getFlowForInput(input: string, engine: Engine): Promise<FlowDefin
 // === SMART DEFAULT ONFAIL GENERATOR ===
 function generateSmartRetryDefaultOnFail(step: FlowStep, error: Error, currentFlowFrame: FlowFrame): boolean {
   const toolName = step.tool || 'unknown';
-  const errorMessage = error.message || 'Unknown error';
+  const errorMessage = error.message.toLocaleLowerCase() || 'unknown error';
   const flowName = currentFlowFrame.flowName;
 
   logger.info(`Generating smart default onFail for tool ${toolName}, in flow ${flowName} for error: ${errorMessage}`);
@@ -2893,7 +2894,9 @@ function generateSmartRetryDefaultOnFail(step: FlowStep, error: Error, currentFl
                        errorMessage.includes('bad request') ||
                        errorMessage.includes('invalid request') ||
                        errorMessage.includes('malformed request') ||
-                       errorMessage.includes('syntax error');
+                       errorMessage.includes('syntax error') ||
+                       errorMessage.includes('rate limit');
+
   
   // Provoke cancelation of the current flow if unrecoverable
   const isAuthError = errorMessage.includes('401') || // Unauthorized
@@ -2922,7 +2925,7 @@ function generateSmartRetryDefaultOnFail(step: FlowStep, error: Error, currentFl
   } else if (isBadRequest || isAuthError || isRateLimitError || isCriticalFinancial) {
     doCancel = true;
   } else {
-    logger.warn(`Unrecognized error type for tool ${toolName} in flow ${flowName}: ${errorMessage}`);    
+    logger.debug(`Unrecognized error type for tool ${toolName} in flow ${flowName}: ${errorMessage}`);    
     // Default to Cancel for unexpected errors
     doCancel = true;
   }
@@ -4998,6 +5001,12 @@ function evaluateExpression(
       const result = evaluateFunctionCall(processedExpression, variables, contextStack, engine);
       if (result !== undefined) {
         return convertReturnType(result, opts.returnType);
+      } else {
+        // Function call was not recognized - for boolean context, return false instead of fallback
+        if (opts.returnType === 'boolean') {
+          logger.debug(`Unrecognized function call in boolean context, returning false: ${processedExpression}`);
+          return false;
+        }
       }
     }
         
@@ -5179,10 +5188,27 @@ function interpolateTemplateVariables(
     // Evaluate the innermost expression
     const evaluatedContent = evaluateExpression(expression, variables, contextStack, {
       ...options,
-      returnType: 'string'
+      returnType: 'auto' // Let the evaluator determine the type
     }, engine);
     
-    const replacement = typeof evaluatedContent === 'string' ? evaluatedContent : String(evaluatedContent);
+    // For condition/expression contexts, preserve types with proper serialization
+    let replacement: string;
+    if (options.context === 'condition-evaluation' || options.context === 'expression-evaluation') {
+      // In expression contexts, properly serialize values to maintain type information
+      if (typeof evaluatedContent === 'string') {
+        replacement = `"${evaluatedContent.replace(/"/g, '\\"')}"`;  // Escape quotes
+      } else if (typeof evaluatedContent === 'boolean' || typeof evaluatedContent === 'number') {
+        replacement = evaluatedContent.toString();
+      } else if (evaluatedContent === null || evaluatedContent === undefined) {
+        replacement = 'null';
+      } else {
+        replacement = JSON.stringify(evaluatedContent);
+      }
+    } else {
+      // In template contexts, convert to string as before
+      replacement = typeof evaluatedContent === 'string' ? evaluatedContent : String(evaluatedContent);
+    }
+    
     logger.debug(`Evaluated to: ${replacement}`);
     
     // Replace the template expression with its evaluated result
@@ -5657,6 +5683,171 @@ function evaluateFunctionCall(expression: string, variables: Record<string, any>
       return 'bitcoin'; // Default fallback
     }
     
+    // Handle array method calls like ['item1', 'item2'].includes(value)
+    logger.debug(`Checking for array method pattern in: ${expression}`);
+    const arrayPrefix = /^\[([^\]]+)\]\.(\w+)\(/;
+    const arrayPrefixMatch = expression.match(arrayPrefix);
+    logger.debug(`Array prefix match result: ${arrayPrefixMatch ? 'FOUND' : 'NOT FOUND'}`);
+    if (arrayPrefixMatch) {
+      const arrayItemsStr = arrayPrefixMatch[1];
+      const methodName = arrayPrefixMatch[2];
+      
+      // Find the matching closing parenthesis for the method call
+      let parenCount = 0;
+      let methodArgsStr = '';
+      let foundStart = false;
+      
+      for (let i = arrayPrefixMatch[0].length - 1; i < expression.length; i++) {
+        const char = expression[i];
+        if (char === '(') {
+          if (!foundStart) {
+            foundStart = true;
+            continue; // Skip the opening paren
+          }
+          parenCount++;
+        } else if (char === ')') {
+          if (parenCount === 0) {
+            break; // Found the matching closing paren
+          }
+          parenCount--;
+        }
+        if (foundStart) {
+          methodArgsStr += char;
+        }
+      }
+      
+      logger.debug(`Detected array method call: ${expression}`);
+      logger.debug(`Array items: ${arrayItemsStr}, Method: ${methodName}, Args: ${methodArgsStr}`);
+      
+      if (methodName === 'includes') {
+        try {
+          // Parse array items
+          const arrayItems: any[] = [];
+          const items = arrayItemsStr.split(',').map(item => item.trim());
+          
+          for (const item of items) {
+            if ((item.startsWith('"') && item.endsWith('"')) || 
+                (item.startsWith("'") && item.endsWith("'"))) {
+              arrayItems.push(item.slice(1, -1));
+            } else if (!isNaN(Number(item))) {
+              arrayItems.push(Number(item));
+            } else if (item === 'true' || item === 'false') {
+              arrayItems.push(item === 'true');
+            } else {
+              // Try to resolve as variable
+              const varResult = resolveSimpleVariable(item, variables, contextStack, engine);
+              if (varResult && !varResult.startsWith('[undefined:')) {
+                arrayItems.push(varResult);
+              } else {
+                arrayItems.push(item); // Use as literal
+              }
+            }
+          }
+          
+          // Parse method argument
+          let argValue: any;
+          const arg = methodArgsStr.trim();
+          if ((arg.startsWith('"') && arg.endsWith('"')) || 
+              (arg.startsWith("'") && arg.endsWith("'"))) {
+            argValue = arg.slice(1, -1);
+          } else if (!isNaN(Number(arg))) {
+            argValue = Number(arg);
+          } else if (arg === 'true' || arg === 'false') {
+            argValue = arg === 'true';
+          } else {
+            // Handle complex expressions like variable.method().otherMethod()
+            const processedArg = evaluateExpression(arg, variables, contextStack, {
+              securityLevel: 'standard',
+              allowLogicalOperators: false,
+              allowMathOperators: false,
+              allowComparisons: false,
+              allowTernary: false,
+              context: 'method-argument',
+              returnType: 'auto'
+            }, engine);
+            argValue = processedArg;
+          }
+          
+          logger.debug(`Array method ${methodName} called on ${JSON.stringify(arrayItems)} with argument: ${argValue}`);
+          const result = arrayItems.includes(argValue);
+          logger.debug(`Array includes result: ${result}`);
+          return result;
+          
+        } catch (error: any) {
+          logger.warn(`Error evaluating array method call: ${error.message}`);
+          return false;
+        }
+      } else {
+        logger.warn(`Unsupported array method: ${methodName}`);
+        return undefined;
+      }
+    }
+    
+    // Handle approved function calls (e.g., valid_email, validateDigits)
+    const approvedFunctionMatch = expression.match(/^(\w+)\(([^)]*)\)$/);
+    if (approvedFunctionMatch) {
+      const functionName = approvedFunctionMatch[1];
+      const argsString = approvedFunctionMatch[2];
+      
+      logger.debug(`Checking for approved function: ${functionName}`);
+      
+      if (engine.APPROVED_FUNCTIONS && 
+          typeof engine.APPROVED_FUNCTIONS.has === 'function' && 
+          engine.APPROVED_FUNCTIONS.has(functionName)) {
+        const approvedFunction = engine.APPROVED_FUNCTIONS.get(functionName);
+        
+        if (typeof approvedFunction === 'function') {
+          try {
+            // Parse arguments
+            const args: any[] = [];
+            if (argsString.trim()) {
+              const argParts = argsString.split(',').map(arg => arg.trim());
+              for (const argPart of argParts) {
+                let argValue: any;
+                
+                // Handle string literals (remove quotes)
+                if ((argPart.startsWith('"') && argPart.endsWith('"')) || 
+                    (argPart.startsWith("'") && argPart.endsWith("'"))) {
+                  argValue = argPart.slice(1, -1);
+                }
+                // Handle number literals
+                else if (!isNaN(Number(argPart))) {
+                  argValue = Number(argPart);
+                }
+                // Handle boolean literals
+                else if (argPart === 'true' || argPart === 'false') {
+                  argValue = argPart === 'true';
+                }
+                // Handle variables
+                else {
+                  const varResult = resolveSimpleVariable(argPart, variables, contextStack, engine);
+                  if (varResult && !varResult.startsWith('[undefined:')) {
+                    argValue = varResult;
+                  } else if (engine) {
+                    const sessionResult = resolveEngineSessionVariable(argPart, engine);
+                    argValue = sessionResult !== undefined ? sessionResult : argPart;
+                  } else {
+                    argValue = argPart;
+                  }
+                }
+                args.push(argValue);
+              }
+            }
+            
+            logger.debug(`Calling approved function ${functionName} with args: ${JSON.stringify(args)}`);
+            const result = approvedFunction(...args);
+            logger.debug(`Approved function ${functionName} returned: ${result}`);
+            return result;
+            
+          } catch (error: any) {
+            logger.warn(`Error calling approved function ${functionName}: ${error.message}`);
+            return false; // Safe fallback for boolean context
+          }
+        }
+      }
+    }
+    
+    logger.warn(`Function call '${expression}' not recognized or unsupported`);
     return undefined; // Function not recognized
   } catch (error: any) {
     logger.warn(`Function call evaluation error: ${error.message}`);
@@ -6289,10 +6480,30 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
          return flowControlResult;
          }
          
-         // Check for strong intent interruption (new flows)
-         const interruptionResult = await handleIntentInterruption(String(sanitizedInput), engine, userId);
-         if (interruptionResult) {
-          return interruptionResult;
+         // Check for strong intent interruption (new flows) - only if current flow AND all parent flows are interruptable
+         const flowStacks = engine.flowStacks;
+         const currentStackIndex = flowStacks.length - 1;
+         const currentStack = flowStacks[currentStackIndex] || [];
+         
+         let isAnyFlowNonInterruptable = false;
+         for (const flowFrame of currentStack) {
+           const flowDefinition = engine.flowsMenu.find((f: FlowDefinition) => f.name === flowFrame.flowName);
+           const isFlowInterruptable = flowDefinition?.interruptable ?? false; // Default to false
+
+           if (!isFlowInterruptable) {
+             isAnyFlowNonInterruptable = true;
+             logger.debug(`Flow "${flowFrame.flowName}" in stack is not interruptable`);
+             break;
+           }
+         }
+         
+         if (!isAnyFlowNonInterruptable) {
+           const interruptionResult = await handleIntentInterruption(String(sanitizedInput), engine, userId);
+           if (interruptionResult) {
+            return interruptionResult;
+           }
+         } else {
+           logger.debug(`Skipping intent interruption check - one or more flows in the stack are not interruptable`);
          }
          
          // Clear the last SAY message if we had one
