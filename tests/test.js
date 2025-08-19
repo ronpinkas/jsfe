@@ -5,7 +5,7 @@ import crypto from "crypto";
 import winston from 'winston';
 
 const logger = winston.createLogger({
-  level: 'warn',  // Changed to debug to see HTTP requests
+  level: process.env.LOG_LEVEL || 'warn',  // Changed to debug to see HTTP requests
   format: winston.format.printf(({ level, message }) => {
     return `${level}: ${message}`;
   }),
@@ -1493,7 +1493,7 @@ Real implementation would parse actual XML structure.
           },
           "global_presence": {
             type: "template",
-            template: "Operating in {{api_response.data.company.locations.length}} locations: {{#each api_response.data.company.locations}}{{city}}, {{country}} ({{employees}} employees){{#unless @last}}; {{/unless}}{{/each}}"
+            template: "Operating in {{{{api_response.data.company.locations}}.length}} locations: {{#each api_response.data.company.locations}}{{city}}, {{country}} ({{employees}} employees){{#unless @last}}; {{/unless}}{{/each}}"
           },
           "metrics": {
             type: "conditional",
@@ -2335,8 +2335,8 @@ const flowsMenu = [
       {
         id: "json-test-summary",
         type: "SAY",
-        value: "JSON API Test Complete!\nResult: {{json_result.status || 'Failed'}}\nUser: {{json_result.username || 'Unknown'}}\nName: {{json_result.name || 'N/A'}}",
-        value_es: "¡Prueba de API JSON completada!\nResultado: {{json_result.status || 'Falló'}}\nUsuario: {{json_result.username || 'Desconocido'}}\nNombre: {{json_result.name || 'N/A'}}"
+        value: "JSON API Test Complete!\nResult: {{{{json_result.status}} || 'Failed'}}\nUser: {{{{json_result.username}} || 'Unknown'}}\nName: {{{{json_result.name}} || 'N/A'}}",
+        value_es: "¡Prueba de API JSON completada!\nResultado: {{{{json_result.status}} || 'Falló'}}\nUsuario: {{{{json_result.username}} || 'Desconocido'}}\nNombre: {{{{json_result.name}} || 'N/A'}}"
       }
     ]
   },
@@ -2371,8 +2371,8 @@ const flowsMenu = [
       {
         id: "form-test-summary",
         type: "SAY",
-        value: "Form Data Test Complete!\nResult: {{form_result.status || 'Failed'}}\nEndpoint: {{form_result.endpoint || 'Unknown'}}\nMethod: POST",
-        value_es: "¡Prueba de datos de formulario completada!\nResultado: {{form_result.status || 'Falló'}}\nEndpoint: {{form_result.endpoint || 'Desconocido'}}\nMétodo: POST"
+        value: "Form Data Test Complete!\nResult: {{{{form_result.status}} || 'Failed'}}\nEndpoint: {{{{form_result.endpoint}} || 'Unknown'}}\nMethod: POST",
+        value_es: "¡Prueba de datos de formulario completada!\nResultado: {{{{form_result.status}} || 'Falló'}}\nEndpoint: {{{{form_result.endpoint}} || 'Desconocido'}}\nMétodo: POST"
       }
     ]
   },
@@ -2404,8 +2404,8 @@ const flowsMenu = [
       {
         id: "xml-test-summary",
         type: "SAY",
-        value: "XML/RSS Feed Test Complete!\nResult: {{xml_result || 'Failed'}}\n\nXML parsing capabilities demonstrated.",
-        value_es: "¡Prueba de feed XML/RSS completada!\nResultado: {{xml_result || 'Falló'}}\n\nCapacidades de análisis XML demostradas."
+        value: "XML/RSS Feed Test Complete!\nResult: {{{{xml_result}} || 'Failed'}}\n\nXML parsing capabilities demonstrated.",
+        value_es: "¡Prueba de feed XML/RSS completada!\nResultado: {{{{xml_result}} || 'Falló'}}\n\nCapacidades de análisis XML demostradas."
       }
     ]
   },
@@ -2502,8 +2502,8 @@ const flowsMenu = [
       {
         id: "test-summary",
         type: "SAY",
-        value: "Response Mapping Tests Complete!\nResult: {{test_result || 'No test results available'}}",
-        value_es: "¡Pruebas de mapeo de respuestas completadas!\nResultado: {{test_result || 'No hay resultados de prueba disponibles'}}"
+        value: "Response Mapping Tests Complete!\nResult: {{{{test_result}} || 'No test results available'}}",
+        value_es: "¡Pruebas de mapeo de respuestas completadas!\nResultado: {{{{test_result}} || 'No hay resultados de prueba disponibles'}}"
       }
     ]
   },
@@ -3208,7 +3208,7 @@ const flowsMenu = [
         id: "increment-attempt-counter",
         type: "SET",
         variable: "attempt_count",
-        value: "{{attempt_count + 1}}"
+        value: "{{{{attempt_count}}ß + 1}}"
       },
       {
         id: "smart-retry-intro",
@@ -3229,7 +3229,7 @@ const flowsMenu = [
           id: "smart-retry-condition",
           type: "CASE",
           branches: {
-            "condition:{{attempt_count < max_attempts}}": {
+            "condition:{{{{attempt_count}} < {{max_attempts}}}}": {
               id: "continue-retrying",
               type: "FLOW",
               value: "SmartSelfRetryDemo",
