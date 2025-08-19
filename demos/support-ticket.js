@@ -108,12 +108,36 @@ const flowsMenu = [
     version: "1.1.0",
 		name: "OpenSupportTicket",
 		prompt: "Open a new support ticket",
+		prompt_es: "Abrir un nuevo ticket de soporte",
 		description: "Collect subject, description, and email; then create a ticket.",
 		steps: [
-      { type: "SAY",     id: "say_1",     value: "Sure — let's open a support ticket. With Cargo: {{cargo.test_var}}" },
-      { type: "SAY-GET", id: "say_get_1", variable: "subject", value: "Subject?" },
-      { type: "SAY-GET", id: "say_get_2", variable: "description", value: "What happened? (a few sentences)" },
-      { type: "SAY-GET", id: "say_get_3", variable: "customer_email", value: "Your email?" },
+      { 
+        type: "SAY", 
+        id: "say_1", 
+        value: "Sure — let's open a support ticket. With Cargo: {{cargo.test_var}}",
+        value_es: "Por supuesto — abramos un ticket de soporte. Con Cargo: {{cargo.test_var}}"
+      },
+      { 
+        type: "SAY-GET", 
+        id: "say_get_1", 
+        variable: "subject", 
+        value: "Subject?",
+        value_es: "¿Asunto?"
+      },
+      { 
+        type: "SAY-GET", 
+        id: "say_get_2", 
+        variable: "description", 
+        value: "What happened? (a few sentences)",
+        value_es: "¿Qué pasó? (unas pocas oraciones)"
+      },
+      { 
+        type: "SAY-GET", 
+        id: "say_get_3", 
+        variable: "customer_email", 
+        value: "Your email?",
+        value_es: "¿Su correo electrónico?"
+      },
 			{
 				type: "CALL-TOOL",
         id: "call_tool_1",
@@ -130,10 +154,16 @@ const flowsMenu = [
         type: 'SWITCH', id: 'switch_1', variable: 'success',
         branches: {
           true: {
-            type: "SAY", id: "say_3", value: "Ticket created: {{ticket_result.ticket.id}} — we will email updates to {{ticket_result.ticket.customer_email}}."
+            type: "SAY", 
+            id: "say_3", 
+            value: "Ticket created: {{ticket_result.ticket.id}} — we will email updates to {{ticket_result.ticket.customer_email}}.",
+            value_es: "Ticket creado: {{ticket_result.ticket.id}} — le enviaremos actualizaciones por correo a {{ticket_result.ticket.customer_email}}."
           },
           default: {
-            type: "SAY", id: "say_4", value: "Failed to create ticket: {{ticket_result.error}}"
+            type: "SAY", 
+            id: "say_4", 
+            value: "Failed to create ticket: {{ticket_result.error}}",
+            value_es: "Error al crear el ticket: {{ticket_result.error}}"
           }
         } 
       }
