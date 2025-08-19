@@ -225,6 +225,7 @@ const flowsMenu = [
       version: "1.0.0",
       description: "Start payment process",
       prompt: "Accepting payment",
+      prompt_es: "Aceptando pago",
       variables: {
          know_acct_yes_or_no: { type: "string", description: "User response for knowing account number" },
          acct_number: { type: "string", description: "Customer account number" },
@@ -238,7 +239,8 @@ const flowsMenu = [
             id: "ask_known_account",
             type: "SAY-GET",
             variable: "know_acct_yes_or_no",
-            value: "Press 1 or say YES if you know your account number - press 2 or say NO if you don't."
+            value: "Press 1 or say YES if you know your account number - press 2 or say NO if you don't.",
+            value_es: "Presione 1 o diga SÍ si conoce su número de cuenta - presione 2 o diga NO si no lo conoce."
          },
          {
             id: "branch_on_account_knowledge",
@@ -279,7 +281,12 @@ const flowsMenu = [
       version: "1.0.0",
       description: "Retry the payment process after an error",
       steps: [
-         { id: "retry_msg", type: "SAY", value: "Oops, sorry, something went wrong - let's try again..." },
+         { 
+            id: "retry_msg", 
+            type: "SAY", 
+            value: "Oops, sorry, something went wrong - let's try again...",
+            value_es: "Ups, lo siento, algo salió mal - intentemos de nuevo..."
+         },
          { id: "restart_payment", type: "FLOW", value: "start-payment", mode: "replace" }
       ]
    },
@@ -294,7 +301,8 @@ const flowsMenu = [
          id: "ask_acct_number",
          type: "SAY-GET",
          variable: "acct_number",
-         value: "Please say or enter your account number"
+         value: "Please say or enter your account number",
+         value_es: "Por favor diga o ingrese su número de cuenta"
          },
          {
          id: "branch_on_account_number",
@@ -326,7 +334,12 @@ const flowsMenu = [
       version: "1.0.0",
       description: "Retry collecting account number after validation error",
       steps: [
-         { id: "retry_msg", type: "SAY", value: "Oops, sorry, something went wrong - let's try again..." },
+         { 
+            id: "retry_msg", 
+            type: "SAY", 
+            value: "Oops, sorry, something went wrong - let's try again...",
+            value_es: "Ups, lo siento, algo salió mal - intentemos de nuevo..."
+         },
          { id: "retry_flow", type: "FLOW", value: "get-acct-number-and-generate-link", mode: "replace" }
       ]
    },
@@ -341,7 +354,8 @@ const flowsMenu = [
          id: "ask_cell_or_email",
          type: "SAY-GET",
          variable: "cell_or_email",
-         value: "To locate your account we need to validate your cell or email. Press 1 or say CELL to proceed using your phone - Press 2 or say EMAIL to proceed by email."
+         value: "To locate your account we need to validate your cell or email. Press 1 or say CELL to proceed using your phone - Press 2 or say EMAIL to proceed by email.",
+         value_es: "Para localizar su cuenta necesitamos validar su celular o email. Presione 1 o diga CELULAR para proceder usando su teléfono - Presione 2 o diga EMAIL para proceder por correo."
          },
          {
          id: "branch_on_cell_or_email",
@@ -374,7 +388,12 @@ const flowsMenu = [
       version: "1.0.0",
       description: "Retry choosing between cell phone or email after invalid input",
       steps: [
-         { id: "retry_msg", type: "SAY", value: "Oops, sorry, something went wrong - let's try again..." },
+         { 
+            id: "retry_msg", 
+            type: "SAY", 
+            value: "Oops, sorry, something went wrong - let's try again...",
+            value_es: "Ups, lo siento, algo salió mal - intentemos de nuevo..."
+         },
          { id: "retry_flow", type: "FLOW", value: "get-cell-or-email-and-generate-link", mode: "replace" }
       ]
    },
@@ -383,33 +402,135 @@ const flowsMenu = [
       id: "get-cell-and-generate-link",
       name: "GetCellAndGenerateLink",
       version: "1.0.0",
-      description: "Collect cell number and generate payment link",
+      description: "Collect cell number and generate payment link with caller ID detection",
       steps: [
          {
-         id: "ask_cell_number",
-         type: "SAY-GET",
-         variable: "cell_number",
-         value: "Please say or enter your cell number"
+            id: "check_caller_id_available",
+            type: "CASE",
+            branches: {
+               "condition: {{cargo.callerId}} && {{cargo.callerId.length}} >= 10": {
+                  id: "goto_caller_id_flow",
+                  type: "FLOW",
+                  value: "get-cell-with-caller-id",
+                  mode: "call"
+               },
+               "default": {
+                  id: "goto_manual_cell_flow",
+                  type: "FLOW",
+                  value: "get-cell-manual-entry",
+                  mode: "call"
+               }
+            }
          },
          {
-         id: "branch_on_cell_number",
-         type: "CASE",
-         branches: {
-            "condition:validate_phone_format({{cell_number}})": {
-               id: "call_get_otp_link_cell",
-               type: "CALL-TOOL",
-               tool: "get-otp-link",
-               variable: "otp_link_result",
-               parameters: { cell_number: "{{cell_number}}" }
-            },
-            "default": {
-               id: "retry_cell_flow",
-               type: "FLOW",
-               value: "retry-get-cell-and-generate-link",
-               mode: "replace"
+            id: "validate_and_send",
+            type: "FLOW",
+            value: "validate-cell-and-send-link",
+            mode: "call"
+         }
+      ]
+   },
+
+   {
+      id: "get-cell-with-caller-id",
+      name: "GetCellWithCallerId",
+      version: "1.0.0",
+      description: "Offer to use detected caller ID for cell number",
+      variables: {
+         use_caller_id: { type: "string", description: "User choice to use detected caller ID" }
+      },
+      steps: [
+         {
+            id: "offer_caller_id",
+            type: "SAY-GET",
+            variable: "use_caller_id",
+            value: "I notice you called from a number ending with {{cargo.callerId.slice(-4).split('').join('-')}}. Press 1 or say YES to use that cell - Press 2 or say NO to use another cell.",
+            value_es: "Noto que llamó desde un número que termina en {{cargo.callerId.slice(-4).split('').join('-')}}. Presione 1 o diga SÍ para usar ese celular - Presione 2 o diga NO para usar otro celular."
+         },
+         {
+            id: "handle_caller_id_choice",
+            type: "CASE",
+            branches: {
+               "condition: {{use_caller_id}} === '1' || {{use_caller_id.trim().toLowerCase()}} === 'yes'": {
+                  id: "use_detected_number",
+                  type: "SET",
+                  variable: "cell_number",
+                  value: "{{cargo.callerId}}"
+               },
+               "condition: {{use_caller_id}} === '2' || {{use_caller_id.trim().toLowerCase()}} === 'no'": {
+                  id: "goto_manual_entry",
+                  type: "FLOW",
+                  value: "get-cell-manual-entry",
+                  mode: "call"
+               },
+               "default": {
+                  id: "retry_caller_id_choice",
+                  type: "FLOW",
+                  value: "retry-get-cell-with-caller-id",
+                  mode: "replace"
+               }
             }
          }
+      ]
+   },
+
+   {
+      id: "get-cell-manual-entry",
+      name: "GetCellManualEntry",
+      version: "1.0.0",
+      description: "Manual cell number entry",
+      steps: [
+         {
+            id: "ask_cell_number",
+            type: "SAY-GET",
+            variable: "cell_number",
+            value: "Please say or enter your cell number",
+            value_es: "Por favor diga o ingrese su número de celular"
          }
+      ]
+   },
+
+   {
+      id: "validate-cell-and-send-link",
+      name: "ValidateCellAndSendLink",
+      version: "1.0.0",
+      description: "Validate cell number and send payment link",
+      steps: [
+         {
+            id: "validate_cell_number",
+            type: "CASE",
+            branches: {
+               "condition: validate_phone_format({{cell_number}})": {
+                  id: "call_get_otp_link_cell",
+                  type: "CALL-TOOL",
+                  tool: "get-otp-link",
+                  variable: "otp_link_result",
+                  parameters: { cell_number: "{{cell_number}}" }
+               },
+               "default": {
+                  id: "retry_cell_flow",
+                  type: "FLOW",
+                  value: "retry-get-cell-and-generate-link",
+                  mode: "replace"
+               }
+            }
+         }
+      ]
+   },
+
+   {
+      id: "retry-get-cell-with-caller-id",
+      name: "RetryGetCellWithCallerId",
+      version: "1.0.0",
+      description: "Retry caller ID choice after invalid input",
+      steps: [
+         { 
+            id: "retry_msg", 
+            type: "SAY", 
+            value: "Oops, sorry, something went wrong - let's try again...",
+            value_es: "Ups, lo siento, algo salió mal - intentemos de nuevo..."
+         },
+         { id: "retry_flow", type: "FLOW", value: "get-cell-with-caller-id", mode: "replace" }
       ]
    },
 
@@ -419,7 +540,12 @@ const flowsMenu = [
       version: "1.0.0",
       description: "Retry collecting cell number after validation error",
       steps: [
-         { id: "retry_msg", type: "SAY", value: "Oops, sorry, something went wrong - let's try again..." },
+         { 
+            id: "retry_msg", 
+            type: "SAY", 
+            value: "Oops, sorry, something went wrong - let's try again...",
+            value_es: "Ups, lo siento, algo salió mal - intentemos de nuevo..."
+         },
          { id: "retry_flow", type: "FLOW", value: "get-cell-and-generate-link", mode: "replace" }
       ]
    },
@@ -434,7 +560,8 @@ const flowsMenu = [
          id: "ask_email",
          type: "SAY-GET",
          variable: "email",
-         value: "Please say your email"
+         value: "Please say your email",
+         value_es: "Por favor diga su correo electrónico"
          },
          {
          id: "branch_on_email",
@@ -464,7 +591,12 @@ const flowsMenu = [
       version: "1.0.0",
       description: "Retry collecting email after validation error",
       steps: [
-         { id: "retry_msg", type: "SAY", value: "Oops, sorry, something went wrong - let's try again..." },
+         { 
+            id: "retry_msg", 
+            type: "SAY", 
+            value: "Oops, sorry, something went wrong - let's try again...",
+            value_es: "Ups, lo siento, algo salió mal - intentemos de nuevo..."
+         },
          { id: "retry_flow", type: "FLOW", value: "get-email-and-generate-link", mode: "replace" }
       ]
    },
@@ -482,7 +614,8 @@ const flowsMenu = [
             "condition:{{otp_link_result.ok}}": {
                id: "success_msg",
                type: "SAY",
-               value: "Payment link was sent to {{otp_link_result.api_response.DATA.TWILIOINFO.to}}"
+               value: "Payment link was sent to {{otp_link_result.api_response.DATA.TWILIOINFO.to}}",
+               value_es: "El enlace de pago fue enviado a {{otp_link_result.api_response.DATA.TWILIOINFO.to}}"
             },
             "default": {
                id: "retry_payment",
@@ -517,8 +650,13 @@ async function main() {
 	let session = engine.initSession(logger, "user-001", "session-001");
   // You can set session variables like this:
   session.cargo.test_var = "test value";
+  
+  // Simulate caller ID detection - in a real system, this would come from your telephony system
+  session.cargo.callerId = "15551234567"; // Example: caller ID
+  session.cargo.twilioNumber = "12133864412"; // Example: Twilio number
+  console.log(`Simulated caller ID: ${session.cargo.callerId}`);
 
-	console.log("Type anything like: 'I need to open a support ticket'");
+	console.log("Type anything like: 'I need to make a payment' or 'payment' to test the enhanced caller ID flow");
 
 	const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 	while (true) {
