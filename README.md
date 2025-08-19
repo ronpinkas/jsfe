@@ -682,6 +682,85 @@ The Flow Engine implements a sophisticated "stack-of-stacks" architecture that a
 - ✅ **FLOW** - Sub-flow execution with multiple call types
 - ✅ **SWITCH** - Enhanced conditional branching with expressions
 
+### Internationalization and Localization
+
+The JSFE engine supports multiple languages through localized properties in flow definitions and steps. This allows you to create workflows that automatically display messages in the user's preferred language.
+
+#### Flow-Level Localization
+
+Add localized prompts to your flow definitions using the `prompt_xx` pattern:
+
+```javascript
+const flowsMenu = [
+  {
+    id: "payment-flow",
+    name: "ProcessPayment",
+    prompt: "Process a payment",           // Default (English)
+    prompt_es: "Procesar un pago",        // Spanish
+    prompt_fr: "Traiter un paiement",     // French
+    prompt_de: "Eine Zahlung bearbeiten", // German
+    description: "Handle payment processing",
+    steps: [ /* ... */ ]
+  }
+];
+```
+
+#### Step-Level Localization
+
+Add localized messages to individual steps using the `value_xx` pattern:
+
+```javascript
+{
+  type: "SAY-GET",
+  variable: "amount",
+  value: "Please enter the payment amount:",           // Default (English)
+  value_es: "Por favor ingrese el monto del pago:",    // Spanish
+  value_fr: "Veuillez saisir le montant du paiement:", // French
+  value_de: "Bitte geben Sie den Zahlungsbetrag ein:"  // German
+}
+```
+
+#### Language Selection
+
+Set the user's preferred language when initializing the engine:
+
+```javascript
+const engine = new WorkflowEngine(
+  logger,
+  aiCallback,
+  flowsMenu,
+  toolsRegistry,
+  APPROVED_FUNCTIONS,
+  globalVariables,
+  true,           // validateOnInit
+  'es',           // language - Spanish
+  messageRegistry,
+  guidanceConfig
+);
+```
+
+#### Supported Language Codes
+
+- `en` - English (default)
+- `es` - Spanish (Español)
+- `pt` - Portuguese (Português)
+- `fr` - French (Français)
+- `de` - German (Deutsch)
+- Any ISO 639-1 language code
+
+#### Language Fallback
+
+If a localized property is not found for the specified language, the engine automatically falls back to the default `prompt` or `value` property. This ensures your flows always work even if some translations are missing.
+
+```javascript
+// Example: User has language='es' but only English is available
+{
+  type: "SAY",
+  value: "Welcome to our service!"  // Will be used as fallback
+  // value_es is missing, so English value is used
+}
+```
+
 ### Expression Template System
 
 The engine supports safe JavaScript expressions within `{{}}` templates:
