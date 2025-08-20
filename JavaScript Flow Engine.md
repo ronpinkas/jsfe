@@ -1165,11 +1165,19 @@ function verifyAccount(args) {
 APPROVED_FUNCTIONS['verifyAccount'] = verifyAccount;
 
 // Pass to engine
-const engine = new WorkflowEngine(flowsMenu, {
-  toolsRegistry,
-  APPROVED_FUNCTIONS,
-  // other config...
-});
+// Initialize the engine
+context.engine = new WorkflowEngine(
+  hostLogger,           // Any logger supporting .debug/.info/.warn/.error (or null)
+  aiCallback,           // host provided access to AI function that receives <systemInstruction>, <userMessage> and returns <string response>
+  flowsMenu,            // Available workflows
+  toolsRegistry,        // Tool definitions
+  APPROVED_FUNCTIONS,   // Secure local functions
+  globalVariables,      // Session-wide variables (optional)
+  validateOnInit,       // Integrity validation flag (optional, default: true)
+  language,             // Language preference (optional, 'en', 'es', etc.)
+  messageRegistry,      // Custom message templates (optional)
+  guidanceConfig        // User guidance settings (optional)
+);
 ```
 
 ### 2. HTTP API Implementation
@@ -1773,7 +1781,7 @@ const orderProcessingFlow = {
             path: "subtotal", 
             transform: {
               type: "add",
-              value: "{{tax_amount}} + {{shipping_cost}}"
+              value: "{{tax_amount + shipping_cost}}"
             }
           },
           
@@ -3093,11 +3101,11 @@ For APIs that require form data or file uploads:
     
     // Form data configuration
     formData: {
-      file: "{file}",           // File content from args
-      filename: "{filename}",   // Filename from args  
-      category: "{category}",   // Category from args
+      file:     "{file}",                         // File content from args
+      filename: "{filename}",                     // Filename from args  
+      category: "{category}",                     // Category from args
       metadata: "{{JSON.stringify(uploadMeta)}}", // Complex data serialization
-      timestamp: "{{Date.now()}}" // Dynamic values
+      timestamp: "{{Date.now()}}"                 // Dynamic values
     },
     
     // Alternative: URL-encoded form data
@@ -3406,7 +3414,7 @@ Variables in the workflow engine operate at multiple scopes:
 
 ### Simplified Expression System
 
-The engine now uses a **single, powerful JavaScript evaluator** that provides 100% compatibility with JavaScript expressions while maintaining security through limited access to explictly shared variables and functions.
+The engine uses a **single, powerful JavaScript evaluator** that provides 100% compatibility with JavaScript expressions while maintaining security through limited access to explictly shared variables and functions.
 
 - **Direct JavaScript Evaluation**: All expressions are evaluated as native JavaScript
 - **Type Preservation**: Single expressions like `{{count + 1}}` preserve their JavaScript types
@@ -3488,186 +3496,6 @@ The workflow engine uses **direct JavaScript evaluation** with a security framew
 "condition:{{age >= 18 && verified && balance > 100}}"  // Complex conditions
 ```
 
-### 1. Simple Variable Access
-
-Access variables using dot notation:
-
-```javascript
-// Simple variable
-{{userName}}
-
-// Nested object access
-{{user.profile.email}}
-{{account.settings.notifications}}
-
-// Array access
-{{items.length}}
-```
-
-**Example Usage:**
-```javascript
-{
-  id: "welcome-step", 
-  type: "SAY",
-  value: "Welcome back, {{user.name}}! You have {{notifications.count}} new messages."
-}
-```
-
-### 2. Logical Expressions
-
-Use logical operators for complex conditions and fallbacks:
-
-```javascript
-// Logical AND
-{{is_verified && age >= 18}}
-
-// Logical OR for fallbacks
-{{user.nickname || user.firstName || 'Guest'}}
-
-// Complex combinations
-{{(age >= 21 && location === 'US') || is_vip_member}}
-
-// Logical operators in conditions
-{{is_active && (is_premium || total_spent > 1000)}}
-```
-
-**Example Usage:**
-```javascript
-{
-  id: "access-check",
-  type: "CASE",
-  branches: {
-    "condition:{{age >= 18 && is_verified && balance >= 100}}": {
-      id: "grant-access",
-      type: "SAY",
-      value: "Access granted! Welcome {{user.name}}."
-    }
-  }
-}
-```
-
-### 3. Conditional (Ternary) Expressions
-
-Implement conditional logic with the `condition ? trueValue : falseValue` syntax:
-
-```javascript
-// Simple boolean check
-{{isVerified ? 'Verified User' : 'Unverified'}}
-
-// Numeric comparisons
-{{age >= 18 ? 'Adult' : 'Minor'}}
-{{balance > 1000 ? 'Premium' : 'Standard'}}
-
-// String comparisons  
-{{status === 'active' ? 'Online' : 'Offline'}}
-
-// Complex conditions
-{{isVip && balance > 5000 ? 'VIP Gold' : 'Regular'}}
-```
-
-**Supported Comparison Operators:**
-- `===` - Strict equality
-- `!==` - Strict inequality  
-- `==` - Loose equality
-- `!=` - Loose inequality
-- `>` - Greater than
-- `<` - Less than
-- `>=` - Greater than or equal
-- `<=` - Less than or equal
-
-**Example Usage:**
-```javascript
-{
-  id: "access-level",
-  type: "SAY",
-  value: "Your access level is: {{userRole === 'admin' ? 'Administrator' : 'Standard User'}}"
-}
-```
-
-### 4. Mathematical Expressions
-
-Perform safe mathematical operations:
-
-```javascript
-// Basic arithmetic
-{{price * quantity}}
-{{total + tax - discount}}
-{{amount / exchangeRate}}
-
-// With parentheses for precedence
-{{(subtotal + tax) * (1 - discountPercent)}}
-
-// Mixed variables and constants
-{{basePrice * 1.1 + shippingCost}}
-```
-
-**Supported Math Operators:**
-- `+` - Addition
-- `-` - Subtraction
-- `*` - Multiplication
-- `/` - Division
-- `%` - Modulo
-- `()` - Parentheses for precedence
-
-**Example Usage:**
-```javascript
-{
-  id: "calculate-total",
-  type: "SET",
-  variable: "orderTotal",
-  value: "{{(itemPrice * quantity) + shippingCost}}"
-}
-```
-
-### 5. Conditional Logic in CASE Steps
-
-CASE steps use the `condition:` prefix for complex conditional branching with **full logical operator support**:
-
-```javascript
-{
-  id: "complex-eligibility-check",
-  type: "CASE",
-  branches: {
-    // Multiple AND conditions
-    "condition:{{user_age}} >= 18 && {{user_verified}} && {{total_amount}} > 100": {
-      type: "SAY",
-      value: "You're eligible for premium processing!"
-    },
-    // OR conditions
-    "condition:{{isVip}} || {{isEmployee}} || {{referralCode}}": {
-      type: "SAY",
-      value: "You qualify for special rates."
-    },
-    // Complex mixed logic
-    "condition:({{creditScore}} > 700 && {{income}} > 50000) || {{hasGuarantor}}": {
-      type: "SAY",
-      value: "Your application is pre-approved."
-    },
-    // Boolean variable checks
-    "condition:{{is_premium_member}}": {
-      type: "SAY",
-      value: "Welcome, premium member!"
-    },
-    // Negation with parentheses
-    "condition:!({{isSuspended}} || {{isBlacklisted}})": {
-      type: "SAY",
-      value: "Account status is good."
-    },
-    "default": {
-      type: "SAY",
-      value: "Standard processing applies."
-    }
-  }
-}
-```
-
-**Supported Logical Operators in CASE Conditions:**
-- `&&` - Logical AND
-- `||` - Logical OR  
-- `!` - Logical NOT
-- `()` - Parentheses for grouping
-- All comparison operators: `===`, `!==`, `==`, `!=`, `>`, `<`, `>=`, `<=`
-
 ## Security Features
 
 ### Simplified JavaScript Evaluation Architecture
@@ -3676,11 +3504,10 @@ The Workflow Engine uses a **direct JavaScript evaluation approach** with securi
 
 #### Core Security Principles
 
-1. **Developer Trust Model**: Workflows are authored by developers, not end users
-2. **Controlled Access**: Only exported entities are allowed as valid JavaScript identifiers.  
-3. **User Input Safety**: User inputs are treated as values, not code structure
-4. **Function Constructor**: Uses JavaScript Function constructor with acess explictly limited to wxported entities.
-5. **No eval()**: Direct function construction without string evaluation dangers
+1. **Controlled Access**: Only exported entities are allowed as valid JavaScript identifiers.  
+2. **User Input Safety**: User inputs are treated as values, not code structure
+3. **Function Constructor**: Uses JavaScript Function constructor with acess explictly limited to wxported entities.
+4. **No eval()**: Direct function construction without string evaluation dangers
 
 #### Security Features
 
@@ -3691,19 +3518,19 @@ The Workflow Engine uses a **direct JavaScript evaluation approach** with securi
 
 **Function Constructor Safety**:
 - No string `eval()` vulnerabilities
-- Parameter names validated before function construction
+- Controlled access limited to explicitly exported variables and functions.
 - Expression evaluated in controlled scope
 
 #### What's Allowed vs Blocked
 
 **✅ ALLOWED - Full JavaScript within parameter scope**:
 ```javascript
-{{userName}}                        // Variable access
-{{age >= 18 && verified}}           // All logical operators
-{{price * quantity + tax}}          // All mathematical operations  
-{{status || 'default'}}             // Nullish coalescing
-{{items.length > 0 ? 'Has items' : 'Empty'}}  // Ternary conditionals
-{{Math.round(average)}}             // Method calls on allowed objects
+{{userName}}                                 // Variable access
+{{age >= 18 && verified}}                    // All logical operators
+{{price * quantity + tax}}                   // All mathematical operations  
+{{status || 'default'}}                      // Nullish coalescing
+{{items.length > 0 ? 'Has items' : 'Empty'}} // Ternary conditionals
+{{Math.round(average)}}                      // Method calls on allowed objects
 ```
 
 **❌ AUTOMATICALLY BLOCKED - Access to any unexported variable or function
@@ -3768,140 +3595,6 @@ String templates automatically convert embedded expressions to strings:
 {{isVerified && !isSuspended && balance > 0 && lastLogin < 90 ? 'active' : 'inactive'}}
 ```
 
-### Performance Considerations
-
-The unified evaluator is optimized for real-world usage:
-
-- **Simple Variables**: ~1ms (e.g., `{{userName}}`)
-- **Mathematical Operations**: ~2-3ms (e.g., `{{price * quantity}}`)
-- **Logical Expressions**: ~5-10ms (e.g., `{{verified && active}}`)
-- **Complex Conditions**: ~10-20ms (e.g., multi-variable business logic)
-
-### Best Practices
-
-**✅ Recommended Patterns:**
-```javascript
-// Use fallbacks for optional values
-{{user.nickname || user.firstName || 'Guest'}}
-
-// Break complex logic into steps
-// Step 1: SET isEligible = {{age >= 18 && verified}}
-// Step 2: Use {{isEligible}} in subsequent expressions
-
-// Use clear, descriptive variable names
-{{currentAccountBalance > minimumPaymentAmount}}
-```
-
-**❌ Avoid These Patterns:**
-```javascript
-// Overly complex nested expressions
-{{(user.profile && user.profile.settings && user.profile.settings.notifications) ? 'enabled' : 'disabled'}}
-
-// Better: Use intermediate variables or OR fallbacks
-{{user.profile.settings.notifications || false ? 'enabled' : 'disabled'}}
-```
-
-## Safe Method Calls and Function Support
-
-### Approved String Methods
-
-The engine includes comprehensive security controls that allow only pre-approved string methods:
-
-```javascript
-// Case conversion
-{{userName.toLowerCase()}}
-{{title.toUpperCase()}}
-
-// Whitespace handling
-{{input.trim()}}
-{{text.padStart(10, '0')}}
-{{name.padEnd(20, '.')}}
-
-// String access and search
-{{email.charAt(0)}}                    // First character
-{{text.indexOf('@')}}                  // Find position
-{{email.includes('@domain.com')}}      // Contains check
-{{url.startsWith('https://')}}         // Starts with
-{{filename.endsWith('.pdf')}}          // Ends with
-
-// String extraction and manipulation
-{{fullText.substring(0, 100)}}         // Extract substring
-{{data.slice(5, 15)}}                 // Extract slice
-{{csv.split(',')}}                    // Split into array
-{{text.replace('old', 'new')}}        // Replace text
-{{content.repeat(3)}}                 // Repeat string
-{{parts.concat(' - ', suffix)}}      // Concatenate
-
-// String inspection
-{{message.length > 100}}              // Length checks
-{{text.search(/\d+/)}}               // Regex search
-{{input.match(/[a-z]+/)}}            // Pattern matching
-{{name.localeCompare(other)}}        // Compare strings
-```
-
-### Approved Array Methods
-
-Safe array operations for data processing:
-
-```javascript
-// Array inspection
-{{items.length > 0}}                  // Length checks
-{{categories.includes('premium')}}     // Contains item
-{{list.indexOf('target')}}            // Find position
-
-// Array extraction
-{{items.slice(0, 5)}}                // First 5 items
-{{tags.join(', ')}}                  // Join with separator
-
-// Array utility
-{{data.toString()}}                  // Convert to string
-{{array.valueOf()}}                  // Get primitive value
-```
-
-### Approved Math Methods
-
-Mathematical operations with built-in functions:
-
-```javascript
-// Basic math operations
-{{Math.abs(balance)}}                 // Absolute value
-{{Math.ceil(price)}}                 // Round up
-{{Math.floor(average)}}              // Round down
-{{Math.round(calculation)}}          // Round to nearest
-
-// Comparisons
-{{Math.max(a, b, c)}}               // Maximum value
-{{Math.min(options)}}               // Minimum value
-
-// Advanced calculations
-{{Math.pow(base, exponent)}}        // Power calculation
-{{Math.sqrt(area)}}                 // Square root
-{{Math.random()}}                   // Random number (0-1)
-```
-
-### Safe Built-in Functions
-
-Type conversion and validation functions:
-
-```javascript
-// Numeric conversion and validation
-{{parseInt(userInput)}}              // String to integer
-{{parseFloat(price)}}               // String to decimal
-{{isNaN(value)}}                    // Check if not a number
-{{isFinite(result)}}                // Check if finite number
-
-// Type conversion (non-constructor forms)
-{{String(data)}}                    // Convert to string
-{{Number(input)}}                   // Convert to number
-{{Boolean(flag)}}                   // Convert to boolean
-
-// URI encoding for API calls
-{{encodeURIComponent(searchTerm)}}  // URL-safe encoding
-{{decodeURIComponent(encoded)}}     // URL decoding
-{{encodeURI(fullUrl)}}             // Full URI encoding
-{{decodeURI(uri)}}                 // Full URI decoding
-```
-
 ### User-Defined Approved Functions
 
 Register custom business logic functions for use in expressions:
@@ -3921,32 +3614,6 @@ const APPROVED_FUNCTIONS = {
 {{formatCurrency(amount, 'USD')}}              // Format money
 {{validateEmail(input) ? 'Valid' : 'Invalid'}} // Email validation
 ```
-
-### Method Chaining
-
-Combine multiple safe methods for complex processing:
-
-```javascript
-// Complex string processing
-{{userInput.toLowerCase().trim().substring(0, 50)}}
-
-// Email domain extraction and validation
-{{email.substring(email.indexOf('@') + 1).toLowerCase()}}
-
-// Array processing with string methods
-{{tags.join(', ').toUpperCase().replace(/,/g, ' |')}}
-
-// Conditional method calls
-{{isValidEmail ? email.toLowerCase() : 'invalid@example.com'}}
-```
-
-### Security Benefits
-
-- **Allowlist Approach**: Only explicitly approved methods are permitted
-- **No Code Injection**: Methods calls are parsed and validated, not executed as code
-- **Type Safety**: Method calls are validated against the actual data types
-- **No Side Effects**: All approved methods are read-only operations
-- **Predictable Behavior**: Same security model across all expression contexts
 
 ---
 
@@ -4386,8 +4053,6 @@ Complete workflows can be internationalized:
   prompt_fr: "Traiter un paiement",    // French  
   prompt_de: "Zahlung verarbeiten",    // German
   prompt_pt: "Processar pagamento",    // Portuguese
-  prompt_zh: "处理付款",               // Chinese
-  prompt_ja: "支払いを処理する",       // Japanese
   
   description: "Handle payment processing with validation",
   description_es: "Manejar procesamiento de pagos con validación",
@@ -4589,7 +4254,7 @@ All step types support error handling through various mechanisms:
   id: "validate-amount",
   type: "CASE",
   branches: {
-    "condition:{{payment_amount}} > 0 && {{payment_amount}} <= {{max_amount}}": {
+    "condition:{{payment_amount > 0 && payment_amount <= max_amount}}": {
       type: "SAY",
       value: "Amount validated. Proceeding with payment."
     },
@@ -4910,17 +4575,12 @@ The **CASE** step provides powerful condition-based branching using expression e
   id: "email_domain_case",
   type: "CASE", 
   branches: {
-    "condition:{{email}}.includes('@company.com')": {
+    "condition:{{email.includes('@company.com')}}": {
       type: "SET",
       variable: "user_type",
       value: "EMPLOYEE"
     },
-    "condition:{{email}}.includes('@partner.')": {
-      type: "SET", 
-      variable: "user_type",
-      value: "PARTNER"
-    },
-    "condition:{{email}}.length > 0": {
+    "condition:{{email.length > 0}}": {
       type: "SET",
       variable: "user_type", 
       value: "EXTERNAL"
@@ -4958,64 +4618,20 @@ The **CASE** step provides powerful condition-based branching using expression e
 ## Expression Syntax and Safety
 
 ### Supported Operators
-
-#### Comparison Operators
-```javascript
-"condition:{{age}} > 18"       // Greater than
-"condition:{{age}} >= 21"      // Greater than or equal
-"condition:{{score}} < 100"    // Less than  
-"condition:{{score}} <= 95"    // Less than or equal
-"condition:{{status}} === 'active'"  // Strict equality
-"condition:{{status}} !== 'banned'"  // Not equal
-```
-
-#### Boolean Operators
-```javascript
-"condition:{{verified}} && {{premium}}"           // AND
-"condition:{{guest}} || {{trial}}"                // OR
-"condition:!{{suspended}}"                        // NOT
-"condition:{{age}} > 18 && {{verified}}"          // Combined
-```
-
-#### String Operations
-```javascript
-"condition:{{email}}.includes('@company.com')"    // Contains
-"condition:{{name}}.startsWith('Dr.')"            // Starts with
-"condition:{{file}}.endsWith('.pdf')"             // Ends with
-"condition:{{message}}.length > 100"              // String length
-```
-
-#### Mathematical Operations
-```javascript
-"condition:{{total}} + {{tax}} > 1000"           // Addition
-"condition:{{price}} * {{quantity}} <= {{budget}}" // Multiplication
-"condition:{{score}} / {{max_score}} >= 0.8"     // Division
-"condition:{{current}} - {{previous}} > 50"      // Subtraction
-```
+All JavaScript operators and methods are supported within a sandboxed environment with
+access limited to explictly exported entities. 
 
 ### Variable Interpolation
 
-Variables are interpolated using double curly braces `{{variable_name}}`:
-
-```javascript
-// Simple variable
-"condition:{{user_age}} >= 18"
-
-// Nested object access
-"condition:{{user.profile.verified}} === true"
-
-// Array access
-"condition:{{scores[0]}} > {{scores[1]}}"
-
-// Global variables
-"condition:{{caller_id}} !== null"
-```
+Variables and expressions are interpolated using double curly braces `{{variable_name}}`:
 
 ### Security Features
 
 The expression evaluator includes multiple security layers:
 
-**Input Sanitization**: Removes dangerous patterns
+**Input Sanitization**
+User inputs are stored in a special class of variables which enable safety sanitation.
+
 ```javascript
 // ❌ Blocked patterns
 "condition:eval()"          // Code execution
@@ -5030,195 +4646,6 @@ The expression evaluator includes multiple security layers:
 - No access to file system
 - No network access
 
-**Type Safety**: Automatic type coercion and validation
-```javascript
-"condition:{{string_number}} > 100"  // "150" > 100 = true
-"condition:{{boolean_string}} && true"  // "false" && true = false
-```
-
-## Combining SWITCH and CASE
-
-For complex logic, you can combine SWITCH and CASE steps to create sophisticated decision trees.
-
-### Nested Branching Example
-
-```javascript
-{
-  id: "user_routing_switch", 
-  type: "SWITCH",
-  variable: "user_tier",
-  branches: {
-    "premium": {
-      // Premium users get condition-based routing
-      type: "CASE",
-      branches: {
-        "condition:{{support_urgency}} === 'critical'": {
-          type: "FLOW",
-          value: "PremiumCriticalSupportFlow"
-        },
-        "condition:{{support_urgency}} === 'high'": {
-          type: "FLOW", 
-          value: "PremiumHighSupportFlow"
-        },
-        "default": {
-          type: "FLOW",
-          value: "PremiumStandardSupportFlow"
-        }
-      }
-    },
-    "standard": {
-      // Standard users get simpler routing
-      type: "CASE",
-      branches: {
-        "condition:{{support_urgency}} === 'critical'": {
-          type: "FLOW",
-          value: "EscalatedSupportFlow"
-        },
-        "default": {
-          type: "FLOW",
-          value: "StandardSupportFlow"
-        }
-      }
-    },
-    "trial": {
-      // Trial users always go to self-service
-      type: "FLOW",
-      value: "SelfServiceFlow"
-    },
-    "default": {
-      type: "SAY",
-      value: "Unable to determine user tier"
-    }
-  }
-}
-```
-
-### Mixed Exact and Conditional Logic
-
-```javascript
-{
-  id: "order_processing_switch",
-  type: "SWITCH", 
-  variable: "order_type",
-  branches: {
-    "express": {
-      // Express orders always go to priority processing
-      type: "FLOW",
-      value: "ExpressProcessingFlow"
-    },
-    "bulk": {
-      // Bulk orders need conditional handling
-      type: "CASE",
-      branches: {
-        "condition:{{item_count}} > 1000 && {{total_value}} > 50000": {
-          type: "FLOW",
-          value: "LargeBulkOrderFlow"
-        },
-        "condition:{{item_count}} > 100": {
-          type: "FLOW",
-          value: "StandardBulkOrderFlow"
-        },
-        "default": {
-          type: "FLOW",
-          value: "SmallBulkOrderFlow"
-        }
-      }
-    },
-    "default": {
-      // All other order types use standard processing with conditions
-      type: "CASE", 
-      branches: {
-        "condition:{{total_value}} > 10000": {
-          type: "FLOW",
-          value: "HighValueOrderFlow"
-        },
-        "condition:{{customer_tier}} === 'vip'": {
-          type: "FLOW",
-          value: "VIPOrderFlow"
-        },
-        "default": {
-          type: "FLOW",
-          value: "StandardOrderFlow"
-        }
-      }
-    }
-  }
-}
-```
-
-## Performance Considerations
-
-### When to Use SWITCH vs CASE
-
-**Use SWITCH when:**
-- You have discrete, known values to match
-- Performance is critical (O(1) lookup)
-- Logic is simple and straightforward
-- Values are static and don't require computation
-
-**Use CASE when:**
-- You need conditional logic with expressions
-- Multiple variables influence the decision
-- Ranges or complex comparisons are needed
-- Dynamic conditions based on computed values
-
-### Optimization Strategies
-
-#### Order Conditions by Likelihood
-```javascript
-{
-  type: "CASE",
-  branches: {
-    // Most common case first
-    "condition:{{user_type}} === 'standard'": { /*...*/ },
-    // Less common cases 
-    "condition:{{user_type}} === 'premium'": { /*...*/ },
-    // Rare cases last
-    "condition:{{user_type}} === 'enterprise'": { /*...*/ }
-  }
-}
-```
-
-#### Combine Simple Checks in SWITCH
-```javascript
-// ✅ Efficient - use SWITCH for simple checks
-{
-  type: "SWITCH",
-  variable: "status",
-  branches: {
-    "active": { /*...*/ },
-    "inactive": { /*...*/ },
-    "default": {
-      // Only use CASE for complex conditions in default
-      type: "CASE", 
-      branches: { /*...*/ }
-    }
-  }
-}
-
-// ❌ Less efficient - CASE for simple exact matches
-{
-  type: "CASE",
-  branches: {
-    "condition:{{status}} === 'active'": { /*...*/ },
-    "condition:{{status}} === 'inactive'": { /*...*/ }
-  }
-}
-```
-
-#### Minimize Variable Access in Conditions
-```javascript
-// ✅ Good - minimal variable access
-"condition:{{total}} > 1000"
-
-// ❌ Less efficient - multiple variable access
-"condition:{{price}} + {{tax}} + {{shipping}} + {{handling}} > 1000"
-
-// ✅ Better - pre-calculate in SET step
-{ type: "SET", variable: "total", value: "{{price}} + {{tax}} + {{shipping}} + {{handling}}" }
-{ type: "CASE", branches: { "condition:{{total}} > 1000": { /*...*/ } } }
-```
-
 ## Error Handling in Conditional Steps
 
 ### Missing Variables
@@ -5227,37 +4654,10 @@ When variables referenced in conditions are undefined:
 
 ```javascript
 // If user_age is undefined
-"condition:{{user_age}} >= 18"  // Evaluates to false
+"condition:{{user_age >= 18}}"  // Evaluates to false
 
 // Defensive programming
-"condition:{{user_age}} !== null && {{user_age}} >= 18"
-```
-
-### Invalid Expressions
-
-The engine provides detailed error messages for invalid expressions:
-
-```javascript
-// ❌ Invalid syntax
-"condition:{{age} >= 18"     // Missing closing brace
-"condition:{{age}} >="       // Incomplete comparison
-"condition:{{age}} && "      // Incomplete boolean expression
-
-// Error handling in flow
-{
-  type: "CASE",
-  branches: {
-    "condition:{{user_age}} >= 18": {
-      type: "SAY",
-      value: "Access granted"
-    },
-    "default": {
-      // This catches both false conditions AND expression errors
-      type: "SAY", 
-      value: "Unable to verify age requirements"
-    }
-  }
-}
+"condition:{{user_age !== null && user_age >= 18}}"
 ```
 
 ### Fallback Strategies
@@ -5268,12 +4668,12 @@ Always provide meaningful default branches:
 {
   type: "CASE",
   branches: {
-    "condition:{{score}} >= 90": {
+    "condition:{{score >= 90}}": {
       type: "SET",
       variable: "grade",
       value: "A"
     },
-    "condition:{{score}} >= 80": {
+    "condition:{{score >= 80}}": {
       type: "SET", 
       variable: "grade",
       value: "B"
@@ -5282,7 +4682,7 @@ Always provide meaningful default branches:
       // Handle missing score or unexpected values
       type: "CASE",
       branches: {
-        "condition:{{score}} !== null": {
+        "condition:{{score !== null}}": {
           type: "SET",
           variable: "grade", 
           value: "F"
@@ -5290,225 +4690,6 @@ Always provide meaningful default branches:
         "default": {
           type: "SAY",
           value: "Score not available - please try again"
-        }
-      }
-    }
-  }
-}
-```
-
-## Best Practices
-
-### 1. Choose the Right Tool
-
-```javascript
-// ✅ Good - SWITCH for exact matching
-{
-  type: "SWITCH",
-  variable: "language",
-  branches: {
-    "en": { type: "SET", variable: "greeting", value: "Hello" },
-    "es": { type: "SET", variable: "greeting", value: "Hola" },
-    "fr": { type: "SET", variable: "greeting", value: "Bonjour" }
-  }
-}
-
-// ✅ Good - CASE for ranges and conditions  
-{
-  type: "CASE",
-  branches: {
-    "condition:{{temperature}} > 30": { type: "SAY", value: "It's hot!" },
-    "condition:{{temperature}} > 20": { type: "SAY", value: "It's warm" },
-    "condition:{{temperature}} > 10": { type: "SAY", value: "It's cool" }
-  }
-}
-```
-
-### 2. Provide Comprehensive Coverage
-
-```javascript
-// ✅ Good - handles all expected cases
-{
-  type: "SWITCH",
-  variable: "day_of_week", 
-  branches: {
-    "monday": { /*...*/ },
-    "tuesday": { /*...*/ },
-    "wednesday": { /*...*/ },
-    "thursday": { /*...*/ },
-    "friday": { /*...*/ },
-    "saturday": { /*...*/ },
-    "sunday": { /*...*/ },
-    "default": {
-      type: "SAY",
-      value: "Invalid day: {{day_of_week}}"
-    }
-  }
-}
-```
-
-### 3. Keep Conditions Readable
-
-```javascript
-// ✅ Good - clear and readable
-"condition:{{age}} >= 18 && {{verified}} === true"
-
-// ❌ Less readable - too complex
-"condition:{{age}} >= 18 && {{verified}} === true && {{country}} !== 'restricted' && {{account_status}} === 'active' && {{last_login}} > '2024-01-01'"
-
-// ✅ Better - break into multiple steps
-{ type: "SET", variable: "eligible", value: "{{age}} >= 18 && {{verified}}" }
-{ type: "SET", variable: "access_allowed", value: "{{country}} !== 'restricted' && {{account_status}} === 'active'" }
-{ type: "CASE", branches: { "condition:{{eligible}} && {{access_allowed}}": { /*...*/ } } }
-```
-
-### 4. Document Complex Logic
-
-```javascript
-{
-  id: "risk_assessment_case",
-  type: "CASE",
-  description: "Assess transaction risk based on amount, frequency, and user history",
-  branches: {
-    // High risk: Large amounts from new or unverified users
-    "condition:{{amount}} > 10000 && ({{account_age_days}} < 30 || !{{verified}})": {
-      type: "FLOW",
-      value: "HighRiskReviewFlow"
-    },
-    // Medium risk: Moderate amounts or high frequency
-    "condition:{{amount}} > 5000 || {{daily_transaction_count}} > 10": {
-      type: "FLOW", 
-      value: "MediumRiskReviewFlow"
-    },
-    // Low risk: Normal transactions
-    "default": {
-      type: "FLOW",
-      value: "StandardProcessingFlow"
-    }
-  }
-}
-```
-
-### 5. Test Edge Cases
-
-Consider testing these scenarios:
-
-- **Null/undefined variables**: `{{undefined_var}} > 0`
-- **Type mismatches**: String compared to number
-- **Edge values**: Boundary conditions (exactly 18, exactly 0, etc.)
-- **Empty strings**: `{{empty_string}}.length > 0`
-- **Boolean conversion**: `{{string_boolean}} === true`
-
-## Advanced Patterns
-
-### State Machine Implementation
-
-```javascript
-{
-  id: "order_state_machine",
-  type: "SWITCH",
-  variable: "order_status",
-  branches: {
-    "pending": {
-      type: "CASE",
-      branches: {
-        "condition:{{payment_confirmed}}": {
-          type: "SET",
-          variable: "order_status",
-          value: "processing"
-        },
-        "condition:{{hours_since_order}} > 24": {
-          type: "SET", 
-          variable: "order_status",
-          value: "expired"
-        },
-        "default": {
-          type: "SAY",
-          value: "Order pending payment confirmation"
-        }
-      }
-    },
-    "processing": {
-      type: "CASE",
-      branches: {
-        "condition:{{all_items_shipped}}": {
-          type: "SET",
-          variable: "order_status", 
-          value: "shipped"
-        },
-        "condition:{{processing_days}} > 5": {
-          type: "FLOW",
-          value: "DelayNotificationFlow"
-        },
-        "default": {
-          type: "SAY",
-          value: "Order is being processed"
-        }
-      }
-    },
-    "shipped": {
-      type: "SAY",
-      value: "Order has been shipped"
-    }
-  }
-}
-```
-
-### Multi-Tier Decision Trees
-
-```javascript
-{
-  id: "customer_service_routing",
-  type: "SWITCH", 
-  variable: "customer_tier",
-  branches: {
-    "enterprise": {
-      // Enterprise customers get immediate escalation options
-      type: "CASE",
-      branches: {
-        "condition:{{issue_type}} === 'outage'": {
-          type: "FLOW",
-          value: "EnterpriseOutageFlow"
-        },
-        "condition:{{issue_severity}} === 'critical'": {
-          type: "FLOW",
-          value: "EnterpriseCriticalFlow"  
-        },
-        "default": {
-          type: "FLOW",
-          value: "EnterpriseStandardFlow"
-        }
-      }
-    },
-    "premium": {
-      // Premium customers get priority handling
-      type: "CASE", 
-      branches: {
-        "condition:{{business_hours}} && {{issue_severity}} !== 'low'": {
-          type: "FLOW",
-          value: "PremiumLiveAgentFlow"
-        },
-        "default": {
-          type: "FLOW",
-          value: "PremiumSelfServiceFlow"
-        }
-      }
-    },
-    "default": {
-      // Standard customers get filtered routing
-      type: "CASE",
-      branches: {
-        "condition:{{business_hours}} && {{queue_length}} < 10": {
-          type: "FLOW",
-          value: "StandardLiveAgentFlow" 
-        },
-        "condition:{{issue_type}} === 'billing'": {
-          type: "FLOW",
-          value: "BillingSelfServiceFlow"
-        },
-        "default": {
-          type: "FLOW",
-          value: "StandardSelfServiceFlow"
         }
       }
     }
@@ -5775,17 +4956,18 @@ The **JavaScript Flow Engine** represents a sophisticated, production-ready work
 #### 1. **Setup and Configuration** (30 minutes)
 ```javascript
 // ✅ Initialize the engine with proper configuration
-const engine = new WorkflowEngine(
-  aiCallback,           // Your AI communication function
-  flowsMenu,            // Start with 2-3 simple flows
-  toolsRegistry,        // Begin with 1-2 essential tools
-  APPROVED_FUNCTIONS,   // Pre-approved local functions
-  logger,               // Your logging instance 
-  language,             // Optional User's preferred language
-  messageRegistry,      // Optional Custom message templates
-  guidanceConfig,       // Optional User assistance configuration
-  true,                 // Enable pre-flight validation during development
-  globalVariables       // Session-wide variables
+const engine = new // Initialize the engine
+context.engine = new WorkflowEngine(
+  hostLogger,           // Any logger supporting .debug/.info/.warn/.error (or null)
+  aiCallback,           // host provided access to AI function that receives <systemInstruction>, <userMessage> and returns <string response>
+  flowsMenu,            // Available workflows
+  toolsRegistry,        // Tool definitions
+  APPROVED_FUNCTIONS,   // Secure local functions
+  globalVariables,      // Session-wide variables (optional)
+  validateOnInit,       // Integrity validation flag (optional, default: true)
+  language,             // Language preference (optional, 'en', 'es', etc.)
+  messageRegistry,      // Custom message templates (optional)
+  guidanceConfig        // User guidance settings (optional)
 );
 ```
 
