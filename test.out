@@ -13,7 +13,7 @@ warn:    • Circular flow reference detected: SmartSelfRetryDemo → SmartSelfR
 📝 Inputs (2): What's the weather in London? → London
 
 🧪 Enhanced Workflow Engine - Test Simulation Mode
-Session ID: 05dad3cc-165a-411f-b6f4-1efa3c5985c3
+Session ID: b8eeaabc-9dc8-45cb-8a85-8efdcd8509d6
 Running 2 simulated inputs...
 
 ============================================================
@@ -26,20 +26,14 @@ Enter the city name to get current weather information
 
 You: London [SIMULATED]
 
-🤖 AI: Current weather in London, : Overcast at 15°C (82% humidity)
-Last updated: 2025-08-20T07:54:29.388Z
+🤖 AI: Current weather in London, : Partly cloudy at 20°C (49% humidity)
+Last updated: 2025-08-20T20:20:06.498Z
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 2187ms
+Session duration: 5621ms
 Simulated inputs processed: 2/2
 ✅ [1/42] weatherMappingTest - PASSED
-
-ANALYSIS: Test: #1/42
-Test Scenario: Weather API integration test
-Expected: User asks for weather in London, provides city name "London", receives weather data
-Actual: ✅ Correct flow - User input "What's the weather in London?" triggers weather flow, user provides "London", system returns "Current weather in London, : Overcast at 15°C (82% humidity)" with timestamp
-Result: EXPECTED BEHAVIOR - Weather API integration working correctly, proper user flow execution
 
 [2/42] 🧪 Running: paymentWorkflowTest
 📝 Inputs (3): I need to make a payment → 123456 → 50.00
@@ -66,21 +60,15 @@ What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 50.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=bc08e5be-b3ca-4e03-b877-7ff9f94fa99b
-Payment ID: bc08e5be-b3ca-4e03-b877-7ff9f94fa99b
-Expires: 2025-08-20T08:54:33.271Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=54a21b5e-be66-4a51-bd1a-0ef3c55e3c2b
+Payment ID: 54a21b5e-be66-4a51-bd1a-0ef3c55e3c2b
+Expires: 2025-08-20T21:20:11.212Z
 
 👋 Ending simulation. Session summary:
 Interactions: 4
-Session duration: 6070ms
+Session duration: 10339ms
 Simulated inputs processed: 3/3
 ✅ [2/42] paymentWorkflowTest - PASSED
-
-ANALYSIS: Test: #2/42
-Test Scenario: End-to-end payment workflow test
-Expected: User initiates payment, provides valid account "123456", amount "50.00", receives payment link
-Actual: ✅ Correct flow - Payment initiated → account verification successful → amount processed → payment link generated with proper UUID, expiration time
-Result: EXPECTED BEHAVIOR - Complete payment workflow functioning correctly with proper security and validation
 
 [3/42] 🧪 Running: multiWeatherTest
 📝 Inputs (6): What's the weather in New York? → New York → What's the weather in Tokyo? → Tokyo → What's the weather in London? → London
@@ -99,8 +87,8 @@ Enter the city name to get current weather information
 
 You: New York [SIMULATED]
 
-🤖 AI: Current weather in Weehawken, : Overcast at 19°C (68% humidity)
-Last updated: 2025-08-20T07:54:36.261Z
+🤖 AI: Current weather in Weehawken, : Overcast at 21°C (81% humidity)
+Last updated: 2025-08-20T20:20:15.917Z
 
 You: What's the weather in Tokyo? [SIMULATED]
 
@@ -110,8 +98,8 @@ Enter the city name to get current weather information
 
 You: Tokyo [SIMULATED]
 
-🤖 AI: Current weather in Shikinejima, : Sunny at 30°C (79% humidity)
-Last updated: 2025-08-20T07:54:37.964Z
+🤖 AI: Current weather in null, : Partly cloudy at 27°C (91% humidity)
+Last updated: 2025-08-20T20:20:17.357Z
 
 You: What's the weather in London? [SIMULATED]
 
@@ -121,20 +109,14 @@ Enter the city name to get current weather information
 
 You: London [SIMULATED]
 
-🤖 AI: Current weather in London, : Overcast at 15°C (82% humidity)
-Last updated: 2025-08-20T07:54:39.721Z
+🤖 AI: Current weather in London, : Partly cloudy at 20°C (49% humidity)
+Last updated: 2025-08-20T20:20:19.991Z
 
 👋 Ending simulation. Session summary:
 Interactions: 7
-Session duration: 12518ms
+Session duration: 19113ms
 Simulated inputs processed: 6/6
 ✅ [3/42] multiWeatherTest - PASSED
-
-ANALYSIS: Test: #3/42
-Test Scenario: Multiple weather requests in sequence
-Expected: User requests weather for New York, Tokyo, and London in sequence, receiving individual responses
-Actual: ✅ Correct flow - All three weather requests processed independently: New York (Weehawken, Overcast 19°C), Tokyo (Shikinejima, Sunny 30°C), London (Overcast 15°C)
-Result: EXPECTED BEHAVIOR - System handles multiple sequential weather requests without interference, proper API responses
 
 [4/42] 🧪 Running: multiPaymentTest
 📝 Inputs (6): I need to make a payment → 123456 → 25.50 → I want to make another payment → 123456 → 100.00
@@ -161,9 +143,9 @@ What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 25.50 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/25.50?id=7cb0065f-25a0-48ca-a179-d42115f37cf0
-Payment ID: 7cb0065f-25a0-48ca-a179-d42115f37cf0
-Expires: 2025-08-20T08:54:43.174Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/25.50?id=c7e2c4b8-3b28-483e-ba20-48ad45e2bc32
+Payment ID: c7e2c4b8-3b28-483e-ba20-48ad45e2bc32
+Expires: 2025-08-20T21:20:29.535Z
 
 You: I want to make another payment [SIMULATED]
 
@@ -181,21 +163,15 @@ What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 100.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/100.00?id=d40ca984-7890-45dc-aee8-8a136be2ac3b
-Payment ID: d40ca984-7890-45dc-aee8-8a136be2ac3b
-Expires: 2025-08-20T08:54:48.237Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/100.00?id=d7b55be5-a1f3-455d-a22b-80c4af3de99c
+Payment ID: d7b55be5-a1f3-455d-a22b-80c4af3de99c
+Expires: 2025-08-20T21:20:34.614Z
 
 👋 Ending simulation. Session summary:
 Interactions: 7
-Session duration: 21037ms
+Session duration: 33736ms
 Simulated inputs processed: 6/6
 ✅ [4/42] multiPaymentTest - PASSED
-
-ANALYSIS: Test: #4/42
-Test Scenario: Multiple payment workflows in sequence
-Expected: User completes first payment (123456, $25.50), then initiates second payment (123456, $100.00)
-Actual: ✅ Correct flow - Both payments processed successfully with unique payment IDs and proper links generated
-Result: EXPECTED BEHAVIOR - System handles multiple payment workflows correctly, maintains proper session state
 
 [5/42] 🧪 Running: invalidAccountTest
 📝 Inputs (3): I need to make a payment → 999999 → cancel
@@ -227,15 +203,9 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 4
-Session duration: 23610ms
+Session duration: 36929ms
 Simulated inputs processed: 3/3
 ✅ [5/42] invalidAccountTest - PASSED
-
-ANALYSIS: Test: #5/42
-Test Scenario: Invalid account number handling and graceful exit
-Expected: User starts payment with invalid account "999999", gets error, cancels successfully
-Actual: ✅ Correct flow - Invalid account triggers "Account verification failed" message, cancel command exits flow cleanly with success message
-Result: EXPECTED BEHAVIOR - Proper error handling for invalid account, graceful flow cancellation
 
 [6/42] 🧪 Running: interruptionTest
 📝 Inputs (5): I need to make a payment → 123456 → cancel → What's the weather in Paris? → Paris
@@ -272,20 +242,14 @@ Enter the city name to get current weather information
 
 You: Paris [SIMULATED]
 
-🤖 AI: Current weather in Gentilly, : Partly cloudy at 19°C (88% humidity)
-Last updated: 2025-08-20T07:54:54.908Z
+🤖 AI: Current weather in Paris, : Overcast at 18°C (88% humidity)
+Last updated: 2025-08-20T20:20:43.544Z
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 27706ms
+Session duration: 42666ms
 Simulated inputs processed: 5/5
 ✅ [6/42] interruptionTest - PASSED
-
-ANALYSIS: Test: #6/42
-Test Scenario: Flow interruption and recovery to different flow
-Expected: User starts payment, verifies account, cancels, then starts weather request
-Actual: ✅ Correct flow - Payment flow cancelled successfully, weather request processed independently with Paris weather data
-Result: EXPECTED BEHAVIOR - System properly handles flow interruption and allows seamless transition to different workflow
 
 [7/42] 🧪 Running: businessFlowsTest
 📝 Inputs (5): What's the weather in Tokyo? → Tokyo → I need to make a payment → 123456 → 99.99
@@ -304,8 +268,8 @@ Enter the city name to get current weather information
 
 You: Tokyo [SIMULATED]
 
-🤖 AI: Current weather in Shikinejima, : Sunny at 30°C (79% humidity)
-Last updated: 2025-08-20T07:54:57.720Z
+🤖 AI: Current weather in null, : Partly cloudy at 27°C (91% humidity)
+Last updated: 2025-08-20T20:20:45.450Z
 
 You: I need to make a payment [SIMULATED]
 
@@ -323,21 +287,15 @@ What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 99.99 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/99.99?id=c36268a2-7dfe-4a73-a4ef-dc34bbdd1ad2
-Payment ID: c36268a2-7dfe-4a73-a4ef-dc34bbdd1ad2
-Expires: 2025-08-20T08:55:00.664Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/99.99?id=d00e84d1-f3bd-477e-ab3e-38c712a3b5e3
+Payment ID: d00e84d1-f3bd-477e-ab3e-38c712a3b5e3
+Expires: 2025-08-20T21:20:49.195Z
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 33462ms
+Session duration: 48317ms
 Simulated inputs processed: 5/5
 ✅ [7/42] businessFlowsTest - PASSED
-
-ANALYSIS: Test: #7/42
-Test Scenario: Mixed business flows (weather + payment)
-Expected: User requests Tokyo weather, then initiates payment workflow
-Actual: ✅ Correct flow - Tokyo weather provided (Sunny 30°C), then payment processed successfully for $99.99
-Result: EXPECTED BEHAVIOR - System handles different business workflows sequentially without interference
 
 [8/42] 🧪 Running: cryptoPriceTest
 📝 Inputs (1): What's the current Bitcoin price?
@@ -354,21 +312,15 @@ You: What's the current Bitcoin price? [SIMULATED]
 
 I will check the price of bitcoin
 
-I found this info: {"crypto_name":"BITCOIN","price":113555,"change_24h":-1.2536541090080573,"currency":"USD"}
+I found this info: {"crypto_name":"BITCOIN","price":114021,"change_24h":0.7515468364525965,"currency":"USD"}
 
-💰 BITCOIN Price is $113555 - 24h Change: -1.2536541090080573% - Last Updated: 8/20/2025, 12:55:02 AM
+💰 BITCOIN Price is $114021 - 24h Change: 0.7515468364525965% - Last Updated: 8/20/2025, 1:20:50 PM
 
 👋 Ending simulation. Session summary:
 Interactions: 2
-Session duration: 34843ms
+Session duration: 49688ms
 Simulated inputs processed: 1/1
 ✅ [8/42] cryptoPriceTest - PASSED
-
-ANALYSIS: Test: #8/42
-Test Scenario: Cryptocurrency price lookup
-Expected: User asks for Bitcoin price, receives current price data
-Actual: ✅ Correct flow - Bitcoin price returned: $113555 with -1.25% 24h change, formatted properly with currency
-Result: EXPECTED BEHAVIOR - Crypto API integration working correctly, proper data extraction and formatting
 
 [9/42] 🧪 Running: apiIntegrationTest
 📝 Inputs (2): I want to test REST API functionality → 1
@@ -395,15 +347,9 @@ Website: hildegard.org
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 35845ms
+Session duration: 51502ms
 Simulated inputs processed: 2/2
 ✅ [9/42] apiIntegrationTest - PASSED
-
-ANALYSIS: Test: #9/42
-Test Scenario: REST API demonstration
-Expected: User requests API functionality test, provides user ID "1", receives user data
-Actual: ✅ Correct flow - User data fetched successfully: Leanne Graham with email, phone, website details
-Result: EXPECTED BEHAVIOR - REST API integration working correctly, proper data retrieval and formatting
 
 [10/42] 🧪 Running: responseMappingTest
 📝 Inputs (2): I want to test response mapping → 1
@@ -433,15 +379,9 @@ Result: {"location":{"name":"New York","country":"United States","coordinates":"
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 37032ms
+Session duration: 52510ms
 Simulated inputs processed: 2/2
 ✅ [10/42] responseMappingTest - PASSED
-
-ANALYSIS: Test: #10/42
-Test Scenario: Response mapping system test with JSONPath option
-Expected: User requests response mapping test, selects option 1 (JSONPath), receives mapped response
-Actual: ✅ Correct flow - JSONPath mapping executed successfully with complex nested JSON structure containing location, current weather, and forecast data
-Result: EXPECTED BEHAVIOR - Response mapping system working correctly with proper JSONPath extraction
 
 [11/42] 🧪 Running: httpToolsTest
 📝 Inputs (6): API testing suite → 1 → API testing suite → 2 → API testing suite → 3
@@ -513,194 +453,211 @@ Result: <?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/
             <link>https://www.bbc.co.uk/news</link>
         </image>
         <generator>RSS for Node</generator>
-        <lastBuildDate>Wed, 20 Aug 2025 07:55:07 GMT</lastBuildDate>
+        <lastBuildDate>Wed, 20 Aug 2025 20:20:53 GMT</lastBuildDate>
         <atom:link href="https://feeds.bbci.co.uk/news/rss.xml" rel="self" type="application/rss+xml"/>
         <copyright><![CDATA[Copyright: (C) British Broadcasting Corporation, see https://www.bbc.co.uk/usingthebbc/terms-of-use/#15metadataandrssfeeds for terms and conditions of reuse.]]></copyright>
         <language><![CDATA[en-gb]]></language>
         <ttl>15</ttl>
         <item>
-            <title><![CDATA[More asylum hotels face legal challenge after court ruling]]></title>
-            <description><![CDATA[Nigel Farage says Reform UK-controlled councils will do everything in their power to close the hotels. ]]></description>
-            <link>https://www.bbc.com/news/articles/cp3e221qgeeo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cp3e221qgeeo#0</guid>
-            <pubDate>Wed, 20 Aug 2025 07:34:38 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/ce02/live/dfd20ea0-7d70-11f0-93ec-675a08aafd94.jpg"/>
+            <title><![CDATA[Israeli military says first stages of assault on Gaza City have begun]]></title>
+            <description><![CDATA[Call-up letters have gone out to 60,000 reservists to bolster an operation which is expected to last until next year.]]></description>
+            <link>https://www.bbc.com/news/articles/clyr7l0z9edo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/clyr7l0z9edo#0</guid>
+            <pubDate>Wed, 20 Aug 2025 19:57:43 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/3c7f/live/8ae02ea0-7df6-11f0-97b5-2745b2279d00.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Practical and political pain for Home Office after hotel ruling]]></title>
-            <description><![CDATA[The government will now have to find new places to house asylum seekers, while hoping other areas don't take similar legal action. ]]></description>
-            <link>https://www.bbc.com/news/articles/cy40wx73mwzo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cy40wx73mwzo#0</guid>
-            <pubDate>Tue, 19 Aug 2025 21:19:08 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/3aca/live/ef28de50-7d3f-11f0-b3c0-9d67b56cf007.jpg"/>
+            <title><![CDATA[Ex-priest found guilty of 17 indecent assaults]]></title>
+            <description><![CDATA[Chris Brain abused nine women while head of the Nine O'Clock Service in Sheffield in the 80s and 90s.]]></description>
+            <link>https://www.bbc.com/news/articles/c20662dxl88o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c20662dxl88o#0</guid>
+            <pubDate>Wed, 20 Aug 2025 16:01:13 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/7a22/live/52d05360-7de6-11f0-aa3b-29990a8088ef.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Empty homes are on the rise. So why aren't they being used to solve the housing shortage?]]></title>
-            <description><![CDATA[There are almost 720,000 empty homes in England. And many more on social housing waiting lists. Is using one to help solve the other a case of a missed opportunity?]]></description>
-            <link>https://www.bbc.com/news/articles/c3r413l5n57o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c3r413l5n57o#0</guid>
-            <pubDate>Tue, 19 Aug 2025 23:08:39 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/2274/live/ca4d4d50-7cf9-11f0-a34f-318be3fb0481.png"/>
+            <title><![CDATA[Asylum hotel challenge doesn't end with Epping court ruling]]></title>
+            <description><![CDATA[The High Court ruling follows an unprecedented backlog in people waiting for a decision on their cases.]]></description>
+            <link>https://www.bbc.com/news/articles/cly4v3pllgko?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cly4v3pllgko#0</guid>
+            <pubDate>Wed, 20 Aug 2025 14:58:02 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/87d7/live/c0d119c0-7dbf-11f0-a512-25ed1ee64338.jpg"/>
         </item>
         <item>
-            <title><![CDATA[MND left her without a voice. Eight seconds of scratchy audio gave it back to her]]></title>
-            <description><![CDATA[Sarah Ezekiel was 34 with two children when motor neurone disease took away her ability to speak.]]></description>
-            <link>https://www.bbc.com/news/articles/c1ejvxne7elo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c1ejvxne7elo#0</guid>
-            <pubDate>Wed, 20 Aug 2025 04:51:38 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/c946/live/409dcbf0-7d0f-11f0-83cc-c5da98c419b8.jpg"/>
+            <title><![CDATA[Why are food prices still rising by so much?]]></title>
+            <description><![CDATA[Food and drink prices have risen by 4.9% over the last year, according to ONS inflation data.]]></description>
+            <link>https://www.bbc.com/news/articles/cyvn9z3y78lo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cyvn9z3y78lo#0</guid>
+            <pubDate>Wed, 20 Aug 2025 14:00:07 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/2ef8/live/2381b250-7dcf-11f0-88a2-b9725373e32e.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Scientists make 'superfood' that could save honeybees]]></title>
+            <description><![CDATA[We rely on honeybees to pollinate our crops and a new food could protect them from growing threats.]]></description>
+            <link>https://www.bbc.com/news/articles/c776kynn771o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c776kynn771o#0</guid>
+            <pubDate>Wed, 20 Aug 2025 15:03:02 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/7189/live/bf16e2a0-7deb-11f0-ab3e-bd52082cd0ae.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Students face nervous wait for GCSE and BTec results]]></title>
+            <description><![CDATA[The GCSE pass rate is expected to be broadly similar to 2024, after years of flux during the Covid pandemic.]]></description>
+            <link>https://www.bbc.com/news/articles/c4g64qedynlo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c4g64qedynlo#0</guid>
+            <pubDate>Wed, 20 Aug 2025 15:01:26 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/e0a9/live/135c0410-7db7-11f0-88de-21c2f8cb127a.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Decision over Kneecap rapper terror charge delayed]]></title>
+            <description><![CDATA[Liam Óg Ó hAnnaidh was charged with a terror offence after allegedly displaying a flag in support of proscribed organisation Hezbollah.]]></description>
+            <link>https://www.bbc.com/news/articles/c939v4kw2l4o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c939v4kw2l4o#0</guid>
+            <pubDate>Wed, 20 Aug 2025 15:04:00 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/c2ba/live/64b1e9a0-7dd6-11f0-ab3e-bd52082cd0ae.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Wales rugby bosses say cutting professional teams to two is 'radical' option]]></title>
+            <description><![CDATA[The Welsh Rugby Union backs reducing the number of professional teams from four to two but insists no final decision has been made.]]></description>
+            <link>https://www.bbc.com/sport/rugby-union/articles/c9d0nwepedeo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/sport/rugby-union/articles/c9d0nwepedeo#0</guid>
+            <pubDate>Wed, 20 Aug 2025 14:11:48 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/164f/live/a93384f0-7dd4-11f0-88a2-b9725373e32e.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Government prepares to take over UK's third-largest steelworks]]></title>
+            <description><![CDATA[Managers have been lined up to take control in a bid to protect 1,500 jobs at the Yorkshire plant. ]]></description>
+            <link>https://www.bbc.com/news/articles/cj0yd0829m4o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cj0yd0829m4o#0</guid>
+            <pubDate>Wed, 20 Aug 2025 16:36:07 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/66db/live/1b193490-7dd8-11f0-ab3e-bd52082cd0ae.jpg"/>
         </item>
         <item>
             <title><![CDATA[Kremlin plays down Zelensky talks as Trump warns Putin may not want to make deal]]></title>
             <description><![CDATA[The US president conceded the war in Ukraine was "tough to solve" after several days of high-level talks.]]></description>
             <link>https://www.bbc.com/news/articles/cn92e52rpjxo?at_medium=RSS&amp;at_campaign=rss</link>
             <guid isPermaLink="false">https://www.bbc.com/news/articles/cn92e52rpjxo#0</guid>
-            <pubDate>Wed, 20 Aug 2025 04:23:23 GMT</pubDate>
+            <pubDate>Wed, 20 Aug 2025 14:24:11 GMT</pubDate>
             <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/1331/live/d2dbeab0-7d32-11f0-b6c9-e1728577c12d.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Trump under pressure as obstacles to progress on Ukraine persist]]></title>
-            <description><![CDATA[Meetings in Alaska and Washington were high on pomp and low on breakthroughs, but there were two potentially significant developments. ]]></description>
-            <link>https://www.bbc.com/news/articles/c776edpr10eo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c776edpr10eo#0</guid>
-            <pubDate>Tue, 19 Aug 2025 20:48:56 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/78dd/live/40435440-7d2d-11f0-afc8-57c826a9a391.jpg"/>
+            <title><![CDATA[Police investigating death of French streamer seize equipment and videos]]></title>
+            <description><![CDATA[Raphaël Graven - also known as Jeanpormanove - was known for his extreme videos on the platform, Kick.]]></description>
+            <link>https://www.bbc.com/news/articles/cd0d31r423ko?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cd0d31r423ko#0</guid>
+            <pubDate>Wed, 20 Aug 2025 14:36:45 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/e719/live/cddec580-7dca-11f0-88a2-b9725373e32e.jpg"/>
         </item>
         <item>
-            <title><![CDATA[UK independent space agency scrapped to cut costs]]></title>
-            <description><![CDATA[Britain's space agency is set to be scrapped - a scientist fears the UK space sector could fall behind as a result]]></description>
-            <link>https://www.bbc.com/news/articles/c4gmjm8z47jo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c4gmjm8z47jo#0</guid>
-            <pubDate>Wed, 20 Aug 2025 00:35:23 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/8115/live/f7ea0ff0-7d21-11f0-a34f-318be3fb0481.jpg"/>
+            <title><![CDATA[MND left her without a voice. Eight seconds of scratchy audio gave it back to her]]></title>
+            <description><![CDATA[Sarah Ezekiel was 34 with two children when motor neurone disease took away her ability to speak.]]></description>
+            <link>https://www.bbc.com/news/articles/c1ejvxne7elo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c1ejvxne7elo#1</guid>
+            <pubDate>Wed, 20 Aug 2025 04:51:38 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/c946/live/409dcbf0-7d0f-11f0-83cc-c5da98c419b8.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Leaked report shows 10,000 gap in probation staff]]></title>
-            <description><![CDATA[There is a shortage of probation staff to manage offenders serving sentences in the community, a report shows.]]></description>
-            <link>https://www.bbc.com/news/articles/cy7yj0gkl3zo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cy7yj0gkl3zo#0</guid>
-            <pubDate>Wed, 20 Aug 2025 05:00:14 GMT</pubDate>
-            <media:thumbnail width="240" height="136" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/d425/live/13d93860-ceb5-11ef-87df-d575b9a434a4.png"/>
+            <title><![CDATA[Why Donetsk matters so much for Ukraine's defences]]></title>
+            <description><![CDATA[For Ukraine to lose western Donetsk would mean the fall of a bulwark against any future Russian advance.]]></description>
+            <link>https://www.bbc.com/news/articles/cj6yd4d5zj6o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cj6yd4d5zj6o#1</guid>
+            <pubDate>Wed, 20 Aug 2025 17:12:10 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/3fd8/live/e90c2a40-7dd5-11f0-88a2-b9725373e32e.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Pine nuts and goat's milk should get allergy labels, say experts]]></title>
-            <description><![CDATA[Warnings for some 'emerging' food allergens should be added to food packaging, researchers suggest.]]></description>
-            <link>https://www.bbc.com/news/articles/c5ypgrzxx9go?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c5ypgrzxx9go#0</guid>
-            <pubDate>Wed, 20 Aug 2025 07:04:57 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/f449/live/7b7f2770-7d03-11f0-8154-37a88043e97c.jpg"/>
+            <title><![CDATA[What are Rachel Reeves' options on property tax?]]></title>
+            <description><![CDATA[Reports suggest the government is considering shaking up the property tax system to raise revenue.]]></description>
+            <link>https://www.bbc.com/news/articles/cm2k1m56xgjo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cm2k1m56xgjo#1</guid>
+            <pubDate>Wed, 20 Aug 2025 15:45:29 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/c9e1/live/23085c10-7dad-11f0-abdc-59614a74b023.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Sanex shower gel ad banned over racial stereotype]]></title>
-            <description><![CDATA[The TV ad depicted two black models with skin problems and a white model without.]]></description>
-            <link>https://www.bbc.com/news/articles/cn92znzx8zzo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cn92znzx8zzo#0</guid>
-            <pubDate>Tue, 19 Aug 2025 23:05:29 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/7cd0/live/4429bc60-7d10-11f0-affd-3db3a18ad929.jpg"/>
+            <title><![CDATA[Empty homes are on the rise. So why aren't they being used to solve the housing shortage?]]></title>
+            <description><![CDATA[There are almost 720,000 empty homes in England. And many more on social housing waiting lists - so why aren't we better using one to help solve the other, and is it a case of a missed opportunity?]]></description>
+            <link>https://www.bbc.com/news/articles/c3r413l5n57o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c3r413l5n57o#1</guid>
+            <pubDate>Tue, 19 Aug 2025 23:08:39 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/2274/live/ca4d4d50-7cf9-11f0-a34f-318be3fb0481.png"/>
         </item>
         <item>
-            <title><![CDATA[Final £1 coins featuring late Queen enter circulation]]></title>
-            <description><![CDATA[More than 23 million coins are being released, alongside 7.5 million new King Charles III coins.]]></description>
-            <link>https://www.bbc.com/news/articles/cvgn3nv6g69o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cvgn3nv6g69o#0</guid>
-            <pubDate>Wed, 20 Aug 2025 00:58:35 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/f01a/live/9cbc8d70-7d25-11f0-ab3e-bd52082cd0ae.jpg"/>
+            <title><![CDATA['He fixes what needs fixing' - why Raducanu turned to Nadal's ex-coach ]]></title>
+            <description><![CDATA[Emma Raducanu recently appointed another full-time coach in Spaniard Francisco Roig - BBC Sport speaks to those who know him best.]]></description>
+            <link>https://www.bbc.com/sport/tennis/articles/c5ypke1n361o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/sport/tennis/articles/c5ypke1n361o#1</guid>
+            <pubDate>Wed, 20 Aug 2025 07:06:58 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/4d65/live/f2620fb0-7d94-11f0-83cc-c5da98c419b8.jpg"/>
         </item>
         <item>
             <title><![CDATA[Jewellery, cash or first cars: Do rewards boost exam grades?]]></title>
             <description><![CDATA[Some parents offer money and gifts ahead of exams results - but does the promise of a reward work?]]></description>
             <link>https://www.bbc.com/news/articles/cgqnzy9ej0do?at_medium=RSS&amp;at_campaign=rss</link>
             <guid isPermaLink="false">https://www.bbc.com/news/articles/cgqnzy9ej0do#1</guid>
-            <pubDate>Wed, 20 Aug 2025 07:38:42 GMT</pubDate>
+            <pubDate>Wed, 20 Aug 2025 18:20:00 GMT</pubDate>
             <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/6161/live/c65a99f0-79c5-11f0-8827-ede848a7813c.jpg"/>
         </item>
         <item>
-            <title><![CDATA[The Papers: 'Migrant hotels facing closure' and 'Noel: I'm so proud of Liam']]></title>
-            <description><![CDATA[The closure of a hotel housing migrants in Epping and the Gallagher brothers make Wednesday's papers.]]></description>
-            <link>https://www.bbc.com/news/articles/c5ylk2p5p9go?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c5ylk2p5p9go#1</guid>
-            <pubDate>Wed, 20 Aug 2025 04:14:03 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/8248/live/270012d0-7d4f-11f0-83cc-c5da98c419b8.png"/>
+            <title><![CDATA[Is Bristol cooler than Berlin? Play BBC Weather’s new guessing game Cooler Than Me?]]></title>
+            <description><![CDATA[The new guessing game from BBC Weather]]></description>
+            <link>https://www.bbc.com/weather/articles/cwy5r7xwq8xo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/weather/articles/cwy5r7xwq8xo#1</guid>
+            <pubDate>Wed, 20 Aug 2025 04:24:40 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/faf2/live/2501b7b0-7d84-11f0-a34f-318be3fb0481.png"/>
         </item>
         <item>
-            <title><![CDATA[What security guarantees for Ukraine would actually mean]]></title>
-            <description><![CDATA[There are inherent contradictions in the idea of the guarantees meant to prevent Russia from attacking Ukraine again.]]></description>
-            <link>https://www.bbc.com/news/articles/cx2qr08l1yko?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cx2qr08l1yko#1</guid>
-            <pubDate>Tue, 19 Aug 2025 23:22:36 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/ebf2/live/1d685620-7d53-11f0-83cc-c5da98c419b8.jpg"/>
+            <title><![CDATA[Microsoft boss troubled by rise in reports of 'AI psychosis']]></title>
+            <description><![CDATA[Mustafa Suleyman said there was still "zero evidence of AI consciousness today".]]></description>
+            <link>https://www.bbc.com/news/articles/c24zdel5j18o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c24zdel5j18o#2</guid>
+            <pubDate>Wed, 20 Aug 2025 16:36:03 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/4434/live/e3b1f560-7dc7-11f0-88a2-b9725373e32e.jpg"/>
         </item>
         <item>
-            <title><![CDATA[US military vets are helping Afghans fight deportation]]></title>
-            <description><![CDATA[Afghan refugees in the US say they fear what would happen if they return to their country, which is now controlled by the Taliban.]]></description>
-            <link>https://www.bbc.com/news/articles/cq68zq24vg5o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cq68zq24vg5o#1</guid>
-            <pubDate>Tue, 19 Aug 2025 23:10:18 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/82db/live/59ad6130-79e2-11f0-9cfe-35292c1863f3.jpg"/>
+            <title><![CDATA[Actress Aubrey Plaza says grief is a 'giant ocean of awfulness']]></title>
+            <description><![CDATA[The US actress says life is "a daily struggle", seven months after husband Jeff Baena's suicide.]]></description>
+            <link>https://www.bbc.com/news/articles/c30z944q42do?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c30z944q42do#2</guid>
+            <pubDate>Wed, 20 Aug 2025 09:47:33 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/3757/live/4377ce40-7dd0-11f0-83cc-c5da98c419b8.jpg"/>
         </item>
         <item>
-            <title><![CDATA[How many wars has President Trump really ended?]]></title>
-            <description><![CDATA[US President Donald Trump claims to have ended seven wars - is that true?]]></description>
-            <link>https://www.bbc.com/news/articles/c5y3599gx4qo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c5y3599gx4qo#1</guid>
-            <pubDate>Tue, 19 Aug 2025 23:49:04 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/9ff4/live/1832bae0-7d32-11f0-83cc-c5da98c419b8.png"/>
+            <title><![CDATA['Chilling' political interference in BBC must stop, says former news boss]]></title>
+            <description><![CDATA[The BBC's former director of news James Harding delivers the TV industry's flagship annual lecture.]]></description>
+            <link>https://www.bbc.com/news/articles/cn85z0z3gz3o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cn85z0z3gz3o#2</guid>
+            <pubDate>Wed, 20 Aug 2025 18:02:08 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/a496/live/cf57c160-7e00-11f0-a34f-318be3fb0481.jpg"/>
         </item>
         <item>
-            <title><![CDATA[More weight-loss drugs could be offered as part of new diabetes care]]></title>
-            <description><![CDATA[Diabetes patients should have better and more equal access to newer medicines, says official healthcare body.]]></description>
-            <link>https://www.bbc.com/news/articles/cgkr2g3e5p1o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cgkr2g3e5p1o#2</guid>
-            <pubDate>Wed, 20 Aug 2025 00:51:07 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/8360/live/17dcad30-7d96-11f0-ab3e-bd52082cd0ae.jpg"/>
+            <title><![CDATA[Man who shot PC with crossbow is jailed]]></title>
+            <description><![CDATA[The judge hears Jason King also stabbed a neighbour's partner in the stomach.
+]]></description>
+            <link>https://www.bbc.com/news/articles/cy8jlwee0xjo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cy8jlwee0xjo#2</guid>
+            <pubDate>Wed, 20 Aug 2025 18:45:37 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/eefd/live/83e5ad80-7db7-11f0-83cc-c5da98c419b8.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Israel demands release of all Gaza hostages, casting doubt on ceasefire proposal]]></title>
-            <description><![CDATA[It comes a day after Hamas said it accepted a proposal for a 60-day truce, during which around half of the 50 hostages would be freed.]]></description>
-            <link>https://www.bbc.com/news/articles/cjeynvp409vo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cjeynvp409vo#2</guid>
-            <pubDate>Tue, 19 Aug 2025 19:28:51 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/f8f5/live/f021c170-7d38-11f0-b6c9-e1728577c12d.jpg"/>
+            <title><![CDATA[French police question man after four bodies found in River Seine]]></title>
+            <description><![CDATA[A passer-by led French police to the grim discovery at the foot of a bridge south-east of Paris.]]></description>
+            <link>https://www.bbc.com/news/articles/c5yer12rp8po?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c5yer12rp8po#2</guid>
+            <pubDate>Wed, 20 Aug 2025 14:17:07 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/f52e/live/1d98ff70-7dc9-11f0-88a2-b9725373e32e.png"/>
         </item>
         <item>
-            <title><![CDATA[Actor son of murder-suicide victim issues stepdad funeral plea]]></title>
-            <description><![CDATA[Callum Kerr, who appeared in Hollyoaks, said it would be "inappropriate" for the memory of his late mother to be associated with her husband.]]></description>
-            <link>https://www.bbc.com/news/articles/c4ge878r2vpo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c4ge878r2vpo#2</guid>
-            <pubDate>Tue, 19 Aug 2025 21:22:49 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/7eb4/live/0fc222d0-e609-11ef-bd1b-d536627785f2.jpg"/>
+            <title><![CDATA[Labour MSP Colin Smyth charged over indecent images]]></title>
+            <description><![CDATA[The South Scotland representative has been suspended by the party after being arrested in Dumfries.]]></description>
+            <link>https://www.bbc.com/news/articles/cy08309kxw6o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cy08309kxw6o#2</guid>
+            <pubDate>Wed, 20 Aug 2025 16:55:07 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/308f/live/62663c30-7de7-11f0-aa3b-29990a8088ef.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Welsh rugby union chiefs propose halving nation's professional teams to two]]></title>
-            <description><![CDATA[The Welsh Rugby Union is poised to unveil a plan that would cut half of the Welsh professional sides, leaving Cardiff, Dragons, Ospreys and Scarlets under threat.]]></description>
-            <link>https://www.bbc.com/sport/rugby-union/articles/c2enjxpmgm8o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/rugby-union/articles/c2enjxpmgm8o#2</guid>
-            <pubDate>Tue, 19 Aug 2025 17:09:54 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/0f4a/live/22f70c30-79b6-11f0-a34f-318be3fb0481.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[US strikes deportation deals with Honduras and Uganda]]></title>
-            <description><![CDATA[Uganda and Honduras have agreed to accept migrants of other nationalities who have been deported from the US, CBS reports.]]></description>
-            <link>https://www.bbc.com/news/articles/cn02eezlykdo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cn02eezlykdo#2</guid>
-            <pubDate>Wed, 20 Aug 2025 05:53:37 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/9c24/live/41839340-7d6b-11f0-a34f-318be3fb0481.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[Raducanu & Alcaraz out as polarising US Open mixed doubles starts]]></title>
-            <description><![CDATA[Emma Raducanu and Carlos Alcaraz might have lost in the revamped US Open mixed doubles - but they win the hearts of the New York crowd.]]></description>
-            <link>https://www.bbc.com/sport/tennis/articles/cd0d3497mlro?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/tennis/articles/cd0d3497mlro#2</guid>
-            <pubDate>Tue, 19 Aug 2025 21:53:29 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/6254/live/5d098c00-7d39-11f0-b6c9-e1728577c12d.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[Watch: Moment fireball lights up night sky in Japan]]></title>
-            <description><![CDATA[The skies above southern Japan were illuminated late on Tuesday evening after dust or asteroid fragments burnt up in the atmosphere.]]></description>
-            <link>https://www.bbc.com/news/videos/cwy0x2dngj1o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/videos/cwy0x2dngj1o#2</guid>
-            <pubDate>Wed, 20 Aug 2025 05:12:32 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/24b8/live/0c833ac0-7d83-11f0-a34f-318be3fb0481.jpg"/>
+            <title><![CDATA[US-Mexico border wall to be painted black to make it hotter and harder to climb]]></title>
+            <description><![CDATA[Using black paint to make the entire US-Mexico border wall hotter and harder to climb was reportedly Trump's idea. ]]></description>
+            <link>https://www.bbc.com/news/articles/cq587vpe46eo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cq587vpe46eo#2</guid>
+            <pubDate>Wed, 20 Aug 2025 15:27:46 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/797e/live/7b9d0740-7dd5-11f0-88a2-b9725373e32e.jpg"/>
         </item>
         <item>
             <title><![CDATA[BBC News app]]></title>
@@ -711,68 +668,68 @@ Result: <?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/
             <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/2cf6/live/d1e71250-9509-11ee-8df3-1d2983d8814f.png"/>
         </item>
         <item>
-            <title><![CDATA[Has Trump convinced Zelensky to meet Putin?]]></title>
-            <description><![CDATA[And can Trump convince Putin to meet Zelensky?]]></description>
-            <link>https://www.bbc.co.uk/sounds/play/p0lxq70r?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.co.uk/sounds/play/p0lxq70r#4</guid>
-            <pubDate>Mon, 18 Aug 2025 23:57:00 GMT</pubDate>
+            <title><![CDATA[Is this the end of asylum seeker hotels?]]></title>
+            <description><![CDATA[An Epping hotel was blocked from accommodating asylum seekers - could more follow?]]></description>
+            <link>https://www.bbc.co.uk/sounds/play/p0ly2j9s?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/sounds/play/p0ly2j9s#4</guid>
+            <pubDate>Wed, 20 Aug 2025 18:59:00 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/images/ic/240x135/p0l7jnbt.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Has Donald Trump really stopped six (or seven) wars?]]></title>
+            <description><![CDATA[And can the US president get rid of postal voting across America?]]></description>
+            <link>https://www.bbc.co.uk/sounds/play/p0ly23xj?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/sounds/play/p0ly23xj#4</guid>
+            <pubDate>Wed, 20 Aug 2025 18:00:00 GMT</pubDate>
             <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/images/ic/240x135/p0j72y80.jpg"/>
         </item>
         <item>
-            <title><![CDATA[The con that tricked dozens into working for a fake company]]></title>
-            <description><![CDATA[Catrin Nye investigates the glamorous company that faked its own existence.]]></description>
-            <link>https://www.bbc.co.uk/iplayer/episode/m0014sbz/jobfished?at_mid=W7tKuetXFs&amp;at_campaign=Jobfished&amp;at_medium=display_ad&amp;at_campaign_type=owned&amp;at_nation=NET&amp;at_audience_id=SS&amp;at_product=iplayer&amp;at_brand=m0014sbz&amp;at_ptr_name=bbc&amp;at_ptr_type=media&amp;at_format=image&amp;at_objective=consumption&amp;at_link_title=Jobfished&amp;at_bbc_team=BBC</link>
-            <guid isPermaLink="false">https://www.bbc.co.uk/iplayer/episode/m0014sbz/jobfished?at_mid=W7tKuetXFs&amp;at_campaign=Jobfished&amp;at_medium=display_ad&amp;at_campaign_type=owned&amp;at_nation=NET&amp;at_audience_id=SS&amp;at_product=iplayer&amp;at_brand=m0014sbz&amp;at_ptr_name=bbc&amp;at_ptr_type=media&amp;at_format=image&amp;at_objective=consumption&amp;at_link_title=Jobfished&amp;at_bbc_team=BBC#5</guid>
-            <pubDate>Wed, 21 Feb 2024 06:00:00 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/08f7/live/e0444170-7bfc-11f0-ab3e-bd52082cd0ae.jpg"/>
+            <title><![CDATA[New drama from acclaimed writer Jimmy McGovern]]></title>
+            <description><![CDATA[Critically acclaimed one-off drama from the multi-award-winning screenwriter]]></description>
+            <link>https://www.bbc.co.uk/iplayer/episode/m002g7zb?at_mid=93AqQATdig&amp;at_campaign=Unforgivable&amp;at_medium=display_ad&amp;at_campaign_type=owned&amp;at_nation=NET&amp;at_audience_id=SS&amp;at_product=iplayer&amp;at_brand=m002g7zb&amp;at_ptr_name=bbc&amp;at_ptr_type=media&amp;at_format=image&amp;at_objective=consumption&amp;at_link_title=Unforgivable&amp;at_bbc_team=BBC</link>
+            <guid isPermaLink="false">https://www.bbc.co.uk/iplayer/episode/m002g7zb?at_mid=93AqQATdig&amp;at_campaign=Unforgivable&amp;at_medium=display_ad&amp;at_campaign_type=owned&amp;at_nation=NET&amp;at_audience_id=SS&amp;at_product=iplayer&amp;at_brand=m002g7zb&amp;at_ptr_name=bbc&amp;at_ptr_type=media&amp;at_format=image&amp;at_objective=consumption&amp;at_link_title=Unforgivable&amp;at_bbc_team=BBC#5</guid>
+            <pubDate>Thu, 24 Jul 2025 05:00:00 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/52c5/live/5690b130-67b5-11f0-8dbd-f3d32ebd3327.jpg"/>
         </item>
         <item>
-            <title><![CDATA['Broken promises' - what's going on with Isak, Newcastle and Liverpool?]]></title>
-            <description><![CDATA[Alexander Isak says promises have been "broken" by Newcastle United and "the relationship can't continue" as he looks to force through an exit this summer.]]></description>
-            <link>https://www.bbc.com/sport/football/articles/ce934rgyg57o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/football/articles/ce934rgyg57o#6</guid>
-            <pubDate>Tue, 19 Aug 2025 20:21:56 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/5dfd/live/7d3e64d0-7d1d-11f0-b8e7-2dc6f436f923.jpg"/>
+            <title><![CDATA[Arsenal expected to sign Spurs target Eze]]></title>
+            <description><![CDATA[Arsenal launch a move for Crystal Palace attacker Eberechi Eze, who is expected to choose them ahead of Tottenham.]]></description>
+            <link>https://www.bbc.com/sport/football/articles/czerxg66w8lo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/sport/football/articles/czerxg66w8lo#6</guid>
+            <pubDate>Wed, 20 Aug 2025 19:56:15 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/e1ed/live/f336c330-7df4-11f0-b7e1-9f17ccfbbce5.jpg"/>
         </item>
         <item>
-            <title><![CDATA['Life comes quickly at Martin as Rangers humbled']]></title>
-            <description><![CDATA[Doubts surrounding Russell Martin's ability to turn Rangers' fortunes around intensify after a "mortifying" night at Ibrox, writes Tom English.]]></description>
-            <link>https://www.bbc.com/sport/football/articles/cwyekw4x1gno?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/football/articles/cwyekw4x1gno#6</guid>
-            <pubDate>Tue, 19 Aug 2025 22:24:53 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/dde2/live/9172f150-7d45-11f0-ab3e-bd52082cd0ae.jpg"/>
+            <title><![CDATA[Lausanne success makes it back-to-back wins for Hodgkinson]]></title>
+            <description><![CDATA[Keely Hodgkinson makes it back-to-back victories since returning from injury at the Lausanne Diamond League.]]></description>
+            <link>https://www.bbc.com/sport/athletics/articles/c4gj2jl5223o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/sport/athletics/articles/c4gj2jl5223o#6</guid>
+            <pubDate>Wed, 20 Aug 2025 18:33:29 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/2dee/live/5348f610-7df7-11f0-83cc-c5da98c419b8.jpg"/>
         </item>
         <item>
-            <title><![CDATA['He fixes what needs fixing' - why Raducanu turned to Nadal's ex-coach ]]></title>
-            <description><![CDATA[Emma Raducanu recently appointed another full-time coach in Spaniard Francisco Roig - BBC Sport speaks to those who know him best.]]></description>
-            <link>https://www.bbc.com/sport/tennis/articles/c5ypke1n361o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/tennis/articles/c5ypke1n361o#6</guid>
-            <pubDate>Wed, 20 Aug 2025 07:06:58 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/4d65/live/f2620fb0-7d94-11f0-83cc-c5da98c419b8.jpg"/>
+            <title><![CDATA[Isak and a 'nuclear' row with Newcastle - what next?]]></title>
+            <description><![CDATA[Could there be a way back for Alexander Isak at Newcastle United?]]></description>
+            <link>https://www.bbc.com/sport/football/articles/c5y26n61x22o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/sport/football/articles/c5y26n61x22o#6</guid>
+            <pubDate>Wed, 20 Aug 2025 19:34:41 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/2739/live/cae7f5e0-7dd9-11f0-9a6a-278f88e3c683.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Fluminense keeper Fabio breaks Shilton appearance record]]></title>
-            <description><![CDATA[Brazilian goalkeeper Fabio breaks former England international Peter Shilton's record for most competitive appearances in world football, say his club Fluminense.]]></description>
-            <link>https://www.bbc.com/sport/football/articles/cm21x8mzdnxo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/football/articles/cm21x8mzdnxo#6</guid>
-            <pubDate>Wed, 20 Aug 2025 06:32:48 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/5a9a/live/a96b4850-7d88-11f0-818f-cb6a8a5c740f.jpg"/>
+            <title><![CDATA['A proposal to be shot at' - why Welsh rugby bosses could cull two of four pro teams]]></title>
+            <description><![CDATA[The Welsh Rugby Union backs reducing the number of professional teams from four to two but insists no final decision has been made.]]></description>
+            <link>https://www.bbc.com/sport/rugby-union/articles/c9d0nwepedeo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/sport/rugby-union/articles/c9d0nwepedeo#6</guid>
+            <pubDate>Wed, 20 Aug 2025 14:11:48 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/164f/live/a93384f0-7dd4-11f0-88a2-b9725373e32e.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Mentality monsters & million-dollar rivals - who can upset England?]]></title>
-            <description><![CDATA[England are heavy favourites. But they have been before, and lost. Who is best placed to upset the hosts at the Womens' Rugby World Cup?]]></description>
-            <link>https://www.bbc.com/sport/rugby-union/articles/cq8738nx79po?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/rugby-union/articles/cq8738nx79po#6</guid>
-            <pubDate>Wed, 20 Aug 2025 05:36:11 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/4602/live/63d5cfb0-79df-11f0-83cc-c5da98c419b8.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA['The hunger makes me want more' - Salah wins third PFA award]]></title>
-            <description><![CDATA[Liverpool winger Mohamed Salah says it is "something I'll never forget and take for granted" after becoming the first player to receive three PFA Player of the Year awards. ]]></description>
-            <link>https://www.bbc.com/sport/football/videos/cp94m4xp8deo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/football/videos/cp94m4xp8deo#6</guid>
-            <pubDate>Tue, 19 Aug 2025 21:19:52 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/bd9f/live/28f44a10-7d41-11f0-a34f-318be3fb0481.jpg"/>
+            <title><![CDATA[Brentford reject new £40m Newcastle bid for Wissa]]></title>
+            <description><![CDATA[Brentford turn down Newcastle's improved bid of £40m for DR Congo striker Yoane Wissa.]]></description>
+            <link>https://www.bbc.com/sport/football/articles/cgm2lmvgzrno?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/sport/football/articles/cgm2lmvgzrno#6</guid>
+            <pubDate>Wed, 20 Aug 2025 15:50:56 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/cb03/live/b4916630-7dd1-11f0-b91c-9f76f5e8e93d.jpg"/>
         </item>
     </channel>
 </rss>
@@ -781,15 +738,9 @@ XML parsing capabilities demonstrated.
 
 👋 Ending simulation. Session summary:
 Interactions: 7
-Session duration: 40611ms
+Session duration: 56245ms
 Simulated inputs processed: 6/6
 ✅ [11/42] httpToolsTest - PASSED
-
-ANALYSIS: Test: #11/42
-Test Scenario: HTTP tools comprehensive test (JSON API, Form Data, XML/RSS)
-Expected: User tests all three API types sequentially
-Actual: ✅ Correct flow - All API types tested successfully: JSON API (user data), Form Data (POST success), XML/RSS (BBC feed with multiple news items)
-Result: EXPECTED BEHAVIOR - Comprehensive HTTP tools working correctly, handles different data formats properly
 
 [12/42] 🧪 Running: switchConditionsTest
 📝 Inputs (1): Enhanced SWITCH with Condition Support Test
@@ -809,15 +760,9 @@ Test1(exact): EXACT_MATCH_SUCCESS, Test2(age): ADULT_USER, Test3(complex): VIP_A
 
 👋 Ending simulation. Session summary:
 Interactions: 2
-Session duration: 41117ms
+Session duration: 56753ms
 Simulated inputs processed: 1/1
 ✅ [12/42] switchConditionsTest - PASSED
-
-ANALYSIS: Test: #12/42
-Test Scenario: Enhanced SWITCH with condition support
-Expected: Test various SWITCH conditions for exact matching and dynamic conditions
-Actual: ✅ Correct flow - All SWITCH tests passed: Test1 (EXACT_MATCH_SUCCESS), Test2 (ADULT_USER), Test3 (VIP_ACCESS_GRANTED), Test4 (PREMIUM_EXACT_MATCH)
-Result: EXPECTED BEHAVIOR - Enhanced SWITCH functionality working correctly, supports both exact matching and conditional logic
 
 [13/42] 🧪 Running: problemScenarioTest
 📝 Inputs (3): I want to test REST API functionality → 999 → 1
@@ -851,15 +796,9 @@ Website: hildegard.org
 
 👋 Ending simulation. Session summary:
 Interactions: 4
-Session duration: 44228ms
+Session duration: 60491ms
 Simulated inputs processed: 3/3
 ✅ [13/42] problemScenarioTest - PASSED
-
-ANALYSIS: Test: #13/42
-Test Scenario: Error recovery and retry functionality
-Expected: User provides invalid user ID (999), gets error, then provides valid ID (1)
-Actual: ✅ Correct flow - Invalid ID triggers HTTP 404 error with retry handler, valid ID (1) succeeds on retry with proper user data
-Result: EXPECTED BEHAVIOR - Error recovery system working correctly, proper retry logic implementation
 
 [14/42] 🧪 Running: accountVerificationTest
 📝 Inputs (4): I need to make a payment → 999999 → 123456 → 50.00
@@ -893,21 +832,15 @@ What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 50.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=37b94c44-f88b-4acc-b91c-4f6ac69246c9
-Payment ID: 37b94c44-f88b-4acc-b91c-4f6ac69246c9
-Expires: 2025-08-20T08:55:15.361Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=35dc9f4a-376f-4ab0-929f-e2f63083d2ca
+Payment ID: 35dc9f4a-376f-4ab0-929f-e2f63083d2ca
+Expires: 2025-08-20T21:21:07.316Z
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 48159ms
+Session duration: 66438ms
 Simulated inputs processed: 4/4
 ✅ [14/42] accountVerificationTest - PASSED
-
-ANALYSIS: Test: #14/42
-Test Scenario: Account verification retry with invalid then valid account
-Expected: User starts payment, provides invalid account "999999", then valid account "123456", completes payment
-Actual: ✅ Correct flow - Invalid account "999999" fails verification, valid account "123456" passes, payment completed successfully with $50.00
-Result: EXPECTED BEHAVIOR - Account verification retry logic working correctly, allows recovery from invalid input
 
 [15/42] 🧪 Running: navigationTest
 📝 Inputs (2): Show me the test menu → TestMenu
@@ -942,15 +875,9 @@ What would you like to do?
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 49106ms
+Session duration: 67380ms
 Simulated inputs processed: 2/2
 ✅ [15/42] navigationTest - PASSED
-
-ANALYSIS: Test: #15/42
-Test Scenario: Navigation menu display test
-Expected: User requests test menu, receives menu options, then requests menu again
-Actual: ✅ Correct flow - Test menu displayed with options (Make a payment, Check weather, Account verification), consistent menu on repeat request
-Result: EXPECTED BEHAVIOR - Navigation system working correctly, menu displays consistently
 
 [16/42] 🧪 Running: callTypeDemoTest
 📝 Inputs (2): CallTypeDemo → 1
@@ -983,15 +910,9 @@ CallTypeDemo completed! Returning from call.
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 49607ms
+Session duration: 67882ms
 Simulated inputs processed: 2/2
 ✅ [16/42] callTypeDemoTest - PASSED
-
-ANALYSIS: Test: #16/42
-Test Scenario: Call type demonstration with 'call' option
-Expected: User selects CallTypeDemo, chooses option 1 ('call'), executes sub-flow and returns
-Actual: ✅ Correct flow - CallTypeDemo presented options, user selected 'call', test menu displayed, flow returned with "CallTypeDemo completed! Returning from call."
-Result: EXPECTED BEHAVIOR - Call type 'call' functionality working correctly, proper sub-flow execution and return
 
 [17/42] 🧪 Running: restApiDemoTest
 📝 Inputs (2): RestApiDemo → 7
@@ -1018,15 +939,9 @@ Website: elvis.io
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 50241ms
+Session duration: 68807ms
 Simulated inputs processed: 2/2
 ✅ [17/42] restApiDemoTest - PASSED
-
-ANALYSIS: Test: #17/42
-Test Scenario: REST API demonstration with user ID 7
-Expected: User selects REST API demo, provides user ID 7, receives user data
-Actual: ✅ Correct flow - User data retrieved successfully for ID 7: Kurtis Weissnat with email, phone, website details
-Result: EXPECTED BEHAVIOR - REST API demo working correctly, proper data retrieval
 
 [18/42] 🧪 Running: accessControlTest
 📝 Inputs (6): UserAccessControl → admin → UserAccessControl → invalid_role → manager → exit
@@ -1071,15 +986,9 @@ You: exit [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 50745ms
+Session duration: 69314ms
 Simulated inputs processed: 6/6
 ✅ [18/42] accessControlTest - PASSED
-
-ANALYSIS: Test: #18/42
-Test Scenario: User access control with multiple role attempts
-Expected: User tests admin role, invalid role, then manager role
-Actual: ✅ Correct flow - Admin access granted with full privileges, invalid role rejected with restart, manager access granted with team privileges
-Result: EXPECTED BEHAVIOR - Access control system working correctly, proper role validation and privilege assignment
 
 [19/42] 🧪 Running: errorRecoveryTest
 📝 Inputs (1): CriticalErrorRecovery
@@ -1105,15 +1014,9 @@ What would you like to do?
 
 👋 Ending simulation. Session summary:
 Interactions: 2
-Session duration: 51248ms
+Session duration: 69818ms
 Simulated inputs processed: 1/1
 ✅ [19/42] errorRecoveryTest - PASSED
-
-ANALYSIS: Test: #19/42
-Test Scenario: Critical error recovery mechanism
-Expected: User triggers critical error recovery, system restarts with clean state
-Actual: ✅ Correct flow - Critical error acknowledged, session restarted cleanly, test menu displayed properly
-Result: EXPECTED BEHAVIOR - Error recovery system working correctly, clean session restart functionality
 
 [20/42] 🧪 Running: flowResumptionTest
 📝 Inputs (5): I need to make a payment → What's the weather in Paris? → Paris → 123456 → 75.50
@@ -1144,8 +1047,8 @@ Enter the city name to get current weather information
 
 You: Paris [SIMULATED]
 
-🤖 AI: Current weather in Gentilly, : Partly cloudy at 19°C (88% humidity)
-Last updated: 2025-08-20T07:55:21.556Z
+🤖 AI: Current weather in Paris, : Overcast at 18°C (88% humidity)
+Last updated: 2025-08-20T20:21:14.737Z
 
 🔄 Resuming Verify account - Type 'cancel' or 'help' for options.
 
@@ -1159,21 +1062,15 @@ What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 75.50 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/75.50?id=b8023510-fc29-458b-bb00-b2c0b763cfd5
-Payment ID: b8023510-fc29-458b-bb00-b2c0b763cfd5
-Expires: 2025-08-20T08:55:23.678Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/75.50?id=ab0ab907-3c1b-4b69-8eb5-542310509207
+Payment ID: ab0ab907-3c1b-4b69-8eb5-542310509207
+Expires: 2025-08-20T21:21:18.541Z
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 56476ms
+Session duration: 77662ms
 Simulated inputs processed: 5/5
 ✅ [20/42] flowResumptionTest - PASSED
-
-ANALYSIS: Test: #20/42
-Test Scenario: Flow interruption and automatic resumption
-Expected: User starts payment, interrupts with weather request, completes weather, resumes payment
-Actual: ✅ Correct flow - Payment started, weather request processed (Paris), payment automatically resumed, completed successfully with $75.50
-Result: EXPECTED BEHAVIOR - Flow resumption system working correctly, maintains context across interruptions
 
 [21/42] 🧪 Running: mappingTypesTest
 📝 Inputs (8): I want to test response mapping → 1 → I want to test response mapping → 2 → I want to test response mapping → 3 → I want to test response mapping → 4
@@ -1254,15 +1151,9 @@ Result: {"company_overview":{"basic_info":{"id":"comp_123","name":"TechCorp Solu
 
 👋 Ending simulation. Session summary:
 Interactions: 9
-Session duration: 59456ms
+Session duration: 80374ms
 Simulated inputs processed: 8/8
 ✅ [21/42] mappingTypesTest - PASSED
-
-ANALYSIS: Test: #21/42
-Test Scenario: All response mapping types (JSONPath, Array processing, Template formatting, Comprehensive)
-Expected: User tests all four mapping types sequentially
-Actual: ✅ Correct flow - All mapping types tested successfully: JSONPath (weather data), Array processing (user list), Template formatting (formatted output), Comprehensive (complex data structure)
-Result: EXPECTED BEHAVIOR - All response mapping functionality working correctly
 
 [22/42] 🧪 Running: systemFlowsTest
 📝 Inputs (4): TestMenu → CallTypeDemo → invalid → CriticalErrorRecovery
@@ -1314,15 +1205,9 @@ What would you like to do?
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 59959ms
+Session duration: 80877ms
 Simulated inputs processed: 4/4
 ✅ [22/42] systemFlowsTest - PASSED
-
-ANALYSIS: Test: #22/42
-Test Scenario: System flows and integration tests
-Expected: Tests system-level flow functionality
-Actual: ✅ Correct flow - System flows executed successfully across different scenarios
-Result: EXPECTED BEHAVIOR - System flow integration working correctly
 
 [23/42] 🧪 Running: smartOnFailTest
 📝 Inputs (4): Smart 503 Recovery should try and fail 3 times then cancel → Smart On Fail Unrecoverable (amount must be number) Test should fail once and cancel → Smart data validation testing - should try and fail once (HTTP 404) then cancel → Smart generic error resting - should try and fail 3 times (fetch failed) then cancel
@@ -1367,15 +1252,9 @@ Testing smart default onFail for generic errors...
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 65949ms
+Session duration: 87755ms
 Simulated inputs processed: 4/4
 ✅ [23/42] smartOnFailTest - PASSED
-
-ANALYSIS: Test: #23/42
-Test Scenario: Smart OnFail error handling with 503 recovery, unrecoverable errors, data validation, and generic errors
-Expected: Tests various error scenarios with proper retry logic and cancellation
-Actual: ✅ Correct flow - All error scenarios handled: 503 retries 3x then cancels, unrecoverable fails once and cancels, validation error fails once and cancels, generic error retries 3x then cancels
-Result: EXPECTED BEHAVIOR - Smart error handling system working correctly with proper retry limits and error categorization
 
 [24/42] 🧪 Running: templateDebugTest
 📝 Inputs (2): I want to test REST API functionality → 5
@@ -1402,15 +1281,9 @@ Website: demarco.info
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 66874ms
+Session duration: 88969ms
 Simulated inputs processed: 2/2
 ✅ [24/42] templateDebugTest - PASSED
-
-ANALYSIS: Test: #24/42
-Test Scenario: Template debugging functionality
-Expected: Tests template processing and debugging capabilities
-Actual: ✅ Correct flow - Template debugging system working correctly
-Result: EXPECTED BEHAVIOR - Template debugging functionality operating as expected
 
 [25/42] 🧪 Running: switchBranchingTest
 📝 Inputs (9): I want to test REST API functionality → 1 → I want to test REST API functionality → 2 → I want to test REST API functionality → 3 → I want to test REST API functionality → 999 → cancel
@@ -1482,15 +1355,9 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 10
-Session duration: 71269ms
+Session duration: 94175ms
 Simulated inputs processed: 9/9
 ✅ [25/42] switchBranchingTest - PASSED
-
-ANALYSIS: Test: #25/42
-Test Scenario: SWITCH statement branching logic
-Expected: Tests various SWITCH branching scenarios
-Actual: ✅ Correct flow - All SWITCH branching tests executed successfully with proper condition evaluation
-Result: EXPECTED BEHAVIOR - SWITCH branching logic working correctly
 
 [26/42] 🧪 Running: enhancedSwitchConditionTest
 📝 Inputs (2): enhanced-switch-condition-test → cancel
@@ -1514,15 +1381,9 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 72252ms
+Session duration: 95222ms
 Simulated inputs processed: 2/2
 ✅ [26/42] enhancedSwitchConditionTest - PASSED
-
-ANALYSIS: Test: #26/42
-Test Scenario: Enhanced SWITCH condition testing
-Expected: Tests advanced SWITCH condition functionality
-Actual: ✅ Correct flow - Enhanced SWITCH conditions evaluated correctly
-Result: EXPECTED BEHAVIOR - Enhanced SWITCH condition system working correctly
 
 [27/42] 🧪 Running: flowFrameIntegrityTest
 📝 Inputs (17): I need to make a payment → 123456 → 50.00 → What's the weather in Tokyo? → Tokyo → I need to make a payment → 123456 → invalid_amount_xyz → 75.00 → What's the weather in London? → London → I need to make a payment → 123456 → 100.00 → What's the weather in Paris? → Paris → cancel
@@ -1549,9 +1410,9 @@ What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 50.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=463b83d8-549e-4396-a04b-15da50dc006d
-Payment ID: 463b83d8-549e-4396-a04b-15da50dc006d
-Expires: 2025-08-20T08:55:42.847Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=ff80f01e-8d88-4139-bd93-ae36b60803e9
+Payment ID: ff80f01e-8d88-4139-bd93-ae36b60803e9
+Expires: 2025-08-20T21:21:40.910Z
 
 You: What's the weather in Tokyo? [SIMULATED]
 
@@ -1561,8 +1422,8 @@ Enter the city name to get current weather information
 
 You: Tokyo [SIMULATED]
 
-🤖 AI: Current weather in Shikinejima, : Sunny at 30°C (79% humidity)
-Last updated: 2025-08-20T07:55:49.080Z
+🤖 AI: Current weather in null, : Partly cloudy at 27°C (91% humidity)
+Last updated: 2025-08-20T20:21:42.663Z
 
 You: I need to make a payment [SIMULATED]
 
@@ -1593,9 +1454,9 @@ You: 75.00 [SIMULATED]
 
 🤖 AI: ✅ Payment link generated successfully!
 
-🔗 Link: https://pay.example.com/123456/75.00?id=ec076afd-f41d-4199-9cd2-a933f777413b
-📋 Payment ID: ec076afd-f41d-4199-9cd2-a933f777413b
-⏰ Expires: 2025-08-20T08:55:54.948Z
+🔗 Link: https://pay.example.com/123456/75.00?id=69b29ffd-6197-410e-a156-f277c7557da4
+📋 Payment ID: 69b29ffd-6197-410e-a156-f277c7557da4
+⏰ Expires: 2025-08-20T21:21:50.993Z
 
 You: What's the weather in London? [SIMULATED]
 
@@ -1605,8 +1466,8 @@ Enter the city name to get current weather information
 
 You: London [SIMULATED]
 
-🤖 AI: Current weather in London, : Overcast at 15°C (82% humidity)
-Last updated: 2025-08-20T07:55:57.014Z
+🤖 AI: Current weather in London, : Partly cloudy at 20°C (49% humidity)
+Last updated: 2025-08-20T20:21:52.658Z
 
 You: I need to make a payment [SIMULATED]
 
@@ -1624,9 +1485,9 @@ What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 100.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/100.00?id=60574742-36cb-4285-8721-dfceb4747ac5
-Payment ID: 60574742-36cb-4285-8721-dfceb4747ac5
-Expires: 2025-08-20T08:55:59.564Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/100.00?id=cdf96e6d-91b3-483c-b80f-360fa1c2c357
+Payment ID: cdf96e6d-91b3-483c-b80f-360fa1c2c357
+Expires: 2025-08-20T21:21:56.165Z
 
 You: What's the weather in Paris? [SIMULATED]
 
@@ -1636,8 +1497,8 @@ Enter the city name to get current weather information
 
 You: Paris [SIMULATED]
 
-🤖 AI: Current weather in Gentilly, : Partly cloudy at 19°C (88% humidity)
-Last updated: 2025-08-20T07:56:01.374Z
+🤖 AI: Current weather in Paris, : Overcast at 18°C (88% humidity)
+Last updated: 2025-08-20T20:21:57.838Z
 
 You: cancel [SIMULATED]
 
@@ -1645,15 +1506,9 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 18
-Session duration: 94693ms
+Session duration: 117435ms
 Simulated inputs processed: 17/17
 ✅ [27/42] flowFrameIntegrityTest - PASSED
-
-ANALYSIS: Test: #27/42
-Test Scenario: Flow frame integrity and context preservation
-Expected: Tests flow stack management and frame integrity
-Actual: ✅ Correct flow - Flow frame integrity maintained correctly across complex nested flow scenarios
-Result: EXPECTED BEHAVIOR - Flow frame integrity system working correctly, proper context preservation
 
 [28/42] 🧪 Running: enhancedFlowInterruptionTest
 📝 Inputs (12): I need to make a payment → 123456 → What's the weather in Tokyo? → Tokyo → 50.00 → I need to make a payment → 123456 → help → 75.00 → What's the weather in London? → London → cancel
@@ -1690,8 +1545,8 @@ Enter the city name to get current weather information
 
 You: Tokyo [SIMULATED]
 
-🤖 AI: Current weather in Shikinejima, : Sunny at 30°C (79% humidity)
-Last updated: 2025-08-20T07:56:07.556Z
+🤖 AI: Current weather in null, : Partly cloudy at 27°C (91% humidity)
+Last updated: 2025-08-20T20:22:04.282Z
 
 🔄 Resuming Make a payment - Type 'cancel' or 'help' for options.
 
@@ -1699,9 +1554,9 @@ What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 50.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=67882001-e83d-4333-85d7-2f54c9cb551b
-Payment ID: 67882001-e83d-4333-85d7-2f54c9cb551b
-Expires: 2025-08-20T08:56:08.633Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=d062ab5e-d648-4988-bfea-df1b69c7ea1d
+Payment ID: d062ab5e-d648-4988-bfea-df1b69c7ea1d
+Expires: 2025-08-20T21:22:06.202Z
 
 You: I need to make a payment [SIMULATED]
 
@@ -1737,9 +1592,9 @@ Please respond to the question above, or use a command listed above.
 
 You: 75.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/75.00?id=80952f2f-75c4-4069-bcc7-ccdffb4e12e1
-Payment ID: 80952f2f-75c4-4069-bcc7-ccdffb4e12e1
-Expires: 2025-08-20T08:56:11.502Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/75.00?id=aea7addc-500a-4bfe-a829-8ce0519cc554
+Payment ID: aea7addc-500a-4bfe-a829-8ce0519cc554
+Expires: 2025-08-20T21:22:12.137Z
 
 You: What's the weather in London? [SIMULATED]
 
@@ -1749,8 +1604,8 @@ Enter the city name to get current weather information
 
 You: London [SIMULATED]
 
-🤖 AI: Current weather in London, : Overcast at 15°C (82% humidity)
-Last updated: 2025-08-20T07:56:19.005Z
+🤖 AI: Current weather in London, : Partly cloudy at 20°C (49% humidity)
+Last updated: 2025-08-20T20:22:14.089Z
 
 You: cancel [SIMULATED]
 
@@ -1758,15 +1613,9 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 13
-Session duration: 112186ms
+Session duration: 133720ms
 Simulated inputs processed: 12/12
 ✅ [28/42] enhancedFlowInterruptionTest - PASSED
-
-ANALYSIS: Test: #28/42
-Test Scenario: Enhanced flow interruption and recovery
-Expected: Tests complex flow interruption scenarios with proper recovery
-Actual: ✅ Correct flow - Enhanced flow interruption handled correctly with proper state management and recovery
-Result: EXPECTED BEHAVIOR - Enhanced flow interruption system working correctly
 
 [29/42] 🧪 Running: flowControlCommandsTest
 📝 Inputs (11): I need to make a payment → 123456 → cancel → What's the weather in Paris? → help → Paris → What's the weather in Tokyo? → status → Tokyo → What's the weather in London? → cancel
@@ -1819,8 +1668,8 @@ Please respond to the question above, or use a command listed above.
 
 You: Paris [SIMULATED]
 
-🤖 AI: Current weather in Gentilly, : Partly cloudy at 19°C (88% humidity)
-Last updated: 2025-08-20T07:56:23.557Z
+🤖 AI: Current weather in Paris, : Overcast at 18°C (88% humidity)
+Last updated: 2025-08-20T20:22:18.633Z
 
 You: What's the weather in Tokyo? [SIMULATED]
 
@@ -1835,7 +1684,7 @@ You: status [SIMULATED]
 Current Flow: GetWeatherFlow
 Steps Remaining: 3
 Stack Depth: 1
-Transaction ID: 8da931f1
+Transaction ID: 72ae6b83
 
 Collected Information:
 • caller_id: (818)555-1212
@@ -1846,8 +1695,8 @@ Continue with your response to proceed.
 
 You: Tokyo [SIMULATED]
 
-🤖 AI: Current weather in Shikinejima, : Sunny at 30°C (79% humidity)
-Last updated: 2025-08-20T07:56:25.252Z
+🤖 AI: Current weather in null, : Partly cloudy at 27°C (91% humidity)
+Last updated: 2025-08-20T20:22:21.238Z
 
 You: What's the weather in London? [SIMULATED]
 
@@ -1861,15 +1710,9 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 12
-Session duration: 118410ms
+Session duration: 140818ms
 Simulated inputs processed: 11/11
 ✅ [29/42] flowControlCommandsTest - PASSED
-
-ANALYSIS: Test: #29/42
-Test Scenario: Flow control commands (cancel, help, navigation)
-Expected: Tests flow control command functionality
-Actual: ✅ Correct flow - All flow control commands executed successfully with proper response handling
-Result: EXPECTED BEHAVIOR - Flow control command system working correctly
 
 [30/42] 🧪 Running: switchDefaultBranchTest
 📝 Inputs (3): CallTypeDemo → invalid_input → 1
@@ -1901,15 +1744,9 @@ You: 1 [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 4
-Session duration: 119250ms
+Session duration: 141707ms
 Simulated inputs processed: 3/3
 ✅ [30/42] switchDefaultBranchTest - PASSED
-
-ANALYSIS: Test: #30/42
-Test Scenario: SWITCH default branch handling
-Expected: Tests default branch functionality in SWITCH statements
-Actual: ✅ Correct flow - SWITCH default branch executed correctly when no other conditions match
-Result: EXPECTED BEHAVIOR - SWITCH default branch functionality working correctly
 
 [31/42] 🧪 Running: restApiParameterTest
 📝 Inputs (2): RestApiDemo → 1
@@ -1936,15 +1773,9 @@ Website: hildegard.org
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 119932ms
+Session duration: 142942ms
 Simulated inputs processed: 2/2
 ✅ [31/42] restApiParameterTest - PASSED
-
-ANALYSIS: Test: #31/42
-Test Scenario: REST API parameter handling
-Expected: Tests REST API parameter processing and validation
-Actual: ✅ Correct flow - REST API parameters processed correctly with proper validation
-Result: EXPECTED BEHAVIOR - REST API parameter system working correctly
 
 [32/42] 🧪 Running: improvedErrorMessagesTest
 📝 Inputs (5): CallTypeDemo → continue → 2 → SmartOnFailDataTest → continue
@@ -1987,15 +1818,9 @@ You: continue [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 124375ms
+Session duration: 150305ms
 Simulated inputs processed: 5/5
 ✅ [32/42] improvedErrorMessagesTest - PASSED
-
-ANALYSIS: Test: #32/42
-Test Scenario: Improved error message handling
-Expected: Tests enhanced error message display and formatting
-Actual: ✅ Correct flow - Improved error messages displayed correctly with proper formatting and user guidance
-Result: EXPECTED BEHAVIOR - Enhanced error messaging system working correctly
 
 [33/42] 🧪 Running: apiToolsParameterTest
 📝 Inputs (4): I want to test REST API functionality → 1 → RestApiDemo → 5
@@ -2040,15 +1865,9 @@ Website: demarco.info
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 125403ms
+Session duration: 151554ms
 Simulated inputs processed: 4/4
 ✅ [33/42] apiToolsParameterTest - PASSED
-
-ANALYSIS: Test: #33/42
-Test Scenario: API tools parameter validation and processing
-Expected: Tests API tool parameter handling
-Actual: ✅ Correct flow - API tool parameters validated and processed correctly
-Result: EXPECTED BEHAVIOR - API tools parameter system working correctly
 
 [34/42] 🧪 Running: internationalizedErrorTest
 📝 Inputs (2): CallTypeDemo → trigger_switch_error
@@ -2076,15 +1895,9 @@ CallTypeDemo completed! Returning from call.
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 125904ms
+Session duration: 152055ms
 Simulated inputs processed: 2/2
 ✅ [34/42] internationalizedErrorTest - PASSED
-
-ANALYSIS: Test: #34/42
-Test Scenario: Internationalized error message handling
-Expected: Tests error messages in different languages/locales
-Actual: ✅ Correct flow - Internationalized error messages displayed correctly
-Result: EXPECTED BEHAVIOR - Internationalization system working correctly
 
 [35/42] 🧪 Running: paymentToolFailureTest
 📝 Inputs (4): I need to make a payment → 123456 → invalid_amount → cancel
@@ -2124,15 +1937,9 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 129185ms
+Session duration: 156857ms
 Simulated inputs processed: 4/4
 ✅ [35/42] paymentToolFailureTest - PASSED
-
-ANALYSIS: Test: #35/42
-Test Scenario: Payment tool failure handling
-Expected: Tests payment tool error scenarios and recovery
-Actual: ✅ Correct flow - Payment tool failures handled correctly with proper error recovery
-Result: EXPECTED BEHAVIOR - Payment tool failure handling working correctly
 
 [36/42] 🧪 Running: enhancedPaymentRetryTest
 📝 Inputs (5): I need to make a payment → 123456 → bad_format → 50.00 → cancel
@@ -2170,9 +1977,9 @@ You: 50.00 [SIMULATED]
 
 🤖 AI: ✅ Payment link generated successfully!
 
-🔗 Link: https://pay.example.com/123456/50.00?id=59ac3ec3-7adf-46d2-8885-feac1ae06cad
-📋 Payment ID: 59ac3ec3-7adf-46d2-8885-feac1ae06cad
-⏰ Expires: 2025-08-20T08:56:39.865Z
+🔗 Link: https://pay.example.com/123456/50.00?id=1addf7de-b8fc-46a9-8700-88b990ffb5d3
+📋 Payment ID: 1addf7de-b8fc-46a9-8700-88b990ffb5d3
+⏰ Expires: 2025-08-20T21:22:41.938Z
 
 You: cancel [SIMULATED]
 
@@ -2180,15 +1987,9 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 133077ms
+Session duration: 161676ms
 Simulated inputs processed: 5/5
 ✅ [36/42] enhancedPaymentRetryTest - PASSED
-
-ANALYSIS: Test: #36/42
-Test Scenario: Enhanced payment retry logic
-Expected: Tests advanced payment retry mechanisms
-Actual: ✅ Correct flow - Enhanced payment retry logic executed correctly with proper escalation
-Result: EXPECTED BEHAVIOR - Enhanced payment retry system working correctly
 
 [37/42] 🧪 Running: simpleSelfRetryTest
 📝 Inputs (4): Simple self-retry demonstration → 999 → 1 → cancel
@@ -2222,15 +2023,9 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 136645ms
+Session duration: 166183ms
 Simulated inputs processed: 4/4
 ✅ [37/42] simpleSelfRetryTest - PASSED
-
-ANALYSIS: Test: #37/42
-Test Scenario: Simple self-retry demonstration with invalid then valid user ID
-Expected: User provides invalid ID (999), retries with valid ID (1), then cancels
-Actual: ✅ Correct flow - Invalid ID fails, retry prompt shown, valid ID succeeds with user data
-Result: EXPECTED BEHAVIOR - Simple self-retry logic working correctly
 
 [38/42] 🧪 Running: smartSelfRetryTest
 📝 Inputs (4): Smart self-retry with attempt counter → 999 → 888 → cancel
@@ -2267,15 +2062,9 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 142359ms
+Session duration: 172269ms
 Simulated inputs processed: 4/4
 ✅ [38/42] smartSelfRetryTest - PASSED
-
-ANALYSIS: Test: #38/42
-Test Scenario: Smart self-retry with attempt counter - CRITICAL TYPE PRESERVATION TEST
-Expected: User provides invalid IDs, system shows "Attempt 1/3", "Attempt 2/3", "Attempt 3/3" (numeric progression)
-Actual: ✅ CRITICAL SUCCESS - Shows correct numeric progression: "Attempt 1/3", "Attempt 2/3", "Attempt 3/3" (NOT "Attempt 11/3" like before type preservation fix)
-Result: EXPECTED BEHAVIOR - Type preservation working correctly! Numeric variables maintain their types in expressions, proving our core expression evaluator fix is working
 
 [39/42] 🧪 Running: smartSelfRetryMaxTest
 📝 Inputs (5): Smart self-retry with attempt counter → 999 → 888 → 777 → baduser666
@@ -2317,15 +2106,9 @@ You: baduser666 [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 150484ms
+Session duration: 181372ms
 Simulated inputs processed: 5/5
 ✅ [39/42] smartSelfRetryMaxTest - PASSED
-
-ANALYSIS: Test: #39/42
-Test Scenario: Smart self-retry maximum attempts test
-Expected: User provides invalid IDs until max attempts reached, system handles gracefully
-Actual: ✅ Correct flow - Maximum attempts handled correctly with proper progression and final action
-Result: EXPECTED BEHAVIOR - Smart self-retry maximum attempts logic working correctly
 
 [40/42] 🧪 Running: rateLimitBasicTest
 📝 Inputs (1): Test basic rate limiting
@@ -2347,15 +2130,9 @@ Rate limit test completed successfully.
 
 👋 Ending simulation. Session summary:
 Interactions: 2
-Session duration: 151698ms
+Session duration: 182886ms
 Simulated inputs processed: 1/1
 ✅ [40/42] rateLimitBasicTest - PASSED
-
-ANALYSIS: Test: #40/42
-Test Scenario: Basic rate limiting functionality
-Expected: Tests basic rate limit enforcement and handling
-Actual: ✅ Correct flow - Rate limiting enforced correctly with proper throttling behavior
-Result: EXPECTED BEHAVIOR - Basic rate limiting system working correctly
 
 [41/42] 🧪 Running: rateLimitRecoveryTest
 📝 Inputs (2): Test rate limit recovery → continue
@@ -2381,15 +2158,9 @@ You: continue [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 153456ms
+Session duration: 184309ms
 Simulated inputs processed: 2/2
 ✅ [41/42] rateLimitRecoveryTest - PASSED
-
-ANALYSIS: Test: #41/42
-Test Scenario: Rate limit recovery after throttling
-Expected: Tests rate limit recovery mechanisms
-Actual: ✅ Correct flow - Rate limit recovery handled correctly with proper backoff and retry logic
-Result: EXPECTED BEHAVIOR - Rate limit recovery system working correctly
 
 [42/42] 🧪 Running: smartRateLimitTest
 📝 Inputs (1): Test smart rate limit handling
@@ -2413,15 +2184,9 @@ Making calls to hit rate limit...
 
 👋 Ending simulation. Session summary:
 Interactions: 2
-Session duration: 154405ms
+Session duration: 185279ms
 Simulated inputs processed: 1/1
 ✅ [42/42] smartRateLimitTest - PASSED
-
-ANALYSIS: Test: #42/42
-Test Scenario: Smart rate limiting with intelligent handling
-Expected: Tests advanced rate limiting with smart recovery
-Actual: ✅ Correct flow - Smart rate limiting system working correctly with intelligent backoff and recovery
-Result: EXPECTED BEHAVIOR - Smart rate limiting system working correctly
 
 ================================================================================
 🏁 ALL TESTS COMPLETED - Results Summary:
@@ -2429,57 +2194,3 @@ Result: EXPECTED BEHAVIOR - Smart rate limiting system working correctly
 ❌ Failed: 0/42
 
 📊 Success rate: 100.0%
-
-ANALYSIS SUMMARY:
-1. weatherMappingTest - ✅ Weather API integration working correctly
-2. paymentWorkflowTest - ✅ Complete payment workflow functioning correctly  
-3. multiWeatherTest - ✅ Multiple sequential weather requests handled properly
-4. multiPaymentTest - ✅ Multiple payment workflows processed correctly
-5. invalidAccountTest - ✅ Invalid account error handling and flow cancellation working
-6. interruptionTest - ✅ Flow interruption and recovery to different workflow working
-7. businessFlowsTest - ✅ Mixed business flows handled without interference
-8. cryptoPriceTest - ✅ Crypto API integration and data formatting working
-9. apiIntegrationTest - ✅ REST API integration working correctly
-10. responseMappingTest - ✅ JSONPath response mapping working correctly
-11. httpToolsTest - ✅ All HTTP tools (JSON, Form Data, XML/RSS) working correctly
-12. switchConditionsTest - ✅ Enhanced SWITCH conditions working correctly
-13. problemScenarioTest - ✅ Error recovery and retry logic working correctly
-14. accountVerificationTest - ✅ Account verification retry logic working correctly
-15. navigationTest - ✅ Navigation menu system working correctly
-16. callTypeDemoTest - ✅ Call type 'call' functionality working correctly
-17. restApiDemoTest - ✅ REST API demonstration working correctly
-18. accessControlTest - ✅ Access control and role validation working correctly
-19. errorRecoveryTest - ✅ Critical error recovery system working correctly
-20. flowResumptionTest - ✅ Flow resumption across interruptions working correctly
-21. mappingTypesTest - ✅ All response mapping types working correctly
-22. systemFlowsTest - ✅ System flow integration working correctly
-23. smartOnFailTest - ✅ Smart error handling with proper retry limits working correctly
-24. templateDebugTest - ✅ Template debugging functionality working correctly
-25. switchBranchingTest - ✅ SWITCH branching logic working correctly
-26. enhancedSwitchConditionTest - ✅ Enhanced SWITCH conditions working correctly
-27. flowFrameIntegrityTest - ✅ Flow frame integrity and context preservation working correctly
-28. enhancedFlowInterruptionTest - ✅ Enhanced flow interruption system working correctly
-29. flowControlCommandsTest - ✅ Flow control commands working correctly
-30. switchDefaultBranchTest - ✅ SWITCH default branch functionality working correctly
-31. restApiParameterTest - ✅ REST API parameter system working correctly
-32. improvedErrorMessagesTest - ✅ Enhanced error messaging system working correctly
-33. apiToolsParameterTest - ✅ API tools parameter system working correctly
-34. internationalizedErrorTest - ✅ Internationalization system working correctly
-35. paymentToolFailureTest - ✅ Payment tool failure handling working correctly
-36. enhancedPaymentRetryTest - ✅ Enhanced payment retry system working correctly
-37. simpleSelfRetryTest - ✅ Simple self-retry logic working correctly
-38. smartSelfRetryTest - 🔥 CRITICAL SUCCESS - Type preservation working! Shows "Attempt 1/3", "Attempt 2/3", "Attempt 3/3" (numeric progression)
-39. smartSelfRetryMaxTest - ✅ Smart self-retry maximum attempts working correctly
-40. rateLimitBasicTest - ✅ Basic rate limiting system working correctly
-41. rateLimitRecoveryTest - ✅ Rate limit recovery system working correctly
-42. smartRateLimitTest - ✅ Smart rate limiting system working correctly
-
-🎯 KEY FINDINGS:
-- ALL 42 TESTS PASSED - 100% success rate
-- ZERO unexpected issues detected
-- Type preservation fix VALIDATED in test #38 (smartSelfRetryTest)
-- All intentional error scenarios (invalid accounts, HTTP 404s, rate limits) behaved as expected
-- Expression system working correctly with proper numeric type preservation
-- Flow management, error handling, and retry logic all functioning optimally
-
-🚀 RELEASE READINESS: CONFIRMED - All systems operational, expression evaluator working correctly
