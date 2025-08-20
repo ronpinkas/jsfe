@@ -7,7 +7,7 @@ import readline from "node:readline/promises";
 import winston from 'winston';
 
 const logger = winston.createLogger({
-  level: 'debug',  // Changed to debug to see HTTP requests
+  level: process.env.LOG_LEVEL || 'warn',  // Changed to debug to see HTTP requests
   format: winston.format.printf(({ level, message }) => {
     return `${level}: ${message}`;
   }),
@@ -246,13 +246,13 @@ const flowsMenu = [
             id: "branch_on_account_knowledge",
             type: "CASE",
             branches: {
-               "condition: {{know_acct_yes_or_no}} === '1' || {{know_acct_yes_or_no.trim().toLowerCase()}} === 'yes'": {
+               "condition: know_acct_yes_or_no === '1' || know_acct_yes_or_no.trim().toLowerCase() === 'yes'": {
                   id: "goto_acct_flow",
                   type: "FLOW",
                   value: "get-acct-number-and-generate-link",
                   mode: "call"
                },
-               "condition: {{know_acct_yes_or_no}} === '2' || {{know_acct_yes_or_no.trim().toLowerCase()}} === 'no'": {
+               "condition: know_acct_yes_or_no === '2' || know_acct_yes_or_no.trim().toLowerCase() === 'no'": {
                   id: "goto_cell_or_email_flow",
                   type: "FLOW",
                   value: "get-cell-or-email-and-generate-link",
@@ -284,8 +284,8 @@ const flowsMenu = [
          { 
             id: "retry_msg", 
             type: "SAY", 
-            value: "Oops, sorry, something went wrong - let's try again...",
-            value_es: "Ups, lo siento, algo salió mal - intentemos de nuevo..."
+            value: "Sorry, I did not understand that - let's try again...",
+            value_es: "Lo siento, no entendí eso - intentémoslo de nuevo..."
          },
          { id: "restart_payment", type: "FLOW", value: "start-payment", mode: "replace" }
       ]
@@ -298,32 +298,32 @@ const flowsMenu = [
       description: "Collect account number and generate payment link",
       steps: [
          {
-         id: "ask_acct_number",
-         type: "SAY-GET",
-         variable: "acct_number",
-         value: "Please say or enter your account number",
-         value_es: "Por favor diga o ingrese su número de cuenta"
+            id: "ask_acct_number",
+            type: "SAY-GET",
+            variable: "acct_number",
+            value: "Please say or enter your account number",
+            value_es: "Por favor diga o ingrese su número de cuenta"
          },
          {
-         id: "branch_on_account_number",
-         type: "CASE",
-         branches: {
-            "condition: validateDigits({{acct_number}}, {{global_acct_required_digits}}, {{global_acct_max_digits}})": {
-               id: "call_get_otp_link",
-               type: "CALL-TOOL",
-               tool: "get-otp-link",
-               variable: "otp_link_result",
-               parameters: {
-                  acct_number: "{{acct_number}}"
+            id: "branch_on_account_number",
+            type: "CASE",
+            branches: {
+               "condition: validateDigits(acct_number, global_acct_required_digits, global_acct_max_digits)": {
+                  id: "call_get_otp_link",
+                  type: "CALL-TOOL",
+                  tool: "get-otp-link",
+                  variable: "otp_link_result",
+                  parameters: {
+                     acct_number: "{{acct_number}}"
+                  }
+               },
+               "default": {
+                  id: "retry_acct_number_flow",
+                  type: "FLOW",
+                  value: "retry-get-acct-number-and-generate-link",
+                  mode: "replace"
                }
-            },
-            "default": {
-               id: "retry_acct_number_flow",
-               type: "FLOW",
-               value: "retry-get-acct-number-and-generate-link",
-               mode: "replace"
             }
-         }
          }
       ]
    },
@@ -337,8 +337,8 @@ const flowsMenu = [
          { 
             id: "retry_msg", 
             type: "SAY", 
-            value: "Oops, sorry, something went wrong - let's try again...",
-            value_es: "Ups, lo siento, algo salió mal - intentemos de nuevo..."
+            value: "Sorry, '{{acct_number}}' is not a valid account number - let's try again...",
+            value_es: "Lo siento, '{{acct_number}}' no es un número de cuenta válido - intentémoslo de nuevo..."
          },
          { id: "retry_flow", type: "FLOW", value: "get-acct-number-and-generate-link", mode: "replace" }
       ]
@@ -361,12 +361,12 @@ const flowsMenu = [
          id: "branch_on_cell_or_email",
          type: "CASE",
          branches: {
-            "condition:{{cell_or_email}} === '1' || ['cell', 'phone', 'mobile'].includes({{cell_or_email}}.trim().toLowerCase())": {
+            "condition: cell_or_email === '1' || ['cell', 'phone', 'mobile'].includes(cell_or_email.trim().toLowerCase())": {
                id: "goto_cell_flow",
                type: "FLOW",
                value: "get-cell-and-generate-link"
             },
-            "condition:{{cell_or_email}} === '2' || {{cell_or_email}} === 'email'": {
+            "condition: cell_or_email === '2' || cell_or_email === 'email'": {
                id: "goto_email_flow",
                type: "FLOW",
                value: "get-email-and-generate-link"
@@ -391,8 +391,8 @@ const flowsMenu = [
          { 
             id: "retry_msg", 
             type: "SAY", 
-            value: "Oops, sorry, something went wrong - let's try again...",
-            value_es: "Ups, lo siento, algo salió mal - intentemos de nuevo..."
+            value: "Sorry, I did not understand that - let's try again...",
+            value_es: "Lo siento, no entendí eso - intentémoslo de nuevo..."
          },
          { id: "retry_flow", type: "FLOW", value: "get-cell-or-email-and-generate-link", mode: "replace" }
       ]
@@ -408,7 +408,7 @@ const flowsMenu = [
             id: "check_caller_id_available",
             type: "CASE",
             branches: {
-               "condition: {{cargo.callerId}} && {{cargo.callerId.length}} >= 10": {
+               "condition: cargo.callerId && cargo.callerId.length >= 10": {
                   id: "goto_caller_id_flow",
                   type: "FLOW",
                   value: "get-cell-with-caller-id",
@@ -451,13 +451,13 @@ const flowsMenu = [
             id: "handle_caller_id_choice",
             type: "CASE",
             branches: {
-               "condition: {{use_caller_id}} === '1' || {{use_caller_id.trim().toLowerCase()}} === 'yes'": {
+               "condition: use_caller_id === '1' || use_caller_id.trim().toLowerCase() === 'yes'": {
                   id: "use_detected_number",
                   type: "SET",
                   variable: "cell_number",
                   value: "{{cargo.callerId}}"
                },
-               "condition: {{use_caller_id}} === '2' || {{use_caller_id.trim().toLowerCase()}} === 'no'": {
+               "condition: use_caller_id === '2' || use_caller_id.trim().toLowerCase() === 'no'": {
                   id: "goto_manual_entry",
                   type: "FLOW",
                   value: "get-cell-manual-entry",
@@ -500,7 +500,7 @@ const flowsMenu = [
             id: "validate_cell_number",
             type: "CASE",
             branches: {
-               "condition: validate_phone_format({{cell_number}})": {
+               "condition: validate_phone_format(cell_number)": {
                   id: "call_get_otp_link_cell",
                   type: "CALL-TOOL",
                   tool: "get-otp-link",
@@ -527,8 +527,8 @@ const flowsMenu = [
          { 
             id: "retry_msg", 
             type: "SAY", 
-            value: "Oops, sorry, something went wrong - let's try again...",
-            value_es: "Ups, lo siento, algo salió mal - intentemos de nuevo..."
+            value: "Sorry, I did not understand that - let's try again...",
+            value_es: "Lo siento, no entendí eso - intentémoslo de nuevo..."
          },
          { id: "retry_flow", type: "FLOW", value: "get-cell-with-caller-id", mode: "replace" }
       ]
@@ -543,8 +543,8 @@ const flowsMenu = [
          { 
             id: "retry_msg", 
             type: "SAY", 
-            value: "Oops, sorry, something went wrong - let's try again...",
-            value_es: "Ups, lo siento, algo salió mal - intentemos de nuevo..."
+            value: "Sorry, '{{cell_number}}' is not a valid cell number - let's try again...",
+            value_es: "Lo siento, '{{cell_number}}' no es un número de celular válido - intentémoslo de nuevo..."
          },
          { id: "retry_flow", type: "FLOW", value: "get-cell-and-generate-link", mode: "replace" }
       ]
@@ -567,7 +567,7 @@ const flowsMenu = [
          id: "branch_on_email",
          type: "CASE",
          branches: {
-            "condition:valid_email({{email}})": {
+            "condition: valid_email(email)": {
                id: "call_get_otp_link_email",
                type: "CALL-TOOL",
                tool: "get-otp-link",
@@ -594,8 +594,8 @@ const flowsMenu = [
          { 
             id: "retry_msg", 
             type: "SAY", 
-            value: "Oops, sorry, something went wrong - let's try again...",
-            value_es: "Ups, lo siento, algo salió mal - intentemos de nuevo..."
+            value: "Sorry, '{{email}}' is not a valid email - let's try again...",
+            value_es: "Lo siento, '{{email}}' no es un correo electrónico válido - intentémoslo de nuevo..."
          },
          { id: "retry_flow", type: "FLOW", value: "get-email-and-generate-link", mode: "replace" }
       ]
@@ -611,22 +611,39 @@ const flowsMenu = [
          id: "validate_otp_result",
          type: "CASE",
          branches: {
-            "condition:{{otp_link_result.ok}}": {
+            "condition: otp_link_result.ok": {
                id: "success_msg",
                type: "SAY",
-               value: "Payment link was sent to {{otp_link_result.api_response.DATA.TWILIOINFO.to}}",
-               value_es: "El enlace de pago fue enviado a {{otp_link_result.api_response.DATA.TWILIOINFO.to}}"
+               value: "Great! Payment link was sent to {{otp_link_result.api_response.DATA.TWILIOINFO.to}}",
+               value_es: "¡Genial! El enlace de pago fue enviado a {{otp_link_result.api_response.DATA.TWILIOINFO.to}}"
             },
             "default": {
                id: "retry_payment",
                type: "FLOW",
-               value: "retry-start-payment",
+               value: "payment-failed",
                mode: "replace"
             }
          }
          }
       ]
+   },
+
+   {
+      id: "payment-failed",
+      name: "PaymentFailed",
+      version: "1.0.0",
+      description: "Handle payment failure",
+      steps: [
+         {
+            id: "say_payment_failed",
+            type: "SAY",
+            value: "Sorry, the payment link could not be generated - Let's try again...",
+            value_es: "Lo siento, no se pudo generar el enlace de pago - intentémoslo de nuevo..."
+         },
+         { id: "retry_payment", type: "FLOW", value: "start-payment", mode: "replace" }
+      ]
    }
+
 ];
 
 /* ---------- Global Variables ---------- */
