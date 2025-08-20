@@ -5299,10 +5299,19 @@ function interpolateMessage(
   contextStack: ContextEntry[], 
   variables: Record<string, unknown> = {}, 
   engine: Engine
-): string {
-  logger.debug(`Interpolating message template: ${template} with variables: ${JSON.stringify(variables)}`);
-  if (!template) return template;
+): string {  
+  if (!template) {
+    logger.warn(`Empty template provided for interpolation`);
+    return template;
+  }
   
+  if( template.includes("{{") && template.includes("}}")) {
+    logger.debug(`Interpolating message template: ${template} with variables: ${JSON.stringify(variables)}`);
+  } else {
+    logger.debug(`No template placeholders found in: ${template}`);
+    return template; // No interpolation needed
+  }
+
   // For template interpolation, we should NOT apply security restrictions
   // Templates are developer-controlled, not user input
   const result = evaluateExpression(template, variables, contextStack, {
