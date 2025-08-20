@@ -1691,7 +1691,7 @@ const flowsMenu = [
         id: "set-api-config",
         type: "SET",
         variable: "api_base_url",
-        value: "https://pay.example.com"
+        value: "'https://pay.example.com'"
       },
       {
         id: "verify-account",
@@ -2664,7 +2664,7 @@ const flowsMenu = [
         id: "setup4",
         type: "SET",
         variable: "status",
-        value: "premium"
+        value: "'premium'"
       },
       
       // Test 1: Simple exact matching (existing functionality)
@@ -2677,19 +2677,19 @@ const flowsMenu = [
             id: "exact_match_result",
             type: "SET",
             variable: "test1_result",
-            value: "EXACT_MATCH_SUCCESS"
+            value: "'EXACT_MATCH_SUCCESS'"
           },
           "basic": {
             id: "basic_result", 
             type: "SET",
             variable: "test1_result",
-            value: "BASIC_USER"
+            value: "'BASIC_USER'"
           },
           "default": {
             id: "default_result",
             type: "SET", 
             variable: "test1_result",
-            value: "DEFAULT_CASE"
+            value: "'DEFAULT_CASE'"
           }
         }
       },
@@ -2699,23 +2699,23 @@ const flowsMenu = [
         id: "test_age_condition",
         type: "CASE",
         branches: {
-          "condition:{{user_age}} >= 21": {
+          "condition: user_age >= 21": {
             id: "adult_result",
             type: "SET",
-            variable: "test2_result", 
-            value: "ADULT_USER"
+            variable: "test2_result",
+            value: "'ADULT_USER'"
           },
-          "condition:{{user_age}} < 21": {
+          "condition: user_age < 21": {
             id: "minor_result",
             type: "SET",
             variable: "test2_result",
-            value: "MINOR_USER"
+            value: "'MINOR_USER'"
           },
           "default": {
             id: "unknown_age_result",
             type: "SET",
-            variable: "test2_result", 
-            value: "UNKNOWN_AGE"
+            variable: "test2_result",
+            value: "'UNKNOWN_AGE'"
           }
         }
       },
@@ -2725,29 +2725,35 @@ const flowsMenu = [
         id: "test_complex_condition",
         type: "CASE",
         branches: {
-          "condition:{{user_age}} >= 18 && {{user_verified}} && {{total_amount}} > 100": {
+          "condition: user_age >= 18 && user_verified && total_amount > 100": {
             id: "vip_result",
             type: "SET",
             variable: "test3_result",
-            value: "VIP_ACCESS_GRANTED"
+            value: "'VIP_ACCESS_GRANTED'"
           },
-          "condition:{{user_age}} >= 18 && {{user_verified}}": {
+          "condition: user_age >= 18 && user_verified": {
             id: "verified_result",
             type: "SET", 
             variable: "test3_result",
-            value: "VERIFIED_ACCESS"
+            value: "'VERIFIED_ACCESS'"
           },
-          "condition:{{user_age}} >= 18": {
+          "condition: user_age >= 18": {
             id: "basic_adult_result",
             type: "SET",
             variable: "test3_result",
-            value: "BASIC_ADULT_ACCESS"
+            value: "'VERIFIED_ACCESS'"
+          },
+          "condition: user_age >= 18": {
+            id: "basic_adult_result",
+            type: "SET",
+            variable: "test3_result",
+            value: "'BASIC_ADULT_ACCESS'"
           },
           "default": {
             id: "no_access_result",
             type: "SET",
             variable: "test3_result",
-            value: "NO_ACCESS"
+            value: "'NO_ACCESS'"
           }
         }
       },
@@ -2762,29 +2768,29 @@ const flowsMenu = [
             id: "premium_exact_result",
             type: "SET",
             variable: "test4_result",
-            value: "PREMIUM_EXACT_MATCH"
+            value: "'PREMIUM_EXACT_MATCH'"
           },
           "default": {
             id: "check_amount_and_verification",
             type: "CASE",
             branches: {
-              "condition:{{total_amount}} > 200": {
+              "condition: total_amount > 200": {
                 id: "high_value_result", 
                 type: "SET",
                 variable: "test4_result",
-                value: "HIGH_VALUE_USER"
+                value: "'HIGH_VALUE_USER'"
               },
-              "condition:{{user_verified}}": {
+              "condition: user_verified": {
                 id: "verified_fallback_result",
                 type: "SET",
                 variable: "test4_result", 
-                value: "VERIFIED_FALLBACK"
+                value: "'VERIFIED_FALLBACK'"
               },
               "default": {
                 id: "mixed_default_result",
                 type: "SET",
                 variable: "test4_result",
-                value: "MIXED_DEFAULT"
+                value: "'MIXED_DEFAULT'"
               }
             }
           }
@@ -2796,7 +2802,7 @@ const flowsMenu = [
         id: "display_results",
         type: "SET",
         variable: "final_results",
-        value: "Test1(exact): {{test1_result}}, Test2(age): {{test2_result}}, Test3(complex): {{test3_result}}, Test4(mixed): {{test4_result}}"
+        value: "`Test1(exact): ${test1_result}, Test2(age): ${test2_result}, Test3(complex): ${test3_result}, Test4(mixed): ${test4_result}`"
       },
       
       {
@@ -2868,12 +2874,6 @@ const flowsMenu = [
             type: "SAY",
             value: "👥 Manager access granted. Team management privileges enabled.",
             value_es: "👥 Acceso de gerente concedido. Privilegios de gestión de equipo habilitados."
-          },
-          "condition:{{user_role}} === 'user' && {{access_level}} >= 2 && {{is_verified}}": {
-            id: "grant_verified_user_access",
-            type: "SAY",
-            value: "✅ Verified user access granted. Standard privileges enabled.",
-            value_es: "✅ Acceso de usuario verificado concedido. Privilegios estándar habilitados."
           },
           "user": {
             id: "grant_basic_user_access",
@@ -3230,7 +3230,7 @@ const flowsMenu = [
           id: "smart-retry-condition",
           type: "CASE",
           branches: {
-            "condition:{{attempt_count < max_attempts}}": {
+            "condition: attempt_count < max_attempts": {
               id: "continue-retrying",
               type: "FLOW",
               value: "SmartSelfRetryDemo",
