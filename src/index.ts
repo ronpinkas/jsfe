@@ -5081,8 +5081,14 @@ function evaluateExpression(
     const context = createSimplifiedEvaluationContext(variables, contextStack, engine);
     
     // Check if the entire expression is a single interpolation
-    const singleExpressionMatch = expression.match(/^\{\{([^}]+)\}\}$/);
-    if (singleExpressionMatch) {
+    let singleExpressionMatch = expression.match(/^\{\{([^}]+)\}\}$/);
+    if (singleExpressionMatch || ! expression.includes('{{')) {
+      
+      // If no brackets (e.g. CASE condition:) then the whole expression is a single expression - as-if it was {{expression}}
+      if( singleExpressionMatch === null) {
+        singleExpressionMatch = ['', expression];
+      }
+
       // Single expression - return the evaluated result directly to preserve type
       try {
         const evaluationResult = evaluateJavaScriptExpression(singleExpressionMatch[1].trim(), context);
