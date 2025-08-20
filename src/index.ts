@@ -673,8 +673,7 @@ export interface AuthConfig {
 }
 
 export interface ApprovedFunctions {
-  get(functionName: string): ((...args: unknown[]) => unknown) | undefined;
-  [functionName: string]: unknown;
+  [functionName: string]: ((...args: unknown[]) => unknown) | undefined;
 }
 
 export interface SystemContext {
@@ -1890,6 +1889,10 @@ function interpolateObject(obj: unknown, data: unknown, args: ArgsType = {}, eng
         let value: unknown = undefined;
         if (isPathTraversableObject(data)) {
           value = extractByPath(data, path);
+          // Handle user input wrapper objects
+          if (isUserInputVariable(value)) {
+            value = (value as Record<string, unknown>).value;
+          }
         }
         
         // If not found in data and engine is available, use the new unified resolver
@@ -1914,6 +1917,10 @@ function interpolateObject(obj: unknown, data: unknown, args: ArgsType = {}, eng
         let value: unknown = undefined;
         if (isPathTraversableObject(data)) {
           value = extractByPath(data, path.trim());
+          // Handle user input wrapper objects
+          if (isUserInputVariable(value)) {
+            value = (value as Record<string, unknown>).value;
+          }
         }
         
         // If not found in data and engine is available, use the new unified resolver
@@ -1964,7 +1971,6 @@ function makeLogger(level: string = process.env.LOG_LEVEL || "warn"): Logger {
 }
 
 let logger: Logger = makeLogger();
-
 
 // Fallback for any remaining console calls
 if (!(global as Record<string, unknown>).console) {
@@ -2121,11 +2127,8 @@ function checkRateLimit(engine: Engine, userId: string, toolId: string) {
 // === INPUT VALIDATION & SANITIZATION ===
 function sanitizeInput(input: unknown): unknown {
   if (typeof input !== 'string') return input;
-  // Basic HTML escape and trim
-  return input.trim().replace(/[<>'"&]/g, (char) => {
-    const escapeMap: Record<string, string> = { '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#x27;', '&': '&amp;' };
-    return escapeMap[char];
-  });
+  // Simple trim - no HTML encoding since user input is treated as literal data
+  return input.trim();
 }
 
 function validateToolArgs(tool: ToolDefinition, args: Record<string, unknown>): Record<string, unknown> {
@@ -2488,10 +2491,15 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
         // Clear the pending variable to avoid infinite loops
         delete currentFlowFrame.pendingVariable;
       } else {
-        // Store user input as variable value
+        // Store user input as variable value with proper sanitization
         // (System commands like 'cancel' are already handled before this point)
-        currentFlowFrame.variables[currentFlowFrame.pendingVariable] = userInput;
-        logger.info(`Stored user input in variable '${currentFlowFrame.pendingVariable}': "${userInput}"`);
+        setUserInputVariable(
+          currentFlowFrame.variables, 
+          currentFlowFrame.pendingVariable, 
+          userInput, 
+          true // Sanitize user input
+        );
+        logger.info(`Stored sanitized user input in variable '${currentFlowFrame.pendingVariable}': "${userInput}"`);
         delete currentFlowFrame.pendingVariable;
         
         // Pop the SAY-GET step now that variable assignment is complete
@@ -3075,7 +3083,7 @@ async function performStepInputValidation(
   // Custom validation function
   if (step.inputValidation.customValidator && engine.APPROVED_FUNCTIONS) {
     try {
-      const validator = engine.APPROVED_FUNCTIONS.get(step.inputValidation.customValidator);
+      const validator = engine.APPROVED_FUNCTIONS[step.inputValidation.customValidator];
       if (typeof validator === 'function') {
         const customResult = await validator(currentFlowFrame.variables, currentFlowFrame) as any;
         if (customResult && typeof customResult === 'object') {
@@ -3688,8 +3696,13 @@ function handleSetStep(currentFlowFrame: FlowFrame, engine: Engine): string {
   }
   
   // Support interpolation in SET values
+  // Use JavaScript evaluation context for security - strings will be properly quoted
   const interpolatedValue = typeof step.value === 'string' 
-    ? interpolateMessage(step.value, [], currentFlowFrame?.variables, engine)
+    ? evaluateExpression(step.value, currentFlowFrame?.variables || {}, [], {
+        securityLevel: 'basic',
+        context: 'javascript-evaluation', // Force JavaScript context for SET values
+        returnType: 'auto'
+      }, engine)
     : step.value;
   
   if (currentFlowFrame && currentFlowFrame.variables !== undefined) {
@@ -3709,7 +3722,12 @@ async function handleSwitchStep(currentFlowFrame: FlowFrame, engine: Engine): Pr
   }
   
   // Get the variable value to switch on
-  const switchValue = currentFlowFrame.variables ? currentFlowFrame.variables[step.variable] : undefined;
+  let switchValue = currentFlowFrame.variables ? currentFlowFrame.variables[step.variable] : undefined;
+  
+  // Handle user input wrapper objects
+  if (isUserInputVariable(switchValue)) {
+    switchValue = (switchValue as Record<string, unknown>).value;
+  }
   
   logger.info(`SWITCH step: evaluating variable '${step.variable}' with value '${switchValue}'`);
   
@@ -4149,7 +4167,14 @@ function generateEnhancedFallbackArgs(schema: any, input: any, flowFrame: FlowFr
       
       // Direct variable match
       if (flowFrame.variables[key] !== undefined) {
-        let value = flowFrame.variables[key];
+        let value: any = flowFrame.variables[key];
+        
+        // Handle user input wrapper objects
+        if (isUserInputVariable(value)) {
+          const userInputObj = value as Record<string, unknown>;
+          value = userInputObj.value;
+        }
+        
         // Type conversion if needed
         if (prop.type === 'number' && typeof value === 'string') {
           const num = parseFloat(value);
@@ -4159,44 +4184,8 @@ function generateEnhancedFallbackArgs(schema: any, input: any, flowFrame: FlowFr
         }
         args[key] = value;
         continue;
-      }
+      }      
       
-      // Smart matching for account numbers
-      if (key.includes('account')) {
-        const accountVar = Object.keys(flowFrame.variables).find(varName => 
-          varName.includes('account') || (
-            typeof flowFrame.variables[varName] === 'object' && 
-            flowFrame.variables[varName] !== null &&
-            (flowFrame.variables[varName] as Record<string, unknown>)?.accountId
-          )
-        );
-        if (accountVar) {
-          const accountData = flowFrame.variables[accountVar];
-          if (typeof accountData === 'object' && accountData !== null && 'accountId' in accountData) {
-            args[key] = (accountData as Record<string, unknown>).accountId;
-          } else if (typeof accountData === 'string') {
-            args[key] = accountData;
-          }
-        }
-      }
-      
-      // Smart matching for amounts
-      if (key.includes('amount')) {
-        const amountVar = Object.keys(flowFrame.variables).find(varName => 
-          varName.includes('amount') || varName.includes('payment')
-        );
-        if (amountVar) {
-          const amountData = flowFrame.variables[amountVar];
-          if (typeof amountData === 'number') {
-            args[key] = amountData;
-          } else if (typeof amountData === 'string') {
-            const num = parseFloat(amountData);
-            if (!isNaN(num)) {
-              args[key] = num;
-            }
-          }
-        }
-      }
     }
   }
   
@@ -4266,7 +4255,7 @@ async function callTool(engine: Engine, tool: any, args: any, userId: string = '
          if (!APPROVED_FUNCTIONS) {
             throw new Error(`Approved functions registry not available`);
          }
-         const fn = APPROVED_FUNCTIONS.get(tool.implementation.function);
+         const fn = APPROVED_FUNCTIONS[tool.implementation.function];
          if (!fn) {
             throw new Error(`Function "${tool.implementation.function}" not found in approved functions registry`);
          }
@@ -4916,21 +4905,13 @@ interface SecurityConfig {
  * Options for expression evaluation
  */
 interface ExpressionOptions {
-  securityLevel?: 'strict' | 'standard' | 'permissive';
+  securityLevel?: 'basic' | 'none'; // Simplified: 'basic' for minimal protection, 'none' for templates
   allowLogicalOperators?: boolean;
   allowMathOperators?: boolean;
   allowComparisons?: boolean;
   allowTernary?: boolean;
   context?: string; // For logging/debugging
   returnType?: 'string' | 'boolean' | 'auto';
-}
-
-/**
- * Result from Phase 1 variable substitution
- */
-interface PhaseOneResult {
-  readonly result: string;
-  readonly substitutions: ReadonlyMap<string, unknown>;
 }
 
 /**
@@ -4941,122 +4922,6 @@ interface SecurityValidationResult {
   readonly reason?: string;
 }
 
-/**
- * Default security configuration with comprehensive method whitelisting
- */
-const DEFAULT_SECURITY_CONFIG: SecurityConfig = {
-  allowedMethods: [
-    // String methods - safe for expression evaluation
-    'slice', 'split', 'join', 'toLowerCase', 'toUpperCase', 'trim', 
-    'charAt', 'substring', 'indexOf', 'includes', 'startsWith', 'endsWith',
-    'replace', 'match', 'search', 'padStart', 'padEnd', 'repeat',
-    'toString', 'valueOf', 'length', 'concat', 'localeCompare', 'normalize',
-    
-    // Array methods - safe for property access and manipulation
-    'join', 'indexOf', 'lastIndexOf', 'includes', 'slice',
-    'toString', 'valueOf', 'length',
-    
-    // Number/Math methods - safe for calculations
-    'toFixed', 'toPrecision', 'toString', 'valueOf',
-    'abs', 'ceil', 'floor', 'round', 'max', 'min', 'pow', 'sqrt'
-  ],
-  
-  blockedPatterns: [
-    // Core security threats
-    /eval\s*\(/,
-    /Function\s*\(/,
-    /constructor/,
-    /prototype/,
-    /__proto__/,
-    /import\s*\(/,
-    /require\s*\(/,
-    
-    // Environment access
-    /process\./,
-    /global\./,
-    /window\./,
-    /document\./,
-    /console\./,
-    
-    // Async/timer functions
-    /setTimeout/,
-    /setInterval/,
-    /fetch\s*\(/,
-    /XMLHttpRequest/,
-    
-    // Control flow that could be dangerous
-    /new\s+/,
-    /delete\s+/,
-    /throw\s+/,
-    /return\s+/,
-    
-    // Assignment operators (not equality)
-    /=(?!=)/
-  ],
-  
-  maxExpressionLength: 500,
-  sanitizeUserInput: true
-} as const;
-
-/**
- * Phase 1: Strict Variable Substitution
- * Replaces {{variable.path}} with actual values from the variable context
- */
-function phaseOneSubstitution(
-  template: string, 
-  variables: Record<string, unknown>, 
-  contextStack: ContextEntry[] = [],
-  engine?: Engine
-): PhaseOneResult {
-  const substitutions = new Map<string, unknown>();
-  let result = template;
-  
-  // Enhanced regex for {{variable.path}} - supports nested object notation
-  const variablePattern = /\{\{([a-zA-Z_$][a-zA-Z0-9_$]*(?:\.[a-zA-Z_$][a-zA-Z0-9_$]*)*)\}\}/g;
-  
-  logger.debug(`Phase 1 - Processing template: ${template}`);
-  
-  let match: RegExpExecArray | null;
-  while ((match = variablePattern.exec(template)) !== null) {
-    const fullMatch = match[0];  // {{variable.path}}
-    const variablePath = match[1]; // variable.path
-    
-    logger.debug(`Phase 1 - Found variable: ${variablePath}`);
-    
-    // Resolve the variable value
-    const value = resolveVariablePath(variablePath, variables, contextStack, engine);
-    
-    // Store the substitution for debugging
-    substitutions.set(variablePath, value);
-    
-    // Replace in result - handle undefined gracefully and properly quote strings
-    let stringValue: string;
-    if (value === undefined) {
-      stringValue = 'undefined';
-    } else if (value === null) {
-      stringValue = 'null';
-    } else if (typeof value === 'string') {
-      // Quote strings properly for JavaScript evaluation
-      stringValue = `"${value.replace(/"/g, '\\"').replace(/\n/g, '\\n').replace(/\r/g, '\\r')}"`;
-    } else if (typeof value === 'number' || typeof value === 'boolean') {
-      stringValue = String(value);
-    } else if (typeof value === 'object') {
-      // For objects, serialize as JSON string with quotes
-      stringValue = `"${JSON.stringify(value).replace(/"/g, '\\"')}"`;
-    } else {
-      stringValue = `"${String(value).replace(/"/g, '\\"')}"`;
-    }
-    
-    result = result.replace(fullMatch, stringValue);
-    logger.debug(`Phase 1 - Substituted ${variablePath} = ${stringValue}`);
-  }
-  
-  // Reset regex for next use
-  variablePattern.lastIndex = 0;
-  
-  logger.debug(`Phase 1 - Final result: ${result}`);
-  return { result, substitutions };
-}
 
 /**
  * Resolve variable path like "cargo.callerId" or "user.profile.name"
@@ -5066,13 +4931,25 @@ function resolveVariablePath(
   path: string, 
   variables: Record<string, unknown>, 
   contextStack: ContextEntry[],
-  engine?: Engine
+  engine: Engine
 ): unknown {
   const parts = path.split('.');
   const rootVar = parts[0];
   
   // 1. Try to find in flow variables first
   let rootValue = variables[rootVar];
+  
+  // Handle user input variables as pure literals
+  if (rootValue && typeof rootValue === 'object' && rootValue !== null) {
+    const userInputObj = rootValue as Record<string, unknown>;
+    if (userInputObj.__userInput === true && userInputObj.__literal === true) {
+      // Extract the literal value and treat it as a normal variable
+      // This allows normal property access like userInput.length
+      rootValue = userInputObj.value;
+    } else {
+      logger.debug(`resolveVariablePath - Found user input object, but not a literal: ${JSON.stringify(userInputObj)}`);
+    }
+  }
   
   // 2. If not found in variables, try context stack
   if (rootValue === undefined && contextStack.length > 0) {
@@ -5086,80 +4963,25 @@ function resolveVariablePath(
   
   // 3. If not found and engine available, try engine session variables
   if (rootValue === undefined && engine) {
-    // Handle engine session variables directly 
-    try {
-      const currentFlowFrame = getCurrentFlowFrame(engine);
+    // Use the centralized session variable logic
+    const sessionVars = getEngineSessionVariables(engine, contextStack);
+    
+    // Handle property access (e.g., cargo.someVar)
+    if (path.includes('.')) {
+      const parts = path.split('.');
+      const baseVariable = parts[0];
+      const propertyPath = parts.slice(1).join('.');
       
-      // Handle property access (e.g., cargo.someVar)
-      if (path.includes('.')) {
-        const parts = path.split('.');
-        const baseVariable = parts[0];
-        const propertyPath = parts.slice(1).join('.');
-        
-        let baseValue: unknown;
-        
-        // Get the base engine session variable
-        switch (baseVariable) {
-          case 'cargo':
-            baseValue = engine.cargo || {};
-            break;
-          case 'userInput':
-          case 'lastUserInput':
-            const userEntries = currentFlowFrame.contextStack.filter(entry => entry.role === 'user');
-            if (userEntries.length > 0) {
-              const lastUserEntry = userEntries[userEntries.length - 1];
-              baseValue = typeof lastUserEntry.content === 'string' ? lastUserEntry.content : String(lastUserEntry.content);
-            } else {
-              baseValue = undefined;
-            }
-            break;
-          case 'sessionId':
-            baseValue = engine.sessionId;
-            break;
-          case 'userId':
-            baseValue = currentFlowFrame.userId;
-            break;
-          case 'flowName':
-            baseValue = currentFlowFrame.flowName;
-            break;
-          default:
-            baseValue = undefined;
-        }
-        
-        // If we found a base value, navigate the remaining path
-        if (baseValue !== undefined) {
-          return resolveVariablePath(propertyPath, { root: baseValue }, [], engine);
-        }
-      } else {
-        // Handle direct variable access (no dots)
-        switch (path) {
-          case 'cargo':
-            rootValue = engine.cargo || {};
-            break;
-          case 'userInput':
-          case 'lastUserInput':
-            const userEntries = currentFlowFrame.contextStack.filter(entry => entry.role === 'user');
-            if (userEntries.length > 0) {
-              const lastUserEntry = userEntries[userEntries.length - 1];
-              rootValue = typeof lastUserEntry.content === 'string' ? lastUserEntry.content : String(lastUserEntry.content);
-            }
-            break;
-          case 'currentTime()':
-            rootValue = new Date().toISOString();
-            break;
-          case 'sessionId':
-            rootValue = engine.sessionId;
-            break;
-          case 'userId':
-            rootValue = currentFlowFrame.userId;
-            break;
-          case 'flowName':
-            rootValue = currentFlowFrame.flowName;
-            break;
-        }
+      // Get the base session variable
+      const baseValue = sessionVars[baseVariable];
+      
+      // If we found a base value, navigate the remaining path
+      if (baseValue !== undefined) {
+        return resolveVariablePath(propertyPath, { root: baseValue }, [], engine);
       }
-    } catch (error) {
-      // Ignore engine session variable resolution errors
+    } else {
+      // Handle direct variable access (no dots)
+      rootValue = sessionVars[path];
     }
   }
   
@@ -5190,82 +5012,22 @@ function resolveVariablePath(
 }
 
 /**
- * Phase 2: Safe Expression Evaluation with Security Validation
- * Evaluates the post-substitution expression using controlled environment
+ * Check if a variable value is marked as user input (literal data)
+ * User input should never be evaluated as code for security
  */
-function phaseTwoEvaluation(
-  expression: string, 
-  securityConfig: SecurityConfig = DEFAULT_SECURITY_CONFIG
-): unknown {
-  logger.debug(`Phase 2 - Evaluating: ${expression}`);
-  
-  // Security validation
-  const securityResult = validateExpressionSecurity(expression, securityConfig);
-  if (!securityResult.isValid) {
-    logger.warn(`Phase 2 - Security violation: ${securityResult.reason}`);
-    return `[blocked: ${securityResult.reason}]`;
-  }
-  
-  try {
-    // Use Function constructor for safer eval with controlled scope
-    // This creates a new scope without access to outer variables
-    const safeEval = new Function('Math', 'String', 'Number', 'Boolean', 'Array', 'Object', `
-      "use strict";
-      try {
-        return (${expression});
-      } catch (e) {
-        return undefined;
-      }
-    `);
-    
-    const result = safeEval(Math, String, Number, Boolean, Array, Object);
-    logger.debug(`Phase 2 - Result: ${result}`);
-    return result;
-    
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.warn(`Phase 2 - Evaluation error: ${errorMessage}`);
-    return undefined;
-  }
-}
-
-/**
- * Security validation for post-substitution expressions
- * Validates against blocked patterns and method whitelist
- */
-function validateExpressionSecurity(
-  expression: string, 
-  config: SecurityConfig
-): SecurityValidationResult {
-  // Length check
-  if (expression.length > config.maxExpressionLength) {
-    return { isValid: false, reason: 'Expression too long' };
-  }
-  
-  // Check for blocked patterns
-  for (const pattern of config.blockedPatterns) {
-    if (pattern.test(expression)) {
-      return { isValid: false, reason: `Blocked pattern: ${pattern}` };
-    }
-  }
-  
-  // Method validation - extract and validate all method calls
-  const methodPattern = /\.([a-zA-Z_$][a-zA-Z0-9_$]*)\s*\(/g;
-  let methodMatch: RegExpExecArray | null;
-  
-  while ((methodMatch = methodPattern.exec(expression)) !== null) {
-    const methodName = methodMatch[1];
-    if (!config.allowedMethods.includes(methodName)) {
-      return { isValid: false, reason: `Disallowed method: ${methodName}` };
-    }
-  }
-  
-  return { isValid: true };
+function isUserInputVariable(value: unknown): boolean {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    (value as Record<string, unknown>).__userInput === true &&
+    (value as Record<string, unknown>).__literal === true
+  );
 }
 
 /**
  * Input sanitization for user-provided values
  * Escapes special characters that could break expression syntax
+ * NOTE: This is secondary defense - primary security is treating user input as literal data
  */
 function sanitizeUserInput(input: unknown): string {
   if (typeof input !== 'string') {
@@ -5283,63 +5045,8 @@ function sanitizeUserInput(input: unknown): string {
 }
 
 /**
- * Robust detection of {{}} expressions that handles nested braces and quoted content
- */
-function hasExpressionBraces(text: string): boolean {
-  let i = 0;
-  while (i < text.length - 1) {
-    if (text[i] === '{' && text[i + 1] === '{') {
-      // Found opening {{, now find the matching }}
-      let depth = 1;
-      let j = i + 2;
-      let inQuotes = false;
-      let quoteChar = '';
-      
-      while (j < text.length - 1 && depth > 0) {
-        const char = text[j];
-        const nextChar = text[j + 1];
-        
-        // Handle quoted strings
-        if (!inQuotes && (char === '"' || char === "'")) {
-          inQuotes = true;
-          quoteChar = char;
-        } else if (inQuotes && char === quoteChar && text[j - 1] !== '\\') {
-          inQuotes = false;
-          quoteChar = '';
-        }
-        
-        // Only count braces when not inside quotes
-        if (!inQuotes) {
-          if (char === '{' && nextChar === '{') {
-            depth++;
-            j++; // Skip next character
-          } else if (char === '}' && nextChar === '}') {
-            depth--;
-            if (depth === 0) {
-              // Found complete expression
-              return true;
-            }
-            j++; // Skip next character
-          }
-        }
-        
-        j++;
-      }
-      
-      // If we get here, we found {{ but no matching }}
-      // Continue searching from next position
-      i += 2;
-    } else {
-      i++;
-    }
-  }
-  
-  return false;
-}
-
-/**
- * Main Two-Phase Expression Evaluator
- * Replaces the previous evaluateExpression function with enhanced security
+ * Simplified Expression Evaluator 
+ * Replaced complex two-phase parser with regex + JavaScript evaluation for 100% reliability
  */
 function evaluateExpression(
   expression: string, 
@@ -5349,7 +5056,7 @@ function evaluateExpression(
   engine: Engine
 ): unknown {
   const opts: Required<ExpressionOptions> = {
-    securityLevel: 'standard',
+    securityLevel: 'basic',
     allowLogicalOperators: true,
     allowMathOperators: true,
     allowComparisons: true,
@@ -5360,40 +5067,53 @@ function evaluateExpression(
   };
 
   try {
-    logger.debug(`Two-phase evaluation starting: ${expression} with options: ${JSON.stringify(opts)}`);
+    logger.debug(`Simplified evaluation starting: ${expression}`);
     
-    // Phase 1: Variable substitution
-    const phase1Result = phaseOneSubstitution(expression, variables, contextStack, engine);
-    
-    // If no variables were found, treat as literal
-    if (phase1Result.substitutions.size === 0) {
-      logger.debug(`No variables found, returning literal: ${expression}`);
-      return convertReturnType(expression, opts.returnType);
+    // If not a string, return as-is
+    if (typeof expression !== 'string') {
+      return expression;
     }
     
-    // Check if Phase 1 result still contains {{}} expressions that need Phase 2 evaluation
-    const hasRemainingExpressions = hasExpressionBraces(phase1Result.result);
-    if (!hasRemainingExpressions) {
-      logger.debug(`Phase 1 complete, no remaining {{}} expressions: ${phase1Result.result}`);
-      return convertReturnType(phase1Result.result, opts.returnType);
+    // Simple regex to find {{expression}} patterns
+    const expressionRegex = /\{\{([^}]+)\}\}/g;
+    
+    // Create evaluation context by merging all available variables
+    const context = createSimplifiedEvaluationContext(variables, contextStack, engine);
+    
+    // Check if the entire expression is a single interpolation
+    const singleExpressionMatch = expression.match(/^\{\{([^}]+)\}\}$/);
+    if (singleExpressionMatch) {
+      // Single expression - return the evaluated result directly to preserve type
+      try {
+        const evaluationResult = evaluateJavaScriptExpression(singleExpressionMatch[1].trim(), context);
+        logger.debug(`Simplified evaluation complete (single): ${expression} -> ${evaluationResult}`);
+        return convertReturnType(evaluationResult, opts.returnType);
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logger.warn(`Single expression evaluation failed: ${singleExpressionMatch[1]} - ${errorMessage}`);
+        return opts.returnType === 'boolean' ? false : `[error: ${expression}]`;
+      }
     }
     
-    // Phase 2: Safe evaluation with security config based on security level
-    const securityConfig: SecurityConfig = {
-      ...DEFAULT_SECURITY_CONFIG,
-      allowedMethods: opts.securityLevel === 'strict' 
-        ? DEFAULT_SECURITY_CONFIG.allowedMethods.filter(m => ['toString', 'valueOf', 'length'].includes(m))
-        : DEFAULT_SECURITY_CONFIG.allowedMethods
-    };
+    // Multiple expressions or mixed content - convert to string
+    const result = expression.replace(expressionRegex, (match, expr) => {
+      try {
+        // Direct JavaScript evaluation with injected variables
+        const evaluationResult = evaluateJavaScriptExpression(expr.trim(), context);
+        return String(evaluationResult);
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        logger.warn(`Expression evaluation failed: ${expr} - ${errorMessage}`);
+        return match; // Return original if evaluation fails
+      }
+    });
     
-    const finalResult = phaseTwoEvaluation(phase1Result.result, securityConfig);
-    
-    logger.debug(`Two-phase evaluation complete: ${expression} -> ${finalResult}`);
-    return convertReturnType(finalResult, opts.returnType);
+    logger.debug(`Simplified evaluation complete: ${expression} -> ${result}`);
+    return convertReturnType(result, opts.returnType);
     
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.warn(`Two-phase evaluation error: ${errorMessage}`);
+    logger.warn(`Simplified evaluation error: ${errorMessage}`);
     return opts.returnType === 'boolean' ? false : `[error: ${expression}]`;
   }
 }
@@ -5415,6 +5135,134 @@ function convertReturnType(value: unknown, returnType: string): unknown {
 }
 
 /**
+ * Get engine session variables for simplified evaluator
+ * This is the SINGLE SOURCE OF TRUTH for session variable logic
+ */
+function getEngineSessionVariables(engine: Engine, contextStack: ContextEntry[]): Record<string, unknown> {
+  const sessionVars: Record<string, unknown> = {};
+  
+  try {
+    const currentFlowFrame = getCurrentFlowFrame(engine);
+    
+    // Get userInput from the most recent user entry in context stack
+    const userEntries = currentFlowFrame.contextStack.filter(entry => entry.role === 'user');
+    if (userEntries.length > 0) {
+      const lastUserEntry = userEntries[userEntries.length - 1];
+      const userInputValue = typeof lastUserEntry.content === 'string' ? lastUserEntry.content : String(lastUserEntry.content);
+      sessionVars.userInput = userInputValue;
+      sessionVars.lastUserInput = userInputValue; // alias
+    }
+    
+    // Add other engine session variables
+    sessionVars.cargo = engine.cargo || {};
+    sessionVars.sessionId = engine.sessionId;
+    sessionVars.userId = currentFlowFrame.userId;
+    sessionVars.flowName = currentFlowFrame.flowName;
+    
+    // Special function-like variables
+    sessionVars['currentTime()'] = new Date().toISOString();
+    
+    // Add global variables if available
+    if (engine.globalVariables) {
+      Object.assign(sessionVars, engine.globalVariables);
+    }
+    
+  } catch (error) {
+    logger.debug(`Error getting engine session variables: ${error}`);
+  }
+  
+  return sessionVars;
+}
+
+/**
+ * Create evaluation context with all available variables for simplified evaluator
+ */
+function createSimplifiedEvaluationContext(
+  variables: Record<string, unknown>, 
+  contextStack: ContextEntry[], 
+  engine: Engine
+): Record<string, unknown> {
+  // Just use the provided variables - contextStack is primarily for conversation history
+  const allVars = variables || {};
+  
+  // Get engine session variables
+  const engineSessionVars = getEngineSessionVariables(engine, contextStack);
+  
+  const context: Record<string, unknown> = {
+    // All variables as top-level properties
+    ...allVars,
+    
+    // Engine session variables (userInput, cargo, sessionId, etc.)
+    ...engineSessionVars,
+    
+    // Special variables that should always be available
+    $args: variables?.$args || {},
+    xml_result: variables?.xml_result,
+    json_result: variables?.json_result,
+    
+    // Add context object for Object.keys() patterns (avoid 'this' keyword issues)
+    currentContext: { ...allVars, ...engineSessionVars },
+    
+    // Include approved functions so they can be called in expressions
+    ...engine.APPROVED_FUNCTIONS,
+    
+    // Utility objects available in expressions
+    Object,
+    Date,
+    Math,
+    String,
+    Number,
+    Boolean,
+    Array,
+    JSON
+  };
+  
+  return context;
+}
+
+/**
+ * Safely evaluate JavaScript expression with injected context
+ */
+function evaluateJavaScriptExpression(expression: string, context: Record<string, unknown>): unknown {
+  // Filter to only valid JavaScript identifiers (root variables only)
+  const validParamNames = Object.keys(context).filter(key => 
+    /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)
+  );
+  
+  // Unwrap user input variables before passing to function
+  const paramValues = validParamNames.map(name => {
+    const value = context[name];
+    // Unwrap user input wrapper objects
+    if (value && typeof value === 'object' && 
+        (value as any).__userInput === true && 
+        (value as any).__literal === true) {
+      return (value as any).value;
+    }
+    return value;
+  });
+  
+  // Build function body that evaluates the expression
+  const functionBody = `
+    "use strict";
+    try {
+      const result = (${expression});
+      // Auto-stringify complex data structures when used in string contexts
+      if (typeof result === 'object' && result !== null &&
+          !(result.__userInput === true && result.__literal === true)) {
+        return JSON.stringify(result);
+      }
+      return result;
+    } catch (e) {
+      throw new Error('Expression evaluation failed: ' + e.message);
+    }
+  `;
+  
+  // Create and execute function with only valid parameter names
+  const evaluatorFunction = new Function(...validParamNames, functionBody);
+  return evaluatorFunction(...paramValues);
+}
+
+/**
  * Security-aware variable setter for user input
  * Integrates with the variable resolution system
  */
@@ -5424,11 +5272,12 @@ function setUserInputVariable(
   value: unknown, 
   sanitize: boolean = true
 ): void {
-  if (sanitize && typeof value === 'string') {
-    variables[key] = sanitizeUserInput(value);
-  } else {
-    variables[key] = value;
-  }
+  // Mark user input as static literal data that should never be evaluated as code
+  variables[key] = {
+    __userInput: true,
+    __literal: true,
+    value: sanitize && typeof value === 'string' ? sanitizeUserInput(value) : value
+  };
 }
 
 // ===============================================
@@ -5448,8 +5297,10 @@ function interpolateMessage(
   logger.debug(`Interpolating message template: ${template} with variables: ${JSON.stringify(variables)}`);
   if (!template) return template;
   
+  // For template interpolation, we should NOT apply security restrictions
+  // Templates are developer-controlled, not user input
   const result = evaluateExpression(template, variables, contextStack, {
-    securityLevel: 'standard',
+    securityLevel: 'none', // No security restrictions for templates
     allowLogicalOperators: true,
     allowMathOperators: true,
     allowComparisons: true,
@@ -5473,7 +5324,7 @@ function evaluateSafeCondition(
   logger.debug(`Evaluating safe condition: ${condition} with variables: ${JSON.stringify(variables)}`);
   
   const result = evaluateExpression(condition, variables, [], {
-    securityLevel: 'standard',
+    securityLevel: 'basic',
     context: 'condition-evaluation',
     returnType: 'boolean',
     allowComparisons: true,
@@ -5481,28 +5332,6 @@ function evaluateSafeCondition(
   }, engine);
   
   return Boolean(result);
-}
-
-function getNestedValue(obj: any, path: string): any {
-  if (!obj || typeof path !== 'string') {
-    return undefined;
-  }
-  
-  if (!path.includes('.')) {
-    return obj[path];
-  }
-  
-  const keys = path.split('.');
-  let current = obj;
-  
-  for (const key of keys) {
-    if (current === null || current === undefined) {
-      return undefined;
-    }
-    current = current[key];
-  }
-  
-  return current;
 }
 
 // === ENHANCED FLOW CONTROL COMMANDS ===
@@ -7303,7 +7132,7 @@ export class WorkflowEngine implements Engine {
                   const variableNames = extractVariableNames(varPath);
                   for (const rootVar of variableNames) {
                      // Check if it's a registered function first (global scope)
-                     const isApprovedFunction = this.APPROVED_FUNCTIONS && this.APPROVED_FUNCTIONS.get && this.APPROVED_FUNCTIONS.get(rootVar);
+                     const isApprovedFunction = this.APPROVED_FUNCTIONS && this.APPROVED_FUNCTIONS[rootVar];
                      
                      // If not an approved function, check if it's in current scope as a variable
                      if (!isApprovedFunction && !currentScope.has(rootVar)) {

@@ -94,10 +94,10 @@ The WorkflowEngine constructor accepts the following parameters in order, each s
 - **Validation**: Parameter schemas validated against OpenAI Function Calling Standard
 - **Security**: Tools define their own security levels and authentication requirements
 
-**5. APPROVED_FUNCTIONS** (Map<string, Function>)
+**5. APPROVED_FUNCTIONS** (Object)
 - **Purpose**: Secure registry of pre-approved local JavaScript functions
-- **Security**: Only functions in this map can be executed by local-type tools
-- **Format**: `Map` where keys are function names and values are the actual functions
+- **Security**: Only functions in this object can be executed by local-type tools
+- **Format**: Plain object where keys are function names and values are the actual functions
 - **Validation**: Functions must match tool definitions in toolsRegistry
 
 **6. globalVariables** (Record<string, unknown>, optional)
@@ -282,7 +282,7 @@ const toolsRegistry = [
 
 #### 3. **Approved Functions Registry** - Secure Local Functions
 ```javascript
-const APPROVED_FUNCTIONS = new Map();
+const APPROVED_FUNCTIONS = {};
 
 // Define secure local functions
 async function processPayment(args) {
@@ -291,7 +291,7 @@ async function processPayment(args) {
 }
 
 // Register approved functions
-APPROVED_FUNCTIONS.set('processPayment', processPayment);
+APPROVED_FUNCTIONS['processPayment'] = processPayment;
 ```
 
 #### 4. **Global Variables** - Secure Sharing of Local Data
@@ -682,6 +682,49 @@ The Flow Engine implements a sophisticated "stack-of-stacks" architecture that a
 - ✅ **FLOW** - Sub-flow execution with multiple call types
 - ✅ **SWITCH** - Enhanced conditional branching with expressions
 
+### Expression System
+
+The JSFE engine features a **powerful, unified JavaScript expression evaluator** that provides consistent syntax and behavior across all contexts. This system supports the full range of JavaScript expressions while maintaining security through a trusted developer model.
+
+#### Core Features
+- ✅ **Full JavaScript Expression Support** - All standard operators, functions, and syntax
+- ✅ **Type Preservation** - Numeric, boolean, and object types maintained correctly
+- ✅ **Template Interpolation** - `{{expression}}` syntax for string templates
+- ✅ **Direct Expression Evaluation** - Pure expressions return their native JavaScript types
+- ✅ **Unified Security Model** - Same safety framework across all evaluation contexts
+
+#### Expression Types
+
+**Single Expressions** (preserve JavaScript types):
+```javascript
+// SET steps with pure expressions return native types
+{ type: "SET", variable: "count", value: "{{attempt_count + 1}}" }        // Returns number
+{ type: "SET", variable: "isValid", value: "{{age >= 18 && verified}}" }  // Returns boolean
+{ type: "SET", variable: "user", value: "{{api_response.user}}" }         // Returns object
+```
+
+**Template Strings** (convert to strings for interpolation):
+```javascript
+// String templates with embedded expressions
+{ type: "SAY", value: "Attempt {{attempt_count + 1}}/{{max_attempts}}" }  // String result
+{ type: "SAY", value: "Welcome {{user.name}} ({{user.verified ? 'Verified' : 'Unverified'}})" }
+```
+
+#### Supported JavaScript Features
+- **Arithmetic**: `+`, `-`, `*`, `/`, `%`, `**` (exponentiation)
+- **Comparison**: `===`, `!==`, `>`, `<`, `>=`, `<=`, `==`, `!=`
+- **Logical**: `&&`, `||`, `!`, `??` (nullish coalescing)
+- **Ternary**: `condition ? true_value : false_value`
+- **Object/Array Access**: `obj.prop`, `obj['key']`, `arr[index]`
+- **Method Calls**: `str.toUpperCase()`, `arr.length`, `Math.round(num)`
+- **Template Literals**: `` `Hello ${name}` `` (within expressions)
+
+#### Security Model
+- **Developer Trust**: Workflows authored by developers, not end users
+- **Parameter Filtering**: Only valid JavaScript identifiers allowed as parameters
+- **No eval()**: Direct Function constructor with parameter validation
+- **User Input Safety**: User inputs are treated as values, not code
+
 ### Internationalization and Localization
 
 The JSFE engine supports multiple languages through localized properties in flow definitions and steps. This allows you to create workflows that automatically display messages in the user's preferred language.
@@ -892,10 +935,10 @@ This pattern ensures that each test runs in complete isolation, preventing the s
 ## Security & Compliance
 
 ### Expression Security
-- ✅ **Safe Expression Evaluation** - No eval(), no code injection
-- ✅ **Safe Method Allowlist** - Only pre-approved methods allowed
-- ✅ **Pattern-Based Security** - Block dangerous operations
-- ✅ **Variable Path Validation** - Secure nested property access
+- ✅ **Direct JavaScript Evaluation** - Native JavaScript execution with security framework
+- ✅ **Controlled Access** - Only exported variables and functions are accessable JavaScript identifiers allowed as parameters
+scope
+- ✅ **User Input Safety** - User inputs treated as values, with protection against code injection
 
 ### Transaction Management
 - ✅ **Comprehensive Audit Trail** - Every action logged

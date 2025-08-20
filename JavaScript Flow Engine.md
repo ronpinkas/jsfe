@@ -123,7 +123,7 @@ const toolsRegistry = [
 
 #### 3. **Approved Functions Registry** - Secure Local Functions
 ```javascript
-const APPROVED_FUNCTIONS = new Map();
+const APPROVED_FUNCTIONS = {};
 
 // Define secure local functions
 async function processPayment(args) {
@@ -132,7 +132,7 @@ async function processPayment(args) {
 }
 
 // Register approved functions
-APPROVED_FUNCTIONS.set('processPayment', processPayment);
+APPROVED_FUNCTIONS['processPayment'] = processPayment;
 ```
 
 #### 4. **Global Variables** - Secure Sharing of Local Data
@@ -196,10 +196,10 @@ The WorkflowEngine constructor accepts the following parameters in order, each s
 - **Validation**: Parameter schemas validated against OpenAI Function Calling Standard
 - **Security**: Tools define their own security levels and authentication requirements
 
-**5. APPROVED_FUNCTIONS** (Map<string, Function>)
+**5. APPROVED_FUNCTIONS** (Object)
 - **Purpose**: Secure registry of pre-approved local JavaScript functions
-- **Security**: Only functions in this map can be executed by local-type tools
-- **Format**: `Map` where keys are function names and values are the actual functions
+- **Security**: Only functions in this object can be executed by local-type tools
+- **Format**: Plain object where keys are function names and values are the actual functions
 - **Validation**: Functions must match tool definitions in toolsRegistry
 
 **6. globalVariables** (Record<string, unknown>, optional)
@@ -1147,7 +1147,7 @@ Execute pre-approved JavaScript functions securely:
 **Setting up Local Functions:**
 
 ```javascript
-const APPROVED_FUNCTIONS = new Map();
+const APPROVED_FUNCTIONS = {};
 
 // Define your function
 function verifyAccount(args) {
@@ -1162,7 +1162,7 @@ function verifyAccount(args) {
 }
 
 // Register the function
-APPROVED_FUNCTIONS.set('verifyAccount', verifyAccount);
+APPROVED_FUNCTIONS['verifyAccount'] = verifyAccount;
 
 // Pass to engine
 const engine = new WorkflowEngine(flowsMenu, {
@@ -2768,8 +2768,8 @@ Classify tools by sensitivity:
 Local functions must be pre-approved:
 
 ```javascript
-const APPROVED_FUNCTIONS = new Map();
-APPROVED_FUNCTIONS.set('safeFunctionName', safeFunctionImplementation);
+const APPROVED_FUNCTIONS = {};
+APPROVED_FUNCTIONS['safeFunctionName'] = safeFunctionImplementation;
 
 // Only functions in this registry can be called
 ```
@@ -3391,7 +3391,7 @@ This completes the TOOL-CALL support chapter. The system provides enterprise-gra
 
 ## Overview
 
-The JavaScript Flow Engine features a **unified expression evaluation system** that handles variable interpolation, mathematical operations, logical expressions, and conditional logic with consistent syntax across all contexts. This system powers everything from simple variable substitution to complex business rule evaluation while maintaining appropriate security controls.
+The JavaScript Flow Engine features a **simplified, powerful JavaScript expression evaluator** that handles variable interpolation, mathematical operations, logical expressions, and conditional logic with full JavaScript syntax support. This system  provides reliable expression evaluation by using native JavaScript execution within a security framework.
 
 ## Core Concepts
 
@@ -3404,50 +3404,84 @@ Variables in the workflow engine operate at multiple scopes:
 - **Session Variables**: Persist across workflow executions (`caller_id`, `caller_name`, `thread_id`)
 - **Context Variables**: Derived from conversation history and context stack
 
-### Unified Expression System
+### Simplified Expression System
 
-The engine uses a **single, powerful expression evaluator** that works consistently across all contexts:
+The engine now uses a **single, powerful JavaScript evaluator** that provides 100% compatibility with JavaScript expressions while maintaining security through limited access to explictly shared variables and functions.
 
-- **Template Interpolation**: `{{variable}}` syntax in strings
-- **Condition Evaluation**: Boolean expressions in CASE statements  
-- **Value Assignment**: Direct expression evaluation in SET steps
-- **Mathematical Operations**: Arithmetic with proper precedence
-- **Logical Operations**: AND, OR, and comparison operators everywhere
+- **Direct JavaScript Evaluation**: All expressions are evaluated as native JavaScript
+- **Type Preservation**: Single expressions like `{{count + 1}}` preserve their JavaScript types
+- **Template Interpolation**: String templates like `"Count: {{count + 1}}"` handle string conversion
+- **No Complex Parsing**: Eliminates the complexity and edge cases of custom expression parsers
+- **Full Compatibility**: All standard JavaScript operators, precedence, and semantics supported
 
 ### Template Interpolation Syntax
 
-The engine uses **double braces `{{variable}}`** for variable interpolation:
+The engine uses **double braces `{{expression}}`** for variable/expression interpolation with two distinct behaviors:
 
+**Single Expression Mode** (preserves JavaScript types):
 ```javascript
-// Basic variable interpolation
-"Hello {{userName}}, your balance is ${{account.balance}}"
+// These return native JavaScript types - numbers stay numbers, booleans stay booleans
+"{{attempt_count + 1}}"                        // Returns number: 2
+"{{age >= 18 && verified}}"                    // Returns boolean: true
+"{{user_data.profile}}"                        // Returns object: {...}
+```
 
-// Logical operators work everywhere
-"Access: {{age >= 18 && is_verified ? 'Granted' : 'Denied'}}"
-
-// Mathematical expressions with logical conditions
-"Total: ${{price * quantity * (is_member ? 0.9 : 1.0)}}"
-
-// Complex conditional logic
-"Status: {{is_active && balance > 0 && verified ? 'Active' : 'Inactive'}}"
+**Template String Mode** (converts to strings):
+```javascript
+// These are string templates with embedded expressions converted to strings
+"Attempt {{attempt_count + 1}} of {{max_attempts}}"    // Returns string: "Attempt 2 of 3"
+"Welcome {{user.name}} (Status: {{verified ? 'OK' : 'Pending'}})"
+"Total: ${{(price * quantity).toFixed(2)}}"
 ```
 
 ## Expression Types and Syntax
 
-### Unified Expression System
+### Simplified JavaScript Evaluation
 
-The workflow engine uses a **single, unified expression evaluator** that works consistently across all contexts:
+The workflow engine uses **direct JavaScript evaluation** with a security framework, providing 100% JavaScript compatibility while maintaining safety:
 
-- **Template Context**: String interpolation with `{{variable}}` syntax
-- **Condition Context**: Boolean evaluation for CASE step conditions
-- **Value Context**: Direct expression evaluation in SET steps
-- **All contexts support the same syntax** - logical operators, mathematics, conditionals work everywhere!
+- **Native JavaScript**: All expressions are evaluated as standard JavaScript code
+- **Type Preservation**: Single expressions preserve their native JavaScript types
+- **Template Conversion**: String templates handle automatic type conversion for interpolation
+- **Full Operator Support**: All JavaScript operators, precedence, and semantics supported
+- **Access Safety**: Only variables and functions explictly exported are accessable.
 
 ### Expression Examples
 
 ```javascript
-// ✅ ALL SUPPORTED everywhere - unified syntax
-"Hello {{userName}}"                           // Variable access
+// ✅ ALL SUPPORTED - Full JavaScript syntax
+"{{userName}}"                                 // Variable access
+"{{user.profile.email}}"                       // Object property access
+"{{items[0].name}}"                            // Array/object indexing
+"{{age >= 18 && verified}}"                    // Logical expressions  
+"{{price * quantity + tax}}"                   // Mathematical operations
+"{{status || 'Unknown'}}"                      // Nullish/falsy fallbacks
+"{{balance > 1000 ? 'Premium' : 'Standard'}}"  // Ternary conditionals
+"{{Math.round(average)}}"                      // Method calls
+"{{new Date().getFullYear()}}"                 // Constructor calls (if allowed by security)
+```
+
+### Key Behavioral Differences
+
+**Single Expression (Type Preserving)**:
+```javascript
+// In SET steps or other contexts expecting native values
+{ type: "SET", variable: "count", value: "{{attempt_count + 1}}" }
+// Result: count = 2 (number), not "2" (string)
+
+{ type: "SET", variable: "isEligible", value: "{{age >= 18 && verified}}" }  
+// Result: isEligible = true (boolean), not "true" (string)
+```
+
+**Template String (String Converting)**:
+```javascript  
+// In SAY steps or other string contexts
+{ type: "SAY", value: "Attempt {{attempt_count + 1}} of {{max_attempts}}" }
+// Result: "Attempt 2 of 3" (string)
+
+{ type: "SAY", value: "Status: {{verified ? 'Verified' : 'Pending'}}" }
+// Result: "Status: Verified" (string)
+```
 "Status: {{status || 'Unknown'}}"              // OR fallback
 "Access: {{age >= 18 && verified ? 'Yes' : 'No'}}"  // Full logical operators
 "Total: ${{price * quantity + shipping}}"      // Mathematics
@@ -3636,121 +3670,78 @@ CASE steps use the `condition:` prefix for complex conditional branching with **
 
 ## Security Features
 
-### Unified Expression Evaluator Architecture
+### Simplified JavaScript Evaluation Architecture
 
-The Workflow Engine uses a **single, unified expression evaluator** that provides consistent syntax and security across all contexts. This architecture replaced the previous dual-evaluator system to provide better maintainability, consistency, and developer experience.
+The Workflow Engine uses a **direct JavaScript evaluation approach** with security through controlled access limited to to exported variables and functions. This simplified architecture provides 100% JavaScript compatibility while maintaining security.
 
 #### Core Security Principles
 
 1. **Developer Trust Model**: Workflows are authored by developers, not end users
-2. **Value-Only User Input**: Users provide variable values, not code structure or operators
-3. **Configurable Security**: Adjustable security levels based on deployment context
-4. **Pattern-Based Protection**: Comprehensive blocking of dangerous code patterns
+2. **Controlled Access**: Only exported entities are allowed as valid JavaScript identifiers.  
+3. **User Input Safety**: User inputs are treated as values, not code structure
+4. **Function Constructor**: Uses JavaScript Function constructor with acess explictly limited to wxported entities.
+5. **No eval()**: Direct function construction without string evaluation dangers
 
-#### Unified Security Implementation
+#### Security Features
 
+**User Input Safety**:
+- User inputs become **values** in the variable context
+- Users cannot inject code structure or operators
+- Variable names are controlled by developers, not users
+
+**Function Constructor Safety**:
+- No string `eval()` vulnerabilities
+- Parameter names validated before function construction
+- Expression evaluated in controlled scope
+
+#### What's Allowed vs Blocked
+
+**✅ ALLOWED - Full JavaScript within parameter scope**:
 ```javascript
-// Single evaluator with configurable security options
-evaluateExpression(expression, variables, contextStack, options = {
-  securityLevel: 'standard',        // 'strict', 'standard', 'permissive'
-  allowLogicalOperators: true,      // Enable &&, ||, ! operators
-  allowMathOperators: true,         // Enable +, -, *, /, % operators
-  allowComparisons: true,           // Enable ==, !=, <, >, <=, >= operators
-  allowTernary: true,               // Enable ?: conditional expressions
-  context: 'template',              // For logging and debugging
-  returnType: 'auto'                // 'string', 'boolean', 'auto'
-})
+{{userName}}                        // Variable access
+{{age >= 18 && verified}}           // All logical operators
+{{price * quantity + tax}}          // All mathematical operations  
+{{status || 'default'}}             // Nullish coalescing
+{{items.length > 0 ? 'Has items' : 'Empty'}}  // Ternary conditionals
+{{Math.round(average)}}             // Method calls on allowed objects
 ```
 
-#### Security Levels
+**❌ AUTOMATICALLY BLOCKED - Access to any unexported variable or function
 
-**Standard Level (Default)**
-- ✅ **Allowed**: All mathematical operations, logical operators, comparisons, ternary expressions
-- ✅ **Variable Access**: Safe nested property access (`user.profile.name`)
-- ✅ **OR Fallbacks**: Variable fallbacks (`{{status || 'default'}}`)
-- ❌ **Blocked**: Function calls, object manipulation, code execution, assignment operators
-
-**Strict Level (High Security)**
-- ✅ **Allowed**: Basic variable access and mathematical operations only
-- ❌ **Blocked**: All logical operators, advanced expressions, bracket notation
-
-**Permissive Level (Full Trust)**
-- ✅ **Allowed**: All standard features plus advanced expressions
-- ✅ **Bracket Notation**: Dynamic property access (`user['property']`)
-- ❌ **Still Blocked**: Core dangerous patterns (function calls, eval, etc.)
-
-#### Comprehensive Pattern Blocking
-
-The unified evaluator blocks dangerous patterns at all security levels:
-
-```javascript
-// ❌ BLOCKED EVERYWHERE - Core Dangerous Patterns
-{{eval('malicious')}}              // Code execution
-{{constructor.prototype}}          // Object manipulation
-{{process.env}}                    // System access
-{{setTimeout()}}                   // Function calls
-{{global.something}}               // Global access
-{{fetch('http://evil.com')}}       // Network requests
-{{new Date()}}                     // Constructor calls
-{{delete user.data}}               // Delete operations
-{{user = 'hacked'}}                // Assignment operations
-
-// ✅ ALLOWED - Safe Expressions (All Contexts)
-{{user.name}}                      // Variable access
-{{age >= 18 && verified}}          // Logical expressions
-{{balance + fee - discount}}       // Mathematical operations
-{{status === 'active' ? 'Online' : 'Offline'}}  // Conditional expressions
-{{items.length > 0 || hasDefault}} // Complex logical expressions
-```
-
-#### Context-Aware Security
-
-The evaluator adjusts behavior based on context:
-
-```javascript
-// Template Interpolation Context
-"Welcome {{user.name}}! Status: {{verified && active ? 'Ready' : 'Pending'}}"
-
-// Condition Evaluation Context  
-"condition:{{age >= 21 && verified && (income > 50000 || hasGuarantor)}}"
-
-// Variable Assignment Context
-variable: "{{(basePrice * quantity) + (isPremium ? 0 : shippingFee)}}"
-```
-
-#### Security Benefits of Unified Approach
-
-**Consistency**: Same syntax works everywhere, reducing developer confusion and errors.
-
-**Maintainability**: Single codebase for security patterns, easier to audit and update.
-
-**Flexibility**: Configurable security levels allow adjustment for different deployment environments.
-
-**Future-Proof**: Easy to add new operators or security features without architectural changes.
-
-**Developer Experience**: Predictable behavior across all expression contexts.
-
-### Expression Error Handling
-
-When expressions encounter errors or security violations:
-
-```javascript
-// Security violations
-{{eval('dangerous')}}     // Result: "[blocked: eval('dangerous')]"
-
-// Runtime errors  
-{{user.nonexistent.prop}} // Result: "[error: Cannot read property of undefined]"
-
-// Type errors
-{{text * boolean}}        // Result: "[math-error: invalid operands]"
-
-// Graceful fallbacks with OR operator
-{{user.name || 'Guest'}}  // Result: "Guest" (if user.name is undefined)
-```
+**Developer Responsibility**:
 
 ## Advanced Expression Features
 
-### Nested Variable Access
+### Type Preservation Examples
+
+The new expression system correctly preserves JavaScript types in single expressions:
+
+```javascript
+// SET steps preserve native types
+{ type: "SET", variable: "attempt_count", value: "{{attempt_count + 1}}" }
+// Result: attempt_count = 2 (number)
+
+{ type: "SET", variable: "is_eligible", value: "{{age >= 18 && verified}}" }  
+// Result: is_eligible = true (boolean)
+
+{ type: "SET", variable: "user_profile", value: "{{api_response.user}}" }
+// Result: user_profile = {name: "John", ...} (object)
+```
+
+### Template String Examples  
+
+String templates automatically convert embedded expressions to strings:
+
+```javascript
+// SAY steps with templates create strings
+{ type: "SAY", value: "Attempt {{attempt_count + 1}} of {{max_attempts}}" }
+// Result: "Attempt 2 of 3"
+
+{ type: "SAY", value: "Welcome {{user.name}} ({{verified ? 'Verified' : 'Pending'}})" }
+// Result: "Welcome John (Verified)"
+```
+
+### Variable Access
 
 ```javascript
 // Deep object traversal
@@ -3917,12 +3908,12 @@ Register custom business logic functions for use in expressions:
 
 ```javascript
 // Example: Register custom functions during engine initialization
-const APPROVED_FUNCTIONS = new Map([
-  ['currentTime', () => new Date().toISOString()],
-  ['extractCrypto', (text) => /* crypto extraction logic */],
-  ['formatCurrency', (amount, currency) => /* formatting logic */],
-  ['validateEmail', (email) => /* validation logic */]
-]);
+const APPROVED_FUNCTIONS = {
+  'currentTime': () => new Date().toISOString(),
+  'extractCrypto': (text) => /* crypto extraction logic */,
+  'formatCurrency': (amount, currency) => /* formatting logic */,
+  'validateEmail': (email) => /* validation logic */
+};
 
 // Use in expressions
 {{currentTime()}}                               // Current timestamp

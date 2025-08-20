@@ -191,12 +191,12 @@ async function sendEmail(email, subject, body) {
 }
 
 /* ---------- Registries ---------- */
-const APPROVED_FUNCTIONS = new Map([
-   ["validateDigits", validateDigits],
-   ["validate_phone_format", validate_phone_format],
-   ["valid_email", valid_email],
-   ["genAndSendPaymentLink", genAndSendPaymentLink]
-]);
+const APPROVED_FUNCTIONS = {
+   "validateDigits": validateDigits,
+   "validate_phone_format": validate_phone_format,
+   "valid_email": valid_email,
+   "genAndSendPaymentLink": genAndSendPaymentLink
+};
 
 const toolsRegistry = [
 	{

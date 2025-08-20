@@ -80,7 +80,7 @@ async function createSupportTicket({ subject, description, customer_email }) {
 }
 
 /* ---------- Registries ---------- */
-const APPROVED_FUNCTIONS = new Map([["createSupportTicket", createSupportTicket]]);
+const APPROVED_FUNCTIONS = {"createSupportTicket": createSupportTicket};
 
 const toolsRegistry = [
 	{
