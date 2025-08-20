@@ -3482,6 +3482,7 @@ The workflow engine uses **direct JavaScript evaluation** with a security framew
 ```
 
 **Template String (String Converting)**:
+
 ```javascript  
 // In SAY steps or other string contexts
 { type: "SAY", value: "Attempt {{attempt_count + 1}} of {{max_attempts}}" }
@@ -3489,11 +3490,6 @@ The workflow engine uses **direct JavaScript evaluation** with a security framew
 
 { type: "SAY", value: "Status: {{verified ? 'Verified' : 'Pending'}}" }
 // Result: "Status: Verified" (string)
-```
-"Status: {{status || 'Unknown'}}"              // OR fallback
-"Access: {{age >= 18 && verified ? 'Yes' : 'No'}}"  // Full logical operators
-"Total: ${{price * quantity + shipping}}"      // Mathematics
-"condition:{{age >= 18 && verified && balance > 100}}"  // Complex conditions
 ```
 
 ## Security Features
@@ -3969,10 +3965,10 @@ Variables operate at multiple levels:
   id: "eligibility-check", 
   type: "CASE",
   branches: {
-    "condition:{{age >= 21 && is_verified && credit_score > 750}}": {
+    "condition: age >= 21 && is_verified && credit_score > 750": {
       type: "SAY", value: "Premium tier approved!"
     },
-    "condition:{{age >= 18 && is_verified}}": {
+    "condition: age >= 18 && is_verified": {
       type: "SAY", value: "Standard features available"
     },
     "default": { type: "SAY", value: "Complete verification first" }
@@ -4254,7 +4250,7 @@ All step types support error handling through various mechanisms:
   id: "validate-amount",
   type: "CASE",
   branches: {
-    "condition:{{payment_amount > 0 && payment_amount <= max_amount}}": {
+    "condition: payment_amount > 0 && payment_amount <= max_amount": {
       type: "SAY",
       value: "Amount validated. Proceeding with payment."
     },
@@ -4493,11 +4489,11 @@ The **CASE** step provides powerful condition-based branching using expression e
   id: "age_verification_case",
   type: "CASE",
   branches: {
-    "condition:{{user_age}} >= 21": {
+    "condition: user_age >= 21": {
       type: "SAY",
       value: "Full access granted"
     },
-    "condition:{{user_age}} >= 18": {
+    "condition: user_age >= 18": {
       type: "SAY",
       value: "Limited access granted"
     },
@@ -4513,9 +4509,9 @@ The **CASE** step provides powerful condition-based branching using expression e
 
 **Condition Evaluation**: Branch keys must start with `condition:` followed by an expression
 ```javascript
-"condition:{{variable}} > 100"           // Numeric comparison
-"condition:{{status}} === 'active'"      // String comparison  
-"condition:{{verified}} && {{premium}}"  // Boolean logic
+"condition: variable > 100"      // Numeric comparison
+"condition: status === 'active'" // String comparison  
+"condition: verified && premium" // Boolean logic
 ```
 
 **Expression Security**: Conditions are evaluated safely with input sanitization
@@ -4530,9 +4526,9 @@ The **CASE** step provides powerful condition-based branching using expression e
   type: "CASE",
   branches: {
     // ✅ Correct order - most specific first
-    "condition:{{score}} >= 90": { /*...*/ },
-    "condition:{{score}} >= 80": { /*...*/ },
-    "condition:{{score}} >= 70": { /*...*/ },
+    "condition: score >= 90": { /*...*/ },
+    "condition: score >= 80": { /*...*/ },
+    "condition: score >= 70": { /*...*/ },
     "default": { /*...*/ }
   }
 }
@@ -4546,16 +4542,16 @@ The **CASE** step provides powerful condition-based branching using expression e
   id: "loan_approval_case",
   type: "CASE",
   branches: {
-    "condition:{{credit_score}} >= 750 && {{income}} >= 75000 && {{debt_ratio}} < 0.3": {
+    "condition: credit_score >= 750 && income >= 75000 && debt_ratio < 0.3": {
       type: "SET",
       variable: "loan_status", 
       value: "PRE_APPROVED"
     },
-    "condition:{{credit_score}} >= 650 && {{income}} >= 50000 && {{debt_ratio}} < 0.4": {
+    "condition: credit_score >= 650 && income >= 50000 && debt_ratio < 0.4": {
       type: "FLOW",
       value: "ManualReviewFlow"
     },
-    "condition:{{credit_score}} >= 600 && {{income}} >= 30000": {
+    "condition: credit_score >= 600 && income >= 30000": {
       type: "SET",
       variable: "loan_status",
       value: "CONDITIONAL_APPROVAL" 
@@ -4575,12 +4571,12 @@ The **CASE** step provides powerful condition-based branching using expression e
   id: "email_domain_case",
   type: "CASE", 
   branches: {
-    "condition:{{email.includes('@company.com')}}": {
+    "condition: email.includes('@company.com')": {
       type: "SET",
       variable: "user_type",
       value: "EMPLOYEE"
     },
-    "condition:{{email.length > 0}}": {
+    "condition: email.length > 0": {
       type: "SET",
       variable: "user_type", 
       value: "EXTERNAL"
@@ -4599,11 +4595,11 @@ The **CASE** step provides powerful condition-based branching using expression e
   id: "business_hours_case",
   type: "CASE",
   branches: {
-    "condition:{{current_hour}} >= 9 && {{current_hour}} < 17 && {{day_of_week}} <= 5": {
+    "condition: current_hour >= 9 && current_hour < 17 && day_of_week <= 5": {
       type: "FLOW",
       value: "LiveAgentFlow"
     },
-    "condition:{{current_hour}} >= 17 || {{current_hour}} < 9 || {{day_of_week}} > 5": {
+    "condition: current_hour >= 17 || current_hour < 9 || day_of_week > 5": {
       type: "FLOW", 
       value: "AfterHoursFlow"
     },
@@ -4632,14 +4628,6 @@ The expression evaluator includes multiple security layers:
 **Input Sanitization**
 User inputs are stored in a special class of variables which enable safety sanitation.
 
-```javascript
-// ❌ Blocked patterns
-"condition:eval()"          // Code execution
-"condition:require()"       // Module imports  
-"condition:process.exit()"  // System calls
-"condition:__proto__"       // Prototype pollution
-```
-
 **Context Isolation**: Expressions run in isolated context
 - No access to global objects
 - No access to Node.js APIs
@@ -4654,10 +4642,10 @@ When variables referenced in conditions are undefined:
 
 ```javascript
 // If user_age is undefined
-"condition:{{user_age >= 18}}"  // Evaluates to false
+"condition: user_age >= 18"  // Evaluates to false
 
 // Defensive programming
-"condition:{{user_age !== null && user_age >= 18}}"
+"condition: user_age !== null && user_age >= 18"
 ```
 
 ### Fallback Strategies
@@ -4668,12 +4656,12 @@ Always provide meaningful default branches:
 {
   type: "CASE",
   branches: {
-    "condition:{{score >= 90}}": {
+    "condition: score >= 90": {
       type: "SET",
       variable: "grade",
       value: "A"
     },
-    "condition:{{score >= 80}}": {
+    "condition: score >= 80": {
       type: "SET", 
       variable: "grade",
       value: "B"
@@ -4682,7 +4670,7 @@ Always provide meaningful default branches:
       // Handle missing score or unexpected values
       type: "CASE",
       branches: {
-        "condition:{{score !== null}}": {
+        "condition: score !== null": {
           type: "SET",
           variable: "grade", 
           value: "F"
@@ -5026,7 +5014,7 @@ node test-jsfe.js --test all > test-results.out 2>&1
   id: "payment-processing",
   steps: [
     { type: "SAY-GET", variable: "amount", value: "Enter payment amount:" },
-    { type: "CASE", branches: { "condition:{{amount > 0 && amount <= 10000}}": {...} }},
+    { type: "CASE", branches: { "condition: amount > 0 && amount <= 10000": {...} }},
     { type: "CALL-TOOL", tool: "PaymentProcessor", onFail: {...} },
     { type: "SAY", value: "Payment processed successfully!" }
   ]

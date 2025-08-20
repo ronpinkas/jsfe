@@ -688,7 +688,8 @@ their original workflow seamlessly.
 - ✅ **SET** - Variable assignment with interpolation support
 - ✅ **CALL-TOOL** - External tool execution with error handling
 - ✅ **FLOW** - Sub-flow execution with multiple call types
-- ✅ **SWITCH** - Enhanced conditional branching with expressions
+- ✅ **CASE** - Conditional branching with expressions
+- ✅ **SWITCH** - Conditional branching based on single value matching
 
 ### Expression System
 
