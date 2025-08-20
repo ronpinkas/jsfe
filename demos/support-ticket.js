@@ -105,7 +105,7 @@ const toolsRegistry = [
 const flowsMenu = [
 	{
 		id: "support-ticket",
-    version: "1.1.0",
+    	version: "1.1.0",
 		name: "OpenSupportTicket",
 		prompt: "Open a new support ticket",
 		prompt_es: "Abrir un nuevo ticket de soporte",
@@ -149,7 +149,7 @@ const flowsMenu = [
 					customer_email: "{{customer_email}}"
 				}
 			},
-      { type: "SET", id: "set_2", variable: "success", value: "{{ticket_result.ok}}" },
+      { type: "SET", id: "set_2", variable: "success", value: "ticket_result.ok" },
       {
         type: 'SWITCH', id: 'switch_1', variable: 'success',
         branches: {
