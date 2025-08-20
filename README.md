@@ -9,7 +9,8 @@ npm i jsfe
 
 ## 📖 Documentation
 
-- **[JavaScript Flow Engine User Guide](JavaScript%20Flow%20Engine.md)** - Comprehensive tutorials, examples, and best practices
+- **[JavaScript Flow Engine User Guide](JavaScript%20Flow%20Engine.md)** 
+- Comprehensive tutorials, examples, and best practices
 - **[README.md](README.md)** - Technical API reference (this document)
 
 *For detailed tutorials, step-by-step examples, and comprehensive workflow patterns, see the **[User Guide](JavaScript%20Flow%20Engine.md)**.*
@@ -219,6 +220,7 @@ You can integrate any AI service (Claude, Gemini, local LLMs, etc.) by implement
 The engine operates through four primary registries that define its capabilities:
 
 #### 1. **Flows Registry** - Workflow Definitions
+
 ```javascript
 const flowsMenu = [
   {
@@ -236,6 +238,7 @@ const flowsMenu = [
 ```
 #### Referencing Tool Results in Later Steps
 When a CALL-TOOL step finishes, it can store the returned data into a variable you name via the variable property. That variable will hold the entire return object from the tool.
+
 ```javascript
 Using variable
 {
@@ -259,6 +262,7 @@ Because you get the raw return object, you do not need to use .result in your te
 If you omit variable, you won’t be able to access the tool’s output later.
 
 #### 2. **Tools Registry** - External Integrations
+
 ```javascript
 const toolsRegistry = [
   {
@@ -281,6 +285,7 @@ const toolsRegistry = [
 ```
 
 #### 3. **Approved Functions Registry** - Secure Local Functions
+
 ```javascript
 const APPROVED_FUNCTIONS = {};
 
@@ -306,7 +311,8 @@ const globalVariables = {
 ### Session Management
 
 - Each user requires a unique session context via `initSession(logger, userId, sessionId)`
-- **CRITICAL**: `updateActivity()` returns an updated `EngineSessionContext` - you must always update your session reference
+- **CRITICAL**: `updateActivity()` returns an updated `EngineSessionContext` 
+- You must always update your session reference on every call
 - The `EngineSessionContext` object should be persisted by your application
 - Pass the same session context to `updateActivity` for conversation continuity
 - **Session Isolation**: Each user/session must have its own context to prevent state contamination
@@ -442,7 +448,9 @@ return aiResponse;
 
 ### Stack-of-Stacks Design
 
-The Flow Engine implements a sophisticated "stack-of-stacks" architecture that allows flows to be suspended and resumed, enabling users to naturally interrupt one workflow to handle another task, then return to their original workflow seamlessly.
+The Flow Engine implements a sophisticated "stack-of-stacks" architecture that allows flows to be suspended
+and resumed, enabling users to naturally interrupt one workflow to handle another task, then return to
+their original workflow seamlessly.
 
 #### Core Components
 
@@ -684,7 +692,9 @@ The Flow Engine implements a sophisticated "stack-of-stacks" architecture that a
 
 ### Expression System
 
-The JSFE engine features a **powerful, unified JavaScript expression evaluator** that provides consistent syntax and behavior across all contexts. This system supports the full range of JavaScript expressions while maintaining security through a trusted developer model.
+The JSFE engine features a **powerful, unified JavaScript expression evaluator** that provides consistent
+syntax and behavior across all contexts. This system supports the full range of JavaScript expressions
+while maintaining security through a trusted developer model and limiting user input usage as values.
 
 #### Core Features
 - ✅ **Full JavaScript Expression Support** - All standard operators, functions, and syntax
@@ -711,13 +721,8 @@ The JSFE engine features a **powerful, unified JavaScript expression evaluator**
 ```
 
 #### Supported JavaScript Features
-- **Arithmetic**: `+`, `-`, `*`, `/`, `%`, `**` (exponentiation)
-- **Comparison**: `===`, `!==`, `>`, `<`, `>=`, `<=`, `==`, `!=`
-- **Logical**: `&&`, `||`, `!`, `??` (nullish coalescing)
-- **Ternary**: `condition ? true_value : false_value`
-- **Object/Array Access**: `obj.prop`, `obj['key']`, `arr[index]`
-- **Method Calls**: `str.toUpperCase()`, `arr.length`, `Math.round(num)`
-- **Template Literals**: `` `Hello ${name}` `` (within expressions)
+All JavaScript features are supported within a sandboxed environment with access limited to 
+explicitly exported variables and functions.
 
 #### Security Model
 - **Developer Trust**: Workflows authored by developers, not end users
@@ -727,7 +732,9 @@ The JSFE engine features a **powerful, unified JavaScript expression evaluator**
 
 ### Internationalization and Localization
 
-The JSFE engine supports multiple languages through localized properties in flow definitions and steps. This allows you to create workflows that automatically display messages in the user's preferred language.
+The JSFE engine supports multiple languages through localized properties in flow definitions
+and steps. This allows you to create workflows that automatically display messages in the user's
+preferred language.
 
 #### Flow-Level Localization
 
@@ -793,7 +800,9 @@ const engine = new WorkflowEngine(
 
 #### Language Fallback
 
-If a localized property is not found for the specified language, the engine automatically falls back to the default `prompt` or `value` property. This ensures your flows always work even if some translations are missing.
+If a localized property is not found for the specified language, the engine automatically falls
+back to the default `prompt` or `value` property. This ensures your flows always work even if
+some translations are missing.
 
 ```javascript
 // Example: User has language='es' but only English is available
@@ -825,7 +834,7 @@ The engine supports safe JavaScript expressions within `{{}}` templates:
 {{user.permissions.includes('admin') && creditScore > 700}}
 ```
 
-### Safe Method Calls
+### JavaScript Method and Function Calls
 
 **String Methods:**
 ```javascript
@@ -857,7 +866,7 @@ The engine supports safe JavaScript expressions within `{{}}` templates:
 {{Math.max(balance, 0)}}
 ```
 
-**Safe Functions:**
+**Functions:**
 ```javascript
 // Type conversion and validation
 {{Number(input) > 0 && !isNaN(Number(input))}}
@@ -873,7 +882,8 @@ The engine supports safe JavaScript expressions within `{{}}` templates:
 
 ## Demo/Test Mode: Flow Matching Without AI
 
-For demos, tests, or developer convenience, you can set `aiCallback` to `null` when constructing the engine. In this mode, intent detection will:
+For demos, tests, or developer convenience, you can set `aiCallback` to `null` when constructing
+the engine. In this mode, intent detection will:
 
 1. **Match by Flow Name or ID (case-insensitive):**
    - If the user input exactly matches a flow's `name` or `id`, that flow is activated.
@@ -882,7 +892,8 @@ For demos, tests, or developer convenience, you can set `aiCallback` to `null` w
 3. **No Match:**
    - If no match is found, no flow is activated.
 
-This makes it easy to run demos and tests without requiring a real AI intent detection function. In production, always provide a real `aiCallback` for robust intent detection.
+This makes it easy to run demos and tests without requiring a real AI intent detection function.
+In production, always provide a real `aiCallback` for robust intent detection.
 
 ### Test Suite Patterns
 
@@ -930,14 +941,14 @@ async function runTest(inputs, sessionContext) {
 }
 ```
 
-This pattern ensures that each test runs in complete isolation, preventing the session corruption that can occur when tests share state.
+This pattern ensures that each test runs in complete isolation, preventing the session corruption
+that can occur when tests share state.
 
 ## Security & Compliance
 
 ### Expression Security
 - ✅ **Direct JavaScript Evaluation** - Native JavaScript execution with security framework
-- ✅ **Controlled Access** - Only exported variables and functions are accessable JavaScript identifiers allowed as parameters
-scope
+- ✅ **Controlled Access** - Only exported variables and functions are accessable JavaScript identifiers allowed as parameters scope
 - ✅ **User Input Safety** - User inputs treated as values, with protection against code injection
 
 ### Transaction Management
