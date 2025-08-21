@@ -7,7 +7,7 @@ import readline from "node:readline/promises";
 import winston from 'winston';
 
 const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'debug',  // Enable debug logging to trace validation
+  level: process.env.LOG_LEVEL || 'warn',  // Enable debug logging to trace validation
   format: winston.format.printf(({ level, message }) => {
     return `${level}: ${message}`;
   }),
@@ -253,8 +253,8 @@ const flowsMenu = [
             id: "ask_known_account",
             type: "SAY-GET",
             variable: "know_acct_yes_or_no",
-            value: "{{`${cargo.voice ? 'Press 1 or ' : ''}${cargo.verb} YES if you know your account number - ${cargo.voice ? 'press 2 or ' : ''}${cargo.verb} NO if you don't.`}}",
-            value_es: "Presione 1 o diga SÍ si conoce su número de cuenta - presione 2 o diga NO si no lo conoce."
+            value: "{{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES if you know your account number - {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO if you don't.",
+            value_es: "{{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ si conoce su número de cuenta - {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb_es}} NO si no lo conoce."
          },
          {
             id: "branch_on_account_knowledge",
@@ -315,8 +315,8 @@ const flowsMenu = [
             id: "ask_acct_number",
             type: "SAY-GET",
             variable: "acct_number",
-            value: "Please say or enter your account number",
-            value_es: "Por favor diga o ingrese su número de cuenta"
+            value: "Please {{cargo.verb}} {{cargo.voice ? 'or enter ' : ''}}your account number",
+            value_es: "Por favor {{cargo.verb_es}} {{cargo.voice ? 'o ingrese ' : ''}}su número de cuenta"
          },
          {
             id: "branch_on_account_number",
@@ -368,8 +368,8 @@ const flowsMenu = [
          id: "ask_cell_or_email",
          type: "SAY-GET",
          variable: "cell_or_email",
-         value: "To locate your account we need to validate your cell or email. Press 1 or say CELL to proceed using your phone - Press 2 or say EMAIL to proceed by email.",
-         value_es: "Para localizar su cuenta necesitamos validar su celular o email. Presione 1 o diga CELULAR para proceder usando su teléfono - Presione 2 o diga EMAIL para proceder por correo."
+         value: "To locate your account we need to validate your cell or email. {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} CELL to proceed using your phone - {{cargo.voice ? 'Press 2 or ' : ''}}{{cargo.verb}} EMAIL to proceed by email.",
+         value_es: "Para localizar su cuenta necesitamos validar su celular o email. {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} CELULAR para proceder usando su teléfono - {{cargo.voice ? 'Presione 2 o ' : ''}}{{cargo.verb_es}} EMAIL para proceder por correo."
          },
          {
          id: "branch_on_cell_or_email",
@@ -458,8 +458,8 @@ const flowsMenu = [
             id: "offer_caller_id",
             type: "SAY-GET",
             variable: "use_caller_id",
-            value: "I notice you called from a number ending with {{cargo.callerId.slice(-4).split('').join('-')}}. Press 1 or say YES to use that cell - Press 2 or say NO to use another cell.",
-            value_es: "Noto que llamó desde un número que termina en {{cargo.callerId.slice(-4).split('').join('-')}}. Presione 1 o diga SÍ para usar ese celular - Presione 2 o diga NO para usar otro celular."
+            value: "I notice you called from a number ending with {{cargo.callerId.slice(-4).split('').join('-')}}. {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES to use that cell - {{cargo.voice ? 'Press 2 or ' : ''}}{{cargo.verb}} NO to use another cell.",
+            value_es: "Noto que llamó desde un número que termina en {{cargo.callerId.slice(-4).split('').join('-')}}. {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ para usar ese celular - {{cargo.voice ? 'Presione 2 o ' : ''}}{{cargo.verb_es}} NO para usar otro celular."
          },
          {
             id: "handle_caller_id_choice",
@@ -498,8 +498,8 @@ const flowsMenu = [
             id: "ask_cell_number",
             type: "SAY-GET",
             variable: "cell_number",
-            value: "Please say or enter your cell number",
-            value_es: "Por favor diga o ingrese su número de celular"
+            value: "Please {{cargo.verb}} {{cargo.voice ? 'or enter ' : ''}}your cell number",
+            value_es: "Por favor {{cargo.verb_es}} {{cargo.voice ? 'o ingrese ' : ''}}su número de celular"
          }
       ]
    },
@@ -574,8 +574,8 @@ const flowsMenu = [
          id: "ask_email",
          type: "SAY-GET",
          variable: "email",
-         value: "Please say your email",
-         value_es: "Por favor diga su correo electrónico"
+         value: "Please {{cargo.verb}} {{cargo.voice ? 'or enter ' : ''}}your email",
+         value_es: "Por favor {{cargo.verb_es}} {{cargo.voice ? 'o ingrese ' : ''}}su correo electrónico"
          },
          {
          id: "branch_on_email",
@@ -628,8 +628,8 @@ const flowsMenu = [
             "condition: otp_link_result.ok": {
                id: "success_msg",
                type: "SAY",
-               value: "Great! Payment link was sent to {{otp_link_result.api_response.DATA.TWILIOINFO.to}}",
-               value_es: "¡Genial! El enlace de pago fue enviado a {{otp_link_result.api_response.DATA.TWILIOINFO.to}}"
+               value: "Great! Payment link was sent to {{email ? email : otp_link_result.api_response.DATA.TWILIOINFO.to}}",
+               value_es: "¡Genial! El enlace de pago fue enviado a {{email ? email : otp_link_result.api_response.DATA.TWILIOINFO.to}}"
             },
             "default": {
                id: "retry_payment",
