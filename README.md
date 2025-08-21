@@ -88,6 +88,7 @@ The WorkflowEngine constructor accepts the following parameters in order, each s
 - **Content**: All workflows that the engine can detect and execute
 - **Validation**: Engine validates flow structure during initialization
 - **Requirements**: Each flow must have valid id, name, description, and steps
+- **Primary Property**: Use `primary: true` to mark user-facing entry point flows vs. helper sub-flows
 
 **4. toolsRegistry** (ToolDefinition[])
 - **Purpose**: Array of external tool definitions for CALL-TOOL steps
@@ -137,6 +138,10 @@ sessionContext.cargo.temporaryData = 'Any dynamic content';
 - **Default**: `true` - recommended for development and production
 - **Performance**: Set to `false` only in high-performance scenarios with pre-validated flows
 - **Output**: Detailed validation reports with errors, warnings, and success metrics
+- **Primary Flow Validation**: Only flows marked with `primary: true` are validated as top-level workflows
+  - Sub-flows are validated in context when called from primary flows
+  - Prevents validation errors for helper flows that depend on parent flow variables
+  - Ensures complete validation coverage through deep traversal of flow call graphs
 
 **8. language** (string, optional)
 - **Purpose**: User's preferred language for localized messages and prompts
@@ -228,6 +233,7 @@ const flowsMenu = [
     name: "ProcessPayment", 
     prompt: "Process a payment",
     description: "Handle payment processing with validation",
+    primary: true, // Optional: Marks this as a primary (user-facing) flow
     steps: [
       { type: "SAY", value: "Let's process your payment." },
       { type: "SAY-GET", variable: "amount", value: "Enter amount:" },
@@ -236,6 +242,39 @@ const flowsMenu = [
   }
 ];
 ```
+
+##### Flow Definition Properties
+
+- **`id`** (required): Unique identifier for the flow
+- **`name`** (required): Human-readable flow name used in execution context
+- **`prompt`** (required): User-facing description for AI intent detection
+- **`description`** (required): Detailed description of the flow's purpose
+- **`primary`** (optional): Boolean flag marking user-facing entry point flows
+  - `true`: Primary flows are standalone workflows that users can directly trigger
+  - `false` or omitted: Helper/sub-flows called by other flows, not directly accessible
+  - **Validation Impact**: Only primary flows are validated as top-level workflows during initialization
+  - **AI Detection**: Only primary flows are considered for intent detection and user interaction
+- **`steps`** (required): Array of workflow steps to execute
+- **`variables`** (optional): Flow-specific variable definitions with types and descriptions
+- **`version`** (optional): Flow version for compatibility tracking (defaults to "1.0")
+
+##### Primary vs. Sub-Flow Architecture
+
+The `primary` property enables a clean separation between:
+
+**Primary Flows** (`primary: true`):
+- User-facing workflows that can be directly triggered by user input
+- Entry points for specific business processes (e.g., "StartPayment", "CreateTicket")
+- Included in AI intent detection and flow selection
+- Validated as standalone workflows during engine initialization
+
+**Sub-Flows** (no `primary` property or `primary: false`):
+- Helper workflows called by other flows (e.g., "RetryPayment", "ValidateInput")
+- Internal logic flows for error handling, validation, or shared functionality
+- Not directly accessible to users through intent detection
+- Validated only when called from primary flows, ensuring proper variable context
+
+This architecture prevents validation errors for sub-flows that depend on variables from their calling flows, while ensuring complete validation coverage during the engine's deep validation process.
 #### Referencing Tool Results in Later Steps
 When a CALL-TOOL step finishes, it can store the returned data into a variable you name via the variable property. That variable will hold the entire return object from the tool.
 
