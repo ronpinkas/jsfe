@@ -1,10 +1,16 @@
-warn: ⚠️  Flow validation passed with 3 warnings
+warn: ⚠️  Flow validation passed with 6 warnings
 warn: ⚠️  Flow "PaymentRetryEscalation" has 1 warnings:
 warn:    • SWITCH step "handle-escalation-choice" in flow "PaymentRetryEscalation" missing "default" branch - recommended for error handling
+warn: ⚠️  Flow "ApiTestingFlow" has 1 warnings:
+warn:    • Circular flow reference detected: api-testing-flow-v1.0 → api-testing-flow-restart-v1.0 → api-testing-flow-v1.0
+warn: ⚠️  Flow "UserAccessControl" has 1 warnings:
+warn:    • Circular flow reference detected: user-access-control-v1.0 → user-access-control-restart-v1.0 → user-access-control-v1.0
 warn: ⚠️  Flow "SmartOnFailUnrecoverableTest" has 1 warnings:
 warn:    • CALL-TOOL step "failing-payment-call" argument "amount" may not match expected type number
+warn: ⚠️  Flow "SimpleSelfRetryDemo" has 1 warnings:
+warn:    • Circular flow reference detected: simple-self-retry-demo-v1.0 → simple-self-retry-demo-v1.0
 warn: ⚠️  Flow "SmartSelfRetryDemo" has 1 warnings:
-warn:    • Circular flow reference detected: SmartSelfRetryDemo → SmartSelfRetryDemo
+warn:    • Circular flow reference detected: smart-self-retry-demo-v1.0 → smart-self-retry-demo-v1.0
 
 🚀 Running ALL test scenarios (42 total) in en
 ================================================================================
@@ -13,7 +19,7 @@ warn:    • Circular flow reference detected: SmartSelfRetryDemo → SmartSelfR
 📝 Inputs (2): What's the weather in London? → London
 
 🧪 Enhanced Workflow Engine - Test Simulation Mode
-Session ID: b8eeaabc-9dc8-45cb-8a85-8efdcd8509d6
+Session ID: 29d12148-9b6e-4e5a-8284-83a889c3d5b4
 Running 2 simulated inputs...
 
 ============================================================
@@ -26,12 +32,12 @@ Enter the city name to get current weather information
 
 You: London [SIMULATED]
 
-🤖 AI: Current weather in London, : Partly cloudy at 20°C (49% humidity)
-Last updated: 2025-08-20T20:20:06.498Z
+🤖 AI: Current weather in London, : Patchy rain nearby at 15°C (72% humidity)
+Last updated: 2025-08-21T07:20:17.321Z
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 5621ms
+Session duration: 10078ms
 Simulated inputs processed: 2/2
 ✅ [1/42] weatherMappingTest - PASSED
 
@@ -60,13 +66,13 @@ What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 50.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=54a21b5e-be66-4a51-bd1a-0ef3c55e3c2b
-Payment ID: 54a21b5e-be66-4a51-bd1a-0ef3c55e3c2b
-Expires: 2025-08-20T21:20:11.212Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=b3c41dec-3656-4ca7-ad75-b0f7a2a4a812
+Payment ID: b3c41dec-3656-4ca7-ad75-b0f7a2a4a812
+Expires: 2025-08-21T08:20:21.216Z
 
 👋 Ending simulation. Session summary:
 Interactions: 4
-Session duration: 10339ms
+Session duration: 13973ms
 Simulated inputs processed: 3/3
 ✅ [2/42] paymentWorkflowTest - PASSED
 
@@ -87,8 +93,8 @@ Enter the city name to get current weather information
 
 You: New York [SIMULATED]
 
-🤖 AI: Current weather in Weehawken, : Overcast at 21°C (81% humidity)
-Last updated: 2025-08-20T20:20:15.917Z
+🤖 AI: Current weather in New York, : Heavy rain, mist at 16°C (93% humidity)
+Last updated: 2025-08-21T07:20:24.596Z
 
 You: What's the weather in Tokyo? [SIMULATED]
 
@@ -98,8 +104,8 @@ Enter the city name to get current weather information
 
 You: Tokyo [SIMULATED]
 
-🤖 AI: Current weather in null, : Partly cloudy at 27°C (91% humidity)
-Last updated: 2025-08-20T20:20:17.357Z
+🤖 AI: Current weather in Shikinejima, : Sunny at 31°C (71% humidity)
+Last updated: 2025-08-21T07:20:28.468Z
 
 You: What's the weather in London? [SIMULATED]
 
@@ -109,12 +115,12 @@ Enter the city name to get current weather information
 
 You: London [SIMULATED]
 
-🤖 AI: Current weather in London, : Partly cloudy at 20°C (49% humidity)
-Last updated: 2025-08-20T20:20:19.991Z
+🤖 AI: Current weather in London, : Patchy rain nearby at 15°C (72% humidity)
+Last updated: 2025-08-21T07:20:30.168Z
 
 👋 Ending simulation. Session summary:
 Interactions: 7
-Session duration: 19113ms
+Session duration: 22924ms
 Simulated inputs processed: 6/6
 ✅ [3/42] multiWeatherTest - PASSED
 
@@ -143,9 +149,9 @@ What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 25.50 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/25.50?id=c7e2c4b8-3b28-483e-ba20-48ad45e2bc32
-Payment ID: c7e2c4b8-3b28-483e-ba20-48ad45e2bc32
-Expires: 2025-08-20T21:20:29.535Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/25.50?id=f0c80189-afbd-47bb-8a90-a8c1bb2635de
+Payment ID: f0c80189-afbd-47bb-8a90-a8c1bb2635de
+Expires: 2025-08-21T08:20:34.518Z
 
 You: I want to make another payment [SIMULATED]
 
@@ -163,13 +169,13 @@ What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 100.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/100.00?id=d7b55be5-a1f3-455d-a22b-80c4af3de99c
-Payment ID: d7b55be5-a1f3-455d-a22b-80c4af3de99c
-Expires: 2025-08-20T21:20:34.614Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/100.00?id=de694fa6-979a-4128-91d9-f2560ce1ca6c
+Payment ID: de694fa6-979a-4128-91d9-f2560ce1ca6c
+Expires: 2025-08-21T08:20:37.733Z
 
 👋 Ending simulation. Session summary:
 Interactions: 7
-Session duration: 33736ms
+Session duration: 30489ms
 Simulated inputs processed: 6/6
 ✅ [4/42] multiPaymentTest - PASSED
 
@@ -203,7 +209,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 4
-Session duration: 36929ms
+Session duration: 33525ms
 Simulated inputs processed: 3/3
 ✅ [5/42] invalidAccountTest - PASSED
 
@@ -242,12 +248,12 @@ Enter the city name to get current weather information
 
 You: Paris [SIMULATED]
 
-🤖 AI: Current weather in Paris, : Overcast at 18°C (88% humidity)
-Last updated: 2025-08-20T20:20:43.544Z
+🤖 AI: Current weather in Paris, : Light rain at 16°C (88% humidity)
+Last updated: 2025-08-21T07:20:45.652Z
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 42666ms
+Session duration: 38408ms
 Simulated inputs processed: 5/5
 ✅ [6/42] interruptionTest - PASSED
 
@@ -268,8 +274,8 @@ Enter the city name to get current weather information
 
 You: Tokyo [SIMULATED]
 
-🤖 AI: Current weather in null, : Partly cloudy at 27°C (91% humidity)
-Last updated: 2025-08-20T20:20:45.450Z
+🤖 AI: Current weather in Shikinejima, : Sunny at 31°C (71% humidity)
+Last updated: 2025-08-21T07:20:49.379Z
 
 You: I need to make a payment [SIMULATED]
 
@@ -287,13 +293,13 @@ What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 99.99 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/99.99?id=d00e84d1-f3bd-477e-ab3e-38c712a3b5e3
-Payment ID: d00e84d1-f3bd-477e-ab3e-38c712a3b5e3
-Expires: 2025-08-20T21:20:49.195Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/99.99?id=d8b06851-55b4-4944-82a9-4c6f9cbd1660
+Payment ID: d8b06851-55b4-4944-82a9-4c6f9cbd1660
+Expires: 2025-08-21T08:20:52.164Z
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 48317ms
+Session duration: 44920ms
 Simulated inputs processed: 5/5
 ✅ [7/42] businessFlowsTest - PASSED
 
@@ -312,13 +318,13 @@ You: What's the current Bitcoin price? [SIMULATED]
 
 I will check the price of bitcoin
 
-I found this info: {"crypto_name":"BITCOIN","price":114021,"change_24h":0.7515468364525965,"currency":"USD"}
+I found this info: {"crypto_name":"BITCOIN","price":113658,"change_24h":-0.09194680747497594,"currency":"USD"}
 
-💰 BITCOIN Price is $114021 - 24h Change: 0.7515468364525965% - Last Updated: 8/20/2025, 1:20:50 PM
+💰 BITCOIN Price is $113658 - 24h Change: -0.09194680747497594% - Last Updated: 8/21/2025, 12:20:53 AM
 
 👋 Ending simulation. Session summary:
 Interactions: 2
-Session duration: 49688ms
+Session duration: 46699ms
 Simulated inputs processed: 1/1
 ✅ [8/42] cryptoPriceTest - PASSED
 
@@ -347,7 +353,7 @@ Website: hildegard.org
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 51502ms
+Session duration: 47867ms
 Simulated inputs processed: 2/2
 ✅ [9/42] apiIntegrationTest - PASSED
 
@@ -379,7 +385,7 @@ Result: {"location":{"name":"New York","country":"United States","coordinates":"
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 52510ms
+Session duration: 48826ms
 Simulated inputs processed: 2/2
 ✅ [10/42] responseMappingTest - PASSED
 
@@ -453,217 +459,257 @@ Result: <?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/
             <link>https://www.bbc.co.uk/news</link>
         </image>
         <generator>RSS for Node</generator>
-        <lastBuildDate>Wed, 20 Aug 2025 20:20:53 GMT</lastBuildDate>
+        <lastBuildDate>Thu, 21 Aug 2025 07:20:57 GMT</lastBuildDate>
         <atom:link href="https://feeds.bbci.co.uk/news/rss.xml" rel="self" type="application/rss+xml"/>
         <copyright><![CDATA[Copyright: (C) British Broadcasting Corporation, see https://www.bbc.co.uk/usingthebbc/terms-of-use/#15metadataandrssfeeds for terms and conditions of reuse.]]></copyright>
         <language><![CDATA[en-gb]]></language>
         <ttl>15</ttl>
         <item>
-            <title><![CDATA[Israeli military says first stages of assault on Gaza City have begun]]></title>
-            <description><![CDATA[Call-up letters have gone out to 60,000 reservists to bolster an operation which is expected to last until next year.]]></description>
+            <title><![CDATA[Dozens more UK Afghan data breaches uncovered]]></title>
+            <description><![CDATA[The MoD admits 49 data breaches at the unit handling applications from Afghans seeking safety in the UK.]]></description>
+            <link>https://www.bbc.com/news/articles/cp8950pyy1vo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cp8950pyy1vo#0</guid>
+            <pubDate>Thu, 21 Aug 2025 05:00:01 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/f7b3/live/20c016c0-7dce-11f0-88a2-b9725373e32e.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Palestinians flee Gaza City districts as Israel says first stages of assault have begun]]></title>
+            <description><![CDATA[An Israeli military spokesman says troops will deepen the damage to the "terror infrastructure" held by Hamas.]]></description>
             <link>https://www.bbc.com/news/articles/clyr7l0z9edo?at_medium=RSS&amp;at_campaign=rss</link>
             <guid isPermaLink="false">https://www.bbc.com/news/articles/clyr7l0z9edo#0</guid>
-            <pubDate>Wed, 20 Aug 2025 19:57:43 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/3c7f/live/8ae02ea0-7df6-11f0-97b5-2745b2279d00.jpg"/>
+            <pubDate>Thu, 21 Aug 2025 05:03:41 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/887a/live/82f15ba0-7e29-11f0-ab3e-bd52082cd0ae.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Ex-priest found guilty of 17 indecent assaults]]></title>
-            <description><![CDATA[Chris Brain abused nine women while head of the Nine O'Clock Service in Sheffield in the 80s and 90s.]]></description>
-            <link>https://www.bbc.com/news/articles/c20662dxl88o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c20662dxl88o#0</guid>
-            <pubDate>Wed, 20 Aug 2025 16:01:13 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/7a22/live/52d05360-7de6-11f0-aa3b-29990a8088ef.jpg"/>
+            <title><![CDATA[Badenoch encourages Tory councils to challenge asylum hotels]]></title>
+            <description><![CDATA[The Tory leader writes to council leaders after a court blocked a hotel from housing asylum seekers.]]></description>
+            <link>https://www.bbc.com/news/articles/cwy0j9n4qzwo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cwy0j9n4qzwo#0</guid>
+            <pubDate>Thu, 21 Aug 2025 06:58:41 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/2b52/live/f59a8eb0-7df2-11f0-99a6-6566970a8a8a.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Asylum hotel challenge doesn't end with Epping court ruling]]></title>
-            <description><![CDATA[The High Court ruling follows an unprecedented backlog in people waiting for a decision on their cases.]]></description>
-            <link>https://www.bbc.com/news/articles/cly4v3pllgko?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cly4v3pllgko#0</guid>
-            <pubDate>Wed, 20 Aug 2025 14:58:02 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/87d7/live/c0d119c0-7dbf-11f0-a512-25ed1ee64338.jpg"/>
+            <title><![CDATA[ICC says it deplores new US sanctions on judges and prosecutors]]></title>
+            <description><![CDATA[Secretary of State Marco Rubio denounces the court as "an instrument of lawfare" against the US and Israel.]]></description>
+            <link>https://www.bbc.com/news/articles/c620l3y7ydro?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c620l3y7ydro#0</guid>
+            <pubDate>Thu, 21 Aug 2025 02:29:40 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/39d7/live/67c12f60-7e2c-11f0-ab3e-bd52082cd0ae.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Why are food prices still rising by so much?]]></title>
-            <description><![CDATA[Food and drink prices have risen by 4.9% over the last year, according to ONS inflation data.]]></description>
-            <link>https://www.bbc.com/news/articles/cyvn9z3y78lo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cyvn9z3y78lo#0</guid>
-            <pubDate>Wed, 20 Aug 2025 14:00:07 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/2ef8/live/2381b250-7dcf-11f0-88a2-b9725373e32e.jpg"/>
+            <title><![CDATA[Rugby star Ilona Maher has Hollywood in her sights after offer to join the WWE]]></title>
+            <description><![CDATA[American social media sensation Ilona Maher says she may move into WWE or Hollywood as her next career move after the Women's Rugby World Cup.]]></description>
+            <link>https://www.bbc.com/sport/rugby-union/articles/cy40w4xd9mlo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/sport/rugby-union/articles/cy40w4xd9mlo#0</guid>
+            <pubDate>Thu, 21 Aug 2025 05:14:19 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/7ede/live/101dd020-7e53-11f0-a34f-318be3fb0481.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Scientists make 'superfood' that could save honeybees]]></title>
-            <description><![CDATA[We rely on honeybees to pollinate our crops and a new food could protect them from growing threats.]]></description>
-            <link>https://www.bbc.com/news/articles/c776kynn771o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c776kynn771o#0</guid>
-            <pubDate>Wed, 20 Aug 2025 15:03:02 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/7189/live/bf16e2a0-7deb-11f0-ab3e-bd52082cd0ae.jpg"/>
+            <title><![CDATA[Sony raises PlayStation 5 prices in US as tariff fears persist]]></title>
+            <description><![CDATA[The Japanese technology giant cited economic challenges as it raised prices for the consoles by around $50.]]></description>
+            <link>https://www.bbc.com/news/articles/cy081prg9jjo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cy081prg9jjo#0</guid>
+            <pubDate>Thu, 21 Aug 2025 01:45:10 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/789a/live/33576d30-7e26-11f0-be03-b746a15647b1.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Students face nervous wait for GCSE and BTec results]]></title>
-            <description><![CDATA[The GCSE pass rate is expected to be broadly similar to 2024, after years of flux during the Covid pandemic.]]></description>
-            <link>https://www.bbc.com/news/articles/c4g64qedynlo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c4g64qedynlo#0</guid>
-            <pubDate>Wed, 20 Aug 2025 15:01:26 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/e0a9/live/135c0410-7db7-11f0-88de-21c2f8cb127a.jpg"/>
+            <title><![CDATA[Government borrowing lower than expected in July]]></title>
+            <description><![CDATA[Borrowing last month was the lowest July figure for three years, following rises in tax and National Insurance receipts.]]></description>
+            <link>https://www.bbc.com/news/articles/cj6ydlk4e1no?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cj6ydlk4e1no#0</guid>
+            <pubDate>Thu, 21 Aug 2025 07:06:44 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/99ca/live/176113c0-7dc6-11f0-9a22-151ece7ed041.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Decision over Kneecap rapper terror charge delayed]]></title>
-            <description><![CDATA[Liam Óg Ó hAnnaidh was charged with a terror offence after allegedly displaying a flag in support of proscribed organisation Hezbollah.]]></description>
-            <link>https://www.bbc.com/news/articles/c939v4kw2l4o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c939v4kw2l4o#0</guid>
-            <pubDate>Wed, 20 Aug 2025 15:04:00 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/c2ba/live/64b1e9a0-7dd6-11f0-ab3e-bd52082cd0ae.jpg"/>
+            <title><![CDATA['Ice-cream man' in fatal Wembley attack named]]></title>
+            <description><![CDATA[Shazad Khan, 41, was treated for stab wounds but died at the scene on Tuesday evening, police say.]]></description>
+            <link>https://www.bbc.com/news/articles/cx23g97vk9mo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cx23g97vk9mo#0</guid>
+            <pubDate>Wed, 20 Aug 2025 19:13:16 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/196a/live/04b94450-7df7-11f0-97b5-2745b2279d00.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Wales rugby bosses say cutting professional teams to two is 'radical' option]]></title>
-            <description><![CDATA[The Welsh Rugby Union backs reducing the number of professional teams from four to two but insists no final decision has been made.]]></description>
-            <link>https://www.bbc.com/sport/rugby-union/articles/c9d0nwepedeo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/rugby-union/articles/c9d0nwepedeo#0</guid>
-            <pubDate>Wed, 20 Aug 2025 14:11:48 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/164f/live/a93384f0-7dd4-11f0-88a2-b9725373e32e.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[Government prepares to take over UK's third-largest steelworks]]></title>
-            <description><![CDATA[Managers have been lined up to take control in a bid to protect 1,500 jobs at the Yorkshire plant. ]]></description>
-            <link>https://www.bbc.com/news/articles/cj0yd0829m4o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cj0yd0829m4o#0</guid>
-            <pubDate>Wed, 20 Aug 2025 16:36:07 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/66db/live/1b193490-7dd8-11f0-ab3e-bd52082cd0ae.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[Kremlin plays down Zelensky talks as Trump warns Putin may not want to make deal]]></title>
-            <description><![CDATA[The US president conceded the war in Ukraine was "tough to solve" after several days of high-level talks.]]></description>
-            <link>https://www.bbc.com/news/articles/cn92e52rpjxo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cn92e52rpjxo#0</guid>
-            <pubDate>Wed, 20 Aug 2025 14:24:11 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/1331/live/d2dbeab0-7d32-11f0-b6c9-e1728577c12d.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[Police investigating death of French streamer seize equipment and videos]]></title>
-            <description><![CDATA[Raphaël Graven - also known as Jeanpormanove - was known for his extreme videos on the platform, Kick.]]></description>
-            <link>https://www.bbc.com/news/articles/cd0d31r423ko?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cd0d31r423ko#0</guid>
-            <pubDate>Wed, 20 Aug 2025 14:36:45 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/e719/live/cddec580-7dca-11f0-88a2-b9725373e32e.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[MND left her without a voice. Eight seconds of scratchy audio gave it back to her]]></title>
-            <description><![CDATA[Sarah Ezekiel was 34 with two children when motor neurone disease took away her ability to speak.]]></description>
-            <link>https://www.bbc.com/news/articles/c1ejvxne7elo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c1ejvxne7elo#1</guid>
-            <pubDate>Wed, 20 Aug 2025 04:51:38 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/c946/live/409dcbf0-7d0f-11f0-83cc-c5da98c419b8.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[Why Donetsk matters so much for Ukraine's defences]]></title>
-            <description><![CDATA[For Ukraine to lose western Donetsk would mean the fall of a bulwark against any future Russian advance.]]></description>
-            <link>https://www.bbc.com/news/articles/cj6yd4d5zj6o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cj6yd4d5zj6o#1</guid>
-            <pubDate>Wed, 20 Aug 2025 17:12:10 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/3fd8/live/e90c2a40-7dd5-11f0-88a2-b9725373e32e.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[What are Rachel Reeves' options on property tax?]]></title>
-            <description><![CDATA[Reports suggest the government is considering shaking up the property tax system to raise revenue.]]></description>
-            <link>https://www.bbc.com/news/articles/cm2k1m56xgjo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cm2k1m56xgjo#1</guid>
-            <pubDate>Wed, 20 Aug 2025 15:45:29 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/c9e1/live/23085c10-7dad-11f0-abdc-59614a74b023.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[Empty homes are on the rise. So why aren't they being used to solve the housing shortage?]]></title>
-            <description><![CDATA[There are almost 720,000 empty homes in England. And many more on social housing waiting lists - so why aren't we better using one to help solve the other, and is it a case of a missed opportunity?]]></description>
-            <link>https://www.bbc.com/news/articles/c3r413l5n57o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c3r413l5n57o#1</guid>
-            <pubDate>Tue, 19 Aug 2025 23:08:39 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/2274/live/ca4d4d50-7cf9-11f0-a34f-318be3fb0481.png"/>
-        </item>
-        <item>
-            <title><![CDATA['He fixes what needs fixing' - why Raducanu turned to Nadal's ex-coach ]]></title>
-            <description><![CDATA[Emma Raducanu recently appointed another full-time coach in Spaniard Francisco Roig - BBC Sport speaks to those who know him best.]]></description>
-            <link>https://www.bbc.com/sport/tennis/articles/c5ypke1n361o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/tennis/articles/c5ypke1n361o#1</guid>
-            <pubDate>Wed, 20 Aug 2025 07:06:58 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/4d65/live/f2620fb0-7d94-11f0-83cc-c5da98c419b8.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[Jewellery, cash or first cars: Do rewards boost exam grades?]]></title>
-            <description><![CDATA[Some parents offer money and gifts ahead of exams results - but does the promise of a reward work?]]></description>
-            <link>https://www.bbc.com/news/articles/cgqnzy9ej0do?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cgqnzy9ej0do#1</guid>
-            <pubDate>Wed, 20 Aug 2025 18:20:00 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/6161/live/c65a99f0-79c5-11f0-8827-ede848a7813c.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[Is Bristol cooler than Berlin? Play BBC Weather’s new guessing game Cooler Than Me?]]></title>
-            <description><![CDATA[The new guessing game from BBC Weather]]></description>
-            <link>https://www.bbc.com/weather/articles/cwy5r7xwq8xo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/weather/articles/cwy5r7xwq8xo#1</guid>
-            <pubDate>Wed, 20 Aug 2025 04:24:40 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/faf2/live/2501b7b0-7d84-11f0-a34f-318be3fb0481.png"/>
+            <title><![CDATA[Delta and United sued for selling 'window seats' without windows]]></title>
+            <description><![CDATA[Delta and United are being sued over allegedly charging extra for seats next to a blank walls.]]></description>
+            <link>https://www.bbc.com/news/articles/c754k7d0z51o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c754k7d0z51o#0</guid>
+            <pubDate>Thu, 21 Aug 2025 02:57:04 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/2f29/live/9b2932a0-7e2a-11f0-bebe-e53cb25f8f71.jpg"/>
         </item>
         <item>
             <title><![CDATA[Microsoft boss troubled by rise in reports of 'AI psychosis']]></title>
             <description><![CDATA[Mustafa Suleyman said there was still "zero evidence of AI consciousness today".]]></description>
             <link>https://www.bbc.com/news/articles/c24zdel5j18o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c24zdel5j18o#2</guid>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c24zdel5j18o#0</guid>
             <pubDate>Wed, 20 Aug 2025 16:36:03 GMT</pubDate>
             <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/4434/live/e3b1f560-7dc7-11f0-88a2-b9725373e32e.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Actress Aubrey Plaza says grief is a 'giant ocean of awfulness']]></title>
-            <description><![CDATA[The US actress says life is "a daily struggle", seven months after husband Jeff Baena's suicide.]]></description>
-            <link>https://www.bbc.com/news/articles/c30z944q42do?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c30z944q42do#2</guid>
-            <pubDate>Wed, 20 Aug 2025 09:47:33 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/3757/live/4377ce40-7dd0-11f0-83cc-c5da98c419b8.jpg"/>
+            <title><![CDATA[China's Xi touts unity and development in surprise Tibet visit]]></title>
+            <description><![CDATA[The visit to Lhasa suggests a desire to stamp the Chinese leader's authority over the region.]]></description>
+            <link>https://www.bbc.com/news/articles/cjr19770x7lo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cjr19770x7lo#0</guid>
+            <pubDate>Thu, 21 Aug 2025 04:27:35 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/b677/live/13fef860-7e47-11f0-b9c8-bf093da3c87a.jpg"/>
         </item>
         <item>
-            <title><![CDATA['Chilling' political interference in BBC must stop, says former news boss]]></title>
+            <title><![CDATA[A full guide to GCSE results day 2025]]></title>
+            <description><![CDATA[Your full guide to this year's GCSE exams in England, Wales and Northern Ireland.
+]]></description>
+            <link>https://www.bbc.com/news/articles/c1jxjk6g1l2o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c1jxjk6g1l2o#1</guid>
+            <pubDate>Wed, 20 Aug 2025 18:19:16 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/ab87/live/078130a0-5668-11f0-86a4-4f1d55abaccf.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[The 9-1 grade boundaries explained]]></title>
+            <description><![CDATA[How do the 9-1 GCSE grades compare with the previous alphabetical system?]]></description>
+            <link>https://www.bbc.com/news/articles/czrynxzvjneo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/czrynxzvjneo#1</guid>
+            <pubDate>Wed, 20 Aug 2025 18:18:32 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/4b1b/live/e874d440-566d-11f0-b065-d59d8f77ead2.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[What results day is like when you're neurodivergent - and how parents can help]]></title>
+            <description><![CDATA[Three young people tell the BBC what support they would have liked during their recent results days.]]></description>
+            <link>https://www.bbc.com/news/articles/c99mn51ny02o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c99mn51ny02o#1</guid>
+            <pubDate>Wed, 20 Aug 2025 18:21:01 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/a0a0/live/3f890900-7c3d-11f0-82b7-b3be03606fb7.png"/>
+        </item>
+        <item>
+            <title><![CDATA[What are BTecs and how are they graded?]]></title>
+            <description><![CDATA[Hundreds of thousands of students do the vocational qualifications known as BTecs every year.]]></description>
+            <link>https://www.bbc.com/news/articles/ce832ze3y1vo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/ce832ze3y1vo#1</guid>
+            <pubDate>Wed, 20 Aug 2025 18:16:24 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/7f76/live/e7df4040-7393-11f0-a20f-3b86f375586a.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[What is an apprenticeship and how much are apprentices paid?]]></title>
+            <description><![CDATA[Going to school, college or university five days a week is not the only way to get a qualification. ]]></description>
+            <link>https://www.bbc.com/news/articles/c51xenx7pvqo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c51xenx7pvqo#1</guid>
+            <pubDate>Wed, 20 Aug 2025 18:15:01 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/8b61/live/5d5d9680-3aed-11f0-9fac-e782546bd539.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Suranne Jones: Playing the prime minister 'changes your perception' of politics]]></title>
+            <description><![CDATA[Suranne Jones plays the Prime Minister whose husband is kidnapped in new political thriller, Hostage.]]></description>
+            <link>https://www.bbc.com/news/articles/cy5p7ze0ww4o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cy5p7ze0ww4o#2</guid>
+            <pubDate>Thu, 21 Aug 2025 00:29:20 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/4390/live/ba2652c0-7de2-11f0-9d89-83e91e6ff334.png"/>
+        </item>
+        <item>
+            <title><![CDATA['Labour revolt on migrant hotels' and 'cult priest guilty']]></title>
+            <description><![CDATA[Local councils seeking legal action on asylum hotels and a priest guilty of 17 sex crimes make Thursday's papers.]]></description>
+            <link>https://www.bbc.com/news/articles/crkz14ydkjgo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/crkz14ydkjgo#2</guid>
+            <pubDate>Thu, 21 Aug 2025 03:56:37 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/8fd0/live/1036f4b0-7e17-11f0-ab3e-bd52082cd0ae.png"/>
+        </item>
+        <item>
+            <title><![CDATA[How a cowboy builder ripped off his customers – and got away with it]]></title>
+            <description><![CDATA[When the BBC exposed Russell McMaster as a cowboy builder last year, angry clients demanded he be prosecuted.]]></description>
+            <link>https://www.bbc.com/news/articles/cm2v8d4z017o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cm2v8d4z017o#2</guid>
+            <pubDate>Thu, 21 Aug 2025 05:11:37 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/e1ff/live/8c2f7eb0-7db9-11f0-a34f-318be3fb0481.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Saving China's finless porpoise from the brink of extinction]]></title>
+            <description><![CDATA[Scientists are racing to protect what some view as "the most important animal" in the Yangtze.]]></description>
+            <link>https://www.bbc.com/news/articles/ce3jy7el90po?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/ce3jy7el90po#2</guid>
+            <pubDate>Wed, 20 Aug 2025 22:01:43 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/7b8d/live/bf10b8d0-7d82-11f0-83cc-c5da98c419b8.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Asylum hotel challenge doesn't end with Epping court ruling]]></title>
+            <description><![CDATA[The High Court ruling follows an unprecedented backlog in people waiting for a decision on their cases.]]></description>
+            <link>https://www.bbc.com/news/articles/cly4v3pllgko?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cly4v3pllgko#2</guid>
+            <pubDate>Wed, 20 Aug 2025 14:58:02 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/87d7/live/c0d119c0-7dbf-11f0-a512-25ed1ee64338.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[A fierce war of words keeps Thailand and Cambodia on edge]]></title>
+            <description><![CDATA[The two sides are waging an information war to win international sympathy and shore up support at home.]]></description>
+            <link>https://www.bbc.com/news/articles/clyrx53zeg4o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/clyrx53zeg4o#2</guid>
+            <pubDate>Wed, 20 Aug 2025 22:05:18 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/5ace/live/26df8a80-7da7-11f0-9bf0-839449dfa85e.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[India's biofuel drive is saving billions but also sparking worries]]></title>
+            <description><![CDATA[Critics say many vehicles in India are not biofuel-compliant, and its use could put engines at risk. The government denies this. ]]></description>
+            <link>https://www.bbc.com/news/articles/cvgv873y02eo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cvgv873y02eo#2</guid>
+            <pubDate>Thu, 21 Aug 2025 00:27:40 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/66ac/live/e4540170-7cb9-11f0-bb34-39c864367b51.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[British woman who is world's oldest living person turns 116]]></title>
+            <description><![CDATA[Ethel Caterham became the oldest living person in June, following the death of a Brazilian nun.]]></description>
+            <link>https://www.bbc.com/news/articles/cy5p7xv4zeyo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cy5p7xv4zeyo#3</guid>
+            <pubDate>Thu, 21 Aug 2025 05:07:07 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/545d/live/b002ec20-7dcb-11f0-88a2-b9725373e32e.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA['Bear attack victim' was actually killed by son, Japan police say]]></title>
+            <description><![CDATA[A man police believed was killed by a bear had in fact been stabbed to death by his son, they say.]]></description>
+            <link>https://www.bbc.com/news/articles/c62n5gv72j5o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c62n5gv72j5o#3</guid>
+            <pubDate>Thu, 21 Aug 2025 04:40:31 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/eef8/live/f68276b0-7e3f-11f0-b55a-b16a524909d2.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Texas lawmakers approve new electoral map favouring Republicans]]></title>
+            <description><![CDATA[Facing opposition from Democrats who fled the state to stall the vote, Republicans hope the new maps will lead to more seats in Congress.]]></description>
+            <link>https://www.bbc.com/news/articles/cp8z4nj17dno?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cp8z4nj17dno#3</guid>
+            <pubDate>Thu, 21 Aug 2025 01:49:44 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/bbec/live/c2da0ee0-7e1c-11f0-a9e3-1500d8bf8472.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Frank Caprio: 'Nicest judge in the world' dies aged 88]]></title>
+            <description><![CDATA[The US celebrity judge and social media star has been remembered for his "unique brand of compassion".]]></description>
+            <link>https://www.bbc.com/news/articles/c87ewp437e2o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c87ewp437e2o#3</guid>
+            <pubDate>Thu, 21 Aug 2025 05:56:13 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/d597/live/3f639430-7e41-11f0-83cc-c5da98c419b8.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Hurricane Erin's high waves thrash coast of North Carolina]]></title>
+            <description><![CDATA[Mandatory evacuation orders are in place along the Outer Banks of North Carolina amid fears islands may be cut off from the main highway.]]></description>
+            <link>https://www.bbc.com/news/articles/ce934e9gyryo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/ce934e9gyryo#3</guid>
+            <pubDate>Thu, 21 Aug 2025 02:42:00 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/46aa/live/e93b51f0-7e14-11f0-a34f-318be3fb0481.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Stop 'chilling' political interference in BBC, says ex-news boss]]></title>
             <description><![CDATA[The BBC's former director of news James Harding delivers the TV industry's flagship annual lecture.]]></description>
             <link>https://www.bbc.com/news/articles/cn85z0z3gz3o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cn85z0z3gz3o#2</guid>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cn85z0z3gz3o#3</guid>
             <pubDate>Wed, 20 Aug 2025 18:02:08 GMT</pubDate>
             <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/a496/live/cf57c160-7e00-11f0-a34f-318be3fb0481.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Man who shot PC with crossbow is jailed]]></title>
-            <description><![CDATA[The judge hears Jason King also stabbed a neighbour's partner in the stomach.
-]]></description>
-            <link>https://www.bbc.com/news/articles/cy8jlwee0xjo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cy8jlwee0xjo#2</guid>
-            <pubDate>Wed, 20 Aug 2025 18:45:37 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/eefd/live/83e5ad80-7db7-11f0-83cc-c5da98c419b8.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[French police question man after four bodies found in River Seine]]></title>
-            <description><![CDATA[A passer-by led French police to the grim discovery at the foot of a bridge south-east of Paris.]]></description>
-            <link>https://www.bbc.com/news/articles/c5yer12rp8po?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c5yer12rp8po#2</guid>
-            <pubDate>Wed, 20 Aug 2025 14:17:07 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/f52e/live/1d98ff70-7dc9-11f0-88a2-b9725373e32e.png"/>
-        </item>
-        <item>
-            <title><![CDATA[Labour MSP Colin Smyth charged over indecent images]]></title>
-            <description><![CDATA[The South Scotland representative has been suspended by the party after being arrested in Dumfries.]]></description>
-            <link>https://www.bbc.com/news/articles/cy08309kxw6o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cy08309kxw6o#2</guid>
-            <pubDate>Wed, 20 Aug 2025 16:55:07 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/308f/live/62663c30-7de7-11f0-aa3b-29990a8088ef.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[US-Mexico border wall to be painted black to make it hotter and harder to climb]]></title>
-            <description><![CDATA[Using black paint to make the entire US-Mexico border wall hotter and harder to climb was reportedly Trump's idea. ]]></description>
-            <link>https://www.bbc.com/news/articles/cq587vpe46eo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cq587vpe46eo#2</guid>
-            <pubDate>Wed, 20 Aug 2025 15:27:46 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/797e/live/7b9d0740-7dd5-11f0-88a2-b9725373e32e.jpg"/>
+            <title><![CDATA[Mechanic, 27, died after being crushed under car]]></title>
+            <description><![CDATA[Daniel Burton, 27, was found unresponsive underneath his partner's father's car he was working on.]]></description>
+            <link>https://www.bbc.com/news/articles/cz607llg346o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cz607llg346o#3</guid>
+            <pubDate>Wed, 20 Aug 2025 22:13:36 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/5ec4/live/e151a980-7e0f-11f0-acf4-cf3f0ca1d6d7.png"/>
         </item>
         <item>
             <title><![CDATA[BBC News app]]></title>
             <description><![CDATA[Top stories, breaking news, live reporting, and follow news topics that match your interests]]></description>
             <link>https://www.bbc.co.uk/news/10628994?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.co.uk/news/10628994#3</guid>
+            <guid isPermaLink="false">https://www.bbc.co.uk/news/10628994#4</guid>
             <pubDate>Wed, 30 Apr 2025 14:04:28 GMT</pubDate>
             <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/2cf6/live/d1e71250-9509-11ee-8df3-1d2983d8814f.png"/>
         </item>
@@ -671,7 +717,7 @@ Result: <?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/
             <title><![CDATA[Is this the end of asylum seeker hotels?]]></title>
             <description><![CDATA[An Epping hotel was blocked from accommodating asylum seekers - could more follow?]]></description>
             <link>https://www.bbc.co.uk/sounds/play/p0ly2j9s?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.co.uk/sounds/play/p0ly2j9s#4</guid>
+            <guid isPermaLink="false">https://www.bbc.co.uk/sounds/play/p0ly2j9s#5</guid>
             <pubDate>Wed, 20 Aug 2025 18:59:00 GMT</pubDate>
             <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/images/ic/240x135/p0l7jnbt.jpg"/>
         </item>
@@ -679,7 +725,7 @@ Result: <?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/
             <title><![CDATA[Has Donald Trump really stopped six (or seven) wars?]]></title>
             <description><![CDATA[And can the US president get rid of postal voting across America?]]></description>
             <link>https://www.bbc.co.uk/sounds/play/p0ly23xj?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.co.uk/sounds/play/p0ly23xj#4</guid>
+            <guid isPermaLink="false">https://www.bbc.co.uk/sounds/play/p0ly23xj#5</guid>
             <pubDate>Wed, 20 Aug 2025 18:00:00 GMT</pubDate>
             <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/images/ic/240x135/p0j72y80.jpg"/>
         </item>
@@ -687,49 +733,57 @@ Result: <?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/
             <title><![CDATA[New drama from acclaimed writer Jimmy McGovern]]></title>
             <description><![CDATA[Critically acclaimed one-off drama from the multi-award-winning screenwriter]]></description>
             <link>https://www.bbc.co.uk/iplayer/episode/m002g7zb?at_mid=93AqQATdig&amp;at_campaign=Unforgivable&amp;at_medium=display_ad&amp;at_campaign_type=owned&amp;at_nation=NET&amp;at_audience_id=SS&amp;at_product=iplayer&amp;at_brand=m002g7zb&amp;at_ptr_name=bbc&amp;at_ptr_type=media&amp;at_format=image&amp;at_objective=consumption&amp;at_link_title=Unforgivable&amp;at_bbc_team=BBC</link>
-            <guid isPermaLink="false">https://www.bbc.co.uk/iplayer/episode/m002g7zb?at_mid=93AqQATdig&amp;at_campaign=Unforgivable&amp;at_medium=display_ad&amp;at_campaign_type=owned&amp;at_nation=NET&amp;at_audience_id=SS&amp;at_product=iplayer&amp;at_brand=m002g7zb&amp;at_ptr_name=bbc&amp;at_ptr_type=media&amp;at_format=image&amp;at_objective=consumption&amp;at_link_title=Unforgivable&amp;at_bbc_team=BBC#5</guid>
+            <guid isPermaLink="false">https://www.bbc.co.uk/iplayer/episode/m002g7zb?at_mid=93AqQATdig&amp;at_campaign=Unforgivable&amp;at_medium=display_ad&amp;at_campaign_type=owned&amp;at_nation=NET&amp;at_audience_id=SS&amp;at_product=iplayer&amp;at_brand=m002g7zb&amp;at_ptr_name=bbc&amp;at_ptr_type=media&amp;at_format=image&amp;at_objective=consumption&amp;at_link_title=Unforgivable&amp;at_bbc_team=BBC#6</guid>
             <pubDate>Thu, 24 Jul 2025 05:00:00 GMT</pubDate>
             <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/52c5/live/5690b130-67b5-11f0-8dbd-f3d32ebd3327.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Arsenal expected to sign Spurs target Eze]]></title>
-            <description><![CDATA[Arsenal launch a move for Crystal Palace attacker Eberechi Eze, who is expected to choose them ahead of Tottenham.]]></description>
-            <link>https://www.bbc.com/sport/football/articles/czerxg66w8lo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/football/articles/czerxg66w8lo#6</guid>
-            <pubDate>Wed, 20 Aug 2025 19:56:15 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/e1ed/live/f336c330-7df4-11f0-b7e1-9f17ccfbbce5.jpg"/>
+            <title><![CDATA[Arsenal's ruthless Eze coup shows intent - leaving Spurs stunned]]></title>
+            <description><![CDATA[Arsenal's stunning coup to snatch Eberechi Eze away from Spurs is a ruthless statement of intent, says BBC chief football writer Phil McNulty.]]></description>
+            <link>https://www.bbc.com/sport/football/articles/c93de7x257xo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/sport/football/articles/c93de7x257xo#7</guid>
+            <pubDate>Wed, 20 Aug 2025 21:59:02 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/0a1f/live/514bdaa0-7e04-11f0-ab50-1bd1cf07c8be.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Lausanne success makes it back-to-back wins for Hodgkinson]]></title>
-            <description><![CDATA[Keely Hodgkinson makes it back-to-back victories since returning from injury at the Lausanne Diamond League.]]></description>
-            <link>https://www.bbc.com/sport/athletics/articles/c4gj2jl5223o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/athletics/articles/c4gj2jl5223o#6</guid>
-            <pubDate>Wed, 20 Aug 2025 18:33:29 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/2dee/live/5348f610-7df7-11f0-83cc-c5da98c419b8.jpg"/>
+            <title><![CDATA['Mission completed' - doubles specialists win US Open mixed title]]></title>
+            <description><![CDATA[Italian pair Sara Errani and Andrea Vavassori complete their "mission" by beating Iga Swiatek and Casper Ruud to win the revamped US Open mixed event.]]></description>
+            <link>https://www.bbc.com/sport/tennis/articles/cvg046gy0p6o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/sport/tennis/articles/cvg046gy0p6o#7</guid>
+            <pubDate>Thu, 21 Aug 2025 04:17:16 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/31a9/live/4f71cf60-7e44-11f0-a6cb-19350206ff25.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Isak and a 'nuclear' row with Newcastle - what next?]]></title>
-            <description><![CDATA[Could there be a way back for Alexander Isak at Newcastle United?]]></description>
-            <link>https://www.bbc.com/sport/football/articles/c5y26n61x22o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/football/articles/c5y26n61x22o#6</guid>
-            <pubDate>Wed, 20 Aug 2025 19:34:41 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/2739/live/cae7f5e0-7dd9-11f0-9a6a-278f88e3c683.jpg"/>
+            <title><![CDATA[What does your club need before transfer window shuts?]]></title>
+            <description><![CDATA[Premier League clubs have spent more than £2bn this summer - but with transfer deadline day nearing, there are more deals to be done. Phil McNulty assesses each top-flight club's potential activity.]]></description>
+            <link>https://www.bbc.com/sport/football/articles/c336j3d4rn7o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/sport/football/articles/c336j3d4rn7o#7</guid>
+            <pubDate>Thu, 21 Aug 2025 06:20:32 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/5ad1/live/1a637c50-7ddc-11f0-99e4-291d86ee4065.png"/>
         </item>
         <item>
-            <title><![CDATA['A proposal to be shot at' - why Welsh rugby bosses could cull two of four pro teams]]></title>
-            <description><![CDATA[The Welsh Rugby Union backs reducing the number of professional teams from four to two but insists no final decision has been made.]]></description>
-            <link>https://www.bbc.com/sport/rugby-union/articles/c9d0nwepedeo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/rugby-union/articles/c9d0nwepedeo#6</guid>
-            <pubDate>Wed, 20 Aug 2025 14:11:48 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/164f/live/a93384f0-7dd4-11f0-88a2-b9725373e32e.jpg"/>
+            <title><![CDATA[US star Maher has Hollywood in sights after offer to join WWE]]></title>
+            <description><![CDATA[American social media sensation Ilona Maher says she may move into WWE or Hollywood as her next career move after the Women's Rugby World Cup.]]></description>
+            <link>https://www.bbc.com/sport/rugby-union/articles/cy40w4xd9mlo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/sport/rugby-union/articles/cy40w4xd9mlo#7</guid>
+            <pubDate>Thu, 21 Aug 2025 05:14:19 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/2d2c/live/707fcdf0-7dd7-11f0-83cc-c5da98c419b8.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Brentford reject new £40m Newcastle bid for Wissa]]></title>
-            <description><![CDATA[Brentford turn down Newcastle's improved bid of £40m for DR Congo striker Yoane Wissa.]]></description>
-            <link>https://www.bbc.com/sport/football/articles/cgm2lmvgzrno?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/football/articles/cgm2lmvgzrno#6</guid>
-            <pubDate>Wed, 20 Aug 2025 15:50:56 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/cb03/live/b4916630-7dd1-11f0-b91c-9f76f5e8e93d.jpg"/>
+            <title><![CDATA[Weekly sports quiz: Who stood too close to Chelsea's wall?]]></title>
+            <description><![CDATA[How much attention did you pay to what happened in the world of sport over the past seven days?]]></description>
+            <link>https://www.bbc.com/sport/football/articles/cy8jyz10e57o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/sport/football/articles/cy8jyz10e57o#7</guid>
+            <pubDate>Thu, 21 Aug 2025 06:44:33 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/5098/live/147b2850-7dba-11f0-83cc-c5da98c419b8.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Edmilson nearly scores from centre circle against Celtic]]></title>
+            <description><![CDATA[Kairat striker Edmilson comes close to breaking the deadlock from the edge of the centre circle in their Champions League play-off first leg against Celtic.]]></description>
+            <link>https://www.bbc.com/sport/football/videos/ckgj0n5gp41o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/sport/football/videos/ckgj0n5gp41o#7</guid>
+            <pubDate>Wed, 20 Aug 2025 21:32:40 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/d7db/live/f92bccf0-7e0c-11f0-ab3e-bd52082cd0ae.jpg"/>
         </item>
     </channel>
 </rss>
@@ -738,7 +792,7 @@ XML parsing capabilities demonstrated.
 
 👋 Ending simulation. Session summary:
 Interactions: 7
-Session duration: 56245ms
+Session duration: 51664ms
 Simulated inputs processed: 6/6
 ✅ [11/42] httpToolsTest - PASSED
 
@@ -760,7 +814,7 @@ Test1(exact): EXACT_MATCH_SUCCESS, Test2(age): ADULT_USER, Test3(complex): VIP_A
 
 👋 Ending simulation. Session summary:
 Interactions: 2
-Session duration: 56753ms
+Session duration: 52169ms
 Simulated inputs processed: 1/1
 ✅ [12/42] switchConditionsTest - PASSED
 
@@ -796,7 +850,7 @@ Website: hildegard.org
 
 👋 Ending simulation. Session summary:
 Interactions: 4
-Session duration: 60491ms
+Session duration: 55296ms
 Simulated inputs processed: 3/3
 ✅ [13/42] problemScenarioTest - PASSED
 
@@ -832,13 +886,13 @@ What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 50.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=35dc9f4a-376f-4ab0-929f-e2f63083d2ca
-Payment ID: 35dc9f4a-376f-4ab0-929f-e2f63083d2ca
-Expires: 2025-08-20T21:21:07.316Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=8a5d3f0b-aaa2-46c3-82c6-39cf958b7976
+Payment ID: 8a5d3f0b-aaa2-46c3-82c6-39cf958b7976
+Expires: 2025-08-21T08:21:06.036Z
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 66438ms
+Session duration: 58792ms
 Simulated inputs processed: 4/4
 ✅ [14/42] accountVerificationTest - PASSED
 
@@ -875,7 +929,7 @@ What would you like to do?
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 67380ms
+Session duration: 59671ms
 Simulated inputs processed: 2/2
 ✅ [15/42] navigationTest - PASSED
 
@@ -910,7 +964,7 @@ CallTypeDemo completed! Returning from call.
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 67882ms
+Session duration: 60174ms
 Simulated inputs processed: 2/2
 ✅ [16/42] callTypeDemoTest - PASSED
 
@@ -939,7 +993,7 @@ Website: elvis.io
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 68807ms
+Session duration: 60801ms
 Simulated inputs processed: 2/2
 ✅ [17/42] restApiDemoTest - PASSED
 
@@ -986,7 +1040,7 @@ You: exit [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 69314ms
+Session duration: 61306ms
 Simulated inputs processed: 6/6
 ✅ [18/42] accessControlTest - PASSED
 
@@ -1014,7 +1068,7 @@ What would you like to do?
 
 👋 Ending simulation. Session summary:
 Interactions: 2
-Session duration: 69818ms
+Session duration: 61809ms
 Simulated inputs processed: 1/1
 ✅ [19/42] errorRecoveryTest - PASSED
 
@@ -1047,8 +1101,8 @@ Enter the city name to get current weather information
 
 You: Paris [SIMULATED]
 
-🤖 AI: Current weather in Paris, : Overcast at 18°C (88% humidity)
-Last updated: 2025-08-20T20:21:14.737Z
+🤖 AI: Current weather in Paris, : Light rain at 16°C (88% humidity)
+Last updated: 2025-08-21T07:21:15.895Z
 
 🔄 Resuming Verify account - Type 'cancel' or 'help' for options.
 
@@ -1062,13 +1116,13 @@ What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 75.50 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/75.50?id=ab0ab907-3c1b-4b69-8eb5-542310509207
-Payment ID: ab0ab907-3c1b-4b69-8eb5-542310509207
-Expires: 2025-08-20T21:21:18.541Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/75.50?id=bca04217-67fd-48e8-8582-cc11f0e6d7dc
+Payment ID: bca04217-67fd-48e8-8582-cc11f0e6d7dc
+Expires: 2025-08-21T08:21:19.269Z
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 77662ms
+Session duration: 72024ms
 Simulated inputs processed: 5/5
 ✅ [20/42] flowResumptionTest - PASSED
 
@@ -1151,7 +1205,7 @@ Result: {"company_overview":{"basic_info":{"id":"comp_123","name":"TechCorp Solu
 
 👋 Ending simulation. Session summary:
 Interactions: 9
-Session duration: 80374ms
+Session duration: 75289ms
 Simulated inputs processed: 8/8
 ✅ [21/42] mappingTypesTest - PASSED
 
@@ -1205,7 +1259,7 @@ What would you like to do?
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 80877ms
+Session duration: 75793ms
 Simulated inputs processed: 4/4
 ✅ [22/42] systemFlowsTest - PASSED
 
@@ -1252,7 +1306,7 @@ Testing smart default onFail for generic errors...
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 87755ms
+Session duration: 83605ms
 Simulated inputs processed: 4/4
 ✅ [23/42] smartOnFailTest - PASSED
 
@@ -1281,7 +1335,7 @@ Website: demarco.info
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 88969ms
+Session duration: 84853ms
 Simulated inputs processed: 2/2
 ✅ [24/42] templateDebugTest - PASSED
 
@@ -1355,7 +1409,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 10
-Session duration: 94175ms
+Session duration: 89254ms
 Simulated inputs processed: 9/9
 ✅ [25/42] switchBranchingTest - PASSED
 
@@ -1381,7 +1435,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 95222ms
+Session duration: 90126ms
 Simulated inputs processed: 2/2
 ✅ [26/42] enhancedSwitchConditionTest - PASSED
 
@@ -1410,9 +1464,9 @@ What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 50.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=ff80f01e-8d88-4139-bd93-ae36b60803e9
-Payment ID: ff80f01e-8d88-4139-bd93-ae36b60803e9
-Expires: 2025-08-20T21:21:40.910Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=1aa4d4a9-5772-4c34-af9c-3c377174c61e
+Payment ID: 1aa4d4a9-5772-4c34-af9c-3c377174c61e
+Expires: 2025-08-21T08:21:41.015Z
 
 You: What's the weather in Tokyo? [SIMULATED]
 
@@ -1422,8 +1476,8 @@ Enter the city name to get current weather information
 
 You: Tokyo [SIMULATED]
 
-🤖 AI: Current weather in null, : Partly cloudy at 27°C (91% humidity)
-Last updated: 2025-08-20T20:21:42.663Z
+🤖 AI: Current weather in Shikinejima, : Sunny at 31°C (71% humidity)
+Last updated: 2025-08-21T07:21:42.663Z
 
 You: I need to make a payment [SIMULATED]
 
@@ -1454,9 +1508,9 @@ You: 75.00 [SIMULATED]
 
 🤖 AI: ✅ Payment link generated successfully!
 
-🔗 Link: https://pay.example.com/123456/75.00?id=69b29ffd-6197-410e-a156-f277c7557da4
-📋 Payment ID: 69b29ffd-6197-410e-a156-f277c7557da4
-⏰ Expires: 2025-08-20T21:21:50.993Z
+🔗 Link: https://pay.example.com/123456/75.00?id=566f6015-9a33-47eb-a438-19f2124ea688
+📋 Payment ID: 566f6015-9a33-47eb-a438-19f2124ea688
+⏰ Expires: 2025-08-21T08:21:48.679Z
 
 You: What's the weather in London? [SIMULATED]
 
@@ -1466,8 +1520,8 @@ Enter the city name to get current weather information
 
 You: London [SIMULATED]
 
-🤖 AI: Current weather in London, : Partly cloudy at 20°C (49% humidity)
-Last updated: 2025-08-20T20:21:52.658Z
+🤖 AI: Current weather in London, : Patchy rain nearby at 15°C (72% humidity)
+Last updated: 2025-08-21T07:21:50.369Z
 
 You: I need to make a payment [SIMULATED]
 
@@ -1485,9 +1539,9 @@ What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 100.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/100.00?id=cdf96e6d-91b3-483c-b80f-360fa1c2c357
-Payment ID: cdf96e6d-91b3-483c-b80f-360fa1c2c357
-Expires: 2025-08-20T21:21:56.165Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/100.00?id=e81af728-504c-4a2e-9059-e9f6880eff2b
+Payment ID: e81af728-504c-4a2e-9059-e9f6880eff2b
+Expires: 2025-08-21T08:21:53.690Z
 
 You: What's the weather in Paris? [SIMULATED]
 
@@ -1497,8 +1551,8 @@ Enter the city name to get current weather information
 
 You: Paris [SIMULATED]
 
-🤖 AI: Current weather in Paris, : Overcast at 18°C (88% humidity)
-Last updated: 2025-08-20T20:21:57.838Z
+🤖 AI: Current weather in Paris, : Light rain at 16°C (88% humidity)
+Last updated: 2025-08-21T07:21:55.457Z
 
 You: cancel [SIMULATED]
 
@@ -1506,7 +1560,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 18
-Session duration: 117435ms
+Session duration: 108665ms
 Simulated inputs processed: 17/17
 ✅ [27/42] flowFrameIntegrityTest - PASSED
 
@@ -1545,8 +1599,8 @@ Enter the city name to get current weather information
 
 You: Tokyo [SIMULATED]
 
-🤖 AI: Current weather in null, : Partly cloudy at 27°C (91% humidity)
-Last updated: 2025-08-20T20:22:04.282Z
+🤖 AI: Current weather in Shikinejima, : Sunny at 31°C (71% humidity)
+Last updated: 2025-08-21T07:22:01.563Z
 
 🔄 Resuming Make a payment - Type 'cancel' or 'help' for options.
 
@@ -1554,9 +1608,9 @@ What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 50.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=d062ab5e-d648-4988-bfea-df1b69c7ea1d
-Payment ID: d062ab5e-d648-4988-bfea-df1b69c7ea1d
-Expires: 2025-08-20T21:22:06.202Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=5cf52ae6-13a8-437c-b0e4-9987ce944158
+Payment ID: 5cf52ae6-13a8-437c-b0e4-9987ce944158
+Expires: 2025-08-21T08:22:03.300Z
 
 You: I need to make a payment [SIMULATED]
 
@@ -1592,9 +1646,9 @@ Please respond to the question above, or use a command listed above.
 
 You: 75.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/75.00?id=aea7addc-500a-4bfe-a829-8ce0519cc554
-Payment ID: aea7addc-500a-4bfe-a829-8ce0519cc554
-Expires: 2025-08-20T21:22:12.137Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/75.00?id=bb855491-b86c-41bb-9595-b54af955033c
+Payment ID: bb855491-b86c-41bb-9595-b54af955033c
+Expires: 2025-08-21T08:22:08.602Z
 
 You: What's the weather in London? [SIMULATED]
 
@@ -1604,8 +1658,8 @@ Enter the city name to get current weather information
 
 You: London [SIMULATED]
 
-🤖 AI: Current weather in London, : Partly cloudy at 20°C (49% humidity)
-Last updated: 2025-08-20T20:22:14.089Z
+🤖 AI: Current weather in London, : Patchy rain nearby at 15°C (72% humidity)
+Last updated: 2025-08-21T07:22:10.221Z
 
 You: cancel [SIMULATED]
 
@@ -1613,7 +1667,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 13
-Session duration: 133720ms
+Session duration: 123532ms
 Simulated inputs processed: 12/12
 ✅ [28/42] enhancedFlowInterruptionTest - PASSED
 
@@ -1668,8 +1722,8 @@ Please respond to the question above, or use a command listed above.
 
 You: Paris [SIMULATED]
 
-🤖 AI: Current weather in Paris, : Overcast at 18°C (88% humidity)
-Last updated: 2025-08-20T20:22:18.633Z
+🤖 AI: Current weather in Paris, : Light rain at 16°C (88% humidity)
+Last updated: 2025-08-21T07:22:16.926Z
 
 You: What's the weather in Tokyo? [SIMULATED]
 
@@ -1684,7 +1738,7 @@ You: status [SIMULATED]
 Current Flow: GetWeatherFlow
 Steps Remaining: 3
 Stack Depth: 1
-Transaction ID: 72ae6b83
+Transaction ID: d6a25f03
 
 Collected Information:
 • caller_id: (818)555-1212
@@ -1695,8 +1749,8 @@ Continue with your response to proceed.
 
 You: Tokyo [SIMULATED]
 
-🤖 AI: Current weather in null, : Partly cloudy at 27°C (91% humidity)
-Last updated: 2025-08-20T20:22:21.238Z
+🤖 AI: Current weather in Shikinejima, : Sunny at 31°C (71% humidity)
+Last updated: 2025-08-21T07:22:19.127Z
 
 You: What's the weather in London? [SIMULATED]
 
@@ -1710,7 +1764,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 12
-Session duration: 140818ms
+Session duration: 132341ms
 Simulated inputs processed: 11/11
 ✅ [29/42] flowControlCommandsTest - PASSED
 
@@ -1744,7 +1798,7 @@ You: 1 [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 4
-Session duration: 141707ms
+Session duration: 133365ms
 Simulated inputs processed: 3/3
 ✅ [30/42] switchDefaultBranchTest - PASSED
 
@@ -1773,7 +1827,7 @@ Website: hildegard.org
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 142942ms
+Session duration: 133985ms
 Simulated inputs processed: 2/2
 ✅ [31/42] restApiParameterTest - PASSED
 
@@ -1818,7 +1872,7 @@ You: continue [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 150305ms
+Session duration: 137536ms
 Simulated inputs processed: 5/5
 ✅ [32/42] improvedErrorMessagesTest - PASSED
 
@@ -1833,21 +1887,17 @@ Running 4 simulated inputs...
 
 You: I want to test REST API functionality [SIMULATED]
 
-🤖 AI: Processing API testing suite - You can also 'cancel' or request 'help'.
+🤖 AI: Processing REST API demonstration - You can also 'cancel' or request 'help'.
 
-API Testing Suite
-Choose test type:
-1. JSON API
-2. Form Data
-3. XML/SOAP
-Enter your choice:
+This demo shows REST API capabilities. Enter a user ID (1-10) to fetch user data:
 
 You: 1 [SIMULATED]
 
-🤖 AI: JSON API Test Complete!
-Result: active
-User: Bret
+🤖 AI: User Info:
 Name: Leanne Graham
+Email: Sincere@april.biz
+Phone: 1-770-736-8031 x56442
+Website: hildegard.org
 
 You: RestApiDemo [SIMULATED]
 
@@ -1865,7 +1915,7 @@ Website: demarco.info
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 151554ms
+Session duration: 138681ms
 Simulated inputs processed: 4/4
 ✅ [33/42] apiToolsParameterTest - PASSED
 
@@ -1895,7 +1945,7 @@ CallTypeDemo completed! Returning from call.
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 152055ms
+Session duration: 139184ms
 Simulated inputs processed: 2/2
 ✅ [34/42] internationalizedErrorTest - PASSED
 
@@ -1937,7 +1987,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 156857ms
+Session duration: 143444ms
 Simulated inputs processed: 4/4
 ✅ [35/42] paymentToolFailureTest - PASSED
 
@@ -1977,9 +2027,9 @@ You: 50.00 [SIMULATED]
 
 🤖 AI: ✅ Payment link generated successfully!
 
-🔗 Link: https://pay.example.com/123456/50.00?id=1addf7de-b8fc-46a9-8700-88b990ffb5d3
-📋 Payment ID: 1addf7de-b8fc-46a9-8700-88b990ffb5d3
-⏰ Expires: 2025-08-20T21:22:41.938Z
+🔗 Link: https://pay.example.com/123456/50.00?id=d5817134-e5a9-49db-a4f2-40a1dacb341a
+📋 Payment ID: d5817134-e5a9-49db-a4f2-40a1dacb341a
+⏰ Expires: 2025-08-21T08:22:34.638Z
 
 You: cancel [SIMULATED]
 
@@ -1987,7 +2037,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 161676ms
+Session duration: 147907ms
 Simulated inputs processed: 5/5
 ✅ [36/42] enhancedPaymentRetryTest - PASSED
 
@@ -2023,7 +2073,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 166183ms
+Session duration: 151530ms
 Simulated inputs processed: 4/4
 ✅ [37/42] simpleSelfRetryTest - PASSED
 
@@ -2062,7 +2112,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 172269ms
+Session duration: 156962ms
 Simulated inputs processed: 4/4
 ✅ [38/42] smartSelfRetryTest - PASSED
 
@@ -2106,7 +2156,7 @@ You: baduser666 [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 181372ms
+Session duration: 165006ms
 Simulated inputs processed: 5/5
 ✅ [39/42] smartSelfRetryMaxTest - PASSED
 
@@ -2130,7 +2180,7 @@ Rate limit test completed successfully.
 
 👋 Ending simulation. Session summary:
 Interactions: 2
-Session duration: 182886ms
+Session duration: 166285ms
 Simulated inputs processed: 1/1
 ✅ [40/42] rateLimitBasicTest - PASSED
 
@@ -2146,11 +2196,13 @@ Running 2 simulated inputs...
 You: Test rate limit recovery [SIMULATED]
 warn: Error executing tool RateLimitTestTool: Rate limit exceeded for Rate Limit Test Tool. Max 2 requests per 10 seconds.
 
-🤖 AI: 🤖 Processing Test rate limit onFail handling
+🤖 AI: 🤖 Processing Test automated rate limit handling
 
-🧪 Rate Limit onFail Test
+🧪 Automated Rate Limit Test
 
-Making rapid calls to trigger rate limit and test explicit onFail handler...
+Testing that automated onFail treats rate limiting as not immediately recoverable...
+
+Making calls to hit rate limit...
 
 You: continue [SIMULATED]
 
@@ -2158,7 +2210,7 @@ You: continue [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 184309ms
+Session duration: 167737ms
 Simulated inputs processed: 2/2
 ✅ [41/42] rateLimitRecoveryTest - PASSED
 
@@ -2184,7 +2236,7 @@ Making calls to hit rate limit...
 
 👋 Ending simulation. Session summary:
 Interactions: 2
-Session duration: 185279ms
+Session duration: 168612ms
 Simulated inputs processed: 1/1
 ✅ [42/42] smartRateLimitTest - PASSED
 
