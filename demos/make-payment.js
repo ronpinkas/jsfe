@@ -7,7 +7,7 @@ import readline from "node:readline/promises";
 import winston from 'winston';
 
 const logger = winston.createLogger({
-  level: process.env.LOG_LEVEL || 'warn',  // Changed to debug to see HTTP requests
+  level: process.env.LOG_LEVEL || 'debug',  // Enable debug logging to trace validation
   format: winston.format.printf(({ level, message }) => {
     return `${level}: ${message}`;
   }),
@@ -15,6 +15,19 @@ const logger = winston.createLogger({
     new winston.transports.Console()
   ]
 });
+
+import fs from 'fs';
+import path from 'path';
+
+// Ensure __dirname is defined for both CommonJS and ES modules
+import { dirname } from 'path';
+import { fileURLToPath } from 'url';
+let __dirname;
+try {
+  __dirname = typeof __dirname !== 'undefined' ? __dirname : dirname(fileURLToPath(import.meta.url));
+} catch (e) {
+  __dirname = process.cwd();
+}
 
 /* ---------- AI callback ---------- */
 async function aiCallback(systemInstruction, userMessage) {
@@ -59,7 +72,7 @@ function validateDigits(input, minDigits, maxDigits) {
    return length >= minDigits && length <= maxDigits;
 }
 
-function validate_phone_format(phone) {
+function validatePhone(phone) {
    // Remove any non-digit characters for validation
    const cleaned = phone.replace(/\D/g, '');
    logger.debug(`Validating phone format: ${cleaned}`);
@@ -80,7 +93,7 @@ function validate_phone_format(phone) {
    return false;
 }
 
-function valid_email(email) {
+function validateEmail(email) {
    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
    return emailRegex.test(email);
 }
@@ -193,8 +206,8 @@ async function sendEmail(email, subject, body) {
 /* ---------- Registries ---------- */
 const APPROVED_FUNCTIONS = {
    "validateDigits": validateDigits,
-   "validate_phone_format": validate_phone_format,
-   "valid_email": valid_email,
+   "validatePhone": validatePhone,
+   "validateEmail": validateEmail,
    "genAndSendPaymentLink": genAndSendPaymentLink
 };
 
@@ -226,6 +239,7 @@ const flowsMenu = [
       description: "Start payment process",
       prompt: "Accepting payment",
       prompt_es: "Aceptando pago",
+      primary: true,
       variables: {
          know_acct_yes_or_no: { type: "string", description: "User response for knowing account number" },
          acct_number: { type: "string", description: "Customer account number" },
@@ -239,7 +253,7 @@ const flowsMenu = [
             id: "ask_known_account",
             type: "SAY-GET",
             variable: "know_acct_yes_or_no",
-            value: "Press 1 or say YES if you know your account number - press 2 or say NO if you don't.",
+            value: "{{`${cargo.voice ? 'Press 1 or ' : ''}${cargo.verb} YES if you know your account number - ${cargo.voice ? 'press 2 or ' : ''}${cargo.verb} NO if you don't.`}}",
             value_es: "Presione 1 o diga SÍ si conoce su número de cuenta - presione 2 o diga NO si no lo conoce."
          },
          {
@@ -500,7 +514,7 @@ const flowsMenu = [
             id: "validate_cell_number",
             type: "CASE",
             branches: {
-               "condition: validate_phone_format(cell_number)": {
+               "condition: validatePhone(cell_number)": {
                   id: "call_get_otp_link_cell",
                   type: "CALL-TOOL",
                   tool: "get-otp-link",
@@ -567,7 +581,7 @@ const flowsMenu = [
          id: "branch_on_email",
          type: "CASE",
          branches: {
-            "condition: valid_email(email)": {
+            "condition: validateEmail(email)": {
                id: "call_get_otp_link_email",
                type: "CALL-TOOL",
                tool: "get-otp-link",
@@ -664,28 +678,42 @@ const engine = new WorkflowEngine(
 
 /* ---------- Simple REPL ---------- */
 async function main() {
+
+   try {
+      fs.writeFileSync(path.resolve(__dirname, 'tests.flow'), JSON.stringify(flowsMenu, null, 2), 'utf8');
+      fs.writeFileSync(path.resolve(__dirname, 'tests.tools'), JSON.stringify(toolsRegistry, null, 2), 'utf8');
+      console.log('✅ Persisted flowsMenu and toolsRegistry to tests.flow and tests.tools');
+   } catch (err) {
+      console.error('❌ Failed to persist flows/tools:', err);
+   }
+
 	let session = engine.initSession(logger, "user-001", "session-001");
-  // You can set session variables like this:
-  session.cargo.test_var = "test value";
-  
-  // Simulate caller ID detection - in a real system, this would come from your telephony system
-  session.cargo.callerId = "15551234567"; // Example: caller ID
-  session.cargo.twilioNumber = "12133864412"; // Example: Twilio number
-  console.log(`Simulated caller ID: ${session.cargo.callerId}`);
+   // You can set session variables like this:
+   session.cargo.test_var = "test value";
+   
+   // Simulate caller ID detection - in a real system, this would come from your telephony system
+   session.cargo.callerId = "15551234567"; // Example: caller ID
+   session.cargo.twilioNumber = "12133864412"; // Example: Twilio number
+   session.cargo.voice = true; // Simulate voice interaction
+   session.cargo.verb = "say";
+   session.cargo.verb_es = "diga";
 
-	console.log("Type anything like: 'I need to make a payment' or 'payment' to test the enhanced caller ID flow");
 
-	const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-	while (true) {
-		const user = await rl.question("> ");
-		const result = await engine.updateActivity({ role: "user", content: user }, session);
-    session = result
-    if (result.response) {
-      console.log(result.response);
-    } else {
-      console.log("You said:", user);
-    }
-	}
+   console.log(`Simulated caller ID: ${session.cargo.callerId}`);
+
+   console.log("Type anything like: 'I need to make a payment' or 'payment' to test the enhanced caller ID flow");
+
+   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+   while (true) {
+      const user = await rl.question("> ");
+      const result = await engine.updateActivity({ role: "user", content: user }, session);
+      session = result
+      if (result.response) {
+         console.log(result.response);
+      } else {
+         console.log("You said:", user);
+      }
+   }
 }
 
 main().catch(err => {
