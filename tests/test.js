@@ -1665,6 +1665,7 @@ const flowsMenu = [
   {
     id: "payment-flow-v1.2",
     name: "MakePayment",
+    primary: true, // User-facing entry point flow for AI intent detection
     version: "1.2.0",
     description: "Complete payment processing workflow with enhanced validation",
     prompt: "Make a payment",
@@ -1734,25 +1735,14 @@ const flowsMenu = [
         retryOnConditions: [
           {
             errorPattern: "invalid.*amount|validation.*failed",
-            action: "ask_user"
+            action: "retry"
           },
           {
             errorPattern: "network|timeout|503|502",
             action: "retry"
           }
         ],
-        
-        retryBehavior: {
-          preserveData: true,
-          showProgressiveHelp: true,
-          escalateAfterMaxRetries: {
-            id: "payment-retry-escalation",
-            type: "FLOW",
-            name: "PaymentRetryEscalation",
-            callType: "call" // Don't restart the whole flow
-          }
-        },
-        
+                
         // Improved onFail with smart retry
         onFail: {
           id: "payment-generation-failed-retry",
@@ -1923,6 +1913,8 @@ const flowsMenu = [
     version: "1.0.0",
     description: "Escalation flow when payment retries are exhausted",
     prompt: "Payment Retry Escalation",
+    prompt_es: "Escalación de Reintentos de Pago",
+    primary: true, // User-facing entry point flow for AI intent detection
     
     // VALIDATION EXPECTATIONS:
     // Expected Warning: SWITCH step missing "default" branch
@@ -1971,6 +1963,7 @@ const flowsMenu = [
   {
     id: "weather-flow-v1.0",
     name: "GetWeatherFlow",
+    primary: true, // User-facing entry point flow for AI intent detection
     prompt: "Weather Check",
     prompt_es: "Consulta del Clima",
     prompt_fr: "Vérification Météo",
@@ -2046,6 +2039,7 @@ const flowsMenu = [
   {
     id: "test-menu-v1.0", 
     name: "TestMenu",
+    primary: true, // User-facing entry point flow for AI intent detection
     prompt: "Test Menu",
     prompt_es: "Mostrar Menú de Prueba",
     version: "1.0.0",
@@ -2069,6 +2063,7 @@ const flowsMenu = [
   {
     id: "calltype-demo-v1.0",
     name: "CallTypeDemo", 
+    primary: true, // User-facing entry point flow for AI intent detection
     version: "1.0.0",
     description: "Demonstrates different callType behaviors for FLOW steps",
     prompt: "Flow Navigation Demo",
@@ -2132,6 +2127,7 @@ const flowsMenu = [
   {
     id: "rest-api-demo-v1.0",
     name: "RestApiDemo",
+    primary: true, // User-facing entry point flow for AI intent detection
     version: "1.0.0", 
     description: "Demonstrates comprehensive REST API capabilities",
     prompt: "REST API demonstration",
@@ -2228,6 +2224,7 @@ const flowsMenu = [
   {
     id: "api-testing-flow-v1.0",
     name: "ApiTestingFlow",
+    primary: true, // User-facing entry point flow for AI intent detection
     version: "1.0.0",
     description: "Comprehensive API testing workflow with different content types",
     prompt: "API testing suite",
@@ -2238,7 +2235,11 @@ const flowsMenu = [
       category: "testing",
       riskLevel: "low"
     },
-    
+
+    variables: {
+      test_type: { type: "string", scope: "flow" } // Variable to store user's test type choice
+    },
+
     steps: [
       {
         id: "test-intro",
@@ -2413,6 +2414,7 @@ const flowsMenu = [
   {
     id: "mapping-test-flow-v1.0",
     name: "MappingTestFlow",
+    primary: true, // User-facing entry point flow for AI intent detection
     version: "1.0.0",
     description: "Tests all declarative response mapping capabilities",
     prompt: "Response mapping tests",
@@ -2511,6 +2513,7 @@ const flowsMenu = [
   {
     id: "http-tools-test-flow-v1.0",
     name: "HttpToolsTestFlow",
+    primary: true, // User-facing entry point flow for AI intent detection
     version: "1.0.0",
     description: "Tests all HTTP tool integrations and content types",
     prompt: "HTTP tools testing",
@@ -2818,6 +2821,7 @@ const flowsMenu = [
   {
     id: "user-access-control-v1.0",
     name: "UserAccessControl",
+    primary: true, // User-facing entry point flow for AI intent detection
     version: "1.0.0",
     description: "Demonstrates proper SWITCH default handling with error recovery",
     prompt: "User access control",
@@ -2932,6 +2936,7 @@ const flowsMenu = [
   {
     id: "smart-onfail-recoverable-test-v1.0",
     name: "SmartOn503FailRecoverableTest",
+    primary: true, // User-facing entry point flow for AI intent detection
     version: "1.0.0",
     description: "Tests smart default onFail for recoverable server errors (should retry)",
     prompt: "Smart 503 recoverable error testing",
@@ -2974,6 +2979,7 @@ const flowsMenu = [
   {
     id: "smart-onfail-unrecoverable-test-v1.0",
     name: "SmartOnFailUnrecoverableTest", 
+    primary: true, // User-facing entry point flow for AI intent detection
     version: "1.0.0",
     description: "Tests smart default onFail for invalid argument (amount must be number) unrecoverable client errors (should cancel)",
     prompt: "Smart unrecoverable error testing (amount must be number)",
@@ -3016,6 +3022,7 @@ const flowsMenu = [
   {
     id: "smart-onfail-data-test-v1.0",
     name: "SmartOnFailDataTest",
+    primary: true, // User-facing entry point flow for AI intent detection
     version: "1.0.0", 
     description: "Tests smart default onFail for data validation errors (no explicit onFail handler)",
     prompt: "Smart data validation testing",
@@ -3059,6 +3066,7 @@ const flowsMenu = [
   {
     id: "smart-onfail-generic-test-v1.0", 
     name: "SmartOnFailGenericTest",
+    primary: true, // User-facing entry point flow for AI intent detection
     version: "1.0.0",
     description: "Tests smart default onFail for generic errors (no explicit onFail handler)",
     prompt: "Smart generic error testing",
@@ -3129,6 +3137,7 @@ const flowsMenu = [
   {
     id: "simple-self-retry-demo-v1.0",
     name: "SimpleSelfRetryDemo",
+    primary: true, // User-facing entry point flow for AI intent detection
     version: "1.0.0",
     description: "Demonstrates simple self-referencing retry with callType replace",
     prompt: "Simple self-retry demonstration",
@@ -3179,6 +3188,7 @@ const flowsMenu = [
   {
     id: "smart-self-retry-demo-v1.0",
     name: "SmartSelfRetryDemo",
+    primary: true, // User-facing entry point flow for AI intent detection
     version: "1.0.0",
     description: "Demonstrates self-referencing retry with attempt counter and condition-based limits",
     prompt: "Smart self-retry with attempt counter",
@@ -3259,8 +3269,11 @@ const flowsMenu = [
     id: 'crypto-price-check',
     name: 'Crypto Price Check',
     prompt: 'Check cryptocurrency prices',
+    prompt_es: 'Consultar precios de criptomonedas',
     description: 'Provides current cryptocurrency prices and 24h changes',
     version: '1.0.0',
+    primary: true, // User-facing entry point flow for AI intent detection
+
     metadata: {
       riskLevel: 'low',
       category: 'financial'
@@ -3313,6 +3326,7 @@ const flowsMenu = [
     prompt: "Test basic rate limiting",
     prompt_es: "Probar limitación de tasa básica",
     interruptable: true,
+    primary: true, // User-facing entry point flow for AI intent detection
     
     metadata: {
       author: "system",
@@ -3477,8 +3491,10 @@ const flowsMenu = [
     version: "1.0.0",
     description: "Tests that automated onFail considers rate limiting as not immediately recoverable",
     prompt: "Test automated rate limit handling",
+    prompt_es: "Probar manejo automático de limitación de tasa",
     interruptable: true,
-    
+    primary: true,
+
     metadata: {
       author: "system",
       category: "testing",
