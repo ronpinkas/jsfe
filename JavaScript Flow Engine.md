@@ -90,6 +90,7 @@ const flowsMenu = [
     name: "ProcessPayment", 
     prompt: "Process a payment",
     description: "Handle payment processing with validation",
+    primary: true, // Mark as user-facing entry point flow
     steps: [
       { type: "SAY", value: "Let's process your payment." },
       { type: "SAY-GET", variable: "amount", value: "Enter amount:" },
@@ -351,6 +352,7 @@ interface FlowDefinition {
   description: string;                 // Clear description of what the flow does
   version: string;                     // Flow version for compatibility
   steps: FlowStep[];                   // Array of executable flow steps
+  primary?: boolean;                   // Optional: Marks this as a primary (user-facing) flow
   
   // Localization Support
   prompt?: string;                     // Default prompt for the flow
@@ -380,6 +382,11 @@ interface FlowDefinition {
 
 - **Core Identity**: `id`, `name`, `description`, `version` define the flow's identity and purpose
 - **Execution Logic**: `steps` array contains the declarative workflow logic
+- **Flow Classification**: `primary` property distinguishes user-facing entry points from helper sub-flows
+  - `primary: true`: User-facing workflows that can be directly triggered by user input
+  - `primary: false` or omitted: Helper/sub-flows called by other flows, not directly accessible
+  - **Validation Impact**: Only primary flows are validated as top-level workflows during initialization
+  - **AI Detection**: Only primary flows are considered for intent detection and user interaction
 - **Multi-language Support**: Engine automatically selects appropriate prompt based on user's language preference
 - **Variable Management**: Define flow-specific variables with types, scopes, and initial values
 - **Risk Classification**: `metadata.riskLevel` enables security-conscious flow handling
@@ -391,10 +398,11 @@ interface FlowDefinition {
   id: "payment-flow",
   name: "ProcessPayment",
   description: "Handle secure payment processing",
-  prompt: "Let's process your payment",           // Default
-  prompt_en: "Let's process your payment",        // English
-  prompt_es: "Procesemos su pago",               // Spanish  
-  prompt_fr: "Traitons votre paiement",         // French
+  primary: true,                                       // Mark as user-facing entry point
+  prompt: "Let's process your payment",                // Default
+  prompt_en: "Let's process your payment",             // English
+  prompt_es: "Procesemos su pago",                     // Spanish  
+  prompt_fr: "Traitons votre paiement",                // French
   prompt_de: "Lassen Sie uns Ihre Zahlung bearbeiten", // German
   version: "1.0.0",
   steps: [
@@ -407,6 +415,68 @@ interface FlowDefinition {
   }
 }
 ```
+
+**Primary vs. Sub-Flow Architecture Example:**
+
+```javascript
+const flowsMenu = [
+  // PRIMARY FLOW - User-facing entry point
+  {
+    id: "start-payment",
+    name: "StartPayment",
+    primary: true,                    // Marks this as directly accessible to users
+    prompt: "Process a payment",
+    description: "Main payment processing workflow",
+    variables: {
+      amount: { type: "string", description: "Payment amount" },
+      account_number: { type: "string", description: "Customer account" }
+    },
+    steps: [
+      { type: "SAY-GET", variable: "amount", value: "Enter payment amount:" },
+      { 
+        type: "CASE", 
+        branches: {
+          "condition: validateAmount(amount)": {
+            type: "CALL-TOOL", 
+            tool: "ProcessPayment",
+            variable: "payment_result"
+          },
+          "default": {
+            type: "FLOW",
+            value: "retry-payment-amount",  // Calls sub-flow
+            mode: "replace"
+          }
+        }
+      }
+    ]
+  },
+  
+  // SUB-FLOW - Helper flow for error handling
+  {
+    id: "retry-payment-amount",
+    name: "RetryPaymentAmount",
+    // No 'primary' property - this is a helper flow
+    description: "Retry payment amount collection after validation error",
+    steps: [
+      { 
+        type: "SAY", 
+        value: "Sorry, '{{amount}}' is not a valid amount. Let's try again." 
+      },
+      { 
+        type: "FLOW", 
+        value: "start-payment",  // Returns to primary flow
+        mode: "replace" 
+      }
+    ]
+  }
+];
+```
+
+**Validation Benefits:**
+- **Primary flows** are validated as standalone workflows with complete variable context
+- **Sub-flows** are validated only when called from primary flows, ensuring proper variable inheritance
+- **No false errors** for sub-flows that depend on variables from their calling flows
+- **Complete coverage** through deep traversal of the flow call graph during validation
 
 **Flow Execution Context:**
 During execution, the engine creates lightweight FlowFrame objects that maintain execution state while accessing FlowDefinition properties dynamically for optimal memory usage and localization support.
@@ -1655,6 +1725,7 @@ sessionContext.cargo.systemInfo = {
 const supportTicketFlow = {
   id: "support-ticket-with-cargo",
   name: "Support Ticket Creation",
+  primary: true, // User-facing entry point flow
   prompt: "create support ticket|need help|technical issue",
   steps: [
     { 
@@ -1741,6 +1812,7 @@ async function handleUserMessage(userId, message) {
 const orderProcessingFlow = {
   id: "process-ecommerce-order",
   name: "E-commerce Order Processing",
+  primary: true, // User-facing entry point flow
   steps: [
     {
       id: "calculate-order-totals",
@@ -1899,6 +1971,7 @@ This section showcases comprehensive real-world scenarios demonstrating the enha
 const ecommercePricingFlow = {
   id: "dynamic-pricing-engine",
   name: "E-commerce Dynamic Pricing Engine",
+  primary: true, // User-facing entry point flow
   description: "Comprehensive pricing system with inventory tracking, customer segmentation, and promotional calculations",
   
   steps: [
@@ -2057,6 +2130,7 @@ const ecommercePricingFlow = {
 const portfolioAnalysisFlow = {
   id: "investment-portfolio-analyzer",
   name: "Investment Portfolio Analysis Engine",
+  primary: true, // User-facing entry point flow
   description: "Comprehensive portfolio analysis with risk assessment, performance metrics, and rebalancing recommendations",
   
   steps: [
@@ -2146,6 +2220,7 @@ const portfolioAnalysisFlow = {
 const hrAnalyticsFlow = {
   id: "employee-performance-analytics",
   name: "HR Performance Analytics Engine",
+  primary: true, // User-facing entry point flow
   description: "Comprehensive employee analytics with performance tracking, compensation analysis, and development recommendations",
   
   steps: [
@@ -2245,6 +2320,7 @@ const hrAnalyticsFlow = {
 const healthcareAnalyticsFlow = {
   id: "patient-care-analytics",
   name: "Healthcare Analytics & Patient Care Optimization",
+  primary: true, // User-facing entry point flow
   description: "Comprehensive patient analytics with care quality metrics, resource utilization, and outcome predictions",
   
   steps: [
@@ -2353,6 +2429,7 @@ const healthcareAnalyticsFlow = {
 const supplyChainFlow = {
   id: "supply-chain-optimization",
   name: "Supply Chain Analytics & Optimization Engine",
+  primary: true, // User-facing entry point flow
   description: "Comprehensive supply chain analysis with inventory management, logistics optimization, and predictive analytics",
   
   steps: [
