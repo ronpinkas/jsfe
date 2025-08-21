@@ -219,15 +219,71 @@ const toolsRegistry = [
       parameters: {
          type: "object",
          properties: {
-            acct_number: { type: "string", description: "Account Number" },
-            cell_number: { type: "string", description: "Customer's phone number" },
-            email: { type: "string", description: "Customer's email address" }
+            email: { 
+               type: "string", 
+               description: "Customer's email address",
+               default: ""
+            },
+            phone_number: { 
+               type: "string", 
+               description: "Customer's phone number",
+               default: ""
+            },
+            account_number: { 
+               type: "string", 
+               description: "Customer's account number",
+               default: ""
+            }
          },
          required: [],
          additionalProperties: false
       },
-      implementation: { type: "local", function: "genAndSendPaymentLink", timeout: 5000 },
-      security: { requiresAuth: false },
+      implementation: { 
+         type: "http",
+         url: "https://wh-consumer.aws.icuracao.com/get-otp-link",
+         method: "POST",
+         contentType: "application/json",
+         timeout: 10000,
+         retries: 2,
+         headers: {
+            "Authorization": "Bearer ..." // Replace tool definition and place your API key here
+         },
+         responseMapping: {
+            type: "object",
+            mappings: {
+               "success": {
+                  path: "success",
+                  fallback: false
+               },
+               "error": {
+                  path: "error",
+                  fallback: 1
+               },
+               "customer_info": {
+                  type: "object",
+                  mappings: {
+                     "cust_id": "cust_id",
+                     "first_name": "first_name",
+                     "last_name": "last_name",
+                     "phone": "phone",
+                     "cell": "cell",
+                     "email": "email",
+                     "address": {
+                        type: "template",
+                        template: "{{street}}, {{city}}, {{state}} {{zip}}"
+                     }
+                  }
+               },
+               "api_response": "."
+            }
+         }
+      },
+      security: { 
+         requiresAuth: false,
+         auditLevel: "high",
+         dataClassification: "financial",
+         rateLimit: { requests: 10, window: 60000 }
+      },
 	},
 ];
 
@@ -328,7 +384,9 @@ const flowsMenu = [
                   tool: "get-otp-link",
                   variable: "otp_link_result",
                   parameters: {
-                     acct_number: "{{acct_number}}"
+                     account_number: "{{acct_number}}",
+                     email: "",
+                     phone_number: ""
                   }
                },
                "default": {
@@ -519,7 +577,11 @@ const flowsMenu = [
                   type: "CALL-TOOL",
                   tool: "get-otp-link",
                   variable: "otp_link_result",
-                  parameters: { cell_number: "{{cell_number}}" }
+                  parameters: { 
+                     account_number: "",
+                     email: "",
+                     phone_number: "{{cell_number}}" 
+                  }
                },
                "default": {
                   id: "retry_cell_flow",
@@ -586,7 +648,11 @@ const flowsMenu = [
                type: "CALL-TOOL",
                tool: "get-otp-link",
                variable: "otp_link_result",
-               parameters: { email: "{{email}}" }
+               parameters: { 
+                  account_number: "",
+                  email: "{{email}}",
+                  phone_number: ""
+               }
             },
             "default": {
                id: "retry_email_flow",
@@ -625,11 +691,11 @@ const flowsMenu = [
          id: "validate_otp_result",
          type: "CASE",
          branches: {
-            "condition: otp_link_result.ok": {
+            "condition: otp_link_result.success": {
                id: "success_msg",
                type: "SAY",
-               value: "Great! Payment link was sent to {{email ? email : otp_link_result.api_response.DATA.TWILIOINFO.to}}",
-               value_es: "¡Genial! El enlace de pago fue enviado a {{email ? email : otp_link_result.api_response.DATA.TWILIOINFO.to}}"
+               value: "Great! Payment link was sent to {{otp_link_result.customer_info.email && otp_link_result.customer_info.cell ? 'your email: ' + otp_link_result.customer_info.email + ' and cell: ' + otp_link_result.customer_info.cell : otp_link_result.customer_info.email ? 'your email: ' + otp_link_result.customer_info.email : 'your cell: ' + otp_link_result.customer_info.cell}}",
+               value_es: "¡Genial! El enlace de pago fue enviado a {{otp_link_result.customer_info.email && otp_link_result.customer_info.cell ? 'su correo: ' + otp_link_result.customer_info.email + ' y celular: ' + otp_link_result.customer_info.cell : otp_link_result.customer_info.email ? 'su correo: ' + otp_link_result.customer_info.email : 'su celular: ' + otp_link_result.customer_info.cell}}"
             },
             "default": {
                id: "retry_payment",
