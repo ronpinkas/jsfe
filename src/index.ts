@@ -5081,22 +5081,22 @@ function evaluateExpression(
     const context = createSimplifiedEvaluationContext(variables, contextStack, engine);
     
     // Check if the entire expression is a single interpolation
-    let singleExpressionMatch = expression.match(/^\{\{([^}]+)\}\}$/);
-    if (singleExpressionMatch || ! expression.includes('{{')) {
-      
+    let singleExpressionMatch = expression.startsWith('{{') && expression.endsWith('}}') ? expression.slice(2, -2).trim() : null;
+    if (singleExpressionMatch || !expression.includes('{{')) {
+
       // If no brackets (e.g. CASE condition:) then the whole expression is a single expression - as-if it was {{expression}}
       if( singleExpressionMatch === null) {
-        singleExpressionMatch = ['', expression];
+        singleExpressionMatch = expression;
       }
 
       // Single expression - return the evaluated result directly to preserve type
       try {
-        const evaluationResult = evaluateJavaScriptExpression(singleExpressionMatch[1].trim(), context);
+        const evaluationResult = evaluateJavaScriptExpression(singleExpressionMatch.trim(), context);
         logger.debug(`Simplified evaluation complete (single): ${expression} -> ${evaluationResult}`);
         return convertReturnType(evaluationResult, opts.returnType);
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        logger.warn(`Single expression evaluation failed: ${singleExpressionMatch[1]} - ${errorMessage}`);
+        logger.warn(`Single expression evaluation failed: ${singleExpressionMatch} - ${errorMessage}`);
         return opts.returnType === 'boolean' ? false : `[error: ${expression}]`;
       }
     }
@@ -5105,7 +5105,9 @@ function evaluateExpression(
     const result = expression.replace(expressionRegex, (match, expr) => {
       try {
         // Direct JavaScript evaluation with injected variables
+        logger.debug(`Evaluating expression: ${expr.trim()}`);
         const evaluationResult = evaluateJavaScriptExpression(expr.trim(), context);
+        logger.debug(`Expression evaluated: ${expr.trim()} -> ${evaluationResult}`);
         return String(evaluationResult);
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -5924,6 +5926,8 @@ export class WorkflowEngine implements Engine {
     * @param language - Optional language code for localization
     * @param messageRegistry - Optional message registry for custom messages
     * @param guidanceConfig - Optional guidance configuration for AI interactions
+    * @example
+    *   const engine = new WorkflowEngine(logger, aiCallback, flowsMenu, toolsRegistry, APPROVED_FUNCTIONS);
    */
    constructor(
       hostLogger: Logger,
