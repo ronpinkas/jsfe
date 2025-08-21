@@ -445,15 +445,7 @@ export interface FlowStep {
       message: string; // Error message if validation fails
     }>;
     customValidator?: string; // Name of approved function for complex validation
-  };
-  
-  // Progressive retry with user feedback
-  retryBehavior?: {
-    preserveData?: boolean; // Keep existing variables during retry
-    askUserBeforeRetry?: boolean; // Confirm with user before retrying
-    escalateAfterMaxRetries?: FlowStep; // What to do after max retries reached
-    showProgressiveHelp?: boolean; // Show more detailed help on subsequent failures
-  };
+  };  
 }
 
 export interface TransactionStep {
@@ -3200,9 +3192,9 @@ async function shouldRetryStep(
           case 'skip':
           case 'fallback':
             return false;
-          case 'ask_user':
-            // TODO: Implement user confirmation for retry
-            return true;
+          default:
+            logger.warn(`Unknown retry action "${condition.action}" for step ${step.id}`);
+            return false;
         }
       }
     }
@@ -3244,18 +3236,7 @@ async function retryCurrentStep(
     const delay = Math.min(1000 * Math.pow(2, currentRetryCount), 30000); // Max 30 seconds
     await new Promise(resolve => setTimeout(resolve, delay));
   }
-  
-  // Show progressive help if enabled
-  if (step.retryBehavior?.showProgressiveHelp && step.retryCount > 1) {
-    const helpMessage = generateProgressiveHelpMessage(step, error, step.retryCount);
-    addToContextStack(
-      currentFlowFrame.contextStack,
-      'system',
-      helpMessage,
-      step.id + '-retry-help'
-    );
-  }
-  
+    
   // Put the step back on the stack for retry
   currentFlowFrame.flowStepsStack.push(step);
   
@@ -5082,8 +5063,10 @@ function evaluateExpression(
     }
     
     // Simple regex to find {{expression}} patterns
-    const expressionRegex = /\{\{([^}]+)\}\}/g;
-    
+    //const expressionRegex = /\{\{([^}]+)\}\}/g;
+    // Above does not allow inner curly braces, so we use a more permissive regex
+    const expressionRegex = /\{\{([\s\S]*?)\}\}/g;
+
     // Create evaluation context by merging all available variables
     const context = createSimplifiedEvaluationContext(variables, contextStack, engine);
     
@@ -6753,12 +6736,16 @@ export class WorkflowEngine implements Engine {
          return;
       }
 
-      // Add to call graph - use flow ID for consistency
+      // Find the target flow to get its ID for consistent call graph storage
+      const targetFlow = this.flowsMenu.find((f: any) => f.id === step.value || f.name === step.value);
+      const targetFlowId = targetFlow ? targetFlow.id : step.value; // Fallback to step.value if not found
+
+      // Add to call graph - use flow IDs for consistency
       const calledFlows = state.flowCallGraph.get(flowDef.id) || [];
-      if (!calledFlows.includes(step.value)) {
-         calledFlows.push(step.value);
+      if (!calledFlows.includes(targetFlowId)) {
+         calledFlows.push(targetFlowId);
          state.flowCallGraph.set(flowDef.id, calledFlows);
-         logger.debug(`📞 Added flow "${step.value}" to call graph for "${flowDef.id}"`);
+         logger.debug(`📞 Added flow "${targetFlowId}" to call graph for "${flowDef.id}"`);
       }
 
       // Validate callType if present
