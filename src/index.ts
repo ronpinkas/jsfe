@@ -588,6 +588,7 @@ export interface FlowDefinition {
   [key: `prompt_${string}`]: string | undefined; // Support for any language code
   description: string;
   version: string;
+  primary?: boolean; // Whether this flow is a primary entry point for users (default: false)
   interruptable?: boolean; // Whether this flow can be interrupted by AI intent detection (default: false)
   steps: FlowStep[];
   variables?: Record<string, {
@@ -2810,7 +2811,13 @@ async function getFlowForInput(input: string, engine: Engine): Promise<FlowDefin
       return null;
     }
 
-    // First try direct name or id matching (case-insensitive)
+    // Filter to only primary flows for AI intent detection
+    const primaryFlows = flowsMenu.filter(flow => flow.primary === true);
+    const flowsForIntentDetection = primaryFlows.length > 0 ? primaryFlows : flowsMenu;
+    
+    logger.debug(`Using ${flowsForIntentDetection.length} flows for intent detection (${primaryFlows.length} primary flows available)`);
+
+    // First try direct name or id matching (case-insensitive) - check all flows
     const directMatch = flowsMenu.find(flow =>
       flow.name.toLowerCase() === input.toLowerCase() || (flow.id.toLowerCase() === input.toLowerCase())
     );
@@ -2825,7 +2832,7 @@ async function getFlowForInput(input: string, engine: Engine): Promise<FlowDefin
       return null;
     }
 
-    // If AI callback is present, use AI for intent detection
+    // If AI callback is present, use AI for intent detection with primary flows only
     const task = "Considering the chat history when available and applicable, decide if the user input should trigger any available flow.";
 
     const rules = `- Return the exact flow name if a match is found
@@ -2844,7 +2851,7 @@ async function getFlowForInput(input: string, engine: Engine): Promise<FlowDefin
     }
 
     try {    
-      const aiResponse = await fetchAiTask(task, rules, context, input, flowsMenu, undefined, engine.aiCallback);
+      const aiResponse = await fetchAiTask(task, rules, context, input, flowsForIntentDetection, undefined, engine.aiCallback);
          
       if (aiResponse && aiResponse !== 'None' && aiResponse !== 'null') {
         const flow = flowsMenu.find(flow => flow.name.toLowerCase() === aiResponse.toLowerCase() || flow.id === aiResponse);
@@ -6386,6 +6393,8 @@ export class WorkflowEngine implements Engine {
          return;
       }
 
+      logger.info(`Validating flow: ${flowName} (depth: ${state.currentDepth})`);
+
       // Mark as visited
       state.visitedFlows.add(flowName);
       state.currentDepth++;
@@ -6420,7 +6429,8 @@ export class WorkflowEngine implements Engine {
 
       // Validate recursively if deep validation is enabled
       if (opts.deep) {
-         const calledFlows = state.flowCallGraph.get(flowName) || [];
+         const calledFlows = state.flowCallGraph.get(flowDef.id) || [];
+         logger.debug(`🔍 Processing call graph for "${flowDef.id}": [${calledFlows.join(', ')}]`);
          for (const calledFlow of calledFlows) {
             this._validateFlowRecursive(calledFlow, state, opts);
          }
@@ -6743,11 +6753,12 @@ export class WorkflowEngine implements Engine {
          return;
       }
 
-      // Add to call graph
-      const calledFlows = state.flowCallGraph.get(flowDef.name) || [];
+      // Add to call graph - use flow ID for consistency
+      const calledFlows = state.flowCallGraph.get(flowDef.id) || [];
       if (!calledFlows.includes(step.value)) {
          calledFlows.push(step.value);
-         state.flowCallGraph.set(flowDef.name, calledFlows);
+         state.flowCallGraph.set(flowDef.id, calledFlows);
+         logger.debug(`📞 Added flow "${step.value}" to call graph for "${flowDef.id}"`);
       }
 
       // Validate callType if present
@@ -6874,13 +6885,18 @@ export class WorkflowEngine implements Engine {
       
       logger.info(`🔗 Found ${referencedSubFlows.size} flows referenced as sub-flows: [${Array.from(referencedSubFlows).join(', ')}]`);
 
-      // PHASE 2: Validate only top-level flows (not referenced as sub-flows)
-      logger.info('🔍 Phase 2: Validating top-level flows...');
+      // PHASE 2: Validate primary flows and referenced flows
+      logger.info('🔍 Phase 2: Validating primary flows...');
       
       for (const flow of this.flowsMenu) {
-         if (referencedSubFlows.has(flow.name) || referencedSubFlows.has(flow.id)) {
-            // Skip validation of sub-flows - they'll be validated in parent context
-            logger.info(`⏭️  Skipping sub-flow "${flow.name}" - will be validated in parent context`);
+         // Only validate flows marked as primary: true, or if no flows are marked as primary, validate all unreferenced flows
+         const hasPrimaryFlows = this.flowsMenu.some(f => f.primary === true);
+         const shouldValidate = hasPrimaryFlows ? flow.primary === true : !(referencedSubFlows.has(flow.name) || referencedSubFlows.has(flow.id));
+         
+         if (!shouldValidate) {
+            // Skip validation of non-primary flows when primary flows exist
+            const reason = hasPrimaryFlows ? 'Non-primary flow - validated in context' : 'Sub-flow - validated in parent context';
+            logger.info(`⏭️  Skipping ${hasPrimaryFlows ? 'non-primary' : 'sub'}-flow "${flow.name}" - ${reason.toLowerCase()}`);
             results.skippedSubFlows.push(flow.name);
             
             // Add placeholder result for tracking
@@ -6890,14 +6906,14 @@ export class WorkflowEngine implements Engine {
                errors: [],
                warnings: [],
                skipped: true,
-               skipReason: 'Sub-flow - validated in parent context'
+               skipReason: reason
             });
             
             results.validFlows++;
             continue;
          }
          
-         logger.info(`🔍 Validating top-level flow "${flow.name}"...`);
+         logger.info(`🔍 Validating ${hasPrimaryFlows ? 'primary' : 'top-level'} flow "${flow.name}"...`);
          
          // Create isolated validation state for each flow
          const result = this.validateFlow(flow.name, options);
