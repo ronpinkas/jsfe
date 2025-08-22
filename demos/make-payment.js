@@ -653,20 +653,33 @@ async function main() {
    
    // Simulate caller ID detection - in a real system, this would come from your telephony system
    session.cargo.twilioNumber = "12133864412"; // Example: Twilio number
-   session.cargo.voice = true; // Simulate voice interaction
-   session.cargo.verb = "say";
+   session.cargo.voice = false; // Simulate voice interaction
+   session.cargo.verb = "type";
    session.cargo.verb_es = "diga";
 
 
    console.log(`Simulated caller ID: ${session.cargo.callerId}`);
 
    console.log("Type anything like: 'I need to make a payment' or 'payment' to test the enhanced caller ID flow");
+   console.log("NOTE: This test includes JSON serialization/deserialization to simulate the remote widget");
 
    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
    while (true) {
       const user = await rl.question("> ");
-      const result = await engine.updateActivity({ role: "user", content: user }, session);
+      
+      // SIMULATE REMOTE WIDGET: Serialize session before sending to engine (like chat-widget.js does)
+      console.log("🔄 Simulating JSON serialization (like remote widget)...");
+      const serializedSession = JSON.stringify(session);
+      const deserializedSession = JSON.parse(serializedSession);
+      
+      // Use the deserialized session (this breaks object references without our fix)
+      const result = await engine.updateActivity({ role: "user", content: user }, deserializedSession);
       session = result
+      
+      // SIMULATE REMOTE WIDGET: Serialize session again after engine response
+      const serializedResult = JSON.stringify(session);
+      session = JSON.parse(serializedResult);
+      
       if (result.response) {
          console.log(result.response);
       } else {
