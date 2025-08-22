@@ -6038,6 +6038,10 @@ export class WorkflowEngine implements Engine {
       // Store reference to session context - no copying needed! Engine works directly with session data
       this.sessionContext = engineSessionContext;
       
+      // CRITICAL: Reconstruct variable references after potential JSON deserialization
+      // This fixes broken object references that are essential for variable inheritance
+      this.reconstructVariableReferences();
+      
       // Ensure session context has proper initialization
       if (!this.sessionContext.flowStacks || !Array.isArray(this.sessionContext.flowStacks)) {
         this.sessionContext.flowStacks = [[]];
@@ -6160,6 +6164,44 @@ export class WorkflowEngine implements Engine {
       // If no session context provided, we can't return it - this should not happen
       throw error;
     }
+   }
+
+   /**
+    * Reconstruct variable references after JSON deserialization.
+    * This fixes the issue where JSON.stringify/parse breaks shared object references
+    * that are crucial for variable inheritance between flows.
+    */
+   reconstructVariableReferences(): void {
+      if (!this.sessionContext?.flowStacks) {
+         return;
+      }
+
+      logger.debug('Reconstructing variable references after deserialization...');
+
+      for (const stack of this.sessionContext.flowStacks) {
+         if (!Array.isArray(stack) || stack.length === 0) {
+            continue;
+         }
+
+         // For each stack, ensure all flows share the same variable reference
+         let sharedVariables: Record<string, unknown> | null = null;
+
+         for (let flowIndex = 0; flowIndex < stack.length; flowIndex++) {
+            const flowFrame = stack[flowIndex];
+            if (!flowFrame) continue;
+
+            if (flowIndex === 0) {
+               // First flow sets the shared variables
+               sharedVariables = flowFrame.variables || {};
+               flowFrame.variables = sharedVariables;
+            } else {
+               // All subsequent flows should share the same variable object
+               flowFrame.variables = sharedVariables!;
+            }
+         }
+      }
+
+      logger.debug(`Reconstructed variable references for ${this.sessionContext.flowStacks.length} flow stacks`);
    }
 
    // Add a SAY message to global accumulation
