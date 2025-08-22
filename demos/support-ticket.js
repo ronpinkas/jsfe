@@ -182,7 +182,7 @@ const engine = new WorkflowEngine(
 
 /* ---------- Simple REPL ---------- */
 async function main() {
-	let session = engine.initSession(logger, "user-001", "session-001");
+	let session = engine.initSession("user-001", "session-001");
   // You can set session variables like this:
   session.cargo.test_var = "test value";
 

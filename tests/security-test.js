@@ -57,7 +57,7 @@ const engine = new WorkflowEngine(
 );
 
 async function runSecurityTest() {
-  const sessionContext = engine.initSession(logger, 'demo-user', 'demo-session');
+  const sessionContext = engine.initSession('demo-user', 'demo-session');
 
   console.log('=== Testing Safe Methods ===');
   

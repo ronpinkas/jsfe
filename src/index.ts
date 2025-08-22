@@ -397,8 +397,21 @@ export type AiCallbackFunction = ((systemInstruction: string, userMessage: strin
 
 // Engine Session Context - Encapsulates all session-specific state
 // This object should be maintained by the host application for each user session
+/**
+ * @interface EngineSessionContext
+ * @property {string} sessionId - Unique identifier for the session
+ * @property {string} userId - Identifier for the user
+ * @property {Date} createdAt - Timestamp when the session was created
+ * @property {Date} lastActivity - Timestamp of the last activity in the session
+ * @property {FlowFrame[][]} flowStacks - Stack of active flows (can be nested)
+ * @property {string[]} globalAccumulatedMessages - All messages exchanged in the session
+ * @property {{ user?: ContextEntry; assistant?: ContextEntry }} lastChatTurn - Last user and assistant messages
+ * @property {Record<string, unknown>} globalVariables - Global variables accessible across flows
+ * @property {string | null} [response] - Latest response from flow processing
+ * @property {TransactionData[]} [completedTransactions] - Completed transactions for host access
+ * @property {Record<string, unknown> | undefined} cargo - Additional session data for host use
+ */
 export interface EngineSessionContext {
-  hostLogger: Logger; // Logger instance for session-specific logging
   sessionId: string;
   userId: string;
   createdAt: Date;
@@ -5890,6 +5903,14 @@ export class WorkflowEngine implements Engine {
   // Private session context - engine works directly with session data (no copying!)
   private sessionContext: EngineSessionContext | null = null;
   
+  set logger(value: Logger) {
+    logger = value;
+  }
+  
+  get logger(): Logger {
+    return logger;
+  }
+
   // Session-specific properties as getters - work directly with session data
   get flowStacks(): FlowFrame[][] {
     return this.sessionContext?.flowStacks || [[]];
@@ -5920,7 +5941,7 @@ export class WorkflowEngine implements Engine {
     *   const engine = new WorkflowEngine(logger, aiCallback, flowsMenu, toolsRegistry, APPROVED_FUNCTIONS);
    */
    constructor(
-      hostLogger: Logger,
+      hostLogger: Logger | null,
       aiCallback: AiCallbackFunction,
       flowsMenu: FlowDefinition[],
       toolsRegistry: ToolDefinition[],
@@ -5930,7 +5951,18 @@ export class WorkflowEngine implements Engine {
       language?: string,
       messageRegistry?: MessageRegistry,
       guidanceConfig?: GuidanceConfig,
-   ) {
+   ) {  
+      // Validate logger compatibility
+      if(hostLogger) {
+        const requiredMethods = ['info', 'warn', 'error', 'debug'];
+        for (const method of requiredMethods) {
+          if (typeof (hostLogger as any)[method] !== 'function') {
+            logger.warn(`Provided hostLogger is missing required method: ${method}. Falling back to default logger.`);  
+            hostLogger = null;
+          }
+        }
+      }
+    
       hostLogger = hostLogger || logger; // Fallback to global fake logger if none provided
       logger = hostLogger; // Assign to global logger
       
@@ -5967,7 +5999,6 @@ export class WorkflowEngine implements Engine {
   /**
    * Initialize a new session context for a user session.
    *
-   * @param hostLogger - Logger instance for this session. Must implement info, warn, error, and debug methods.
    * @param userId - User identifier for this session
    * @param sessionId - Unique identifier for the session
    * @returns EngineSessionContext object that should be persisted by the host
@@ -5977,22 +6008,9 @@ export class WorkflowEngine implements Engine {
    *   const engine = new WorkflowEngine(...);
    *   const session = engine.initSession(yourLogger, 'user-123', 'session-456');
    */
-   initSession(hostLogger: Logger | null, userId: string, sessionId: string): EngineSessionContext {
-    // Validate logger compatibility
-    if(hostLogger) {
-      const requiredMethods = ['info', 'warn', 'error', 'debug'];
-      for (const method of requiredMethods) {
-        if (typeof (hostLogger as any)[method] !== 'function') {
-          throw new Error(`Logger is missing required method: ${method}`);
-        }
-      }
-    }
-
-    // Assign the session logger to the global logger
-    logger = hostLogger || logger;
+   initSession(userId: string, sessionId: string): EngineSessionContext {
 
     const engineSessionContext: EngineSessionContext = {
-      hostLogger: hostLogger || logger,
       sessionId: sessionId || crypto.randomUUID(),
       userId: userId,
       createdAt: new Date(),
@@ -6012,20 +6030,6 @@ export class WorkflowEngine implements Engine {
 
    async updateActivity(contextEntry: ContextEntry, engineSessionContext: EngineSessionContext): Promise<EngineSessionContext> {
     try {
-      // Load session context if provided
-      let hostLogger: Logger = engineSessionContext.hostLogger || logger; // Fallback to global logger if not provided
-      if (engineSessionContext.hostLogger){
-        const requiredMethods = ['info', 'warn', 'error', 'debug'];
-        for (const method of requiredMethods) {
-          if (typeof (engineSessionContext.hostLogger as any)[method] !== 'function') {
-            hostLogger = logger; // Fallback to global logger if hostLogger is missing methods
-            break; // No need to throw error, just use global logger
-            //throw new Error(`Logger is missing required method: ${method}`);
-          }
-        }
-      }
-
-      logger = hostLogger; // Assign to global logger
       this.cargo = engineSessionContext.cargo;
       logger.info(`Received Cargo: ${JSON.stringify(this.cargo)}`);
       this.sessionId = engineSessionContext.sessionId;

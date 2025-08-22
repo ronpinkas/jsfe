@@ -3567,7 +3567,7 @@ async function fetchAiResponse(systemInstruction, userMessage) {
     logger.info(`fetchAiResponse called with system instruction length: ${systemInstruction.length}, user message: "${userMessage}"`);
     
     //logger.warn(`System instruction: "${systemInstruction}"\nUser message: "${userMessage}"`);
-    
+        
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -4246,7 +4246,7 @@ async function runAllTestScenarios(language = 'en') {
 
     try {
       // Create fresh session context for each test to prevent contamination
-      //context.sessionContext = engine.initSession(logger, 'test-user', `test-session-${i+1}`);
+      //context.sessionContext = engine.initSession('test-user', `test-session-${i+1}`);
       
       await simulateLocalChat(scenario, language);
       console.log(`✅ [${i + 1}/${totalScenarios}] ${scenarioName} - PASSED`);
@@ -4406,7 +4406,7 @@ if (typeof process !== 'undefined' && process.argv) {
     context.engine = engine;
 
     // Initialize session context for testing
-    context.sessionContext = engine.initSession(logger, 'test-user', 'test-session');
+    context.sessionContext = engine.initSession('test-user', 'test-session');
 
     if (parsed.test) {
       if (parsed.test === 'all') {
@@ -4450,7 +4450,7 @@ if (typeof process !== 'undefined' && process.argv) {
     context.engine = engine;
 
     // Initialize session context for interactive mode
-    context.sessionContext = engine.initSession ? engine.initSession(logger, 'interactive-user', 'interactive-session') : null;
+    context.sessionContext = engine.initSession ? engine.initSession('interactive-user', 'interactive-session') : null;
 
     // No test specified, start interactive mode
     console.log('🚀 Starting interactive mode...\n');

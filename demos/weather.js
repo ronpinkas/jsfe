@@ -47,7 +47,7 @@ const engine = new WorkflowEngine(
 );
 
 async function runDemo() {
-  const sessionContext = engine.initSession(null, 'demo-user', 'demo-session');
+  const sessionContext = engine.initSession('demo-user', 'demo-session');
 
   let userInput = 'weather-demo';
   console.log(`User input: ${userInput}`);

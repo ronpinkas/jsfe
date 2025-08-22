@@ -22,7 +22,7 @@ const engine = new WorkflowEngine(
 );
 
 async function runDemo() {
-   const sessionContext = engine.initSession(null, 'demo-user');
+   const sessionContext = engine.initSession('demo-user');
    
    // Fake User prompt - should trigger the 'hello-world' flow
    let userInput = 'hello-world'; 

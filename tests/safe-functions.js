@@ -28,7 +28,7 @@ const engine = new WorkflowEngine(
 );
 
 async function runDemo() {
-  let sessionContext = engine.initSession(null, 'demo-user', 'demo-session');
+  let sessionContext = engine.initSession('demo-user', 'demo-session');
 
   console.log('Testing safe function calls in expressions...\n');
 

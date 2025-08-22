@@ -109,13 +109,42 @@ The WorkflowEngine constructor accepts the following parameters in order, each s
 - **Examples**: User ID, session ID, application configuration, environmental data
 - **Nature**: **STATIC** - Set during engine initialization, same for all sessions
 
+### Alternative Setting logger: engine.logger = logger
+**hostLogger** (Logger)
+- **Purpose**: Primary logging interface for the host application
+- **Requirements**: Must support `.debug()`, `.info()`, `.warn()`, `.error()` methods
+- **Usage**: Engine uses this for all operational logging and debugging output
+- **Example**: Winston, or custom logger implementation
+
+```javascript
+const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || 'warn',  // Enable debug logging to trace validation
+  format: winston.format.printf(({ level, message }) => {
+    return `${level}: ${message}`;
+  }),
+  transports: [
+    new winston.transports.Console()
+  ]
+});
+
+engine.logger = logger;
+```
+
 ### Dynamic Session Data: The `cargo` Property
 
 Unlike `globalVariables` which are static and shared across all sessions, each `EngineSessionContext` has a `cargo` property for **dynamic, session-specific data sharing**:
 
 ```javascript
+
+**hostLogger** (Logger | null)
+- **Purpose**: Primary logging interface for the host application
+- **Requirements**: Must support `.debug()`, `.info()`, `.warn()`, `.error()` methods
+- **Usage**: Engine uses this for all operational logging and debugging output
+- **Example**: Winston, or custom logger implementation
+- **Nullable**: Can be `null` to disable host application logging
+
 // After initSession, you can set dynamic session data
-let sessionContext = engine.initSession(logger, 'user-123', 'session-456');
+let sessionContext = engine.initSession('user-123', 'session-456');
 
 // Set dynamic data that workflows can access
 sessionContext.cargo.userPreferences = { theme: 'dark', language: 'en' };
@@ -349,7 +378,7 @@ const globalVariables = {
 
 ### Session Management
 
-- Each user requires a unique session context via `initSession(logger, userId, sessionId)`
+- Each user requires a unique session context via `initSession(userId, sessionId)`
 - **CRITICAL**: `updateActivity()` returns an updated `EngineSessionContext` 
 - You must always update your session reference on every call
 - The `EngineSessionContext` object should be persisted by your application
@@ -362,7 +391,7 @@ Each session context includes a `cargo` property for dynamic, session-specific d
 
 ```javascript
 // Initialize session
-let sessionContext = engine.initSession(logger, 'user-123', 'session-456');
+let sessionContext = engine.initSession('user-123', 'session-456');
 
 // Set dynamic session data that workflows can reference
 sessionContext.cargo.userProfile = {
@@ -379,7 +408,7 @@ sessionContext = await engine.updateActivity(userEntry, sessionContext);
 
 ```javascript
 // Initialize session
-let sessionContext = engine.initSession(logger, 'user-123', 'session-456');
+let sessionContext = engine.initSession('user-123', 'session-456');
 
 // For every updateActivity call, capture the returned context
 sessionContext = await engine.updateActivity(userEntry, sessionContext);
@@ -397,14 +426,14 @@ sessionContext = await engine.updateActivity(assistantEntry, sessionContext);
 #### ❌ Common Mistake - Not Updating Session Reference
 ```javascript
 // WRONG - This will cause session corruption
-const sessionContext = engine.initSession(logger, 'user-123', 'session-456');
+const sessionContext = engine.initSession('user-123', 'session-456');
 await engine.updateActivity(userEntry, sessionContext); // Session state lost!
 ```
 
 #### ✅ Correct Pattern - Always Update Session Reference
 ```javascript
 // CORRECT - Session state maintained
-let sessionContext = engine.initSession(logger, 'user-123', 'session-456');
+let sessionContext = engine.initSession('user-123', 'session-456');
 sessionContext = await engine.updateActivity(userEntry, sessionContext); // Session updated
 ```
 
@@ -942,8 +971,8 @@ When creating test suites, follow these patterns to ensure session isolation and
 #### Proper Test Isolation Pattern
 
 ```javascript
-// ❌ Wrong - Shared session causes contamination
-const globalSession = engine.initSession(logger, 'test-user', 'test-session');
+// ❌ Dangerous - Shared session may cause contamination
+const globalSession = engine.initSession('test-user', 'test-session');
 
 for (const testCase of testCases) {
   // This will cause session corruption!
@@ -955,7 +984,7 @@ for (let i = 0; i < testCases.length; i++) {
   const testCase = testCases[i];
   
   // Create fresh session for each test
-  let sessionContext = engine.initSession(logger, 'test-user', `test-session-${i+1}`);
+  let sessionContext = engine.initSession('test-user', `test-session-${i+1}`);
   
   await runTest(testCase, sessionContext);
 }
@@ -1148,16 +1177,16 @@ The engine supports completely generic response transformation through declarati
 2. **Use unique sessions per user/conversation**:
    ```javascript
    // ❌ Wrong - sharing sessions
-   const sharedSession = engine.initSession(logger, 'shared', 'shared');
+   const sharedSession = engine.initSession('shared', 'shared');
    
    // ✅ Correct - isolated sessions
-   const userSession = engine.initSession(logger, `user-${userId}`, `session-${sessionId}`);
+   const userSession = engine.initSession(`user-${userId}`, `session-${sessionId}`);
    ```
 
 3. **Initialize fresh sessions for testing**:
    ```javascript
    // For each test case
-   let sessionContext = engine.initSession(logger, 'test-user', `test-session-${testIndex}`);
+   let sessionContext = engine.initSession('test-user', `test-session-${testIndex}`);
    ```
 
 #### Problem: Workflows not triggering or mock responses
@@ -1167,7 +1196,7 @@ The engine supports completely generic response transformation through declarati
 **Solution**: Ensure proper session lifecycle:
 ```javascript
 // Initialize once per user/conversation
-let sessionContext = engine.initSession(logger, userId, sessionId);
+let sessionContext = engine.initSession(userId, sessionId);
 
 // Update for every interaction
 sessionContext = await engine.updateActivity(userInput, sessionContext);
@@ -1193,7 +1222,7 @@ const userSessions = new Map();
 function getOrCreateSession(userId, sessionId) {
   const key = `${userId}-${sessionId}`;
   if (!userSessions.has(key)) {
-    userSessions.set(key, engine.initSession(logger, userId, sessionId));
+    userSessions.set(key, engine.initSession(userId, sessionId));
   }
   return userSessions.get(key);
 }

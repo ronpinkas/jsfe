@@ -111,7 +111,7 @@ const engine = new WorkflowEngine(
 );
 
 async function runDemo() {
-  const sessionContext = engine.initSession(logger, 'demo-user', 'demo-session');
+  const sessionContext = engine.initSession('demo-user', 'demo-session');
 
   let userInput = 'show me your abilities';
   console.log(`User input: ${userInput}`);

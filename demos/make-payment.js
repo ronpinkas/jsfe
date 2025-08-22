@@ -98,117 +98,11 @@ function validateEmail(email) {
    return emailRegex.test(email);
 }
 
-async function genAndSendPaymentLink(params) {
-   const acct_number = params.acct_number;
-   const cell_number = params.cell_number || params.cell;
-   const email = params.email;
-   
-   logger.info(`Generating payment link - account: ${acct_number}, cell: ${cell_number}, email: ${email}`);
-   
-   try {
-      // Simulate payment link generation
-      const paymentId = `PAY-${Date.now()}`;
-      const paymentLink = `https://secure.payment.com/pay/${paymentId}`;
-      
-      // Handle the three scenarios: account lookup, cell direct, or email direct
-      let contactInfo = {};
-      
-      if (acct_number) {
-         // Scenario 1: Account-based lookup - simulate looking up customer contact info
-         contactInfo = await lookupCustomerByAccount(acct_number);
-         logger.info(`Found customer contact info for account ${acct_number}: ${JSON.stringify(contactInfo)}`);
-      } else if (cell_number) {
-         // Scenario 2: Cell-based direct
-         contactInfo = { cell: cell_number, method: 'cell' };
-      } else if (email) {
-         // Scenario 3: Email-based direct  
-         contactInfo = { email: email, method: 'email' };
-      } else {
-         throw new Error("Must provide either account_number, cell_number, or email");
-      }
-      
-      // Send payment link to the appropriate contact method(s)
-      const sendResults = {};
-      
-      if (contactInfo.cell) {
-         sendResults.sms = await sendSMS(contactInfo.cell, `Payment link: ${paymentLink}`);
-      }
-      
-      if (contactInfo.email) {
-         sendResults.email = await sendEmail(contactInfo.email, "Payment Link", `Your payment link: ${paymentLink}`);
-      }
-      
-      // Determine primary contact method used
-      const primaryContact = contactInfo.cell || contactInfo.email;
-      const primaryMethod = contactInfo.cell ? 'SMS' : 'Email';
-      
-      return {
-         ok: true,
-         payment_id: paymentId,
-         payment_link: paymentLink,
-         contact_method: primaryMethod,
-         api_response: {
-         DATA: {
-            TWILIOINFO: {
-               to: contactInfo.cell || "not provided",
-               status: contactInfo.cell ? "sent" : "skipped"
-            },
-            EMAILINFO: {
-               to: contactInfo.email || "not provided", 
-               status: contactInfo.email ? "sent" : "skipped"
-            }
-         }
-         }
-      };
-   } catch (error) {
-      logger.error(`Payment link generation failed: ${error.message}`);
-      return {
-         ok: false,
-         error: error.message
-      };
-   }
-}
-
-// Mock function to simulate customer lookup by account number
-async function lookupCustomerByAccount(accountNumber) {
-   // Simulate database lookup - in real implementation this would query your customer database
-   logger.info(`Looking up customer info for account: ${accountNumber}`);
-   
-   // Simulate finding customer contact info based on account
-   // In a real system, this would query your customer database
-   const mockCustomerData = {
-      "123456": { cell: "555-123-4567", email: "customer1@example.com" },
-      "789012": { cell: "555-987-6543", email: "customer2@example.com" },
-      "345678": { cell: "555-345-6789" }, // Cell only
-      "901234": { email: "customer4@example.com" }, // Email only
-   };
-   
-   const customerInfo = mockCustomerData[accountNumber];
-   if (!customerInfo) {
-      throw new Error(`No customer found for account number: ${accountNumber}`);
-   }
-   
-   return customerInfo;
-}
-
-// Mock SMS sending function
-async function sendSMS(phone, message) {
-   logger.info(`SMS sent to ${phone}: ${message}`);
-   return { status: "sent", to: phone };
-}
-
-// Mock email sending function  
-async function sendEmail(email, subject, body) {
-  logger.info(`Email sent to ${email}: ${subject}`);
-  return { status: "sent", to: email };
-}
-
 /* ---------- Registries ---------- */
 const APPROVED_FUNCTIONS = {
    "validateDigits": validateDigits,
    "validatePhone": validatePhone,
    "validateEmail": validateEmail,
-   "genAndSendPaymentLink": genAndSendPaymentLink
 };
 
 const toolsRegistry = [
@@ -246,7 +140,7 @@ const toolsRegistry = [
          timeout: 10000,
          retries: 2,
          headers: {
-            "Authorization": "Bearer ..." // Replace tool definition and place your API key here
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiJwZXJtYW5lbnRfcHJvZF90b2tlbiIsImlhdCI6MTc1NTMwNTYxOSwiaXNzIjoicG9zX2FpX2FwaSJ9.0fwQn72pU0kUr37HJSverql9verbXYDgD1Yrygw1K2k"
          },
          responseMapping: {
             type: "object",
@@ -753,12 +647,11 @@ async function main() {
       console.error('❌ Failed to persist flows/tools:', err);
    }
 
-	let session = engine.initSession(logger, "user-001", "session-001");
+	let session = engine.initSession("user-001", "session-001");   
    // You can set session variables like this:
    session.cargo.test_var = "test value";
    
    // Simulate caller ID detection - in a real system, this would come from your telephony system
-   session.cargo.callerId = "15551234567"; // Example: caller ID
    session.cargo.twilioNumber = "12133864412"; // Example: Twilio number
    session.cargo.voice = true; // Simulate voice interaction
    session.cargo.verb = "say";
