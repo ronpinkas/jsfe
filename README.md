@@ -30,7 +30,7 @@ const engine = new WorkflowEngine(
   globalVariables,     // Optional: Session-wide variables
   validateOnInit,      // Optional: Enable pre-flight validation (default: true)
   language,            // Optional: User's preferred language
-  aiTimeOut,           // Optional: AI timeout in milliseconds (default: 1000ms)
+  aiTimeOut,           // Optional: AI timeout in milliseconds (default: 2000ms)
   messageRegistry,     // Optional: Custom message templates
   guidanceConfig       // Optional: User assistance configuration
 );
@@ -181,7 +181,7 @@ sessionContext.cargo.temporaryData = 'Any dynamic content';
 
 **9. aiTimeOut** (number, optional)
 - **Purpose**: Timeout in milliseconds for AI callback function calls
-- **Default**: 1000ms (1 second) if not specified
+- **Default**: 2000ms (2 second) if not specified
 - **Usage**: Prevents AI calls from hanging indefinitely, providing better reliability
 - **Range**: Recommended range 1000-30000ms depending on AI service response times
 - **Special Value**: Set to `0` to disable timeout (no time limit on AI calls)
@@ -194,9 +194,9 @@ sessionContext.cargo.temporaryData = 'Any dynamic content';
 const fastEngine = new WorkflowEngine(logger, aiCallback, flows, tools, functions, 
   {}, true, 'en', 500); // 500ms timeout
 
-// Standard cloud AI (default timeout)
+// Fast cloud AI 
 const standardEngine = new WorkflowEngine(logger, aiCallback, flows, tools, functions, 
-  {}, true, 'en', 1000); // 1 second timeout (default)
+  {}, true, 'en', 1000); // 1 second timeout
 
 // No timeout limit (not recommended for production)
 const noTimeoutEngine = new WorkflowEngine(logger, aiCallback, flows, tools, functions, 
@@ -878,7 +878,7 @@ const engine = new WorkflowEngine(
   globalVariables,
   true,           // validateOnInit
   'es',           // language - Spanish
-  2000,           // aiTimeOut - 2 seconds for slower AI services
+  1000,           // aiTimeOut - 1 second for faster service
   messageRegistry,
   guidanceConfig
 );

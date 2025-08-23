@@ -5985,7 +5985,7 @@ export class WorkflowEngine implements Engine {
       globalVariables?: Record<string, unknown>, // Optional global variables shared across all new flows
       validateOnInit?: boolean,
       language?: string,
-      aiTimeOut?: number, // Optional AI timeout in milliseconds (default 1000ms)
+      aiTimeOut?: number, // Optional AI timeout in milliseconds (default 2000ms)
       messageRegistry?: MessageRegistry,
       guidanceConfig?: GuidanceConfig
    ) {  
@@ -6008,7 +6008,7 @@ export class WorkflowEngine implements Engine {
       this.toolsRegistry = toolsRegistry;
       this.APPROVED_FUNCTIONS = APPROVED_FUNCTIONS;
       this.globalVariables = globalVariables ? { ...globalVariables } : {}; // Copy global variables to prevent external mutations
-      this.aiTimeOut = aiTimeOut ?? 1000; // Default to 1000ms (1 second)
+      this.aiTimeOut = aiTimeOut ?? 2000; // Default to 2000ms (2 seconds)
 
       // if validateOnInit is not provided, default to true
       validateOnInit = validateOnInit !== undefined ? validateOnInit : true;

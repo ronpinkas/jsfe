@@ -162,7 +162,7 @@ context.engine = new WorkflowEngine(
   globalVariables,      // Session-wide variables (optional)
   validateOnInit,       // Integrity validation flag (optional, default: true)
   language,             // Language preference (optional, 'en', 'es', etc.)
-  aiTimeOut,            // AI timeout in milliseconds (optional, default: 1000ms)
+  aiTimeOut,            // AI timeout in milliseconds (optional, default: 2000ms)
   messageRegistry,      // Custom message templates (optional)
   guidanceConfig        // User guidance settings (optional)
 );
@@ -293,7 +293,7 @@ sessionContext.cargo.temporaryState = {
 
 **9. aiTimeOut** (number, optional)
 - **Purpose**: Timeout in milliseconds for AI callback function calls
-- **Default**: 1000ms (1 second) if not specified
+- **Default**: 2000ms (2 second) if not specified
 - **Usage**: Prevents AI calls from hanging indefinitely, providing better reliability
 - **Range**: Recommended range 1000-30000ms depending on AI service response times
 - **Special Value**: Set to `0` to disable timeout (no time limit on AI calls)
@@ -1275,7 +1275,7 @@ context.engine = new WorkflowEngine(
   globalVariables,      // Session-wide variables (optional)
   validateOnInit,       // Integrity validation flag (optional, default: true)
   language,             // Language preference (optional, 'en', 'es', etc.)
-  aiTimeOut,            // AI timeout in milliseconds (optional, default: 1000ms)
+  aiTimeOut,            // AI timeout in milliseconds (optional, default: 2000ms)
   messageRegistry,      // Custom message templates (optional)
   guidanceConfig        // User guidance settings (optional)
 );
@@ -5061,7 +5061,7 @@ context.engine = new WorkflowEngine(
   globalVariables,      // Session-wide variables (optional)
   validateOnInit,       // Integrity validation flag (optional, default: true)
   language,             // Language preference (optional, 'en', 'es', etc.)
-  aiTimeOut,            // AI timeout in milliseconds (optional, default: 1000ms)
+  aiTimeOut,            // AI timeout in milliseconds (optional, default: 2000ms)
   messageRegistry,      // Custom message templates (optional)
   guidanceConfig        // User guidance settings (optional)
 );
