@@ -162,6 +162,7 @@ context.engine = new WorkflowEngine(
   globalVariables,      // Session-wide variables (optional)
   validateOnInit,       // Integrity validation flag (optional, default: true)
   language,             // Language preference (optional, 'en', 'es', etc.)
+  aiTimeOut,            // AI timeout in milliseconds (optional, default: 1000ms)
   messageRegistry,      // Custom message templates (optional)
   guidanceConfig        // User guidance settings (optional)
 );
@@ -290,13 +291,21 @@ sessionContext.cargo.temporaryState = {
 - **Default**: 'en' if not specified
 - **Usage**: Engine selects appropriate prompt_xx properties from flow definitions
 
-**9. messageRegistry** (MessageRegistry, optional)
+**9. aiTimeOut** (number, optional)
+- **Purpose**: Timeout in milliseconds for AI callback function calls
+- **Default**: 1000ms (1 second) if not specified
+- **Usage**: Prevents AI calls from hanging indefinitely, providing better reliability
+- **Range**: Recommended range 1000-30000ms depending on AI service response times
+- **Special Value**: Set to `0` to disable timeout (no time limit on AI calls)
+- **Error Handling**: Throws timeout error if AI call exceeds specified duration
+
+**10. messageRegistry** (MessageRegistry, optional)
 - **Purpose**: Custom message templates for engine-generated user messages
 - **Format**: Multi-language message registry with customizable system messages
 - **Override**: Allows customization of built-in engine messages
 - **Localization**: Supports multiple languages with fallback to default messages
 
-**10. guidanceConfig** (GuidanceConfig, optional)
+**11. guidanceConfig** (GuidanceConfig, optional)
 - **Purpose**: Configuration for user guidance and help messages
 - **Features**: Controls how and when the engine provides user assistance
 - **Modes**: Append, prepend, template, or none for guidance integration
@@ -807,7 +816,7 @@ The engine integrates with host systems through the **`updateActivity()`** metho
 import { WorkflowEngine } from './jsfe.ts.js';
 
 // Initialize the engine (typically done once at application startup)
-const engine = new WorkflowEngine(logger, fetchAiResponse, flowsMenu, toolsRegistry, APPROVED_FUNCTIONS, globalVariable, true, parsed.lang);
+const engine = new WorkflowEngine(logger, fetchAiResponse, flowsMenu, toolsRegistry, APPROVED_FUNCTIONS, globalVariable, true, parsed.lang, 2000); // 2 second timeout for AI calls
 ```
 
 #### Session Initialization
@@ -1266,6 +1275,7 @@ context.engine = new WorkflowEngine(
   globalVariables,      // Session-wide variables (optional)
   validateOnInit,       // Integrity validation flag (optional, default: true)
   language,             // Language preference (optional, 'en', 'es', etc.)
+  aiTimeOut,            // AI timeout in milliseconds (optional, default: 1000ms)
   messageRegistry,      // Custom message templates (optional)
   guidanceConfig        // User guidance settings (optional)
 );
@@ -5042,7 +5052,6 @@ The **JavaScript Flow Engine** represents a sophisticated, production-ready work
 #### 1. **Setup and Configuration** (30 minutes)
 ```javascript
 // ✅ Initialize the engine with proper configuration
-const engine = new // Initialize the engine
 context.engine = new WorkflowEngine(
   hostLogger,           // Any logger supporting .debug/.info/.warn/.error (or null)
   aiCallback,           // host provided access to AI function that receives <systemInstruction>, <userMessage> and returns <string response>
@@ -5052,6 +5061,7 @@ context.engine = new WorkflowEngine(
   globalVariables,      // Session-wide variables (optional)
   validateOnInit,       // Integrity validation flag (optional, default: true)
   language,             // Language preference (optional, 'en', 'es', etc.)
+  aiTimeOut,            // AI timeout in milliseconds (optional, default: 1000ms)
   messageRegistry,      // Custom message templates (optional)
   guidanceConfig        // User guidance settings (optional)
 );

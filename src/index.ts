@@ -2684,23 +2684,53 @@ async function playStep(currentFlowFrame: FlowFrame, engine: Engine): Promise<st
 // === AI COMMUNICATION LAYER ===
 
 /**
+ * Create a timeout wrapper for AI calls
+ * @param promise - The promise to wrap with timeout
+ * @param timeoutMs - Timeout in milliseconds (0 = no timeout)
+ * @returns Promise that rejects if timeout is reached
+ */
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  // If timeout is 0 or negative, return the promise directly (no timeout)
+  if (timeoutMs <= 0) {
+    return promise;
+  }
+  
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      reject(new Error(`AI call timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+
+    promise
+      .then((result) => {
+        clearTimeout(timeoutId);
+        resolve(result);
+      })
+      .catch((error) => {
+        clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+}
+
+/**
  * Base AI worker: Plain interface to AI services
  * Uses the user-provided AI callback function instead of hardcoded implementation
  * @param systemInstruction - The system message/prompt for the AI
  * @param userMessage - The user's input message
  * @param aiCallback - User-provided AI communication function
+ * @param timeoutMs - Timeout in milliseconds for the AI call
  * @returns AI response as string
  */
-async function fetchAiResponse(systemInstruction: string, userMessage: string, aiCallback: AiCallbackFunction): Promise<string> {
+async function fetchAiResponse(systemInstruction: string, userMessage: string, aiCallback: AiCallbackFunction, timeoutMs: number = 1000): Promise<string> {
   try {
-    logger.debug(`fetchAiResponse called with system instruction length: ${systemInstruction.length}, user message: "${userMessage}"`);
+    logger.debug(`fetchAiResponse called with system instruction length: ${systemInstruction.length}, user message: "${userMessage}", timeout: ${timeoutMs}ms`);
     
     if (!aiCallback) {
       throw new Error('aiCallback is null. AI-powered features are not available.');
     }
     
-    // Use the user-provided AI callback function
-    const aiResponse = await aiCallback(systemInstruction, userMessage);
+    // Use the user-provided AI callback function with timeout
+    const aiResponse = await withTimeout(aiCallback(systemInstruction, userMessage), timeoutMs);
     
     if (typeof aiResponse !== 'string') {
       throw new Error('AI callback must return a string response');
@@ -2725,6 +2755,7 @@ async function fetchAiResponse(systemInstruction: string, userMessage: string, a
  * @param flows - Available flows (optional)
  * @param jsonSchema - Optional JSON schema for structured responses
  * @param aiCallback - User-provided AI communication function
+ * @param timeoutMs - Timeout in milliseconds for the AI call
  * @returns AI response as string or parsed JSON object
  */
 async function fetchAiTask(
@@ -2734,7 +2765,8 @@ async function fetchAiTask(
   userInput: string, 
   flows?: FlowDefinition[],
   jsonSchema?: string,
-  aiCallback?: AiCallbackFunction
+  aiCallback?: AiCallbackFunction,
+  timeoutMs: number = 1000
 ): Promise<string> {
   try {
     if (!aiCallback) {
@@ -2764,7 +2796,7 @@ async function fetchAiTask(
       userMessage += `\n\n<available-flows>\n${flowDescriptions}\n</available-flows>`;
     }
     
-    const aiResponse = await fetchAiResponse(systemMessage, userMessage, aiCallback);
+    const aiResponse = await fetchAiResponse(systemMessage, userMessage, aiCallback, timeoutMs);
     
     // If JSON schema was provided, parse and return JSON
     if (jsonSchema) {
@@ -2856,7 +2888,7 @@ async function getFlowForInput(input: string, engine: Engine): Promise<FlowDefin
     }
 
     try {    
-      const aiResponse = await fetchAiTask(task, rules, context, input, flowsForIntentDetection, undefined, engine.aiCallback);
+      const aiResponse = await fetchAiTask(task, rules, context, input, flowsForIntentDetection, undefined, engine.aiCallback, engine.aiTimeOut);
          
       if (aiResponse && aiResponse !== 'None' && aiResponse !== 'null') {
         const flow = flowsMenu.find(flow => flow.name.toLowerCase() === aiResponse.toLowerCase() || flow.id === aiResponse);
@@ -4122,7 +4154,7 @@ Context Extraction Examples:
   const context = variablesContext || 'No variables available';
 
   try {    
-    const aiResponse = await fetchAiTask(task, rules, context, String(input), [], schemaDescription, engine.aiCallback);
+    const aiResponse = await fetchAiTask(task, rules, context, String(input), [], schemaDescription, engine.aiCallback, engine.aiTimeOut);
     
     // When we expect JSON args, the response should be parsed as an object
     const args = typeof aiResponse === 'string' ? JSON.parse(aiResponse) : aiResponse;
@@ -5565,7 +5597,7 @@ ${context}`;
 }`;
 
    try {
-      const analysis = await fetchAiTask(task, rules, context, input, flowsMenu, jsonSchema, engine.aiCallback);
+      const analysis = await fetchAiTask(task, rules, context, input, flowsMenu, jsonSchema, engine.aiCallback, engine.aiTimeOut);
       
       // Ensure analysis is an object and add originalInput
       if (typeof analysis === 'object' && analysis !== null) {
@@ -5899,6 +5931,7 @@ export class WorkflowEngine implements Engine {
   public guidanceConfig?: GuidanceConfig;
   public globalVariables?: Record<string, unknown>;
   public aiCallback: AiCallbackFunction;
+  public aiTimeOut: number;
   
   // Private session context - engine works directly with session data (no copying!)
   private sessionContext: EngineSessionContext | null = null;
@@ -5935,10 +5968,13 @@ export class WorkflowEngine implements Engine {
     * @param globalVariables - Optional global variables shared across all new flows
     * @param validateOnInit - Whether to perform validation on initialization (default: true)
     * @param language - Optional language code for localization
+    * @param aiTimeOut - Optional timeout in milliseconds for AI calls (default: 1000ms)
     * @param messageRegistry - Optional message registry for custom messages
     * @param guidanceConfig - Optional guidance configuration for AI interactions
     * @example
     *   const engine = new WorkflowEngine(logger, aiCallback, flowsMenu, toolsRegistry, APPROVED_FUNCTIONS);
+    *   // With custom timeout:
+    *   const engine = new WorkflowEngine(logger, aiCallback, flowsMenu, toolsRegistry, APPROVED_FUNCTIONS, [], true, 'en', 1000);
    */
    constructor(
       hostLogger: Logger | null,
@@ -5949,8 +5985,9 @@ export class WorkflowEngine implements Engine {
       globalVariables?: Record<string, unknown>, // Optional global variables shared across all new flows
       validateOnInit?: boolean,
       language?: string,
+      aiTimeOut?: number, // Optional AI timeout in milliseconds (default 1000ms)
       messageRegistry?: MessageRegistry,
-      guidanceConfig?: GuidanceConfig,
+      guidanceConfig?: GuidanceConfig
    ) {  
       // Validate logger compatibility
       if(hostLogger) {
@@ -5971,6 +6008,7 @@ export class WorkflowEngine implements Engine {
       this.toolsRegistry = toolsRegistry;
       this.APPROVED_FUNCTIONS = APPROVED_FUNCTIONS;
       this.globalVariables = globalVariables ? { ...globalVariables } : {}; // Copy global variables to prevent external mutations
+      this.aiTimeOut = aiTimeOut ?? 1000; // Default to 1000ms (1 second)
 
       // if validateOnInit is not provided, default to true
       validateOnInit = validateOnInit !== undefined ? validateOnInit : true;

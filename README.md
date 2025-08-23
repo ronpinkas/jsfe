@@ -30,6 +30,7 @@ const engine = new WorkflowEngine(
   globalVariables,     // Optional: Session-wide variables
   validateOnInit,      // Optional: Enable pre-flight validation (default: true)
   language,            // Optional: User's preferred language
+  aiTimeOut,           // Optional: AI timeout in milliseconds (default: 1000ms)
   messageRegistry,     // Optional: Custom message templates
   guidanceConfig       // Optional: User assistance configuration
 );
@@ -178,13 +179,37 @@ sessionContext.cargo.temporaryData = 'Any dynamic content';
 - **Default**: 'en' if not specified
 - **Usage**: Engine selects appropriate prompt_xx properties from flow definitions
 
-**9. messageRegistry** (MessageRegistry, optional)
+**9. aiTimeOut** (number, optional)
+- **Purpose**: Timeout in milliseconds for AI callback function calls
+- **Default**: 1000ms (1 second) if not specified
+- **Usage**: Prevents AI calls from hanging indefinitely, providing better reliability
+- **Range**: Recommended range 1000-30000ms depending on AI service response times
+- **Special Value**: Set to `0` to disable timeout (no time limit on AI calls)
+- **Error Handling**: Throws timeout error if AI call exceeds specified duration
+
+```javascript
+// Examples of different timeout configurations:
+
+// Fast local AI (short timeout)
+const fastEngine = new WorkflowEngine(logger, aiCallback, flows, tools, functions, 
+  {}, true, 'en', 500); // 500ms timeout
+
+// Standard cloud AI (default timeout)
+const standardEngine = new WorkflowEngine(logger, aiCallback, flows, tools, functions, 
+  {}, true, 'en', 1000); // 1 second timeout (default)
+
+// No timeout limit (not recommended for production)
+const noTimeoutEngine = new WorkflowEngine(logger, aiCallback, flows, tools, functions, 
+  {}, true, 'en', 0); // 0 = no timeout
+```
+
+**10. messageRegistry** (MessageRegistry, optional)
 - **Purpose**: Custom message templates for engine-generated user messages
 - **Format**: Multi-language message registry with customizable system messages
 - **Override**: Allows customization of built-in engine messages
 - **Localization**: Supports multiple languages with fallback to default messages
 
-**10. guidanceConfig** (GuidanceConfig, optional)
+**11. guidanceConfig** (GuidanceConfig, optional)
 - **Purpose**: Configuration for user guidance and help messages
 - **Features**: Controls how and when the engine provides user assistance
 - **Modes**: Append, prepend, template, or none for guidance integration
@@ -853,6 +878,7 @@ const engine = new WorkflowEngine(
   globalVariables,
   true,           // validateOnInit
   'es',           // language - Spanish
+  2000,           // aiTimeOut - 2 seconds for slower AI services
   messageRegistry,
   guidanceConfig
 );
