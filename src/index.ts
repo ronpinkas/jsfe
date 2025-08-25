@@ -100,12 +100,12 @@ const DEFAULT_MESSAGE_REGISTRY: MessageRegistry = {
     flow_init: "🤖 Processing {{flowPrompt}}",
     flow_interrupted: "🔄 Switched to {{flowPrompt}}\n\n(Your previous \"{{previousFlowPrompt}}\" progress has been saved)",
     flow_resumed: "🔄 Resuming where you left off with {{flowPrompt}}.",
-    flow_resumed_with_guidance: "🔄 Resuming {{flowPrompt}} - Type 'cancel' or 'help' for options.",
+    flow_resumed_with_guidance: "🔄 Resuming {{flowPrompt}} - Type 'cancel flow' or 'help' for options.",
     flow_completed: "✅ {{flowPrompt}} completed successfully.",
     flow_completed_generic: "✅ Flow completed.",
     flow_cancelled: "❌ Cancelled {{flowPrompt}}.",
-    flow_help_general: "Processing {{flowPrompt}} - You can also 'cancel' or request 'help'.",
-    flow_help_payment: "Processing {{flowPrompt}} - You can also 'cancel' or request 'help'.",
+    flow_help_general: "Processing {{flowPrompt}} - You can also 'cancel flow' or request 'help'.",
+    flow_help_payment: "Processing {{flowPrompt}} - You can also 'cancel flow' or request 'help'.",
     critical_error: "❌ I encountered a critical error. Let me restart our session to ensure everything works properly.",
     invalid_input: "❌ I'm sorry, I didn't understand that. Please try again.",
     system_ready: "🤖 System ready. How can I help you today?",
@@ -122,7 +122,7 @@ const DEFAULT_MESSAGE_REGISTRY: MessageRegistry = {
     cmd_flow_exited: "✅ Successfully exited {{flowName}}. How can I help you with something else?",
     cmd_help_title: "📋 Flow Help - {{flowName}}",
     cmd_help_available_commands: "Available commands while in this flow:",
-    cmd_help_cancel: "• \"cancel\" - Exit this flow completely",
+    cmd_help_cancel: "• \"cancel flow\" - Exit this flow completely",
     cmd_help_status: "• \"status\" - Show current flow information", 
     cmd_help_help: "• \"help\" - Show this help message",
     cmd_help_financial_warning: "⚠️ This is a financial transaction flow. Please complete or cancel to maintain security.",
@@ -146,12 +146,12 @@ const DEFAULT_MESSAGE_REGISTRY: MessageRegistry = {
     flow_init: "🤖 Procesando {{flowPrompt}}",
     flow_interrupted: "🔄 Cambiado a {{flowPrompt}}\n\n(Su progreso anterior de \"{{previousFlowPrompt}}\" ha sido guardado)",
     flow_resumed: "🔄 Continuando donde lo dejó con {{flowPrompt}}.",
-    flow_resumed_with_guidance: "🔄 Continuando {{flowPrompt}} - Escriba 'cancelar' o 'ayuda' para opciones.",
+    flow_resumed_with_guidance: "🔄 Continuando {{flowPrompt}} - Escriba 'cancelar flujo' o 'ayuda' para opciones.",
     flow_completed: "✅ {{flowPrompt}} completado exitosamente.",
     flow_completed_generic: "✅ Flujo completado.",
     flow_cancelled: "❌ {{flowPrompt}} cancelado.",
-    flow_help_general: "Procesando {{flowPrompt}} - También puede 'cancelar' o solicitar 'ayuda'.",
-    flow_help_payment: "Procesando {{flowPrompt}} - También puede 'cancelar' o solicitar 'ayuda'.",
+    flow_help_general: "Procesando {{flowPrompt}} - También puede 'cancelar flujo' o solicitar 'ayuda'.",
+    flow_help_payment: "Procesando {{flowPrompt}} - También puede 'cancelar flujo' o solicitar 'ayuda'.",
     critical_error: "❌ Encontré un error crítico. Permítame reiniciar nuestra sesión para asegurar que todo funcione correctamente.",
     invalid_input: "❌ Lo siento, no entendí eso. Por favor, inténtelo de nuevo.",
     system_ready: "🤖 Sistema listo. ¿Cómo puedo ayudarle hoy?",
@@ -168,7 +168,7 @@ const DEFAULT_MESSAGE_REGISTRY: MessageRegistry = {
     cmd_flow_exited: "✅ Salió exitosamente de {{flowName}}. ¿Cómo puedo ayudarle con algo más?",
     cmd_help_title: "📋 Ayuda del Flujo - {{flowName}}",
     cmd_help_available_commands: "Comandos disponibles en este flujo:",
-    cmd_help_cancel: "• \"cancelar\" - Salir completamente de este flujo",
+    cmd_help_cancel: "• \"cancelar flujo\" - Salir completamente de este flujo",
     cmd_help_status: "• \"estado\" - Mostrar información del flujo actual",
     cmd_help_help: "• \"ayuda\" - Mostrar este mensaje de ayuda",
     cmd_help_financial_warning: "⚠️ Este es un flujo de transacción financiera. Por favor complete o cancele para mantener la seguridad.",
@@ -194,14 +194,14 @@ const DEFAULT_MESSAGE_REGISTRY: MessageRegistry = {
 // Multi-language command support for system commands
 const COMMAND_SYNONYMS: Record<string, Record<string, string[]>> = {
   en: {
-    cancel: ['cancel', 'abort', 'stop', 'exit', 'quit', 'end'],
+    cancel: ['cancel flow', 'cancel workflow', 'abort flow', 'stop flow', 'exit flow', 'quit flow', 'end flow'],
     help: ['help', '?', 'options', 'commands'],
     status: ['status', 'where am i', 'what flow', 'current flow', 'info'],
     switch: ['switch', 'change', 'go to'],
     continue: ['continue', 'proceed', 'keep going', 'go on']
   },
   es: {
-    cancel: ['cancelar', 'abortar', 'parar', 'salir', 'terminar', 'fin'],
+    cancel: ['cancelar flujo', 'cancelar workflow', 'abortar flujo', 'parar flujo', 'salir flujo', 'terminar flujo', 'fin flujo'],
     help: ['ayuda', '?', 'opciones', 'comandos'],
     status: ['estado', 'donde estoy', 'que flujo', 'flujo actual', 'info'],
     switch: ['cambiar', 'ir a', 'cambio'],
@@ -260,7 +260,8 @@ function detectSystemCommand(engine: Engine, input: string): string | null {
   const commands = ['cancel', 'help', 'status', 'switch', 'continue'];
   
   for (const command of commands) {
-    if (isCommand(engine, input, command)) {
+    // Only check commands that are enabled
+    if (engine.isCommandEnabled(command) && isCommand(engine, input, command)) {
       return command;
     }
   }
@@ -296,8 +297,8 @@ export const GUIDANCE_CONFIG_EXAMPLES = {
     separator: ' ',
     contextSelector: 'auto' as const,
     guidanceMessages: {
-      general: "You can type cancel or help - To complete {{flowPrompt}}",
-      payment: "You can type cancel or help - Payment in progress"
+      general: "You can type 'cancel flow' or 'help' - To complete {{flowPrompt}}",
+      payment: "You can type 'cancel flow' or 'help' - Payment in progress"
     }
   },
   
@@ -305,8 +306,21 @@ export const GUIDANCE_CONFIG_EXAMPLES = {
   compact: {
     enabled: true,
     mode: 'template' as const,
-    template: "{{message}} (Type 'cancel' or 'help' for {{flowPrompt}})",
+    template: "{{message}} (Type 'cancel flow' or 'help' for {{flowPrompt}})",
     contextSelector: 'auto' as const
+  },
+  
+  // ZERO ADDITIONAL PROMPTS - For voice, automation, or clean conversational flows
+  silent: {
+    enabled: false,  // Disables ALL guidance generation
+    mode: 'none' as const
+  },
+  
+  // COMMANDS DISABLED - For automation flows that should not be interruptible
+  automation: {
+    enabled: false,
+    mode: 'none' as const
+    // Pair with: engine.disableCommands() to disable all system commands
   },
   
   // Disabled guidance
@@ -323,12 +337,12 @@ export const GUIDANCE_CONFIG_EXAMPLES = {
     contextSelector: 'auto' as const,
     guidanceMessages: {
       en: {
-        general: "You can type cancel or help - To complete {{flowPrompt}}",
-        payment: "You can type cancel or help - Payment in progress"
+        general: "You can type 'cancel flow' or 'help' - To complete {{flowPrompt}}",
+        payment: "You can type 'cancel flow' or 'help' - Payment in progress"
       },
       es: {
-        general: "Puede escribir cancelar o ayuda - Para completar {{flowPrompt}}",
-        payment: "Puede escribir cancelar o ayuda - Pago en progreso"
+        general: "Puede escribir 'cancelar flujo' o 'ayuda' - Para completar {{flowPrompt}}",
+        payment: "Puede escribir 'cancelar flujo' o 'ayuda' - Pago en progreso"
       }
     }
   }
@@ -3611,8 +3625,8 @@ function handleSayGetStep(currentFlowFrame: FlowFrame, engine: Engine): string {
 
 // Add contextual guidance to SAY messages when user input is expected
 function addFlowContextGuidance(message: string, flowFrame: FlowFrame, engine: Engine): string {
-  // Check if guidance is disabled
-  if (!engine.guidanceConfig?.enabled) {
+  // Check if guidance is disabled OR commands are disabled
+  if (!engine.guidanceConfig?.enabled || engine.getEnabledCommands().length === 0) {
     return message;
   }
 
@@ -3664,24 +3678,40 @@ function addFlowContextGuidance(message: string, flowFrame: FlowFrame, engine: E
   }
   
   // Fallback to centralized messaging system if no custom guidance found
-  if (!guidance && engine) {
-    // Use centralized messaging system
+  if (!guidance) {
+    // Try centralized messaging system first
     const messageId = contextType === 'payment' ? 'flow_help_payment' : 'flow_help_general';
     guidance = getSystemMessage(engine, messageId, { 
       flowName,
       flowPrompt: getFlowPrompt(engine, flowName)
     });
-  } else if (!guidance) {
-    // Fallback to hardcoded messages if engine not available
-    if (contextType === 'payment') {
-      guidance = "Type 'cancel' or 'help' for options.";
-    } else {
-      guidance = "Type 'cancel' or 'help' for options.";
+    
+    // If still no guidance from system messages, try command-based fallback
+    if (!guidance) {
+      // Generate dynamic guidance messages based on enabled commands
+      let availableOptions: string[] = [];
+      
+      if (engine.isCommandEnabled('cancel')) {
+        availableOptions.push("'cancel flow'");
+      }
+      if (engine.isCommandEnabled('help')) {
+        availableOptions.push("'help'");
+      }
+      if (engine.isCommandEnabled('status')) {
+        availableOptions.push("'status'");
+      }
+      
+      if (availableOptions.length > 0) {
+        guidance = `Type ${availableOptions.join(' or ')} for options.`;
+      }
     }
+    
+    // If no guidance found, leave guidance empty - respect implementer's intent!
+    // DO NOT force "Continue with your response" - that's unwanted prompt injection!
   }
   
   // Apply template interpolation to guidance if needed
-  if (guidance.includes('{{')) {
+  if (guidance && guidance.includes('{{')) {
     guidance = guidance.replace(/\{\{([^}]+)\}\}/g, (match, key) => {
       const context: any = { 
         flowName, 
@@ -3690,6 +3720,11 @@ function addFlowContextGuidance(message: string, flowFrame: FlowFrame, engine: E
       };
       return context[key] || match;
     });
+  }
+  
+  // If no guidance content, return original message (respect implementer's intent for no prompts)
+  if (!guidance || guidance.trim() === '') {
+    return message;
   }
   
   // Apply integration mode
@@ -5417,7 +5452,8 @@ async function handleFlowControlCommands(input: string, engine: Engine, userId: 
   
   // Help commands
   if (detectedCommand === 'help') {
-    return handleFlowHelp(currentFlowFrame, engine);
+    const helpResponse = handleFlowHelp(currentFlowFrame, engine);
+    return helpResponse; // May be null if help is disabled or no guidance wanted
   }
   
   // Status/Where am I commands
@@ -5429,7 +5465,12 @@ async function handleFlowControlCommands(input: string, engine: Engine, userId: 
 }
 
 // Help handler for active flows
-function handleFlowHelp(currentFlowFrame: FlowFrame, engine: Engine): string {
+function handleFlowHelp(currentFlowFrame: FlowFrame, engine: Engine): string | null {
+  // If help command is disabled, return null (no response)
+  if (!engine.isCommandEnabled('help')) {
+    return null;
+  }
+
   const flowName = currentFlowFrame.flowName;
   const isFinancialFlow = flowName.toLowerCase().includes('payment') || 
                          flowName.toLowerCase().includes('transfer') ||
@@ -5437,15 +5478,36 @@ function handleFlowHelp(currentFlowFrame: FlowFrame, engine: Engine): string {
   
   const helpTitle = getSystemMessage(engine, 'cmd_help_title', { flowName });
   const availableCommands = getSystemMessage(engine, 'cmd_help_available_commands');
-  const cancelHelp = getSystemMessage(engine, 'cmd_help_cancel');
-  const statusHelp = getSystemMessage(engine, 'cmd_help_status');
-  const helpHelp = getSystemMessage(engine, 'cmd_help_help');
   
   let helpMessage = `${helpTitle}\n\n`;
+  
+  // Check if we have any enabled commands to show
+  const enabledCommands = engine.getEnabledCommands();
+  if (enabledCommands.length === 0) {
+    // No commands available - return minimal response or null based on guidance config
+    if (engine.guidanceConfig?.enabled === false) {
+      return null; // Implementer wants no additional prompts at all
+    }
+    return `${helpTitle}\n\nNo commands are currently available.`;
+  }
+  
   helpMessage += `${availableCommands}\n`;
-  helpMessage += `${cancelHelp}\n`;
-  helpMessage += `${statusHelp}\n`;
-  helpMessage += `${helpHelp}\n\n`;
+  
+  // Only show commands that are enabled
+  if (engine.isCommandEnabled('cancel')) {
+    const cancelHelp = getSystemMessage(engine, 'cmd_help_cancel');
+    helpMessage += `${cancelHelp}\n`;
+  }
+  if (engine.isCommandEnabled('status')) {
+    const statusHelp = getSystemMessage(engine, 'cmd_help_status');
+    helpMessage += `${statusHelp}\n`;
+  }
+  if (engine.isCommandEnabled('help')) {
+    const helpHelp = getSystemMessage(engine, 'cmd_help_help');
+    helpMessage += `${helpHelp}\n`;
+  }
+  
+  helpMessage += `\n`;
   
   if (isFinancialFlow) {
     const financialWarning = getSystemMessage(engine, 'cmd_help_financial_warning');
@@ -5933,6 +5995,10 @@ export class WorkflowEngine implements Engine {
   public aiCallback: AiCallbackFunction;
   public aiTimeOut: number;
   
+  // Command management for different application types (chat vs voice vs automation)
+  private enabledCommands: Set<string>;
+  private commandsEnabled: boolean;
+  
   // Private session context - engine works directly with session data (no copying!)
   private sessionContext: EngineSessionContext | null = null;
   
@@ -6022,6 +6088,10 @@ export class WorkflowEngine implements Engine {
          separator: '\n\n',
          contextSelector: 'auto'
       };
+
+      // Initialize command management (all commands enabled by default)
+      this.commandsEnabled = true;
+      this.enabledCommands = new Set(['cancel', 'help', 'status', 'switch', 'continue']);
 
       // No longer initialize session-specific data in constructor - it's now in sessionContext
       this.sessionId = crypto.randomUUID();
@@ -6202,6 +6272,105 @@ export class WorkflowEngine implements Engine {
       // If no session context provided, we can't return it - this should not happen
       throw error;
     }
+   }
+
+   /**
+    * Enable specific system commands or all commands if none specified.
+    * Useful for voice applications that want to limit command availability.
+    * 
+    * @param commands - Array of command names to enable, or empty/null to enable all
+    * 
+    * @example
+    * ```typescript
+    * // Enable only help and status commands (disable cancel for voice apps)
+    * engine.enableCommands(['help', 'status']);
+    * 
+    * // Enable all commands
+    * engine.enableCommands();
+    * ```
+    */
+   enableCommands(commands?: string[]): void {
+      this.commandsEnabled = true;
+      
+      if (!commands || commands.length === 0) {
+         // Enable all commands
+         this.enabledCommands = new Set(['cancel', 'help', 'status', 'switch', 'continue']);
+         logger.debug('All system commands enabled');
+      } else {
+         // Enable only specified commands
+         this.enabledCommands = new Set(commands);
+         logger.debug(`System commands enabled: ${commands.join(', ')}`);
+      }
+   }
+
+   /**
+    * Disable specific system commands or all commands if none specified.
+    * Useful for automation flows that should not be interruptible.
+    * 
+    * @param commands - Array of command names to disable, or empty/null to disable all
+    * 
+    * @example
+    * ```typescript
+    * // Disable only cancel command (allow help/status for voice apps)
+    * engine.disableCommands(['cancel']);
+    * 
+    * // Disable all commands for automation flows
+    * engine.disableCommands();
+    * ```
+    */
+   disableCommands(commands?: string[]): void {
+      if (!commands || commands.length === 0) {
+         // Disable all commands
+         this.commandsEnabled = false;
+         this.enabledCommands.clear();
+         logger.debug('All system commands disabled');
+      } else {
+         // Disable only specified commands
+         for (const command of commands) {
+            this.enabledCommands.delete(command);
+         }
+         logger.debug(`System commands disabled: ${commands.join(', ')}`);
+         
+         // If no commands are left enabled, set commandsEnabled to false
+         if (this.enabledCommands.size === 0) {
+            this.commandsEnabled = false;
+         }
+      }
+   }
+
+   /**
+    * Check if a specific system command is currently enabled.
+    * 
+    * @param command - The command to check
+    * @returns true if the command is enabled, false otherwise
+    * 
+    * @example
+    * ```typescript
+    * if (engine.isCommandEnabled('cancel')) {
+    *    // Show cancel option in UI
+    * }
+    * ```
+    */
+   isCommandEnabled(command: string): boolean {
+      return this.commandsEnabled && this.enabledCommands.has(command);
+   }
+
+   /**
+    * Get list of currently enabled commands.
+    * 
+    * @returns Array of enabled command names
+    * 
+    * @example
+    * ```typescript
+    * const enabledCommands = engine.getEnabledCommands();
+    * console.log('Available commands:', enabledCommands);
+    * ```
+    */
+   getEnabledCommands(): string[] {
+      if (!this.commandsEnabled) {
+         return [];
+      }
+      return Array.from(this.enabledCommands);
    }
 
    /**
