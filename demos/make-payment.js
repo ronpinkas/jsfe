@@ -134,13 +134,13 @@ const toolsRegistry = [
       },
       implementation: { 
          type: "http",
-         url: "https://wh-consumer.aws.icuracao.com/get-otp-link",
+         url: "https://<your-url>/get-otp-link",
          method: "POST",
          contentType: "application/json",
          timeout: 10000,
          retries: 2,
          headers: {
-            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiJwZXJtYW5lbnRfcHJvZF90b2tlbiIsImlhdCI6MTc1NTMwNTYxOSwiaXNzIjoicG9zX2FpX2FwaSJ9.0fwQn72pU0kUr37HJSverql9verbXYDgD1Yrygw1K2k"
+            "Authorization": "Bearer <API_KEY_PLACEHOLDER>" // Replace with actual key or use env var
          },
          responseMapping: {
             type: "object",
@@ -196,14 +196,15 @@ const flowsMenu = [
          cell_or_email: { type: "string", description: "User choice between cell or email" },
          cell_number: { type: "string", description: "Customer cell phone number" },
          email: { type: "string", description: "Customer email address" },
-         otp_link_result: { type: "object", description: "Result from OTP link generation" }
+         otp_link_result: { type: "object", description: "Result from OTP link generation" },
+         payment_aborted: { type: "boolean", description: "Flag to indicate if payment was aborted", value: false }
       },
       steps: [
          {
             id: "ask_known_account",
             type: "SAY-GET",
             variable: "know_acct_yes_or_no",
-            value: "{{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES if you know your account number - {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO if you don't.",
+            value: "Sure, {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES if you know your account number - {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO if you don't.",
             value_es: "{{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ si conoce su número de cuenta - {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb_es}} NO si no lo conoce."
          },
          {
@@ -231,10 +232,22 @@ const flowsMenu = [
             }
          },
          {
-            id: "validate_payment_link",
-            type: "FLOW",
-            value: "validate-payment-link",
-            mode: "call"
+            id: "conditional_validate_payment_link",
+            type: "CASE",
+            branches: {
+               "condition: !payment_aborted": {
+                  id: "validate_payment_link",
+                  type: "FLOW",
+                  value: "validate-payment-link",
+                  mode: "call"
+               },
+               "default": {
+                  id: "payment_aborted_msg",
+                  type: "SAY",
+                  value: "Payment process was cancelled.",
+                  value_es: "El proceso de pago fue cancelado."
+               }
+            }
          }
       ]
    },
@@ -244,14 +257,47 @@ const flowsMenu = [
       name: "RetryStartPayment",
       version: "1.0.0",
       description: "Retry the payment process after an error",
+      variables: {
+         user_choice: { type: "string", description: "User choice for retry or exit" }
+      },
       steps: [
          { 
             id: "retry_msg", 
             type: "SAY", 
-            value: "Sorry, I did not understand that - let's try again...",
-            value_es: "Lo siento, no entendí eso - intentémoslo de nuevo..."
+            value: "Sorry, I did not understand that.",
+            value_es: "Lo siento, no entendí eso."
          },
-         { id: "restart_payment", type: "FLOW", value: "start-payment", mode: "replace" }
+         {
+            id: "offer_choice",
+            type: "SAY-GET",
+            variable: "user_choice",
+            value: "Would you like to try again? {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES to retry, or {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO for customer service contact information.",
+            value_es: "¿Le gustaría intentar de nuevo? {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ para reintentar, o {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb_es}} NO para información de contacto de servicio al cliente."
+         },
+         {
+            id: "handle_choice",
+            type: "CASE",
+            branches: {
+               "condition: user_choice === '1' || user_choice.trim().toLowerCase() === 'yes' || user_choice.trim().toLowerCase() === 'sí'": {
+                  id: "restart_payment",
+                  type: "FLOW",
+                  value: "start-payment",
+                  mode: "replace"
+               },
+               "condition: user_choice === '2' || user_choice.trim().toLowerCase() === 'no'": {
+                  id: "provide_contact_info",
+                  type: "FLOW",
+                  value: "customer-service-contact",
+                  mode: "replace"
+               },
+               "default": {
+                  id: "provide_contact_info_default",
+                  type: "FLOW",
+                  value: "customer-service-contact",
+                  mode: "replace"
+               }
+            }
+         }
       ]
    },
 
@@ -299,14 +345,47 @@ const flowsMenu = [
       name: "RetryGetAcctNumberAndGenerateLink",
       version: "1.0.0",
       description: "Retry collecting account number after validation error",
+      variables: {
+         user_choice: { type: "string", description: "User choice for retry or exit" }
+      },
       steps: [
          { 
             id: "retry_msg", 
             type: "SAY", 
-            value: "Sorry, '{{acct_number}}' is not a valid account number - let's try again...",
-            value_es: "Lo siento, '{{acct_number}}' no es un número de cuenta válido - intentémoslo de nuevo..."
+            value: "Sorry, '{{acct_number}}' is not a valid account number (must be {{global_acct_required_digits}}-{{global_acct_max_digits}} digits).",
+            value_es: "Lo siento, '{{acct_number}}' no es un número de cuenta válido (debe tener {{global_acct_required_digits}}-{{global_acct_max_digits}} dígitos)."
          },
-         { id: "retry_flow", type: "FLOW", value: "get-acct-number-and-generate-link", mode: "replace" }
+         {
+            id: "offer_choice",
+            type: "SAY-GET",
+            variable: "user_choice",
+            value: "Would you like to try again? {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES to retry, or {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO for customer service contact information.",
+            value_es: "¿Le gustaría intentar de nuevo? {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ para reintentar, o {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb_es}} NO para información de contacto de servicio al cliente."
+         },
+         {
+            id: "handle_choice",
+            type: "CASE",
+            branches: {
+               "condition: user_choice === '1' || user_choice.trim().toLowerCase() === 'yes' || user_choice.trim().toLowerCase() === 'sí'": {
+                  id: "retry_acct_entry",
+                  type: "FLOW",
+                  value: "get-acct-number-and-generate-link",
+                  mode: "replace"
+               },
+               "condition: user_choice === '2' || user_choice.trim().toLowerCase() === 'no'": {
+                  id: "provide_contact_info",
+                  type: "FLOW",
+                  value: "customer-service-contact",
+                  mode: "replace"
+               },
+               "default": {
+                  id: "provide_contact_info_default",
+                  type: "FLOW",
+                  value: "customer-service-contact",
+                  mode: "replace"
+               }
+            }
+         }
       ]
    },
 
@@ -353,14 +432,47 @@ const flowsMenu = [
       name: "RetryGetCellOrEmailAndGenerateLink",
       version: "1.0.0",
       description: "Retry choosing between cell phone or email after invalid input",
+      variables: {
+         user_choice: { type: "string", description: "User choice for retry or exit" }
+      },
       steps: [
          { 
             id: "retry_msg", 
             type: "SAY", 
-            value: "Sorry, I did not understand that - let's try again...",
-            value_es: "Lo siento, no entendí eso - intentémoslo de nuevo..."
+            value: "Sorry, I did not understand that.",
+            value_es: "Lo siento, no entendí eso."
          },
-         { id: "retry_flow", type: "FLOW", value: "get-cell-or-email-and-generate-link", mode: "replace" }
+         {
+            id: "offer_choice",
+            type: "SAY-GET",
+            variable: "user_choice",
+            value: "Would you like to try again? {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES to retry, or {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO for customer service contact information.",
+            value_es: "¿Le gustaría intentar de nuevo? {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ para reintentar, o {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb_es}} NO para información de contacto de servicio al cliente."
+         },
+         {
+            id: "handle_choice",
+            type: "CASE",
+            branches: {
+               "condition: user_choice === '1' || user_choice.trim().toLowerCase() === 'yes' || user_choice.trim().toLowerCase() === 'sí'": {
+                  id: "retry_cell_or_email_choice",
+                  type: "FLOW",
+                  value: "get-cell-or-email-and-generate-link",
+                  mode: "replace"
+               },
+               "condition: user_choice === '2' || user_choice.trim().toLowerCase() === 'no'": {
+                  id: "provide_contact_info",
+                  type: "FLOW",
+                  value: "customer-service-contact",
+                  mode: "replace"
+               },
+               "default": {
+                  id: "provide_contact_info_default",
+                  type: "FLOW",
+                  value: "customer-service-contact",
+                  mode: "replace"
+               }
+            }
+         }
       ]
    },
 
@@ -493,14 +605,47 @@ const flowsMenu = [
       name: "RetryGetCellWithCallerId",
       version: "1.0.0",
       description: "Retry caller ID choice after invalid input",
+      variables: {
+         user_choice: { type: "string", description: "User choice for retry or exit" }
+      },
       steps: [
          { 
             id: "retry_msg", 
             type: "SAY", 
-            value: "Sorry, I did not understand that - let's try again...",
-            value_es: "Lo siento, no entendí eso - intentémoslo de nuevo..."
+            value: "Sorry, I did not understand that.",
+            value_es: "Lo siento, no entendí eso."
          },
-         { id: "retry_flow", type: "FLOW", value: "get-cell-with-caller-id", mode: "replace" }
+         {
+            id: "offer_choice",
+            type: "SAY-GET",
+            variable: "user_choice",
+            value: "Would you like to try again? {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES to retry, or {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO for customer service contact information.",
+            value_es: "¿Le gustaría intentar de nuevo? {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ para reintentar, o {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb_es}} NO para información de contacto de servicio al cliente."
+         },
+         {
+            id: "handle_choice",
+            type: "CASE",
+            branches: {
+               "condition: user_choice === '1' || user_choice.trim().toLowerCase() === 'yes' || user_choice.trim().toLowerCase() === 'sí'": {
+                  id: "retry_caller_id_flow",
+                  type: "FLOW",
+                  value: "get-cell-with-caller-id",
+                  mode: "replace"
+               },
+               "condition: user_choice === '2' || user_choice.trim().toLowerCase() === 'no'": {
+                  id: "provide_contact_info",
+                  type: "FLOW",
+                  value: "customer-service-contact",
+                  mode: "replace"
+               },
+               "default": {
+                  id: "provide_contact_info_default",
+                  type: "FLOW",
+                  value: "customer-service-contact",
+                  mode: "replace"
+               }
+            }
+         }
       ]
    },
 
@@ -509,14 +654,47 @@ const flowsMenu = [
       name: "RetryGetCellAndGenerateLink",
       version: "1.0.0",
       description: "Retry collecting cell number after validation error",
+      variables: {
+         user_choice: { type: "string", description: "User choice for retry or exit" }
+      },
       steps: [
          { 
             id: "retry_msg", 
             type: "SAY", 
-            value: "Sorry, '{{cell_number}}' is not a valid cell number - let's try again...",
-            value_es: "Lo siento, '{{cell_number}}' no es un número de celular válido - intentémoslo de nuevo..."
+            value: "Sorry, '{{cell_number}}' is not a valid cell number.",
+            value_es: "Lo siento, '{{cell_number}}' no es un número de celular válido."
          },
-         { id: "retry_flow", type: "FLOW", value: "get-cell-and-generate-link", mode: "replace" }
+         {
+            id: "offer_choice",
+            type: "SAY-GET",
+            variable: "user_choice",
+            value: "Would you like to try again? {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES to retry, or {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO for customer service contact information.",
+            value_es: "¿Le gustaría intentar de nuevo? {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ para reintentar, o {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb_es}} NO para información de contacto de servicio al cliente."
+         },
+         {
+            id: "handle_choice",
+            type: "CASE",
+            branches: {
+               "condition: user_choice === '1' || user_choice.trim().toLowerCase() === 'yes' || user_choice.trim().toLowerCase() === 'sí'": {
+                  id: "retry_cell_entry",
+                  type: "FLOW",
+                  value: "get-cell-and-generate-link",
+                  mode: "replace"
+               },
+               "condition: user_choice === '2' || user_choice.trim().toLowerCase() === 'no'": {
+                  id: "provide_contact_info",
+                  type: "FLOW",
+                  value: "customer-service-contact",
+                  mode: "replace"
+               },
+               "default": {
+                  id: "provide_contact_info_default",
+                  type: "FLOW",
+                  value: "customer-service-contact",
+                  mode: "replace"
+               }
+            }
+         }
       ]
    },
 
@@ -564,14 +742,47 @@ const flowsMenu = [
       name: "RetryGetEmailAndGenerateLink",
       version: "1.0.0",
       description: "Retry collecting email after validation error",
+      variables: {
+         user_choice: { type: "string", description: "User choice for retry or exit" }
+      },
       steps: [
          { 
             id: "retry_msg", 
             type: "SAY", 
-            value: "Sorry, '{{email}}' is not a valid email - let's try again...",
-            value_es: "Lo siento, '{{email}}' no es un correo electrónico válido - intentémoslo de nuevo..."
+            value: "Sorry, '{{email}}' is not a valid email address.",
+            value_es: "Lo siento, '{{email}}' no es una dirección de correo electrónico válida."
          },
-         { id: "retry_flow", type: "FLOW", value: "get-email-and-generate-link", mode: "replace" }
+         {
+            id: "offer_choice",
+            type: "SAY-GET",
+            variable: "user_choice",
+            value: "Would you like to try again? {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES to retry, or {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO for customer service contact information.",
+            value_es: "¿Le gustaría intentar de nuevo? {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ para reintentar, o {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb_es}} NO para información de contacto de servicio al cliente."
+         },
+         {
+            id: "handle_choice",
+            type: "CASE",
+            branches: {
+               "condition: user_choice === '1' || user_choice.trim().toLowerCase() === 'yes' || user_choice.trim().toLowerCase() === 'sí'": {
+                  id: "retry_email_entry",
+                  type: "FLOW",
+                  value: "get-email-and-generate-link",
+                  mode: "replace"
+               },
+               "condition: user_choice === '2' || user_choice.trim().toLowerCase() === 'no'": {
+                  id: "provide_contact_info",
+                  type: "FLOW",
+                  value: "customer-service-contact",
+                  mode: "replace"
+               },
+               "default": {
+                  id: "provide_contact_info_default",
+                  type: "FLOW",
+                  value: "customer-service-contact",
+                  mode: "replace"
+               }
+            }
+         }
       ]
    },
 
@@ -607,14 +818,68 @@ const flowsMenu = [
       name: "PaymentFailed",
       version: "1.0.0",
       description: "Handle payment failure",
+      variables: {
+         user_choice: { type: "string", description: "User choice for retry or exit" }
+      },
       steps: [
          {
             id: "say_payment_failed",
             type: "SAY",
-            value: "Sorry, the payment link could not be generated - Let's try again...",
-            value_es: "Lo siento, no se pudo generar el enlace de pago - intentémoslo de nuevo..."
+            value: "Sorry, the payment link could not be generated.",
+            value_es: "Lo siento, no se pudo generar el enlace de pago."
          },
-         { id: "retry_payment", type: "FLOW", value: "start-payment", mode: "replace" }
+         {
+            id: "offer_choice",
+            type: "SAY-GET",
+            variable: "user_choice",
+            value: "Would you like to try again? {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES to retry, or {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO for customer service contact information.",
+            value_es: "¿Le gustaría intentar de nuevo? {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ para reintentar, o {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb_es}} NO para información de contacto de servicio al cliente."
+         },
+         {
+            id: "handle_choice",
+            type: "CASE",
+            branches: {
+               "condition: user_choice === '1' || user_choice.trim().toLowerCase() === 'yes' || user_choice.trim().toLowerCase() === 'sí'": {
+                  id: "restart_payment",
+                  type: "FLOW",
+                  value: "start-payment",
+                  mode: "replace"
+               },
+               "condition: user_choice === '2' || user_choice.trim().toLowerCase() === 'no'": {
+                  id: "provide_contact_info",
+                  type: "FLOW",
+                  value: "customer-service-contact",
+                  mode: "replace"
+               },
+               "default": {
+                  id: "provide_contact_info_default",
+                  type: "FLOW",
+                  value: "customer-service-contact",
+                  mode: "replace"
+               }
+            }
+         }
+      ]
+   },
+
+   {
+      id: "customer-service-contact",
+      name: "CustomerServiceContact",
+      version: "1.0.0",
+      description: "Provide customer service contact information",
+      steps: [
+         {
+            id: "set_payment_aborted",
+            type: "SET",
+            variable: "payment_aborted",
+            value: true
+         },
+         {
+            id: "provide_contact_info",
+            type: "SAY",
+            value: "Sorry I couldn't help! For assistance with your payment, please call 1-877-495-6774 or text 'Pay' to 70273 from a cell phone associated with your account.",
+            value_es: "¡Lo siento, no pude ayudar! Para asistencia con su pago, por favor llame al 1-877-495-6774 o envíe un mensaje de texto con la palabra 'Pagar' al 70273 desde un celular asociado con su cuenta."
+         }
       ]
    }
 
@@ -635,6 +900,7 @@ const engine = new WorkflowEngine(
 	APPROVED_FUNCTIONS,
 	globalVariables
 );
+engine.disableCommands(); // Disable default flow commands for this demo
 
 /* ---------- Simple REPL ---------- */
 async function main() {
@@ -650,6 +916,12 @@ async function main() {
 	let session = engine.initSession("user-001", "session-001");   
    // You can set session variables like this:
    session.cargo.test_var = "test value";
+   
+   // GLOBAL PAYMENT ABORT FEATURE:
+   // The payment_aborted variable is automatically initialized to false
+   // Any retry flow can set it to true to skip payment validation:
+   // session.cargo.payment_aborted = true;
+   // This will bypass the validate-payment-link flow and show a cancellation message
    
    // Simulate caller ID detection - in a real system, this would come from your telephony system
    session.cargo.twilioNumber = "12133864412"; // Example: Twilio number
@@ -668,7 +940,7 @@ async function main() {
       const user = await rl.question("> ");
       
       // SIMULATE REMOTE WIDGET: Serialize session before sending to engine (like chat-widget.js does)
-      console.log("🔄 Simulating JSON serialization (like remote widget)...");
+      //console.log("🔄 Simulating JSON serialization (like remote widget)...");
       const serializedSession = JSON.stringify(session);
       const deserializedSession = JSON.parse(serializedSession);
       
