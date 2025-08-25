@@ -19,25 +19,25 @@ warn:    • Circular flow reference detected: smart-self-retry-demo-v1.0 → sm
 📝 Inputs (2): What's the weather in London? → London
 
 🧪 Enhanced Workflow Engine - Test Simulation Mode
-Session ID: 5924670f-54aa-4ab7-8626-16c3a2e07432
+Session ID: e145e115-3989-4788-be20-9dfbd74cb1c2
 Running 2 simulated inputs...
 
 ============================================================
 
 You: What's the weather in London? [SIMULATED]
 
-🤖 AI: Processing Weather Check - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Weather Check - You can also 'cancel flow' or request 'help'.
 
 Enter the city name to get current weather information
 
 You: London [SIMULATED]
 
-🤖 AI: Current weather in London, : Partly cloudy at 16°C (63% humidity)
-Last updated: 2025-08-23T11:09:31.148Z
+🤖 AI: Current weather in London, : Sunny at 27°C (30% humidity)
+Last updated: 2025-08-25T19:55:49.035Z
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 3841ms
+Session duration: 16315ms
 Simulated inputs processed: 2/2
 ✅ [1/42] weatherMappingTest - PASSED
 
@@ -52,7 +52,7 @@ Running 3 simulated inputs...
 
 You: I need to make a payment [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 🤖 Processing Make a payment
 
@@ -60,19 +60,19 @@ Please enter your account number (6-12 digits)
 
 You: 123456 [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 50.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=4ea84e4e-fabf-4781-9e78-6c7ca6860075
-Payment ID: 4ea84e4e-fabf-4781-9e78-6c7ca6860075
-Expires: 2025-08-23T12:09:34.537Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=a4dd1d5a-27c7-4c7b-8f48-17c55779b4b9
+Payment ID: a4dd1d5a-27c7-4c7b-8f48-17c55779b4b9
+Expires: 2025-08-25T20:55:52.821Z
 
 👋 Ending simulation. Session summary:
 Interactions: 4
-Session duration: 7231ms
+Session duration: 20100ms
 Simulated inputs processed: 3/3
 ✅ [2/42] paymentWorkflowTest - PASSED
 
@@ -87,40 +87,40 @@ Running 6 simulated inputs...
 
 You: What's the weather in New York? [SIMULATED]
 
-🤖 AI: Processing Weather Check - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Weather Check - You can also 'cancel flow' or request 'help'.
 
 Enter the city name to get current weather information
 
 You: New York [SIMULATED]
 
-🤖 AI: Current weather in New York, : Clear at 20°C (61% humidity)
-Last updated: 2025-08-23T11:09:37.300Z
+🤖 AI: Current weather in New York, : Sunny at 29°C (33% humidity)
+Last updated: 2025-08-25T19:55:55.893Z
 
 You: What's the weather in Tokyo? [SIMULATED]
 
-🤖 AI: Processing Weather Check - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Weather Check - You can also 'cancel flow' or request 'help'.
 
 Enter the city name to get current weather information
 
 You: Tokyo [SIMULATED]
 
-🤖 AI: Current weather in Shikinejima, : Partly cloudy at 31°C (75% humidity)
-Last updated: 2025-08-23T11:09:38.898Z
+🤖 AI: Current weather in Shikinejima, : Patchy rain nearby at 27°C (87% humidity)
+Last updated: 2025-08-25T19:55:57.816Z
 
 You: What's the weather in London? [SIMULATED]
 
-🤖 AI: Processing Weather Check - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Weather Check - You can also 'cancel flow' or request 'help'.
 
 Enter the city name to get current weather information
 
 You: London [SIMULATED]
 
-🤖 AI: Current weather in London, : Partly cloudy at 16°C (63% humidity)
-Last updated: 2025-08-23T11:09:41.443Z
+🤖 AI: Current weather in London, : Sunny at 27°C (30% humidity)
+Last updated: 2025-08-25T19:56:02.032Z
 
 👋 Ending simulation. Session summary:
 Interactions: 7
-Session duration: 14136ms
+Session duration: 29310ms
 Simulated inputs processed: 6/6
 ✅ [3/42] multiWeatherTest - PASSED
 
@@ -135,7 +135,7 @@ Running 6 simulated inputs...
 
 You: I need to make a payment [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 🤖 Processing Make a payment
 
@@ -143,39 +143,46 @@ Please enter your account number (6-12 digits)
 
 You: 123456 [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 25.50 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/25.50?id=3bade3ca-9403-49ce-84b5-ed60ec1983d9
-Payment ID: 3bade3ca-9403-49ce-84b5-ed60ec1983d9
-Expires: 2025-08-23T12:09:45.815Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/25.50?id=2472054c-a76e-4bde-9fb6-e8b868e9ea03
+Payment ID: 2472054c-a76e-4bde-9fb6-e8b868e9ea03
+Expires: 2025-08-25T20:56:05.545Z
 
 You: I want to make another payment [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 🤖 Processing Make a payment
 
 Please enter your account number (6-12 digits)
 
 You: 123456 [SIMULATED]
+warn: fetchAiResponse error: AI call timed out after 2000ms
+warn: Error: AI call timed out after 2000ms
+    at Timeout._onTimeout (file:///Users/ronpinkas1/git/jsfe/dist/index.js:2015:20)
+    at listOnTimeout (node:internal/timers:581:17)
+    at process.processTimers (node:internal/timers:519:7)
+error: fetchAiTask error: AI communication failed: AI call timed out after 2000ms
+warn: Intent analysis error:
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 100.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/100.00?id=0529d5e3-c9e1-4cb1-b800-8192d972aef9
-Payment ID: 0529d5e3-c9e1-4cb1-b800-8192d972aef9
-Expires: 2025-08-23T12:09:48.724Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/100.00?id=a8f409d0-6359-48b5-91ff-e0455cfc5b80
+Payment ID: a8f409d0-6359-48b5-91ff-e0455cfc5b80
+Expires: 2025-08-25T20:56:09.505Z
 
 👋 Ending simulation. Session summary:
 Interactions: 7
-Session duration: 21416ms
+Session duration: 36784ms
 Simulated inputs processed: 6/6
 ✅ [4/42] multiPaymentTest - PASSED
 
@@ -190,7 +197,7 @@ Running 3 simulated inputs...
 
 You: I need to make a payment [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 🤖 Processing Make a payment
 
@@ -199,7 +206,7 @@ Please enter your account number (6-12 digits)
 You: 999999 [SIMULATED]
 warn: Error executing tool VerifyAccountTool: Invalid account number
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 Account verification failed. Please ensure you entered a valid 6-12 digit account number.
 
@@ -209,7 +216,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 4
-Session duration: 24041ms
+Session duration: 39857ms
 Simulated inputs processed: 3/3
 ✅ [5/42] invalidAccountTest - PASSED
 
@@ -224,7 +231,7 @@ Running 5 simulated inputs...
 
 You: I need to make a payment [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 🤖 Processing Make a payment
 
@@ -232,7 +239,7 @@ Please enter your account number (6-12 digits)
 
 You: 123456 [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
@@ -242,18 +249,18 @@ You: cancel [SIMULATED]
 
 You: What's the weather in Paris? [SIMULATED]
 
-🤖 AI: Processing Weather Check - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Weather Check - You can also 'cancel flow' or request 'help'.
 
 Enter the city name to get current weather information
 
 You: Paris [SIMULATED]
 
-🤖 AI: Current weather in Paris, : Sunny at 14°C (77% humidity)
-Last updated: 2025-08-23T11:09:55.140Z
+🤖 AI: Current weather in Paris, : Sunny at 28°C (28% humidity)
+Last updated: 2025-08-25T19:56:19.030Z
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 27833ms
+Session duration: 46308ms
 Simulated inputs processed: 5/5
 ✅ [6/42] interruptionTest - PASSED
 
@@ -268,18 +275,18 @@ Running 5 simulated inputs...
 
 You: What's the weather in Tokyo? [SIMULATED]
 
-🤖 AI: Processing Weather Check - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Weather Check - You can also 'cancel flow' or request 'help'.
 
 Enter the city name to get current weather information
 
 You: Tokyo [SIMULATED]
 
-🤖 AI: Current weather in Shikinejima, : Partly cloudy at 31°C (75% humidity)
-Last updated: 2025-08-23T11:09:57.216Z
+🤖 AI: Current weather in Shikinejima, : Patchy rain nearby at 27°C (87% humidity)
+Last updated: 2025-08-25T19:56:22.084Z
 
 You: I need to make a payment [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 🤖 Processing Make a payment
 
@@ -287,19 +294,19 @@ Please enter your account number (6-12 digits)
 
 You: 123456 [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 99.99 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/99.99?id=b401f26f-197d-47ed-8c62-f27c559fa965
-Payment ID: b401f26f-197d-47ed-8c62-f27c559fa965
-Expires: 2025-08-23T12:10:00.332Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/99.99?id=de12485d-29fb-4772-b85e-aef1232764f2
+Payment ID: de12485d-29fb-4772-b85e-aef1232764f2
+Expires: 2025-08-25T20:56:24.861Z
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 33026ms
+Session duration: 52139ms
 Simulated inputs processed: 5/5
 ✅ [7/42] businessFlowsTest - PASSED
 
@@ -318,13 +325,13 @@ You: What's the current Bitcoin price? [SIMULATED]
 
 I will check the price of bitcoin
 
-I found this info: {"crypto_name":"BITCOIN","price":115534,"change_24h":2.697143072268588,"currency":"USD"}
+I found this info: {"crypto_name":"BITCOIN","price":111128,"change_24h":-0.9706729452918587,"currency":"USD"}
 
-💰 BITCOIN Price is $115534 - 24h Change: 2.697143072268588% - Last Updated: 8/23/2025, 4:10:01 AM
+💰 BITCOIN Price is $111128 - 24h Change: -0.9706729452918587% - Last Updated: 8/25/2025, 12:56:26 PM
 
 👋 Ending simulation. Session summary:
 Interactions: 2
-Session duration: 34369ms
+Session duration: 53941ms
 Simulated inputs processed: 1/1
 ✅ [8/42] cryptoPriceTest - PASSED
 
@@ -339,7 +346,7 @@ Running 2 simulated inputs...
 
 You: I want to test REST API functionality [SIMULATED]
 
-🤖 AI: Processing REST API demonstration - You can also 'cancel' or request 'help'.
+🤖 AI: Processing REST API demonstration - You can also 'cancel flow' or request 'help'.
 
 This demo shows REST API capabilities. Enter a user ID (1-10) to fetch user data:
 
@@ -353,7 +360,7 @@ Website: hildegard.org
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 35416ms
+Session duration: 55108ms
 Simulated inputs processed: 2/2
 ✅ [9/42] apiIntegrationTest - PASSED
 
@@ -368,7 +375,7 @@ Running 2 simulated inputs...
 
 You: I want to test response mapping [SIMULATED]
 
-🤖 AI: Processing Response mapping tests - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Response mapping tests - You can also 'cancel flow' or request 'help'.
 
 Testing Response Mapping System
 Choose test type:
@@ -385,7 +392,7 @@ Result: {"location":{"name":"New York","country":"United States","coordinates":"
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 36534ms
+Session duration: 56087ms
 Simulated inputs processed: 2/2
 ✅ [10/42] responseMappingTest - PASSED
 
@@ -400,7 +407,7 @@ Running 6 simulated inputs...
 
 You: API testing suite [SIMULATED]
 
-🤖 AI: Processing API testing suite - You can also 'cancel' or request 'help'.
+🤖 AI: Processing API testing suite - You can also 'cancel flow' or request 'help'.
 
 API Testing Suite
 Choose test type:
@@ -418,7 +425,7 @@ Name: Leanne Graham
 
 You: API testing suite [SIMULATED]
 
-🤖 AI: Processing API testing suite - You can also 'cancel' or request 'help'.
+🤖 AI: Processing API testing suite - You can also 'cancel flow' or request 'help'.
 
 API Testing Suite
 Choose test type:
@@ -436,7 +443,7 @@ Method: POST
 
 You: API testing suite [SIMULATED]
 
-🤖 AI: Processing API testing suite - You can also 'cancel' or request 'help'.
+🤖 AI: Processing API testing suite - You can also 'cancel flow' or request 'help'.
 
 API Testing Suite
 Choose test type:
@@ -459,210 +466,186 @@ Result: <?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/
             <link>https://www.bbc.co.uk/news</link>
         </image>
         <generator>RSS for Node</generator>
-        <lastBuildDate>Sat, 23 Aug 2025 11:09:59 GMT</lastBuildDate>
+        <lastBuildDate>Mon, 25 Aug 2025 19:56:28 GMT</lastBuildDate>
         <atom:link href="https://feeds.bbci.co.uk/news/rss.xml" rel="self" type="application/rss+xml"/>
         <copyright><![CDATA[Copyright: (C) British Broadcasting Corporation, see https://www.bbc.co.uk/usingthebbc/terms-of-use/#15metadataandrssfeeds for terms and conditions of reuse.]]></copyright>
         <language><![CDATA[en-gb]]></language>
         <ttl>15</ttl>
         <item>
-            <title><![CDATA[Ghislaine Maxwell says Epstein client list does not exist]]></title>
-            <description><![CDATA[Maxwell was interviewed after pressure on Trump to release information about whether prominent figures were involved in Jeffrey Epstein's crimes. ]]></description>
-            <link>https://www.bbc.com/news/articles/cdd3pe6189go?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cdd3pe6189go#0</guid>
-            <pubDate>Sat, 23 Aug 2025 10:33:36 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/0dad/live/99c0ab30-7f99-11f0-84a2-0722ea84f1f9.jpg"/>
+            <title><![CDATA[Three dead and one injured as helicopter crashes during flying lesson]]></title>
+            <description><![CDATA[Four people were on board the helicopter when it crashed on the Isle of Wight, police say.]]></description>
+            <link>https://www.bbc.com/news/articles/c87e22ryerlo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c87e22ryerlo#0</guid>
+            <pubDate>Mon, 25 Aug 2025 17:41:43 GMT</pubDate>
+            <media:thumbnail width="240" height="157" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/cbbe/live/b04d0f30-81d6-11f0-ab3e-bd52082cd0ae.jpg"/>
         </item>
         <item>
-            <title><![CDATA[How Israel's policies created famine in Gaza]]></title>
-            <description><![CDATA[Israel has systematically obstructed food entering Gaza, aid agencies say, as a UN-backed body confirms a famine.]]></description>
-            <link>https://www.bbc.com/news/articles/ckg4p90z1kxo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/ckg4p90z1kxo#0</guid>
-            <pubDate>Fri, 22 Aug 2025 19:55:47 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/325d/live/772e6ee0-800c-11f0-a34f-318be3fb0481.jpg"/>
+            <title><![CDATA[Five journalists among 20 killed in Israeli double strike on hospital]]></title>
+            <description><![CDATA[Israeli Prime Minister Benjamin Netanyahu said it was a "tragic mishap" and promised a "thorough investigation".]]></description>
+            <link>https://www.bbc.com/news/articles/cp89rp48246o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cp89rp48246o#0</guid>
+            <pubDate>Mon, 25 Aug 2025 18:31:54 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/68e6/live/14296ba0-81e8-11f0-a34f-318be3fb0481.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Farage vows mass deportations to tackle small boats]]></title>
-            <description><![CDATA[Plans outlined by the Reform UK leader would see the country taken out of the European Convention on Human Rights.]]></description>
-            <link>https://www.bbc.com/news/articles/c9vd3rx33g1o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c9vd3rx33g1o#0</guid>
-            <pubDate>Sat, 23 Aug 2025 08:38:04 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/309e/live/e4740a20-7fba-11f0-9481-1fe1ca574d00.jpg"/>
+            <title><![CDATA[Watch: Trump says he wants to meet Kim Jong Un]]></title>
+            <description><![CDATA[In a meeting with South Korean President Lee Jae Myung, the Trump said he will meet with the North Korean leader in the "appropriate future".]]></description>
+            <link>https://www.bbc.com/news/videos/c4gzy1qjrpxo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/videos/c4gzy1qjrpxo#0</guid>
+            <pubDate>Mon, 25 Aug 2025 19:14:45 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/c8bc/live/1a5bf690-81df-11f0-83cc-c5da98c419b8.jpg"/>
         </item>
         <item>
-            <title><![CDATA[What next for Menendez brothers after parole bids rejected]]></title>
-            <description><![CDATA[Lyle and Erik Menendez have been denied release by separate parole boards this week.   ]]></description>
-            <link>https://www.bbc.com/news/articles/c5y2dgep4zzo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c5y2dgep4zzo#0</guid>
-            <pubDate>Sat, 23 Aug 2025 08:37:41 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/5ff6/live/fe8e24a0-30a9-11f0-a620-b132f633f1b3.jpg"/>
+            <title><![CDATA[Lil Nas X pleads not guilty to four felony charges after LA arrest]]></title>
+            <description><![CDATA[The rapper, whose legal name is Montero Lamar Hill, was detained last week while wandering the streets in his underwear.]]></description>
+            <link>https://www.bbc.com/news/articles/cly4ey0nm7xo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cly4ey0nm7xo#0</guid>
+            <pubDate>Mon, 25 Aug 2025 19:12:22 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/7b50/live/edc0d690-81e4-11f0-bc2a-81c474dab1b8.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Chappell Roan slays Reading Festival with fairytale-themed set]]></title>
-            <description><![CDATA[The US star took to the stage on Friday night, and was almost drowned out by her devoted fans.]]></description>
-            <link>https://www.bbc.com/news/articles/cr74p245zdlo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cr74p245zdlo#0</guid>
-            <pubDate>Fri, 22 Aug 2025 21:26:47 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/8ff6/live/34c96e40-7f9b-11f0-84a2-0722ea84f1f9.png"/>
+            <title><![CDATA[Hospitality hit by half of all UK job losses since Budget, industry leaders warn]]></title>
+            <description><![CDATA[Lobby group calls for urgent action to lower taxes, but the government says it is helping establishments.]]></description>
+            <link>https://www.bbc.com/news/articles/c05ey2ypp92o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c05ey2ypp92o#0</guid>
+            <pubDate>Mon, 25 Aug 2025 11:03:22 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/6853/live/045447d0-81a3-11f0-ba2e-9321f123f193.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Woman jailed for race hate post says she was political prisoner]]></title>
-            <description><![CDATA[She gives her first newspaper interview after being released from prison.]]></description>
-            <link>https://www.bbc.com/news/articles/ce83pj1ggmeo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/ce83pj1ggmeo#0</guid>
-            <pubDate>Sat, 23 Aug 2025 09:09:34 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/9dde/live/697abfc0-366e-11f0-92d0-a5509e61962c.jpg"/>
+            <title><![CDATA[Man mistakenly deported to El Salvador set to be removed from US again]]></title>
+            <description><![CDATA[Kilmar Abrego Garcia is taken into custody in Baltimore as his lawyers say he may be sent to Uganda.]]></description>
+            <link>https://www.bbc.com/news/articles/c04ryk6ed5lo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c04ryk6ed5lo#0</guid>
+            <pubDate>Mon, 25 Aug 2025 19:32:59 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/f02f/live/5b804170-81ae-11f0-ab3e-bd52082cd0ae.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Parking firm pays £10,240 after losing case, again]]></title>
-            <description><![CDATA[Excel Parking loses a court case against 22-year-old Hannah Robinson for a second time.]]></description>
-            <link>https://www.bbc.com/news/articles/ce83n7j7p6po?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/ce83n7j7p6po#0</guid>
-            <pubDate>Sat, 23 Aug 2025 00:25:25 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/32da/live/7896b490-0e15-11f0-b234-07dc7691c360.jpg"/>
+            <title><![CDATA[Record bank holiday temperatures for parts of UK]]></title>
+            <description><![CDATA[The heat will be short-lived, with wet and windy weather expected for most by mid week.]]></description>
+            <link>https://www.bbc.com/news/articles/cj6yp0j7znxo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cj6yp0j7znxo#0</guid>
+            <pubDate>Mon, 25 Aug 2025 16:31:29 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/70e9/live/ab4303e0-81cd-11f0-b1b7-d5227004453f.jpg"/>
         </item>
         <item>
-            <title><![CDATA['Two laptops, six plugs': The South Korean cafes grappling with students who don't leave]]></title>
-            <description><![CDATA[As Starbucks asks some to stop bringing printers into its branches to work, what's going on?]]></description>
-            <link>https://www.bbc.com/news/articles/c80d9e8ep7do?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c80d9e8ep7do#1</guid>
-            <pubDate>Fri, 22 Aug 2025 23:02:12 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/98c8/live/b328d1f0-7ff4-11f0-b30e-5b8b5234cffb.jpg"/>
+            <title><![CDATA[Scotland is known for its rain. So why are experts worried about water supplies?]]></title>
+            <description><![CDATA[Restrictions are being introduced on water use by businesses near two rivers where the levels are low.]]></description>
+            <link>https://www.bbc.com/news/articles/c0qly7g9pepo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c0qly7g9pepo#0</guid>
+            <pubDate>Mon, 25 Aug 2025 16:20:01 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/6f27/live/ea205080-8192-11f0-bad1-43a8cc805880.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Trump's plan for DC homeless is giving San Francisco deja vu]]></title>
-            <description><![CDATA[San Francisco's crackdown on homelessness has transformed the city - but advocates say the root of the problem still remains.]]></description>
-            <link>https://www.bbc.com/news/articles/c2kz4d0vwlzo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c2kz4d0vwlzo#1</guid>
-            <pubDate>Fri, 22 Aug 2025 23:19:47 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/0a42/live/2a7e5ec0-7fad-11f0-8d82-e9d807f3100d.jpg"/>
+            <title><![CDATA[Colourful Notting Hill Carnival revellers party in the streets]]></title>
+            <description><![CDATA[The celebrations continue with the adult's parade, sound systems and live performances on Monday.]]></description>
+            <link>https://www.bbc.com/news/articles/c4gjyyd2320o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c4gjyyd2320o#0</guid>
+            <pubDate>Mon, 25 Aug 2025 19:52:50 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/0349/live/0a14ed90-81db-11f0-a34f-318be3fb0481.png"/>
         </item>
         <item>
-            <title><![CDATA[Fans loved her new album. The thing was, she hadn't released one]]></title>
-            <description><![CDATA[Artists on the mystery of being targeted by fraudsters releasing "AI slop" songs in their name.]]></description>
-            <link>https://www.bbc.com/news/articles/clydz8d03dvo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/clydz8d03dvo#1</guid>
-            <pubDate>Fri, 22 Aug 2025 23:12:40 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/94c2/live/0b7bf260-7dcf-11f0-88a2-b9725373e32e.jpg"/>
+            <title><![CDATA[Kneecap cancel US tour dates amid court case]]></title>
+            <description><![CDATA[The trio said they have cancelled all upcoming US tour dates because of the "proximity of our next court hearing in London".]]></description>
+            <link>https://www.bbc.com/news/articles/c99m2zne0y9o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c99m2zne0y9o#0</guid>
+            <pubDate>Mon, 25 Aug 2025 16:12:37 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/9790/live/5614c0f0-81c0-11f0-b1e0-f1e3fb4f730d.jpg"/>
         </item>
         <item>
-            <title><![CDATA[My ex stalked me, so I joined a 'dating safety' app. Then my address was leaked]]></title>
-            <description><![CDATA[Thousands of women who signed up had their data, including images, posts, and comments, leaked.]]></description>
-            <link>https://www.bbc.com/news/articles/ce87rer52k3o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/ce87rer52k3o#1</guid>
-            <pubDate>Sat, 23 Aug 2025 00:34:38 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/ed31/live/ff719070-7f71-11f0-8844-df46f3a0217b.jpg"/>
+            <title><![CDATA[Inside Donetsk as residents flee attacks on Ukrainian region Putin wants to control]]></title>
+            <description><![CDATA[Quentin Sommerville follows volunteers carrying out evacuations in eastern Ukraine as drone attacks rage.]]></description>
+            <link>https://www.bbc.com/news/articles/c209yn1ygz6o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c209yn1ygz6o#1</guid>
+            <pubDate>Sun, 24 Aug 2025 21:04:11 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/3d9d/live/3207d060-8113-11f0-a34f-318be3fb0481.jpg"/>
         </item>
         <item>
-            <title><![CDATA[England's appetite for destruction undimmed by thrashing of USA]]></title>
-            <description><![CDATA[Ellie Kildunne stole the show, but coach John Mitchell will have been looking more at the inner working of his England team in their World Cup win over the United States.]]></description>
-            <link>https://www.bbc.com/sport/rugby-union/articles/cp94p2y9rl3o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/rugby-union/articles/cp94p2y9rl3o#1</guid>
-            <pubDate>Fri, 22 Aug 2025 23:22:17 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/543b/live/2d6da590-7fa4-11f0-ab3e-bd52082cd0ae.jpg"/>
+            <title><![CDATA[Lives torn apart by fatal crashes on one of UK's longest roads]]></title>
+            <description><![CDATA[The family of an American woman who died in a crash on the A9 with her brother and mother talk about the impact.]]></description>
+            <link>https://www.bbc.com/news/articles/c70xn6pnx0go?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c70xn6pnx0go#1</guid>
+            <pubDate>Mon, 25 Aug 2025 05:07:24 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/6b0d/live/6aebcd00-7d1c-11f0-b8e7-2dc6f436f923.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Woman jailed for race hate post says she was political prisoner]]></title>
-            <description><![CDATA[She gives her first newspaper interview after being released from prison.]]></description>
-            <link>https://www.bbc.com/news/articles/ce83pj1ggmeo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/ce83pj1ggmeo#2</guid>
-            <pubDate>Sat, 23 Aug 2025 09:09:34 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/9dde/live/697abfc0-366e-11f0-92d0-a5509e61962c.jpg"/>
+            <title><![CDATA[A cut-off finger ended her comfortable family life. Now she's hiding from US officials]]></title>
+            <description><![CDATA[Donald Trump declared some cartels to be terrorist organisations. So why are the victims of cartels in hiding?]]></description>
+            <link>https://www.bbc.com/news/articles/cvg4kd385e4o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cvg4kd385e4o#1</guid>
+            <pubDate>Sun, 24 Aug 2025 23:00:35 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/c316/live/0ac4e770-813d-11f0-ab3e-bd52082cd0ae.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Rail strike hits CrossCountry services over Bank Holiday weekend]]></title>
-            <description><![CDATA[The operator will run no trains on Saturday and a "very limited" service on Monday.]]></description>
-            <link>https://www.bbc.com/news/articles/c5y04nyjz29o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c5y04nyjz29o#2</guid>
-            <pubDate>Sat, 23 Aug 2025 06:14:22 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/7d61/live/a95e2e80-7dc0-11f0-a512-25ed1ee64338.jpg"/>
+            <title><![CDATA[Women aren't just 'cosy gamers' - I play horror games and 600,000 watch]]></title>
+            <description><![CDATA[Once thought of as a male-dominated pastime, the number of women streaming and playing video games is growing rapidly.]]></description>
+            <link>https://www.bbc.com/news/articles/cm21xy23npyo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cm21xy23npyo#1</guid>
+            <pubDate>Sun, 24 Aug 2025 23:05:06 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/cdd0/live/ab61f960-7f63-11f0-9b45-d97edf6817de.jpg"/>
         </item>
         <item>
-            <title><![CDATA[Parking firm pays £10,240 after losing case, again]]></title>
-            <description><![CDATA[Excel Parking loses a court case against 22-year-old Hannah Robinson for a second time.]]></description>
-            <link>https://www.bbc.com/news/articles/ce83n7j7p6po?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/ce83n7j7p6po#2</guid>
-            <pubDate>Sat, 23 Aug 2025 00:25:25 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/32da/live/7896b490-0e15-11f0-b234-07dc7691c360.jpg"/>
+            <title><![CDATA[How Russia is quietly trying to win over the world beyond the West]]></title>
+            <description><![CDATA[Over the past three years, Russian state-backed news channel RT has expanded its international presence.]]></description>
+            <link>https://www.bbc.com/news/articles/cm2vr37yd4no?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cm2vr37yd4no#1</guid>
+            <pubDate>Sun, 24 Aug 2025 23:06:41 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/c2b6/live/da09a6b0-7f67-11f0-a34f-318be3fb0481.png"/>
         </item>
         <item>
-            <title><![CDATA[Will Serena Williams's weight-loss admission help shed stigma of anti-obesity drugs?]]></title>
-            <description><![CDATA[Could her comments instil a new sense of confidence in those using the drugs and quieten the critics?]]></description>
-            <link>https://www.bbc.com/news/articles/c8de89lg21jo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c8de89lg21jo#2</guid>
-            <pubDate>Fri, 22 Aug 2025 20:34:35 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/b680/live/1d5fff10-7f7f-11f0-83cc-c5da98c419b8.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[Five dead in bus crash after Niagara Falls tour]]></title>
-            <description><![CDATA[Police say most of the victims are tourists from India, China and the Philippines.]]></description>
-            <link>https://www.bbc.com/news/articles/cm2kp312ryxo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cm2kp312ryxo#2</guid>
-            <pubDate>Sat, 23 Aug 2025 07:23:44 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/8dc0/live/4d526720-7fcb-11f0-a34f-318be3fb0481.png"/>
-        </item>
-        <item>
-            <title><![CDATA[Are young women more left wing than men - and, if so, why?]]></title>
-            <description><![CDATA[A divide appears to be opening up between young women and young men in the way they vote and view the world.]]></description>
-            <link>https://www.bbc.com/news/articles/cqxg89jzvl1o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cqxg89jzvl1o#2</guid>
-            <pubDate>Fri, 22 Aug 2025 23:48:35 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/e48a/live/1df3d340-7f82-11f0-83cc-c5da98c419b8.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA['A loan from nan started my business - it's now made £71m']]></title>
-            <description><![CDATA[Paige Louise Williams opened her first salon in 2014 - now the business is set to turn over £138m.]]></description>
-            <link>https://www.bbc.com/news/articles/c5y2vdlm8xgo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c5y2vdlm8xgo#2</guid>
-            <pubDate>Sat, 23 Aug 2025 05:58:42 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/bf5a/live/e4e9c710-7f51-11f0-aa13-61c4f67c93c8.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA['Pivotal' moment as Coventry City buys CBS Arena]]></title>
-            <description><![CDATA[Club owner Doug King says it is "proud to finally call this stadium our own".]]></description>
-            <link>https://www.bbc.com/news/articles/c1le2zpvyedo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c1le2zpvyedo#2</guid>
-            <pubDate>Sat, 23 Aug 2025 10:10:30 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/ff61/live/e62a4d60-8001-11f0-83c9-e1191d1c16a3.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[Why India's Election Commission is facing a test of credibility]]></title>
-            <description><![CDATA[The polling monitor is facing heat over voter roll revision and allegations of vote theft, that it has denied.]]></description>
-            <link>https://www.bbc.com/news/articles/cj9w43p7741o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cj9w43p7741o#2</guid>
-            <pubDate>Sat, 23 Aug 2025 00:31:01 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/ea7e/live/ba6e1540-7e52-11f0-bcba-a3d9b3feb3f0.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[Russia is trying to stop meeting on peace and prolong war, Zelensky says]]></title>
-            <description><![CDATA[Volodymyr Zelensky urges Western allies to impose fresh sanctions on Moscow if it shows no interest in peace.]]></description>
-            <link>https://www.bbc.com/news/articles/ckgjpmg4r23o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/ckgjpmg4r23o#2</guid>
-            <pubDate>Fri, 22 Aug 2025 20:27:18 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/956e/live/a13a23f0-7f62-11f0-a34f-318be3fb0481.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[Former UUP MP Rev Martin Smyth dies aged 94]]></title>
-            <description><![CDATA[As well as representing Belfast South in parliament, he served as the Grand Master of the Orange Lodge at the height of the Troubles.]]></description>
-            <link>https://www.bbc.com/news/articles/cde3p2450nwo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/cde3p2450nwo#2</guid>
-            <pubDate>Fri, 22 Aug 2025 21:54:12 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/3624/live/363ad890-7f9b-11f0-84a2-0722ea84f1f9.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[FBI searches home of Trump adviser-turned-critic John Bolton]]></title>
-            <description><![CDATA[Bolton served in Trump's first administration but has since become a fierce critic of the president. ]]></description>
-            <link>https://www.bbc.com/news/articles/c98lre1vqn4o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/news/articles/c98lre1vqn4o#2</guid>
-            <pubDate>Fri, 22 Aug 2025 19:27:21 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/479c/live/a2a12e30-7f87-11f0-9ae6-2781a6562cc1.jpg"/>
+            <title><![CDATA['We're the UK's last piano builders - but it's not a dying art']]></title>
+            <description><![CDATA[Craftsmen at Yorkshire Pianos hope to be the "first of a new age of piano building".]]></description>
+            <link>https://www.bbc.com/news/articles/cgqng5zpx71o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cgqng5zpx71o#1</guid>
+            <pubDate>Mon, 25 Aug 2025 06:10:37 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/5191/live/e20c26b0-7d9d-11f0-8701-ef823735961d.jpg"/>
         </item>
         <item>
             <title><![CDATA[Play here]]></title>
             <description><![CDATA[Find out if you're forecast to become the BBC's next star meteorologist by playing our new guessing game]]></description>
             <link>https://www.bbc.com/weather/articles/cwy5r7xwq8xo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/weather/articles/cwy5r7xwq8xo#3</guid>
-            <pubDate>Sat, 23 Aug 2025 04:45:02 GMT</pubDate>
+            <guid isPermaLink="false">https://www.bbc.com/weather/articles/cwy5r7xwq8xo#2</guid>
+            <pubDate>Mon, 25 Aug 2025 04:22:11 GMT</pubDate>
             <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/1b3e/live/1200eb90-7ea1-11f0-83cc-c5da98c419b8.png"/>
+        </item>
+        <item>
+            <title><![CDATA[Virginia Giuffre memoir to be published months after death]]></title>
+            <description><![CDATA[She had finished working on the "intimate" and "heartbreaking" book before she took her own life in April, her publisher says.]]></description>
+            <link>https://www.bbc.com/news/articles/c2djy7048pdo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c2djy7048pdo#3</guid>
+            <pubDate>Mon, 25 Aug 2025 07:49:33 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/64a5/live/1d77f680-8185-11f0-843f-7b3b652c1219.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Medvedev has US Open meltdown after photographer interrupts play]]></title>
+            <description><![CDATA[Daniil Medvedev is out of the US Open after a remarkable defeat by Benjamin Bonzi, where a photographer walking on to the court changed the course of the match.]]></description>
+            <link>https://www.bbc.com/sport/tennis/articles/c0qly4k97q0o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/sport/tennis/articles/c0qly4k97q0o#3</guid>
+            <pubDate>Mon, 25 Aug 2025 07:06:27 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/944b/live/f35567b0-8176-11f0-9990-6d77e0e8cbb5.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Mushroom murderer left me half alive, only survivor of toxic lunch tells court]]></title>
+            <description><![CDATA[Family members of the three people Erin Patterson murdered with toxic mushrooms have confronted her in court.]]></description>
+            <link>https://www.bbc.com/news/articles/cp8zr04wzz9o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cp8zr04wzz9o#3</guid>
+            <pubDate>Mon, 25 Aug 2025 07:21:36 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/b5c0/live/6fa93b30-8194-11f0-83cc-c5da98c419b8.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA['It's terrifying': Thousands evacuate as typhoon batters Vietnam]]></title>
+            <description><![CDATA[It comes less than a year after Vietnam was hit by Typhoon Yagi, which killed 300 people.]]></description>
+            <link>https://www.bbc.com/news/articles/cwy0kqgxwwlo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/cwy0kqgxwwlo#3</guid>
+            <pubDate>Mon, 25 Aug 2025 12:21:50 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/d543/live/83666910-81a1-11f0-ba2e-9321f123f193.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[ScotRail to replace controversial AI voice on trains]]></title>
+            <description><![CDATA[Voiceover artist Gayanne Potter said a "dreadful" robotic version of her voice was being used on trains]]></description>
+            <link>https://www.bbc.com/news/articles/c5ypzzyjgego?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/news/articles/c5ypzzyjgego#3</guid>
+            <pubDate>Mon, 25 Aug 2025 12:58:42 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/ae0c/live/02a8fb40-81c3-11f0-a34f-318be3fb0481.png"/>
         </item>
         <item>
             <title><![CDATA[BBC News app]]></title>
@@ -673,42 +656,10 @@ Result: <?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/
             <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/2cf6/live/d1e71250-9509-11ee-8df3-1d2983d8814f.png"/>
         </item>
         <item>
-            <title><![CDATA[West Ham booed as Chelsea score five in convincing win]]></title>
-            <description><![CDATA[Joao Pedro gets a goal and an assist as Chelsea come from behind to comfortably beat West Ham 5-1 in the Premier League at London Stadium.]]></description>
-            <link>https://www.bbc.com/sport/football/videos/cm21pe8d8leo?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/football/videos/cm21pe8d8leo#5</guid>
-            <pubDate>Fri, 22 Aug 2025 21:31:39 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/618d/live/6222a9f0-7f9c-11f0-ab3e-bd52082cd0ae.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[England's appetite for destruction undimmed by thrashing of USA]]></title>
-            <description><![CDATA[Ellie Kildunne stole the show, but coach John Mitchell will have been looking more at the inner working of his England team in their World Cup win over the United States.]]></description>
-            <link>https://www.bbc.com/sport/rugby-union/articles/cp94p2y9rl3o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/rugby-union/articles/cp94p2y9rl3o#5</guid>
-            <pubDate>Fri, 22 Aug 2025 23:22:17 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/543b/live/2d6da590-7fa4-11f0-ab3e-bd52082cd0ae.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA['I'd love to be a WWE wrestler' - Guehi in his own words]]></title>
-            <description><![CDATA[Marc Guehi sits down with Kelly Somers to discuss his journey into football, being "put in my place", and his varied influences.]]></description>
-            <link>https://www.bbc.com/sport/articles/cdxyde951r5o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/articles/cdxyde951r5o#5</guid>
-            <pubDate>Sat, 23 Aug 2025 05:13:28 GMT</pubDate>
-            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/fad9/live/5dabd770-7ea2-11f0-ab3e-bd52082cd0ae.jpg"/>
-        </item>
-        <item>
-            <title><![CDATA[Two games, eight goals conceded - is Potter under pressure?]]></title>
-            <description><![CDATA[With West Ham conceding eight goals in just two games so far this season, the pressure appears to be on manager Graham Potter already.]]></description>
-            <link>https://www.bbc.com/sport/football/articles/cy5p2end116o?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.com/sport/football/articles/cy5p2end116o#5</guid>
-            <pubDate>Fri, 22 Aug 2025 23:12:29 GMT</pubDate>
-            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/e5fd/live/24c52ae0-7fa8-11f0-9428-699ed9aaaeff.jpg"/>
-        </item>
-        <item>
             <title><![CDATA[Israel begins ground offensive in Gaza City]]></title>
             <description><![CDATA[Palestinians flee Gaza City districts as Israel says first stages of offensive have begun]]></description>
             <link>https://www.bbc.co.uk/sounds/play/p0lybfkm?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.co.uk/sounds/play/p0lybfkm#6</guid>
+            <guid isPermaLink="false">https://www.bbc.co.uk/sounds/play/p0lybfkm#5</guid>
             <pubDate>Thu, 21 Aug 2025 17:46:00 GMT</pubDate>
             <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/images/ic/240x135/p0l7jnbt.jpg"/>
         </item>
@@ -716,9 +667,41 @@ Result: <?xml version="1.0" encoding="UTF-8"?><rss xmlns:dc="http://purl.org/dc/
             <title><![CDATA[Is Donald Trump losing his Latino base?]]></title>
             <description><![CDATA[And can the Democrats win them back?]]></description>
             <link>https://www.bbc.co.uk/sounds/play/w3ct7t5t?at_medium=RSS&amp;at_campaign=rss</link>
-            <guid isPermaLink="false">https://www.bbc.co.uk/sounds/play/w3ct7t5t#6</guid>
+            <guid isPermaLink="false">https://www.bbc.co.uk/sounds/play/w3ct7t5t#5</guid>
             <pubDate>Fri, 22 Aug 2025 12:05:00 GMT</pubDate>
             <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/images/ic/240x135/p0j72y80.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Wolves reject £50m Newcastle bid for Strand Larsen]]></title>
+            <description><![CDATA[Newcastle United have a £50m bid for striker Jorgen Strand Larsen rejected by Wolves as they look to sign a striker before the transfer deadline.]]></description>
+            <link>https://www.bbc.com/sport/football/articles/cgr9k81yz8do?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/sport/football/articles/cgr9k81yz8do#7</guid>
+            <pubDate>Mon, 25 Aug 2025 15:56:11 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/dca7/live/de04ead0-81c5-11f0-b1b7-d5227004453f.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA['Nervous' Norrie through after Korda retirement]]></title>
+            <description><![CDATA[Britain's Cameron Norrie books his place in the second round of the US Open thanks to Sebastian Korda's retirement.]]></description>
+            <link>https://www.bbc.com/sport/tennis/articles/ce87j8md4djo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/sport/tennis/articles/ce87j8md4djo#7</guid>
+            <pubDate>Mon, 25 Aug 2025 18:19:35 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/7592/live/e837bac0-81dc-11f0-b33a-a59e76affdb5.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Everton sign Southampton's Dibling in £40m deal]]></title>
+            <description><![CDATA[Everton sign Tyler Dibling from Southampton in a deal worth an initial £35m plus £5m in add-ons.]]></description>
+            <link>https://www.bbc.com/sport/football/articles/c07py7jg3gjo?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/sport/football/articles/c07py7jg3gjo#7</guid>
+            <pubDate>Mon, 25 Aug 2025 19:21:14 GMT</pubDate>
+            <media:thumbnail width="240" height="134" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/a2b8/live/c4f99ec0-81e6-11f0-aa40-9bf70e78287c.jpg"/>
+        </item>
+        <item>
+            <title><![CDATA[Jacks takes spectacular leaping catch to remove Pope]]></title>
+            <description><![CDATA[Will Jacks takes a brilliant leaping one-handed to catch to remove Ollie Pope off the bowling of Sam Curran as London Spirit face Oval Invincibles in the men's Hundred at the Oval. ]]></description>
+            <link>https://www.bbc.com/sport/cricket/videos/c36jy60pz69o?at_medium=RSS&amp;at_campaign=rss</link>
+            <guid isPermaLink="false">https://www.bbc.com/sport/cricket/videos/c36jy60pz69o#7</guid>
+            <pubDate>Mon, 25 Aug 2025 18:26:27 GMT</pubDate>
+            <media:thumbnail width="240" height="135" url="https://ichef.bbci.co.uk/ace/standard/240/cpsprodpb/42ff/live/6e9ac6e0-81e0-11f0-a34f-318be3fb0481.jpg"/>
         </item>
     </channel>
 </rss>
@@ -727,7 +710,7 @@ XML parsing capabilities demonstrated.
 
 👋 Ending simulation. Session summary:
 Interactions: 7
-Session duration: 42394ms
+Session duration: 60543ms
 Simulated inputs processed: 6/6
 ✅ [11/42] httpToolsTest - PASSED
 
@@ -749,7 +732,7 @@ Test1(exact): EXACT_MATCH_SUCCESS, Test2(age): ADULT_USER, Test3(complex): VIP_A
 
 👋 Ending simulation. Session summary:
 Interactions: 2
-Session duration: 42899ms
+Session duration: 61050ms
 Simulated inputs processed: 1/1
 ✅ [12/42] switchConditionsTest - PASSED
 
@@ -764,14 +747,14 @@ Running 3 simulated inputs...
 
 You: I want to test REST API functionality [SIMULATED]
 
-🤖 AI: Processing REST API demonstration - You can also 'cancel' or request 'help'.
+🤖 AI: Processing REST API demonstration - You can also 'cancel flow' or request 'help'.
 
 This demo shows REST API capabilities. Enter a user ID (1-10) to fetch user data:
 
 You: 999 [SIMULATED]
 warn: Error executing tool RestApiExample: HTTP 404 Not Found: {}
 
-🤖 AI: Processing REST API retry handler - You can also 'cancel' or request 'help'.
+🤖 AI: Processing REST API retry handler - You can also 'cancel flow' or request 'help'.
 
 Failed to fetch user data. Please try again with a valid user ID (1-10):
 
@@ -785,7 +768,7 @@ Website: hildegard.org
 
 👋 Ending simulation. Session summary:
 Interactions: 4
-Session duration: 46024ms
+Session duration: 65164ms
 Simulated inputs processed: 3/3
 ✅ [13/42] problemScenarioTest - PASSED
 
@@ -800,7 +783,7 @@ Running 4 simulated inputs...
 
 You: I need to make a payment [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 🤖 Processing Make a payment
 
@@ -809,25 +792,25 @@ Please enter your account number (6-12 digits)
 You: 999999 [SIMULATED]
 warn: Error executing tool VerifyAccountTool: Invalid account number
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 Account verification failed. Please ensure you entered a valid 6-12 digit account number.
 
 You: 123456 [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 50.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=51a9ab12-9378-40bc-96d6-d42263ed5f38
-Payment ID: 51a9ab12-9378-40bc-96d6-d42263ed5f38
-Expires: 2025-08-23T12:10:17.254Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=f3447e4c-65da-49d5-b206-2016627ac82f
+Payment ID: f3447e4c-65da-49d5-b206-2016627ac82f
+Expires: 2025-08-25T20:56:41.210Z
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 49948ms
+Session duration: 68488ms
 Simulated inputs processed: 4/4
 ✅ [14/42] accountVerificationTest - PASSED
 
@@ -864,7 +847,7 @@ What would you like to do?
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 50919ms
+Session duration: 69450ms
 Simulated inputs processed: 2/2
 ✅ [15/42] navigationTest - PASSED
 
@@ -879,7 +862,7 @@ Running 2 simulated inputs...
 
 You: CallTypeDemo [SIMULATED]
 
-🤖 AI: Processing Flow Navigation Demo - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Flow Navigation Demo - You can also 'cancel flow' or request 'help'.
 
 This flow demonstrates callType options. Choose:
 1. 'call' - Normal sub-flow
@@ -899,7 +882,7 @@ CallTypeDemo completed! Returning from call.
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 51423ms
+Session duration: 69953ms
 Simulated inputs processed: 2/2
 ✅ [16/42] callTypeDemoTest - PASSED
 
@@ -914,7 +897,7 @@ Running 2 simulated inputs...
 
 You: RestApiDemo [SIMULATED]
 
-🤖 AI: Processing REST API demonstration - You can also 'cancel' or request 'help'.
+🤖 AI: Processing REST API demonstration - You can also 'cancel flow' or request 'help'.
 
 This demo shows REST API capabilities. Enter a user ID (1-10) to fetch user data:
 
@@ -928,7 +911,7 @@ Website: elvis.io
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 52073ms
+Session duration: 71284ms
 Simulated inputs processed: 2/2
 ✅ [17/42] restApiDemoTest - PASSED
 
@@ -943,7 +926,7 @@ Running 6 simulated inputs...
 
 You: UserAccessControl [SIMULATED]
 
-🤖 AI: Processing User access control - You can also 'cancel' or request 'help'.
+🤖 AI: Processing User access control - You can also 'cancel flow' or request 'help'.
 
 Enter your role (admin, manager, user, guest):
 
@@ -953,13 +936,13 @@ You: admin [SIMULATED]
 
 You: UserAccessControl [SIMULATED]
 
-🤖 AI: Processing User access control - You can also 'cancel' or request 'help'.
+🤖 AI: Processing User access control - You can also 'cancel flow' or request 'help'.
 
 Enter your role (admin, manager, user, guest):
 
 You: invalid_role [SIMULATED]
 
-🤖 AI: Processing User access control - You can also 'cancel' or request 'help'.
+🤖 AI: Processing User access control - You can also 'cancel flow' or request 'help'.
 
 ❌ Invalid role 'invalid_role'. Valid roles are: admin, manager, user, guest.
 
@@ -975,7 +958,7 @@ You: exit [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 52579ms
+Session duration: 71791ms
 Simulated inputs processed: 6/6
 ✅ [18/42] accessControlTest - PASSED
 
@@ -1003,7 +986,7 @@ What would you like to do?
 
 👋 Ending simulation. Session summary:
 Interactions: 2
-Session duration: 53082ms
+Session duration: 72293ms
 Simulated inputs processed: 1/1
 ✅ [19/42] errorRecoveryTest - PASSED
 
@@ -1018,7 +1001,7 @@ Running 5 simulated inputs...
 
 You: I need to make a payment [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 🤖 Processing Make a payment
 
@@ -1030,34 +1013,34 @@ You: What's the weather in Paris? [SIMULATED]
 
 (Your previous "Verify account" progress has been saved)
 
-Processing Weather Check - You can also 'cancel' or request 'help'.
+Processing Weather Check - You can also 'cancel flow' or request 'help'.
 
 Enter the city name to get current weather information
 
 You: Paris [SIMULATED]
 
-🤖 AI: Current weather in Paris, : Sunny at 14°C (77% humidity)
-Last updated: 2025-08-23T11:10:24.675Z
+🤖 AI: Current weather in Paris, : Sunny at 28°C (28% humidity)
+Last updated: 2025-08-25T19:56:48.414Z
 
-🔄 Resuming Verify account - Type 'cancel' or 'help' for options.
+🔄 Resuming Verify account - Type 'cancel flow' or 'help' for options.
 
 Please enter your account number (6-12 digits)
 
 You: 123456 [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 75.50 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/75.50?id=661c72fb-ef36-4731-b72b-5ba5b4fbeee6
-Payment ID: 661c72fb-ef36-4731-b72b-5ba5b4fbeee6
-Expires: 2025-08-23T12:10:27.696Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/75.50?id=584144f6-7a2b-406c-8ebf-17252733c0e0
+Payment ID: 584144f6-7a2b-406c-8ebf-17252733c0e0
+Expires: 2025-08-25T20:56:50.871Z
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 60389ms
+Session duration: 78150ms
 Simulated inputs processed: 5/5
 ✅ [20/42] flowResumptionTest - PASSED
 
@@ -1072,7 +1055,7 @@ Running 8 simulated inputs...
 
 You: I want to test response mapping [SIMULATED]
 
-🤖 AI: Processing Response mapping tests - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Response mapping tests - You can also 'cancel flow' or request 'help'.
 
 Testing Response Mapping System
 Choose test type:
@@ -1089,7 +1072,7 @@ Result: {"location":{"name":"New York","country":"United States","coordinates":"
 
 You: I want to test response mapping [SIMULATED]
 
-🤖 AI: Processing Response mapping tests - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Response mapping tests - You can also 'cancel flow' or request 'help'.
 
 Testing Response Mapping System
 Choose test type:
@@ -1106,7 +1089,7 @@ Result: [{"id":1,"name":"Laptop","price_formatted":"$999.99 USD","rating_stars":
 
 You: I want to test response mapping [SIMULATED]
 
-🤖 AI: Processing Response mapping tests - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Response mapping tests - You can also 'cancel flow' or request 'help'.
 
 Testing Response Mapping System
 Choose test type:
@@ -1123,7 +1106,7 @@ Result: Order Summary\n================\nOrder ID: ORD-2025-001\nCustomer: John 
 
 You: I want to test response mapping [SIMULATED]
 
-🤖 AI: Processing Response mapping tests - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Response mapping tests - You can also 'cancel flow' or request 'help'.
 
 Testing Response Mapping System
 Choose test type:
@@ -1140,7 +1123,7 @@ Result: {"company_overview":{"basic_info":{"id":"comp_123","name":"TechCorp Solu
 
 👋 Ending simulation. Session summary:
 Interactions: 9
-Session duration: 62839ms
+Session duration: 81676ms
 Simulated inputs processed: 8/8
 ✅ [21/42] mappingTypesTest - PASSED
 
@@ -1166,7 +1149,7 @@ What would you like to do?
 
 You: CallTypeDemo [SIMULATED]
 
-🤖 AI: Processing Flow Navigation Demo - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Flow Navigation Demo - You can also 'cancel flow' or request 'help'.
 
 This flow demonstrates callType options. Choose:
 1. 'call' - Normal sub-flow
@@ -1194,7 +1177,7 @@ What would you like to do?
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 63343ms
+Session duration: 82178ms
 Simulated inputs processed: 4/4
 ✅ [22/42] systemFlowsTest - PASSED
 
@@ -1241,7 +1224,7 @@ Testing smart default onFail for generic errors...
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 69618ms
+Session duration: 91269ms
 Simulated inputs processed: 4/4
 ✅ [23/42] smartOnFailTest - PASSED
 
@@ -1256,7 +1239,7 @@ Running 2 simulated inputs...
 
 You: I want to test REST API functionality [SIMULATED]
 
-🤖 AI: Processing REST API demonstration - You can also 'cancel' or request 'help'.
+🤖 AI: Processing REST API demonstration - You can also 'cancel flow' or request 'help'.
 
 This demo shows REST API capabilities. Enter a user ID (1-10) to fetch user data:
 
@@ -1270,7 +1253,7 @@ Website: demarco.info
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 70696ms
+Session duration: 92371ms
 Simulated inputs processed: 2/2
 ✅ [24/42] templateDebugTest - PASSED
 
@@ -1285,7 +1268,7 @@ Running 9 simulated inputs...
 
 You: I want to test REST API functionality [SIMULATED]
 
-🤖 AI: Processing REST API demonstration - You can also 'cancel' or request 'help'.
+🤖 AI: Processing REST API demonstration - You can also 'cancel flow' or request 'help'.
 
 This demo shows REST API capabilities. Enter a user ID (1-10) to fetch user data:
 
@@ -1299,7 +1282,7 @@ Website: hildegard.org
 
 You: I want to test REST API functionality [SIMULATED]
 
-🤖 AI: Processing REST API demonstration - You can also 'cancel' or request 'help'.
+🤖 AI: Processing REST API demonstration - You can also 'cancel flow' or request 'help'.
 
 This demo shows REST API capabilities. Enter a user ID (1-10) to fetch user data:
 
@@ -1313,7 +1296,7 @@ Website: anastasia.net
 
 You: I want to test REST API functionality [SIMULATED]
 
-🤖 AI: Processing REST API demonstration - You can also 'cancel' or request 'help'.
+🤖 AI: Processing REST API demonstration - You can also 'cancel flow' or request 'help'.
 
 This demo shows REST API capabilities. Enter a user ID (1-10) to fetch user data:
 
@@ -1327,14 +1310,14 @@ Website: ramiro.info
 
 You: I want to test REST API functionality [SIMULATED]
 
-🤖 AI: Processing REST API demonstration - You can also 'cancel' or request 'help'.
+🤖 AI: Processing REST API demonstration - You can also 'cancel flow' or request 'help'.
 
 This demo shows REST API capabilities. Enter a user ID (1-10) to fetch user data:
 
 You: 999 [SIMULATED]
 warn: Error executing tool RestApiExample: HTTP 404 Not Found: {}
 
-🤖 AI: Processing REST API retry handler - You can also 'cancel' or request 'help'.
+🤖 AI: Processing REST API retry handler - You can also 'cancel flow' or request 'help'.
 
 Failed to fetch user data. Please try again with a valid user ID (1-10):
 
@@ -1344,7 +1327,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 10
-Session duration: 75278ms
+Session duration: 98011ms
 Simulated inputs processed: 9/9
 ✅ [25/42] switchBranchingTest - PASSED
 
@@ -1370,7 +1353,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 76264ms
+Session duration: 99043ms
 Simulated inputs processed: 2/2
 ✅ [26/42] enhancedSwitchConditionTest - PASSED
 
@@ -1385,7 +1368,7 @@ Running 17 simulated inputs...
 
 You: I need to make a payment [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 🤖 Processing Make a payment
 
@@ -1393,30 +1376,30 @@ Please enter your account number (6-12 digits)
 
 You: 123456 [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 50.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=df85218f-75b7-44c9-9d68-379d9a841c77
-Payment ID: df85218f-75b7-44c9-9d68-379d9a841c77
-Expires: 2025-08-23T12:10:47.235Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=6414f46b-afc9-415f-ac02-513237255d0d
+Payment ID: 6414f46b-afc9-415f-ac02-513237255d0d
+Expires: 2025-08-25T20:57:15.450Z
 
 You: What's the weather in Tokyo? [SIMULATED]
 
-🤖 AI: Processing Weather Check - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Weather Check - You can also 'cancel flow' or request 'help'.
 
 Enter the city name to get current weather information
 
 You: Tokyo [SIMULATED]
 
-🤖 AI: Current weather in Shikinejima, : Partly cloudy at 31°C (75% humidity)
-Last updated: 2025-08-23T11:10:48.887Z
+🤖 AI: Current weather in Shikinejima, : Patchy rain nearby at 27°C (87% humidity)
+Last updated: 2025-08-25T19:57:17.705Z
 
 You: I need to make a payment [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 🤖 Processing Make a payment
 
@@ -1424,7 +1407,7 @@ Please enter your account number (6-12 digits)
 
 You: 123456 [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
@@ -1433,7 +1416,7 @@ warn: Error executing tool GeneratePaymentLink: Tool argument validation failed:
 warn: Error executing tool GeneratePaymentLink: Tool argument validation failed: /amount must be number
 warn: Error executing tool GeneratePaymentLink: Tool argument validation failed: /amount must be number
 
-🤖 AI: Processing Payment Amount Retry - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Payment Amount Retry - You can also 'cancel flow' or request 'help'.
 
 💡 Let's try entering the payment amount again. Please use a format like '25.50' or '$100.00'.
 
@@ -1443,24 +1426,24 @@ You: 75.00 [SIMULATED]
 
 🤖 AI: ✅ Payment link generated successfully!
 
-🔗 Link: https://pay.example.com/123456/75.00?id=53302b39-409c-4823-a3a4-01f37800728a
-📋 Payment ID: 53302b39-409c-4823-a3a4-01f37800728a
-⏰ Expires: 2025-08-23T12:10:55.181Z
+🔗 Link: https://pay.example.com/123456/75.00?id=f831dfab-e3a1-4cd3-bc5a-46b8d2ff81b2
+📋 Payment ID: f831dfab-e3a1-4cd3-bc5a-46b8d2ff81b2
+⏰ Expires: 2025-08-25T20:57:23.597Z
 
 You: What's the weather in London? [SIMULATED]
 
-🤖 AI: Processing Weather Check - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Weather Check - You can also 'cancel flow' or request 'help'.
 
 Enter the city name to get current weather information
 
 You: London [SIMULATED]
 
-🤖 AI: Current weather in London, : Partly cloudy at 16°C (63% humidity)
-Last updated: 2025-08-23T11:10:56.774Z
+🤖 AI: Current weather in London, : Sunny at 27°C (30% humidity)
+Last updated: 2025-08-25T19:57:25.114Z
 
 You: I need to make a payment [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 🤖 Processing Make a payment
 
@@ -1468,26 +1451,26 @@ Please enter your account number (6-12 digits)
 
 You: 123456 [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 100.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/100.00?id=dfafab38-aad8-4d18-80fd-0c79d9b3eac8
-Payment ID: dfafab38-aad8-4d18-80fd-0c79d9b3eac8
-Expires: 2025-08-23T12:11:00.091Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/100.00?id=5e523403-aab2-4ffd-a55e-e648c8e17964
+Payment ID: 5e523403-aab2-4ffd-a55e-e648c8e17964
+Expires: 2025-08-25T20:57:28.246Z
 
 You: What's the weather in Paris? [SIMULATED]
 
-🤖 AI: Processing Weather Check - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Weather Check - You can also 'cancel flow' or request 'help'.
 
 Enter the city name to get current weather information
 
 You: Paris [SIMULATED]
 
-🤖 AI: Current weather in Paris, : Sunny at 14°C (77% humidity)
-Last updated: 2025-08-23T11:11:01.696Z
+🤖 AI: Current weather in Paris, : Sunny at 28°C (28% humidity)
+Last updated: 2025-08-25T19:57:29.620Z
 
 You: cancel [SIMULATED]
 
@@ -1495,7 +1478,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 18
-Session duration: 94906ms
+Session duration: 117371ms
 Simulated inputs processed: 17/17
 ✅ [27/42] flowFrameIntegrityTest - PASSED
 
@@ -1510,7 +1493,7 @@ Running 12 simulated inputs...
 
 You: I need to make a payment [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 🤖 Processing Make a payment
 
@@ -1518,7 +1501,7 @@ Please enter your account number (6-12 digits)
 
 You: 123456 [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
@@ -1528,28 +1511,28 @@ You: What's the weather in Tokyo? [SIMULATED]
 
 (Your previous "Make a payment" progress has been saved)
 
-Processing Weather Check - You can also 'cancel' or request 'help'.
+Processing Weather Check - You can also 'cancel flow' or request 'help'.
 
 Enter the city name to get current weather information
 
 You: Tokyo [SIMULATED]
 
-🤖 AI: Current weather in Shikinejima, : Partly cloudy at 31°C (75% humidity)
-Last updated: 2025-08-23T11:11:07.015Z
+🤖 AI: Current weather in Shikinejima, : Patchy rain nearby at 27°C (87% humidity)
+Last updated: 2025-08-25T19:57:34.173Z
 
-🔄 Resuming Make a payment - Type 'cancel' or 'help' for options.
+🔄 Resuming Make a payment - Type 'cancel flow' or 'help' for options.
 
 What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: 50.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=b89c888c-4c7c-4f7d-a625-ded2853159ba
-Payment ID: b89c888c-4c7c-4f7d-a625-ded2853159ba
-Expires: 2025-08-23T12:11:08.558Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/50.00?id=34a5e4a4-6542-4a53-aade-0f7d70c7aaf4
+Payment ID: 34a5e4a4-6542-4a53-aade-0f7d70c7aaf4
+Expires: 2025-08-25T20:57:35.314Z
 
 You: I need to make a payment [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 🤖 Processing Make a payment
 
@@ -1557,7 +1540,7 @@ Please enter your account number (6-12 digits)
 
 You: 123456 [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
@@ -1566,14 +1549,14 @@ You: help [SIMULATED]
 🤖 AI: 📋 Flow Help - MakePayment
 
 Available commands while in this flow:
-• "cancel" - Exit this flow completely
+• "cancel flow" - Exit this flow completely
 • "status" - Show current flow information
 • "help" - Show this help message
 
 ⚠️ This is a financial transaction flow. Please complete or cancel to maintain security.
 
 **Current Question:**
-Processing Make a payment - You can also 'cancel' or request 'help'.
+Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
@@ -1581,20 +1564,20 @@ Please respond to the question above, or use a command listed above.
 
 You: 75.00 [SIMULATED]
 
-🤖 AI: Payment link generated successfully: https://pay.example.com/123456/75.00?id=2d6c2c02-d90e-4123-b3f1-43ae03ccc208
-Payment ID: 2d6c2c02-d90e-4123-b3f1-43ae03ccc208
-Expires: 2025-08-23T12:11:11.932Z
+🤖 AI: Payment link generated successfully: https://pay.example.com/123456/75.00?id=45e36b8a-4a24-4070-ae59-0f2c2e910b51
+Payment ID: 45e36b8a-4a24-4070-ae59-0f2c2e910b51
+Expires: 2025-08-25T20:57:37.963Z
 
 You: What's the weather in London? [SIMULATED]
 
-🤖 AI: Processing Weather Check - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Weather Check - You can also 'cancel flow' or request 'help'.
 
 Enter the city name to get current weather information
 
 You: London [SIMULATED]
 
-🤖 AI: Current weather in London, : Partly cloudy at 16°C (63% humidity)
-Last updated: 2025-08-23T11:11:13.809Z
+🤖 AI: Current weather in London, : Sunny at 27°C (30% humidity)
+Last updated: 2025-08-25T19:57:39.517Z
 
 You: cancel [SIMULATED]
 
@@ -1602,7 +1585,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 13
-Session duration: 106937ms
+Session duration: 127510ms
 Simulated inputs processed: 12/12
 ✅ [28/42] enhancedFlowInterruptionTest - PASSED
 
@@ -1617,7 +1600,7 @@ Running 11 simulated inputs...
 
 You: I need to make a payment [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 🤖 Processing Make a payment
 
@@ -1625,7 +1608,7 @@ Please enter your account number (6-12 digits)
 
 You: 123456 [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
@@ -1635,7 +1618,7 @@ You: cancel [SIMULATED]
 
 You: What's the weather in Paris? [SIMULATED]
 
-🤖 AI: Processing Weather Check - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Weather Check - You can also 'cancel flow' or request 'help'.
 
 Enter the city name to get current weather information
 
@@ -1644,12 +1627,12 @@ You: help [SIMULATED]
 🤖 AI: 📋 Flow Help - GetWeatherFlow
 
 Available commands while in this flow:
-• "cancel" - Exit this flow completely
+• "cancel flow" - Exit this flow completely
 • "status" - Show current flow information
 • "help" - Show this help message
 
 **Current Question:**
-Processing Weather Check - You can also 'cancel' or request 'help'.
+Processing Weather Check - You can also 'cancel flow' or request 'help'.
 
 Enter the city name to get current weather information
 
@@ -1657,12 +1640,12 @@ Please respond to the question above, or use a command listed above.
 
 You: Paris [SIMULATED]
 
-🤖 AI: Current weather in Paris, : Sunny at 14°C (77% humidity)
-Last updated: 2025-08-23T11:11:17.647Z
+🤖 AI: Current weather in Paris, : Sunny at 28°C (28% humidity)
+Last updated: 2025-08-25T19:57:44.430Z
 
 You: What's the weather in Tokyo? [SIMULATED]
 
-🤖 AI: Processing Weather Check - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Weather Check - You can also 'cancel flow' or request 'help'.
 
 Enter the city name to get current weather information
 
@@ -1673,7 +1656,7 @@ You: status [SIMULATED]
 Current Flow: GetWeatherFlow
 Steps Remaining: 3
 Stack Depth: 1
-Transaction ID: f66cc920
+Transaction ID: af3a3386
 
 Collected Information:
 • caller_id: (818)555-1212
@@ -1684,12 +1667,12 @@ Continue with your response to proceed.
 
 You: Tokyo [SIMULATED]
 
-🤖 AI: Current weather in Shikinejima, : Partly cloudy at 31°C (75% humidity)
-Last updated: 2025-08-23T11:11:20.258Z
+🤖 AI: Current weather in Shikinejima, : Patchy rain nearby at 27°C (87% humidity)
+Last updated: 2025-08-25T19:57:45.738Z
 
 You: What's the weather in London? [SIMULATED]
 
-🤖 AI: Processing Weather Check - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Weather Check - You can also 'cancel flow' or request 'help'.
 
 Enter the city name to get current weather information
 
@@ -1699,7 +1682,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 12
-Session duration: 113436ms
+Session duration: 133448ms
 Simulated inputs processed: 11/11
 ✅ [29/42] flowControlCommandsTest - PASSED
 
@@ -1714,7 +1697,7 @@ Running 3 simulated inputs...
 
 You: CallTypeDemo [SIMULATED]
 
-🤖 AI: Processing Flow Navigation Demo - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Flow Navigation Demo - You can also 'cancel flow' or request 'help'.
 
 This flow demonstrates callType options. Choose:
 1. 'call' - Normal sub-flow
@@ -1729,11 +1712,18 @@ CallTypeDemo completed! Returning from call.
 
 You: 1 [SIMULATED]
 
-🤖 AI: You said: "1". This is a mock reply.
+🤖 AI: 🤖 Processing Test Menu
+
+This is the Test Menu. I can help you with:
+Make a payment
+Check weather
+Account verification
+
+What would you like to do?
 
 👋 Ending simulation. Session summary:
 Interactions: 4
-Session duration: 114385ms
+Session duration: 134471ms
 Simulated inputs processed: 3/3
 ✅ [30/42] switchDefaultBranchTest - PASSED
 
@@ -1748,7 +1738,7 @@ Running 2 simulated inputs...
 
 You: RestApiDemo [SIMULATED]
 
-🤖 AI: Processing REST API demonstration - You can also 'cancel' or request 'help'.
+🤖 AI: Processing REST API demonstration - You can also 'cancel flow' or request 'help'.
 
 This demo shows REST API capabilities. Enter a user ID (1-10) to fetch user data:
 
@@ -1762,7 +1752,7 @@ Website: hildegard.org
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 115034ms
+Session duration: 146566ms
 Simulated inputs processed: 2/2
 ✅ [31/42] restApiParameterTest - PASSED
 
@@ -1777,7 +1767,7 @@ Running 5 simulated inputs...
 
 You: CallTypeDemo [SIMULATED]
 
-🤖 AI: Processing Flow Navigation Demo - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Flow Navigation Demo - You can also 'cancel flow' or request 'help'.
 
 This flow demonstrates callType options. Choose:
 1. 'call' - Normal sub-flow
@@ -1792,14 +1782,7 @@ CallTypeDemo completed! Returning from call.
 
 You: 2 [SIMULATED]
 
-🤖 AI: 🤖 Processing Test Menu
-
-This is the Test Menu. I can help you with:
-Make a payment
-Check weather
-Account verification
-
-What would you like to do?
+🤖 AI: You said: "2". This is a mock reply.
 
 You: SmartOnFailDataTest [SIMULATED]
 warn: Error executing tool RestApiExample: HTTP 404 Not Found: {}
@@ -1814,7 +1797,7 @@ You: continue [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 118659ms
+Session duration: 150652ms
 Simulated inputs processed: 5/5
 ✅ [32/42] improvedErrorMessagesTest - PASSED
 
@@ -1829,7 +1812,7 @@ Running 4 simulated inputs...
 
 You: I want to test REST API functionality [SIMULATED]
 
-🤖 AI: Processing REST API demonstration - You can also 'cancel' or request 'help'.
+🤖 AI: Processing REST API demonstration - You can also 'cancel flow' or request 'help'.
 
 This demo shows REST API capabilities. Enter a user ID (1-10) to fetch user data:
 
@@ -1843,7 +1826,7 @@ Website: hildegard.org
 
 You: RestApiDemo [SIMULATED]
 
-🤖 AI: Processing REST API demonstration - You can also 'cancel' or request 'help'.
+🤖 AI: Processing REST API demonstration - You can also 'cancel flow' or request 'help'.
 
 This demo shows REST API capabilities. Enter a user ID (1-10) to fetch user data:
 
@@ -1857,7 +1840,7 @@ Website: demarco.info
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 120232ms
+Session duration: 152058ms
 Simulated inputs processed: 4/4
 ✅ [33/42] apiToolsParameterTest - PASSED
 
@@ -1872,7 +1855,7 @@ Running 2 simulated inputs...
 
 You: CallTypeDemo [SIMULATED]
 
-🤖 AI: Processing Flow Navigation Demo - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Flow Navigation Demo - You can also 'cancel flow' or request 'help'.
 
 This flow demonstrates callType options. Choose:
 1. 'call' - Normal sub-flow
@@ -1887,7 +1870,7 @@ CallTypeDemo completed! Returning from call.
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 120734ms
+Session duration: 152560ms
 Simulated inputs processed: 2/2
 ✅ [34/42] internationalizedErrorTest - PASSED
 
@@ -1902,7 +1885,7 @@ Running 4 simulated inputs...
 
 You: I need to make a payment [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 🤖 Processing Make a payment
 
@@ -1910,14 +1893,14 @@ Please enter your account number (6-12 digits)
 
 You: 123456 [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: invalid_amount [SIMULATED]
 warn: Error executing tool GeneratePaymentLink: Tool argument validation failed: /amount must be number
 
-🤖 AI: Processing Payment Amount Retry - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Payment Amount Retry - You can also 'cancel flow' or request 'help'.
 
 💡 Let's try entering the payment amount again. Please use a format like '25.50' or '$100.00'.
 
@@ -1929,7 +1912,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 124508ms
+Session duration: 155979ms
 Simulated inputs processed: 4/4
 ✅ [35/42] paymentToolFailureTest - PASSED
 
@@ -1944,7 +1927,7 @@ Running 5 simulated inputs...
 
 You: I need to make a payment [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 🤖 Processing Make a payment
 
@@ -1952,14 +1935,14 @@ Please enter your account number (6-12 digits)
 
 You: 123456 [SIMULATED]
 
-🤖 AI: Processing Make a payment - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Make a payment - You can also 'cancel flow' or request 'help'.
 
 What amount would you like to pay? (minimum $0.01, maximum $10,000)
 
 You: bad_format [SIMULATED]
 warn: Error executing tool GeneratePaymentLink: Tool argument validation failed: /amount must be number
 
-🤖 AI: Processing Payment Amount Retry - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Payment Amount Retry - You can also 'cancel flow' or request 'help'.
 
 💡 Let's try entering the payment amount again. Please use a format like '25.50' or '$100.00'.
 
@@ -1969,9 +1952,9 @@ You: 50.00 [SIMULATED]
 
 🤖 AI: ✅ Payment link generated successfully!
 
-🔗 Link: https://pay.example.com/123456/50.00?id=be9f4897-6e71-45c2-a000-e2870733e348
-📋 Payment ID: be9f4897-6e71-45c2-a000-e2870733e348
-⏰ Expires: 2025-08-23T12:11:36.207Z
+🔗 Link: https://pay.example.com/123456/50.00?id=03c90c3e-d1b5-41dc-a4d1-e3bf7fa9e7c8
+📋 Payment ID: 03c90c3e-d1b5-41dc-a4d1-e3bf7fa9e7c8
+⏰ Expires: 2025-08-25T20:58:12.041Z
 
 You: cancel [SIMULATED]
 
@@ -1979,7 +1962,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 129333ms
+Session duration: 159869ms
 Simulated inputs processed: 5/5
 ✅ [36/42] enhancedPaymentRetryTest - PASSED
 
@@ -1994,14 +1977,14 @@ Running 4 simulated inputs...
 
 You: Simple self-retry demonstration [SIMULATED]
 
-🤖 AI: Processing Simple self-retry demonstration - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Simple self-retry demonstration - You can also 'cancel flow' or request 'help'.
 
 🔄 Simple Self-Retry Demo: Enter a user ID (1-10) to fetch user data:
 
 You: 999 [SIMULATED]
 warn: Error executing tool RestApiExample: HTTP 404 Not Found: {}
 
-🤖 AI: Processing Simple self-retry demonstration - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Simple self-retry demonstration - You can also 'cancel flow' or request 'help'.
 
 🔄 Simple Self-Retry Demo: Enter a user ID (1-10) to fetch user data:
 
@@ -2015,7 +1998,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 133182ms
+Session duration: 164578ms
 Simulated inputs processed: 4/4
 ✅ [37/42] simpleSelfRetryTest - PASSED
 
@@ -2030,21 +2013,21 @@ Running 4 simulated inputs...
 
 You: Smart self-retry with attempt counter [SIMULATED]
 
-🤖 AI: Processing Smart self-retry with attempt counter - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Smart self-retry with attempt counter - You can also 'cancel flow' or request 'help'.
 
 🎯 Smart Self-Retry Demo (Attempt 1/3): Enter a user ID (1-10):
 
 You: 999 [SIMULATED]
 warn: Error executing tool RestApiExample: HTTP 404 Not Found: {}
 
-🤖 AI: Processing Smart self-retry with attempt counter - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Smart self-retry with attempt counter - You can also 'cancel flow' or request 'help'.
 
 🎯 Smart Self-Retry Demo (Attempt 2/3): Enter a user ID (1-10):
 
 You: 888 [SIMULATED]
 warn: Error executing tool RestApiExample: HTTP 404 Not Found: {}
 
-🤖 AI: Processing Smart self-retry with attempt counter - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Smart self-retry with attempt counter - You can also 'cancel flow' or request 'help'.
 
 🎯 Smart Self-Retry Demo (Attempt 3/3): Enter a user ID (1-10):
 
@@ -2054,7 +2037,7 @@ You: cancel [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 5
-Session duration: 138425ms
+Session duration: 171194ms
 Simulated inputs processed: 4/4
 ✅ [38/42] smartSelfRetryTest - PASSED
 
@@ -2069,21 +2052,21 @@ Running 5 simulated inputs...
 
 You: Smart self-retry with attempt counter [SIMULATED]
 
-🤖 AI: Processing Smart self-retry with attempt counter - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Smart self-retry with attempt counter - You can also 'cancel flow' or request 'help'.
 
 🎯 Smart Self-Retry Demo (Attempt 1/3): Enter a user ID (1-10):
 
 You: 999 [SIMULATED]
 warn: Error executing tool RestApiExample: HTTP 404 Not Found: {}
 
-🤖 AI: Processing Smart self-retry with attempt counter - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Smart self-retry with attempt counter - You can also 'cancel flow' or request 'help'.
 
 🎯 Smart Self-Retry Demo (Attempt 2/3): Enter a user ID (1-10):
 
 You: 888 [SIMULATED]
 warn: Error executing tool RestApiExample: HTTP 404 Not Found: {}
 
-🤖 AI: Processing Smart self-retry with attempt counter - You can also 'cancel' or request 'help'.
+🤖 AI: Processing Smart self-retry with attempt counter - You can also 'cancel flow' or request 'help'.
 
 🎯 Smart Self-Retry Demo (Attempt 3/3): Enter a user ID (1-10):
 
@@ -2098,7 +2081,7 @@ You: baduser666 [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 6
-Session duration: 146450ms
+Session duration: 180878ms
 Simulated inputs processed: 5/5
 ✅ [39/42] smartSelfRetryMaxTest - PASSED
 
@@ -2122,7 +2105,7 @@ Rate limit test completed successfully.
 
 👋 Ending simulation. Session summary:
 Interactions: 2
-Session duration: 147644ms
+Session duration: 182496ms
 Simulated inputs processed: 1/1
 ✅ [40/42] rateLimitBasicTest - PASSED
 
@@ -2152,7 +2135,7 @@ You: continue [SIMULATED]
 
 👋 Ending simulation. Session summary:
 Interactions: 3
-Session duration: 148867ms
+Session duration: 184032ms
 Simulated inputs processed: 2/2
 ✅ [41/42] rateLimitRecoveryTest - PASSED
 
@@ -2178,7 +2161,7 @@ Making calls to hit rate limit...
 
 👋 Ending simulation. Session summary:
 Interactions: 2
-Session duration: 149893ms
+Session duration: 185054ms
 Simulated inputs processed: 1/1
 ✅ [42/42] smartRateLimitTest - PASSED
 
