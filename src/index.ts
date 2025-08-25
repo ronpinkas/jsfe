@@ -194,14 +194,14 @@ const DEFAULT_MESSAGE_REGISTRY: MessageRegistry = {
 // Multi-language command support for system commands
 const COMMAND_SYNONYMS: Record<string, Record<string, string[]>> = {
   en: {
-    cancel: ['cancel flow', 'cancel workflow', 'abort flow', 'stop flow', 'exit flow', 'quit flow', 'end flow'],
+    cancel: ['cancel', 'cancel flow', 'cancel workflow', 'abort flow', 'stop flow', 'exit flow', 'quit flow', 'end flow'],
     help: ['help', '?', 'options', 'commands'],
     status: ['status', 'where am i', 'what flow', 'current flow', 'info'],
     switch: ['switch', 'change', 'go to'],
     continue: ['continue', 'proceed', 'keep going', 'go on']
   },
   es: {
-    cancel: ['cancelar flujo', 'cancelar workflow', 'abortar flujo', 'parar flujo', 'salir flujo', 'terminar flujo', 'fin flujo'],
+    cancel: ['cancelar', 'cancelar flujo', 'cancelar workflow', 'abortar flujo', 'parar flujo', 'salir flujo', 'terminar flujo', 'fin flujo'],
     help: ['ayuda', '?', 'opciones', 'comandos'],
     status: ['estado', 'donde estoy', 'que flujo', 'flujo actual', 'info'],
     switch: ['cambiar', 'ir a', 'cambio'],
@@ -2503,29 +2503,28 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
     
     // Handle pending variable storage when resuming flow execution
     if (currentFlowFrame.pendingVariable && currentFlowFrame.inputStack && currentFlowFrame.inputStack.length > 0) {
-      const userInput = currentFlowFrame.inputStack[currentFlowFrame.inputStack.length - 1];
+      let userInput = currentFlowFrame.inputStack[currentFlowFrame.inputStack.length - 1];
       
       // Safety check: ensure userInput is defined before processing
       if (!userInput) {
-        logger.warn(`Skipping variable processing - userInput is undefined for pendingVariable: ${currentFlowFrame.pendingVariable}`);
-        // Clear the pending variable to avoid infinite loops
-        delete currentFlowFrame.pendingVariable;
-      } else {
-        // Store user input as variable value with proper sanitization
-        // (System commands like 'cancel' are already handled before this point)
-        setUserInputVariable(
-          currentFlowFrame.variables, 
-          currentFlowFrame.pendingVariable, 
-          userInput, 
-          true // Sanitize user input
-        );
-        logger.info(`Stored sanitized user input in variable '${currentFlowFrame.pendingVariable}': "${userInput}"`);
-        delete currentFlowFrame.pendingVariable;
-        
-        // Pop the SAY-GET step now that variable assignment is complete
-        currentFlowFrame.flowStepsStack.pop();
-        logger.info(`Popped SAY-GET step after variable assignment completed`);
-      }
+        logger.info(`Skipping variable processing - userInput is undefined for pendingVariable: ${currentFlowFrame.pendingVariable}`);
+        userInput = '';
+      } 
+      
+      // Store user input as variable value with proper sanitization
+      // (System commands like 'cancel' are already handled before this point)
+      setUserInputVariable(
+        currentFlowFrame.variables, 
+        currentFlowFrame.pendingVariable, 
+        userInput, 
+        true // Sanitize user input
+      );
+      logger.info(`Stored sanitized user input in variable '${currentFlowFrame.pendingVariable}': "${userInput}"`);
+      delete currentFlowFrame.pendingVariable;
+      
+      // Pop the SAY-GET step now that variable assignment is complete
+      currentFlowFrame.flowStepsStack.pop();
+      logger.info(`Popped SAY-GET step after variable assignment completed`);
     }
     
     // Flow completion handling
