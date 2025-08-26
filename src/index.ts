@@ -1307,6 +1307,13 @@ function extractByPath(obj: PathTraversableObject, path: PathExpression): Extrac
   }
   
   logger.debug(`extractByPath final result: ${JSON.stringify(current)}`);
+  
+  // Unwrap user input objects to extract the actual value
+  if (current && typeof current === 'object' && '__userInput' in current && '__literal' in current && 'value' in current) {
+    logger.debug(`extractByPath: unwrapping user input object, value: ${JSON.stringify((current as any).value)}`);
+    return (current as any).value;
+  }
+  
   return current;
 }
 
@@ -2585,7 +2592,13 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
         engine, // Pass engine for AI voice cleanup
         currentFlowFrame.pendingVariableContext // Pass question context for AI voice cleanup
       );
-      logger.info(`Stored sanitized user input in variable '${currentFlowFrame.pendingVariable}': "${userInput}"`);
+      
+      // Log the actual stored value (which may have been processed by AI voice cleanup)
+      const storedValue = currentFlowFrame.variables[currentFlowFrame.pendingVariable];
+      const actualValue = typeof storedValue === 'object' && storedValue !== null && '__userInput' in storedValue 
+        ? (storedValue as any).value 
+        : storedValue;
+      logger.info(`Stored sanitized user input in variable '${currentFlowFrame.pendingVariable}': "${actualValue}"`);
       
       // Clear digits setting from cargo since input has been collected
       if (engine.cargo && engine.cargo.digits) {
