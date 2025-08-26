@@ -132,16 +132,16 @@ const toolsRegistry = [
          required: [],
          additionalProperties: false
       },
-      implementation: { 
-         type: "http",
+      implementation: {
+        type: "http",
          url: "https://<your-url>/get-otp-link",
-         method: "POST",
-         contentType: "application/json",
-         timeout: 10000,
-         retries: 2,
-         headers: {
+        method: "POST",
+        contentType: "application/json",
+        timeout: 10000,
+        retries: 0,
+        headers: {
             "Authorization": "Bearer <API_KEY_PLACEHOLDER>" // Replace with actual key or use env var
-         },
+        },
          responseMapping: {
             type: "object",
             mappings: {
@@ -323,10 +323,16 @@ const flowsMenu = [
                   type: "CALL-TOOL",
                   tool: "get-otp-link",
                   variable: "otp_link_result",
-                  parameters: {
+                  args: {
                      account_number: "{{acct_number}}",
                      email: "",
                      phone_number: ""
+                  },
+                  onFail: {
+                     id: "account-otp-failed-flow",
+                     type: "FLOW",
+                     value: "payment-failed",
+                     mode: "replace"
                   }
                },
                "default": {
@@ -564,6 +570,12 @@ const flowsMenu = [
             variable: "cell_number",
             value: "Please {{cargo.verb}} {{cargo.voice ? 'or enter ' : ''}}your cell number",
             value_es: "Por favor {{cargo.verb_es}} {{cargo.voice ? 'o ingrese ' : ''}}su número de celular"
+         },
+         {
+            id: "remove-hash-if-present",
+            type: "SET",
+            variable: "cell_number",
+            value: "cell_number.replace(/#/g, '')"
          }
       ]
    },
@@ -583,10 +595,16 @@ const flowsMenu = [
                   type: "CALL-TOOL",
                   tool: "get-otp-link",
                   variable: "otp_link_result",
-                  parameters: { 
+                  args: { 
                      account_number: "",
                      email: "",
                      phone_number: "{{cell_number}}" 
+                  },
+                  onFail: {
+                     id: "cell-otp-failed-flow",
+                     type: "FLOW",
+                     value: "payment-failed",
+                     mode: "replace"
                   }
                },
                "default": {
@@ -720,10 +738,16 @@ const flowsMenu = [
                type: "CALL-TOOL",
                tool: "get-otp-link",
                variable: "otp_link_result",
-               parameters: { 
+               args: { 
                   account_number: "",
                   email: "{{email}}",
                   phone_number: ""
+               },
+               onFail: {
+                  id: "email-otp-failed-flow",
+                  type: "FLOW",
+                  value: "payment-failed",
+                  mode: "replace"
                }
             },
             "default": {
