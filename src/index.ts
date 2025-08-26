@@ -4159,6 +4159,13 @@ async function generateToolCallAndResponse(
             
             rawArgs = interpolateObject(rawArgs, variables, {}, engine);
             logger.debug(`Interpolated args:`, rawArgs);
+            
+            // Debug each property specifically to see what's happening
+            if (rawArgs && typeof rawArgs === 'object') {
+               for (const [key, value] of Object.entries(rawArgs)) {
+                  logger.debug(`Interpolated args - ${key}: ${JSON.stringify(value)} (type: ${typeof value})`);
+               }
+            }
          } catch (error: any) {
             logger.warn(`Failed to interpolate args templates: ${error.message}`);
             // Continue with original args if interpolation fails
