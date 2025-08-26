@@ -4163,32 +4163,38 @@ async function generateToolCallAndResponse(
             // This handles production environments where default values get converted to null during config processing
             if (rawArgs && typeof rawArgs === 'object' && tool.schema?.properties) {
                for (const [key, value] of Object.entries(rawArgs)) {
-                  if (value === null && tool.schema.properties[key]?.type) {
-                     const fieldType = tool.schema.properties[key].type as string;
-                     switch (fieldType) {
+                  const schemaType = tool.schema.properties[key]?.type as string;
+                  
+                  // Handle direct null values or objects that represent null
+                  const isNullValue = value === null || 
+                                     (typeof value === 'object' && value !== null && Object.keys(value).length === 0) ||
+                                     (typeof value === 'object' && value !== null && 'value' in value && (value as any).value === null);
+                  
+                  if (isNullValue && schemaType) {
+                     switch (schemaType) {
                         case 'string':
                            (rawArgs as any)[key] = '';
-                           logger.debug(`Converted null to empty string for ${key} (string field)`);
+                           logger.debug(`Converted null/empty object to empty string for ${key} (string field)`);
                            break;
                         case 'number':
                         case 'integer':
                            (rawArgs as any)[key] = 0;
-                           logger.debug(`Converted null to 0 for ${key} (${fieldType} field)`);
+                           logger.debug(`Converted null/empty object to 0 for ${key} (${schemaType} field)`);
                            break;
                         case 'boolean':
                            (rawArgs as any)[key] = false;
-                           logger.debug(`Converted null to false for ${key} (boolean field)`);
+                           logger.debug(`Converted null/empty object to false for ${key} (boolean field)`);
                            break;
                         case 'array':
                            (rawArgs as any)[key] = [];
-                           logger.debug(`Converted null to empty array for ${key} (array field)`);
+                           logger.debug(`Converted null/empty object to empty array for ${key} (array field)`);
                            break;
                         case 'object':
                            (rawArgs as any)[key] = {};
-                           logger.debug(`Converted null to empty object for ${key} (object field)`);
+                           logger.debug(`Converted null/empty object to empty object for ${key} (object field)`);
                            break;
                         default:
-                           logger.warn(`No conversion rule for null value of type ${fieldType} for key ${key}`);
+                           logger.warn(`No conversion rule for null value of type ${schemaType} for key ${key}`);
                      }
                   }
                }
