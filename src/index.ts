@@ -4158,6 +4158,42 @@ async function generateToolCallAndResponse(
             logger.debug(`Available variables:`, variables);
             
             rawArgs = interpolateObject(rawArgs, variables, {}, engine);
+            
+            // SAFETY: Convert null values to appropriate defaults for schema-typed fields
+            // This handles production environments where default values get converted to null during config processing
+            if (rawArgs && typeof rawArgs === 'object' && tool.schema?.properties) {
+               for (const [key, value] of Object.entries(rawArgs)) {
+                  if (value === null && tool.schema.properties[key]?.type) {
+                     const fieldType = tool.schema.properties[key].type as string;
+                     switch (fieldType) {
+                        case 'string':
+                           (rawArgs as any)[key] = '';
+                           logger.debug(`Converted null to empty string for ${key} (string field)`);
+                           break;
+                        case 'number':
+                        case 'integer':
+                           (rawArgs as any)[key] = 0;
+                           logger.debug(`Converted null to 0 for ${key} (${fieldType} field)`);
+                           break;
+                        case 'boolean':
+                           (rawArgs as any)[key] = false;
+                           logger.debug(`Converted null to false for ${key} (boolean field)`);
+                           break;
+                        case 'array':
+                           (rawArgs as any)[key] = [];
+                           logger.debug(`Converted null to empty array for ${key} (array field)`);
+                           break;
+                        case 'object':
+                           (rawArgs as any)[key] = {};
+                           logger.debug(`Converted null to empty object for ${key} (object field)`);
+                           break;
+                        default:
+                           logger.warn(`No conversion rule for null value of type ${fieldType} for key ${key}`);
+                     }
+                  }
+               }
+            }
+            
             logger.debug(`Interpolated args:`, rawArgs);
             
             // Debug each property specifically to see what's happening
