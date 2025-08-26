@@ -4130,88 +4130,91 @@ async function generateToolCallAndResponse(
    try {
       const toolsRegistry = engine.toolsRegistry;
       if (!toolsRegistry) {
-         throw new Error('Tools registry not found in engine');
+        throw new Error('Tools registry not found in engine');
       }
       const tool = toolsRegistry.find((t: any) => t.id === toolName);
       if (!tool) {
-         throw new Error(`Tool ${toolName} not found in registry`);
+        throw new Error(`Tool ${toolName} not found in registry`);
       }
 
       // Use explicit args if provided, otherwise generate them
       let rawArgs: any;
       if (explicitArgs && Object.keys(explicitArgs).length > 0) {
-         logger.info('Using explicit args from step definition:', explicitArgs);
-         rawArgs = explicitArgs;
+        logger.info('Using explicit args from step definition:', explicitArgs);
+        rawArgs = explicitArgs;
       } else {
-         // Generate and validate arguments with conversation context
-         rawArgs = await generateToolArgs(tool.schema || tool.parameters, input, contextStack, flowFrame, engine);
+        // Generate and validate arguments with conversation context
+        rawArgs = await generateToolArgs(tool.schema || tool.parameters, input, contextStack, flowFrame, engine);
       }
       
       // === TEMPLATE INTERPOLATION FOR ARGS ===
       // Interpolate {{variable}} templates in the args using current flow variables
       if (flowFrame && rawArgs && typeof rawArgs === 'object') {
-         try {
-            const variables = flowFrame.variables || {};
-            const contextStack = flowFrame.contextStack || [];
-            
-            logger.debug(`Interpolating args templates:`, rawArgs);
-            logger.debug(`Available variables:`, variables);
-            
-            rawArgs = interpolateObject(rawArgs, variables, {}, engine);
-            
-            // SAFETY: Convert null values to appropriate defaults for schema-typed fields
-            // This handles production environments where default values get converted to null during config processing
-            if (rawArgs && typeof rawArgs === 'object' && tool.schema?.properties) {
-               for (const [key, value] of Object.entries(rawArgs)) {
-                  const schemaType = tool.schema.properties[key]?.type as string;
-                  
-                  // Handle direct null values or objects that represent null
-                  const isNullValue = value === null || 
-                                     (typeof value === 'object' && value !== null && Object.keys(value).length === 0) ||
-                                     (typeof value === 'object' && value !== null && 'value' in value && (value as any).value === null);
-                  
-                  if (isNullValue && schemaType) {
-                     switch (schemaType) {
-                        case 'string':
-                           (rawArgs as any)[key] = '';
-                           logger.debug(`Converted null/empty object to empty string for ${key} (string field)`);
-                           break;
-                        case 'number':
-                        case 'integer':
-                           (rawArgs as any)[key] = 0;
-                           logger.debug(`Converted null/empty object to 0 for ${key} (${schemaType} field)`);
-                           break;
-                        case 'boolean':
-                           (rawArgs as any)[key] = false;
-                           logger.debug(`Converted null/empty object to false for ${key} (boolean field)`);
-                           break;
-                        case 'array':
-                           (rawArgs as any)[key] = [];
-                           logger.debug(`Converted null/empty object to empty array for ${key} (array field)`);
-                           break;
-                        case 'object':
-                           (rawArgs as any)[key] = {};
-                           logger.debug(`Converted null/empty object to empty object for ${key} (object field)`);
-                           break;
-                        default:
-                           logger.warn(`No conversion rule for null value of type ${schemaType} for key ${key}`);
-                     }
-                  }
-               }
+        try {
+          const variables = flowFrame.variables || {};
+          const contextStack = flowFrame.contextStack || [];
+          
+          logger.debug(`Interpolating args templates:`, rawArgs);
+          logger.debug(`Available variables:`, variables);
+          
+          rawArgs = interpolateObject(rawArgs, variables, {}, engine);
+          
+          // SAFETY: Convert null values to appropriate defaults for schema-typed fields
+          // This handles production environments where default values get converted to null during config processing
+          const schema = tool.schema || tool.parameters;
+          logger.debug(`SAFETY CHECK CONDITIONS: schema: ${JSON.stringify(schema)} rawArgs=${!!rawArgs}, typeof=${typeof rawArgs}, schema=${!!schema}, schema.properties=${!!schema?.properties}`);
+          
+          if (rawArgs && typeof rawArgs === 'object' && schema?.properties) {
+            for (const [key, value] of Object.entries(rawArgs)) {
+              const schemaType = schema.properties[key]?.type as string;
+              
+              // Convert null values to appropriate defaults for schema-typed fields
+              const isNullValue = value === null || value === undefined;
+              
+              
+              if (isNullValue && schemaType) {
+                logger.debug(`SAFETY CHECK: ${key} = ${JSON.stringify(value)}, isNull=${isNullValue}, schemaType=${schemaType}`);
+                switch (schemaType) {
+                  case 'string':
+                    (rawArgs as any)[key] = '';
+                    logger.debug(`Converted null/empty object to empty string for ${key} (string field)`);
+                    break;
+                  case 'number':
+                  case 'integer':
+                    (rawArgs as any)[key] = 0;
+                    logger.debug(`Converted null/empty object to 0 for ${key} (${schemaType} field)`);
+                    break;
+                  case 'boolean':
+                    (rawArgs as any)[key] = false;
+                    logger.debug(`Converted null/empty object to false for ${key} (boolean field)`);
+                    break;
+                  case 'array':
+                    (rawArgs as any)[key] = [];
+                    logger.debug(`Converted null/empty object to empty array for ${key} (array field)`);
+                    break;
+                  case 'object':
+                    (rawArgs as any)[key] = {};
+                    logger.debug(`Converted null/empty object to empty object for ${key} (object field)`);
+                    break;
+                  default:
+                    logger.warn(`No conversion rule for null value of type ${schemaType} for key ${key}`);
+                }
+              }
             }
-            
-            logger.debug(`Interpolated args:`, rawArgs);
-            
-            // Debug each property specifically to see what's happening
-            if (rawArgs && typeof rawArgs === 'object') {
-               for (const [key, value] of Object.entries(rawArgs)) {
-                  logger.debug(`Interpolated args - ${key}: ${JSON.stringify(value)} (type: ${typeof value})`);
-               }
+          }
+          
+          logger.debug(`Interpolated args:`, rawArgs);
+          
+          // Debug each property specifically to see what's happening
+          if (rawArgs && typeof rawArgs === 'object') {
+            for (const [key, value] of Object.entries(rawArgs)) {
+              logger.debug(`Interpolated args - ${key}: ${JSON.stringify(value)} (type: ${typeof value})`);
             }
-         } catch (error: any) {
-            logger.warn(`Failed to interpolate args templates: ${error.message}`);
-            // Continue with original args if interpolation fails
-         }
+          }
+        } catch (error: any) {
+        logger.warn(`Failed to interpolate args templates: ${error.message}`);
+        // Continue with original args if interpolation fails
+        }
       }
       
       const validatedArgs = validateToolArgs(tool, rawArgs);
