@@ -446,6 +446,7 @@ export interface FlowStep {
   args?: Record<string, unknown>;
   variable?: string;
   value?: string;
+  digits?: unknown; // Digit collection configuration for SAY-GET steps (exposed to sessionContext.cargo for platform integration like Twilio ConversationRelay)
   [key: string]: unknown; // Allow for value-xx properties and future extensions
   name?: string;
   nextFlow?: string;
@@ -2520,6 +2521,13 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
         true // Sanitize user input
       );
       logger.info(`Stored sanitized user input in variable '${currentFlowFrame.pendingVariable}': "${userInput}"`);
+      
+      // Clear digits setting from cargo since input has been collected
+      if (engine.cargo && engine.cargo.digits) {
+        delete engine.cargo.digits;
+        logger.info(`Cleared digits setting from cargo after input collection`);
+      }
+      
       delete currentFlowFrame.pendingVariable;
       
       // Pop the SAY-GET step now that variable assignment is complete
@@ -3608,6 +3616,12 @@ function handleSayGetStep(currentFlowFrame: FlowFrame, engine: Engine): string {
     if (step.variable) {
       currentFlowFrame.pendingVariable = step.variable;
       logger.info(`SAY-GET step will store next user input in variable '${step.variable}' (step will be popped after input)`);
+      
+      // Expose digits setting to sessionContext.cargo for Twilio ConversationRelay integration
+      if (step.digits && engine.cargo) {
+        engine.cargo.digits = step.digits;
+        logger.info(`SAY-GET step exposed digits setting to cargo: ${JSON.stringify(step.digits)}`);
+      }
       
       // Enhanced user guidance: Add contextual help to SAY-GET messages that expect input
       const contextualMessage = addFlowContextGuidance(finalMessage, currentFlowFrame, engine);
