@@ -586,6 +586,7 @@ export interface FlowFrame {
   userId: string;
   startTime: number;
   pendingVariable?: string;
+  pendingVariableContext?: string; // Question context for AI voice cleanup
   lastSayMessage?: string;
   pendingInterruption?: Record<string, unknown>;
   accumulatedMessages?: string[];
@@ -2146,6 +2147,68 @@ function checkRateLimit(engine: Engine, userId: string, toolId: string) {
 }
 
 // === INPUT VALIDATION & SANITIZATION ===
+
+/**
+ * AI-powered voice input cleanup for natural speech processing
+ * Cleans up voice input by removing filler words and normalizing responses based on context
+ * @param input - Raw voice input from user
+ * @param questionContext - The question or prompt that was asked to provide context
+ * @param engine - Engine instance for AI callback access
+ * @returns Promise<string> - Cleaned up input suitable for processing
+ */
+async function cleanVoiceInput(input: string, questionContext: string, engine: Engine): Promise<string> {
+  if (!engine.aiCallback) {
+    logger.warn('AI callback not available for voice input cleanup, using raw input');
+    return input.trim();
+  }
+
+  try {
+    const systemInstruction = `You are a voice input cleaner for a conversational AI system. Your job is to clean up natural speech input by:
+
+1. Removing filler words (um, uh, hmm, etc.)
+2. Extracting the core intent from casual speech
+3. Normalizing responses to expected formats
+4. Preserving the original meaning while making it suitable for system processing
+
+Rules:
+- If the user clearly means "yes" (yes, yeah, yep, sure, okay, alright, umm yes, etc.) return "yes"
+- If the user clearly means "no" (no, nope, nah, not really, etc.) return "no" 
+- For numbers, extract just the digits (e.g., "umm, it's 123456" → "123456")
+- For emails, extract just the email address
+- For phone numbers, extract just the number digits
+- For names, extract just the name parts
+- If unclear or ambiguous, return the input with just filler words removed
+- Always preserve the core semantic meaning
+- Keep responses concise and direct
+
+Return ONLY the cleaned input, no explanations.`;
+
+    const userMessage = `Question asked: "${questionContext}"
+User's voice response: "${input}"
+
+Clean this voice input:`;
+
+    const cleanedInput = await fetchAiResponse(
+      systemInstruction, 
+      userMessage, 
+      engine.aiCallback, 
+      engine.aiTimeOut || 2000
+    );
+
+    if (cleanedInput && cleanedInput.trim()) {
+      logger.info(`Voice input cleaned: "${input}" → "${cleanedInput.trim()}"`);
+      return cleanedInput.trim();
+    } else {
+      logger.warn('AI returned empty response for voice cleanup, using original input');
+      return input.trim();
+    }
+
+  } catch (error: any) {
+    logger.warn(`Voice input cleanup failed: ${error.message}, using original input`);
+    return input.trim();
+  }
+}
+
 function sanitizeInput(input: unknown): unknown {
   if (typeof input !== 'string') return input;
   // Simple trim - no HTML encoding since user input is treated as literal data
@@ -2514,11 +2577,13 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
       
       // Store user input as variable value with proper sanitization
       // (System commands like 'cancel' are already handled before this point)
-      setUserInputVariable(
+      await setUserInputVariable(
         currentFlowFrame.variables, 
         currentFlowFrame.pendingVariable, 
         userInput, 
-        true // Sanitize user input
+        true, // Sanitize user input
+        engine, // Pass engine for AI voice cleanup
+        currentFlowFrame.pendingVariableContext // Pass question context for AI voice cleanup
       );
       logger.info(`Stored sanitized user input in variable '${currentFlowFrame.pendingVariable}': "${userInput}"`);
       
@@ -2529,6 +2594,7 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
       }
       
       delete currentFlowFrame.pendingVariable;
+      delete currentFlowFrame.pendingVariableContext; // Clean up context
       
       // Pop the SAY-GET step now that variable assignment is complete
       currentFlowFrame.flowStepsStack.pop();
@@ -3615,6 +3681,7 @@ function handleSayGetStep(currentFlowFrame: FlowFrame, engine: Engine): string {
     // If this step has a variable attribute, it expects user input to be stored in that variable
     if (step.variable) {
       currentFlowFrame.pendingVariable = step.variable;
+      currentFlowFrame.pendingVariableContext = finalMessage; // Store question context for AI voice cleanup
       logger.info(`SAY-GET step will store next user input in variable '${step.variable}' (step will be popped after input)`);
       
       // Expose digits setting to sessionContext.cargo for Twilio ConversationRelay integration
@@ -5354,20 +5421,35 @@ function evaluateJavaScriptExpression(expression: string, context: Record<string
 }
 
 /**
- * Security-aware variable setter for user input
- * Integrates with the variable resolution system
+ * Security-aware variable setter for user input with AI-powered voice cleanup
+ * Integrates with the variable resolution system and handles voice input processing
  */
-function setUserInputVariable(
+async function setUserInputVariable(
   variables: Record<string, unknown>, 
   key: string, 
   value: unknown, 
-  sanitize: boolean = true
-): void {
+  sanitize: boolean = true,
+  engine: Engine,
+  questionContext?: string
+): Promise<void> {
+  let processedValue = value;
+  
+  // Apply AI-powered voice cleanup if voice input is detected and AI is available
+  if (sanitize && typeof value === 'string' && engine.cargo?.voice && questionContext) {
+    try {
+      processedValue = await cleanVoiceInput(value, questionContext, engine);
+      logger.info(`Voice input processed: "${value}" → "${processedValue}"`);
+    } catch (error: any) {
+      logger.warn(`Voice cleanup failed, using original value: ${error.message}`);
+      processedValue = value;
+    }
+  }
+  
   // Mark user input as static literal data that should never be evaluated as code
   variables[key] = {
     __userInput: true,
     __literal: true,
-    value: sanitize && typeof value === 'string' ? sanitizeUserInput(value) : value
+    value: sanitize && typeof processedValue === 'string' ? sanitizeUserInput(processedValue) : processedValue
   };
 }
 
