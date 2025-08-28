@@ -6298,7 +6298,7 @@ export class WorkflowEngine implements Engine {
 
    async updateActivity(contextEntry: ContextEntry, engineSessionContext: EngineSessionContext): Promise<EngineSessionContext> {
     try {
-      this.cargo = engineSessionContext.cargo;
+      this.cargo = engineSessionContext.cargo || {};
       logger.info(`Received Cargo: ${JSON.stringify(this.cargo)}`);
       this.sessionId = engineSessionContext.sessionId;
       this.createdAt = engineSessionContext.createdAt;
