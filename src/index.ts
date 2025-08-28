@@ -6082,20 +6082,20 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
          logger.info(`Flow context updated. inputStack: ${JSON.stringify(currentFlowFrame.inputStack)}, contextStack length: ${currentFlowFrame.contextStack.length}`);
          
          try {
-         const response = await playFlowFrame(engine);
-         logger.info(`Flow response: ${response}`);
-         return response;
+          const response = await playFlowFrame(engine);
+          logger.info(`Flow response: ${response}`);
+          return response;
          } catch (error: any) {
-         logger.error(`Flow execution error: ${error.message}`);
-         logger.info(`Stack trace: ${error.stack}`);
-         
-         // Clean up failed flow
-         if (getCurrentStackLength(engine) > 0) {
-            const failedFrame = popFromCurrentStack(engine)!;
-            TransactionManager.fail(failedFrame.transaction, error.message);
-         }
-         
-         return `I encountered an error: ${error.message}. Please try again or contact support if the issue persists.`;
+          logger.error(`Flow execution error: ${error.message}`);
+          logger.info(`Stack trace: ${error.stack}`);
+          
+          // Clean up failed flow
+          if (getCurrentStackLength(engine) > 0) {
+              const failedFrame = popFromCurrentStack(engine)!;
+              TransactionManager.fail(failedFrame.transaction, error.message);
+          }
+          
+          return `I encountered an error: ${error.message}. Please try again or contact support if the issue persists.`;
          }
       }
    
@@ -6312,7 +6312,7 @@ export class WorkflowEngine implements Engine {
       
       // Ensure session context has proper initialization
       if (!this.sessionContext.flowStacks || !Array.isArray(this.sessionContext.flowStacks)) {
-        this.sessionContext.flowStacks = [[]];
+        this.initializeFlowStacks();
         logger.warn('engineSessionContext.flowStacks was invalid, initialized fresh flowStacks');
       }
       
