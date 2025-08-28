@@ -2504,7 +2504,6 @@ function getCurrentFlowFrame(engine: Engine): FlowFrame {
 
 // === FLOW EXECUTION ENGINE WITH ENHANCED ERROR HANDLING ===
 async function isFlowActivated(input: string, engine: Engine, userId: string = 'anonymous') {
-  const flowsMenu = engine.flowsMenu;
   const flow = await getFlowForInput(input, engine);
 
   if (flow) {
@@ -6025,8 +6024,6 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
     // Debug logging
     logger.info(`processActivity received input: ${JSON.stringify(input)}, sanitized: ${JSON.stringify(sanitizedInput)}`);
     logger.debug(`Current stack length: ${getCurrentStackLength(engine)}`);
-
-    const flowsMenu = engine.flowsMenu; // Access the global flows menu
 
     // Check if we're already in a flow (using new stack-of-stacks)
     if (getCurrentStackLength(engine) > 0) {
