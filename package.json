@@ -40,6 +40,7 @@
   ],
   "devDependencies": {
     "@types/node": "^24.2.1",
+    "twilio": "^5.8.2",
     "typescript": "^5.9.2"
   },
   "dependencies": {
