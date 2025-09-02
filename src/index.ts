@@ -4155,9 +4155,16 @@ async function generateToolCallAndResponse(
         const contextStack = flowFrame.contextStack || [];
 
         logger.debug(`Interpolating args templates:`, rawArgs);
-        logger.debug(`Available variables:`, variables);
 
-        rawArgs = interpolateObject(rawArgs, variables, {}, engine);
+        // Combine flow variables with session cargo for template interpolation
+        const combinedVariables = {
+          ...variables,
+          ...getEngineSessionVariables(engine, contextStack)
+        };
+
+        logger.debug(`Combined variables for interpolation: ${JSON.stringify(combinedVariables)}`);
+
+        rawArgs = interpolateObject(rawArgs, combinedVariables, {}, engine);
 
         // SAFETY: Convert null values to appropriate defaults for schema-typed fields
         // This handles production environments where default values get converted to null during config processing
