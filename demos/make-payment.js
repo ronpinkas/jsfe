@@ -32,8 +32,16 @@ try {
 import crypto from "node:crypto";
 
 import twilio from "twilio";
-const TWILIO_AUTH_TOKEN = '<your_twilio_auth_token_here>';
-const TWILIO_ACCOUNT_SID = '<your_twilio_account_sid_here>';
+const TWILIO_AUTH_TOKEN = '...';
+const TWILIO_ACCOUNT_SID = '...';
+
+import nodemailer from "nodemailer";
+const SMTP_HOST = "..."
+const SMTP_PORT = 465
+const SMTP_USER = "mailer@instantaiguru.com"
+const SMTP_PASSWORD = "..."
+
+const config = {dbPrefix: 'myaccount.icuracao.com'};
 
 /* ---------- AI callback ---------- */
 async function aiCallback(systemInstruction, userMessage) {
@@ -546,20 +554,17 @@ const toolsRegistry = [
       "name": "Send Email OTP",
       "description": "Send OTP code via email for authentication",
       "parameters": {
-         "type": "object",
-         "properties": {
-            "to": {
-               "type": "string",
-               "description": "Email address to send OTP to"
-            },
-            "container": {
-               "type": "object",
-               "description": "Session cargo container for OTP storage"
-            }
+         "to": {
+            "type": "string",
+            "description": "Email address to send OTP to"
          },
-         "required": ["to", "container"],
-         "additionalProperties": false
+         "container": {
+            "type": "object",
+            "description": "Session cargo container for OTP storage"
+         },
       },
+      "required": ["to", "container"],
+      "additionalProperties": false,
       "implementation": {
          "type": "local",
          "function": "sendEmailOTP",
@@ -930,12 +935,6 @@ const flowsMenu = [
          }
       },
       "steps": [
-         {
-            "id": "retry_msg",
-            "type": "SAY",
-            "value": "Sorry, I did not understand that.",
-            "value_es": "Lo siento, no entendí eso."
-         },
          {
             "id": "offer_choice",
             "type": "SAY-GET",
@@ -1616,9 +1615,9 @@ const flowsMenu = [
                   },
                   "onFail": {
                      "id": "sms_failed",
-                     "type": "SAY",
-                     "value": "Failed to send SMS. Please try email instead.",
-                     "value_es": "Error al enviar SMS. Por favor intente con correo electrónico."
+                     "type": "FLOW",
+                     "value": "retry-get-cell-or-email",
+                     "mode": "replace"
                   }
                },
                "condition: email": {
@@ -1631,16 +1630,16 @@ const flowsMenu = [
                   },
                   "onFail": {
                      "id": "email_failed",
-                     "type": "SAY",
-                     "value": "Failed to send email. Please try phone instead.",
-                     "value_es": "Error al enviar correo. Por favor intente con teléfono."
+                     "type": "FLOW",
+                     "value": "retry-get-cell-or-email",
+                     "mode": "replace"
                   }
                },
                "default": {
                   "id": "no_contact_error",
-                  "type": "SAY",
-                  "value": "No contact information available for authentication.",
-                  "value_es": "No hay información de contacto disponible para autenticación."
+                  "type": "FLOW",
+                  "value": "retry-get-cell-or-email",
+                  "mode": "replace"
                }
             }
          },
@@ -1670,16 +1669,16 @@ const flowsMenu = [
                   },
                   "onFail": {
                      "id": "otp_validation_failed",
-                     "type": "SAY",
-                     "value": "Invalid verification code. Please try again.",
-                     "value_es": "Código de verificación inválido. Por favor inténtelo de nuevo."
+                     "type": "FLOW",
+                     "value": "retry-get-cell-or-email",
+                     "mode": "replace"
                   }
                },
                "default": {
                   "id": "invalid_otp_format",
-                  "type": "SAY",
-                  "value": "Please enter a valid 6-digit code.",
-                  "value_es": "Por favor ingrese un código válido de 6 dígitos."
+                  "type": "FLOW",
+                  "value": "retry-get-cell-or-email",
+                  "mode": "replace"
                }
             }
          },
@@ -1698,16 +1697,16 @@ const flowsMenu = [
                   },
                   "onFail": {
                      "id": "lookup_failed",
-                     "type": "SAY",
-                     "value": "Unable to locate your account. Please try again or contact customer service.",
-                     "value_es": "No se pudo localizar su cuenta. Por favor inténtelo de nuevo o contacte al servicio al cliente."
+                     "type": "FLOW",
+                     "value": "retry-get-cell-or-email",
+                     "mode": "replace"
                   }
                },
                "default": {
                   "id": "otp_not_validated",
-                  "type": "SAY",
-                  "value": "Authentication failed. Please try again.",
-                  "value_es": "Autenticación fallida. Por favor inténtelo de nuevo."
+                  "type": "FLOW",
+                  "value": "retry-get-cell-or-email",
+                  "mode": "replace"
                }
             }
          },
@@ -1773,7 +1772,7 @@ async function main() {
 
    // Simulate caller ID detection - in a real system, this would come from your telephony system
    session.cargo.twilioNumber = "12132053155"; // Example: Twilio number
-   session.cargo.callerId = "12135551212";   // Example: Caller ID
+   session.cargo.callerId = "17185105842";   // Example: Caller ID
    session.cargo.voice = false; // Simulate voice interaction
    session.cargo.verb = "type";
    session.cargo.verb_es = "diga";
