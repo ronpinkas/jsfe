@@ -2179,10 +2179,10 @@ async function cleanVoiceInput(input: string, questionContext: string, engine: E
 
 Rules:
 - If the user clearly means "yes" (yes, yeah, yep, sure, okay, alright, umm yes, etc.) return "yes"
-- If the user clearly means "no" (no, nope, nah, not really, etc.) return "no" 
-- For numbers, extract just the digits (e.g., "umm, it's 123456" → "123456")
-- For emails, extract just the email address
-- For phone numbers, extract just the number digits
+- If the user clearly means "no" (no, nope, nah, not really, etc.) return "no"
+- For numbers: Extract only the digits (e.g., "umm, it's 123456" → "123456"). Pay special attention to possible duplication if the user repeats themselves for clarification (e.g., "it's 123456, 123, 456" should be normalized to "123456").
+- For emails: This is one of the most challenging cases. If the user says something like "my email is john dot doe at example dot com," convert it to "john.doe@example.com." Users may also say "at gmail," "GM," "hotmail," or "hot mail." In these cases, convert the domain to the correct format (e.g., @gmail.com, @hotmail.com, etc.). By excelling at email normalization, you can truly save callers from intense frustration.
+- For phone numbers: Extract only the number digits. Pay close attention to potential duplication if the user repeats digits for clarification (e.g., "it's 8, 1, 8, 5, 5, 5, 1, 2, 3, 4, 818, 555, 1234" should be normalized to "8185551234").
 - For names, extract just the name parts
 - If unclear or ambiguous, return the input with just filler words removed
 - Always preserve the core semantic meaning
