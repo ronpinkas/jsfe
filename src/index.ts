@@ -215,7 +215,10 @@ const COMMAND_SYNONYMS: Record<string, Record<string, string[]>> = {
  * Get command synonyms for the current language
  */
 function getCommandSynonyms(engine: Engine, command: string): string[] {
-  const language = engine.language || 'en';
+  // Check for session language first, then fallback to engine language
+  let language = engine.language || 'en';
+  language = engine.getSessionLanguage() || language;
+  
   const synonyms = COMMAND_SYNONYMS[language];
 
   if (!synonyms || !synonyms[command]) {
@@ -352,7 +355,10 @@ export const GUIDANCE_CONFIG_EXAMPLES = {
 // === UNIFIED MESSAGING SYSTEM ===
 export function getSystemMessage(engine: Engine, messageId: string, context?: Record<string, unknown>): string {
   const registry = engine.messageRegistry || DEFAULT_MESSAGE_REGISTRY;
-  const language = engine.language || 'en';
+  
+  // Check for session language first, then fallback to engine language
+  let language = engine.language || 'en';
+  language = engine.getSessionLanguage() || language;
 
   const templates = registry[language] || registry['en'] || {};
   let message = templates[messageId];
@@ -374,7 +380,10 @@ export function getSystemMessage(engine: Engine, messageId: string, context?: Re
 
 // Helper function to get flow prompt in current language
 export function getFlowPrompt(engine: Engine, flowName: string): string {
-  const language = engine.language || 'en';
+  // Check for session language first, then fallback to engine language
+  let language = engine.language || 'en';
+  language = engine.getSessionLanguage() || language;
+  
   const flowsMenu = engine.flowsMenu || [];
   const flow = flowsMenu.find(f => f.name === flowName);
 
@@ -437,6 +446,7 @@ export interface EngineSessionContext {
   response?: string | null; // Latest response from flow processing
   completedTransactions?: TransactionData[]; // Completed transactions for host access
   cargo: Record<string, unknown> | undefined; // Additional session data
+  language?: string; // Language for this session
 }
 
 export interface FlowStep {
@@ -2524,13 +2534,16 @@ async function isFlowActivated(input: string, engine: Engine, userId: string = '
   const flow = await getFlowForInput(input, engine);
 
   if (flow) {
-    if (engine.language == '') {
+    // Check if language detection is needed (no session language set)
+    const sessionLanguage = engine.getSessionLanguage();
+    if (!sessionLanguage) {
       // Determine the language from the input using AI
       const detectedLanguage = await detectLanguage(input, engine);
       logger.debug(`Detected language: ${detectedLanguage}`);
-      engine.language = detectedLanguage;
+      // Set language in session context
+      engine.setSessionLanguage(detectedLanguage);
     } else {
-      logger.debug(`Using language: ${engine.language}`);
+      logger.debug(`Using session language: ${sessionLanguage}`);
     }
 
     const transaction = TransactionManager.create(flow.name, 'user-input', userId);
@@ -3652,7 +3665,10 @@ function handleSayStep(currentFlowFrame: FlowFrame, engine: Engine): null {
   const step = currentFlowFrame.flowStepsStack.pop()!; // This handler pops its own step
   const contextStack = currentFlowFrame.contextStack;
 
-  const lang = engine.language;
+  // Check for session language first, then fallback to engine language
+  let lang = engine.language;
+  lang = engine.getSessionLanguage() || lang;
+  
   const message = (lang && step[`value_${lang}`]) || step.value || '';
   const interpolated = interpolateMessage(String(message), contextStack, currentFlowFrame?.variables, engine || undefined);
   logger.info(`SAY step executed (non-blocking): "${interpolated}"`);
@@ -3680,7 +3696,10 @@ function handleSayGetStep(currentFlowFrame: FlowFrame, engine: Engine): string {
   const step = currentFlowFrame.flowStepsStack[currentFlowFrame.flowStepsStack.length - 1]; // Peek at step without popping
   const contextStack = currentFlowFrame.contextStack;
 
-  const lang = engine.language;
+  // Check for session language first, then fallback to engine language
+  let lang = engine.language;
+  lang = engine.getSessionLanguage() || lang;
+  
   const message = (lang && step[`value_${lang}`]) || step.value || '';
   const interpolated = interpolateMessage(String(message), contextStack, currentFlowFrame?.variables, engine || undefined);
   logger.info(`SAY-GET step executed (blocking): "${interpolated}"`);
@@ -3779,7 +3798,9 @@ function addFlowContextGuidance(message: string, flowFrame: FlowFrame, engine: E
   // Get guidance message
   if (config.guidanceMessages) {
     // Check if it's multi-language format (has language keys like 'en', 'es')
-    const language = engine.language || 'en';
+    // Check for session language first, then fallback to engine language
+    let language = engine.language || 'en';
+    language = engine.getSessionLanguage() || language;
 
     // Check if guidanceMessages has language properties (multi-language format)
     if (typeof config.guidanceMessages === 'object' &&
@@ -6300,14 +6321,15 @@ export class WorkflowEngine implements Engine {
    *
    * @param userId - User identifier for this session
    * @param sessionId - Unique identifier for the session
+   * @param language - Optional language code for this session (defaults to engine's language)
    * @returns EngineSessionContext object that should be persisted by the host
    * @throws Error if logger does not implement all required methods
    *
    * @example
    *   const engine = new WorkflowEngine(...);
-   *   const session = engine.initSession(yourLogger, 'user-123', 'session-456');
+   *   const session = engine.initSession('user-123', 'session-456', 'en');
    */
-  initSession(userId: string, sessionId: string): EngineSessionContext {
+  initSession(userId: string, sessionId: string, language?: string): EngineSessionContext {
 
     const engineSessionContext: EngineSessionContext = {
       sessionId: sessionId || crypto.randomUUID(),
@@ -6320,7 +6342,8 @@ export class WorkflowEngine implements Engine {
       globalVariables: this.globalVariables ? { ...this.globalVariables } : {},
       cargo: {},
       response: null, // Initialize with no response
-      completedTransactions: [] // Initialize with no completed transactions
+      completedTransactions: [], // Initialize with no completed transactions
+      language: language || this.language // Use provided language or fallback to engine's language
     };
 
     logger.info(`Engine session initialized: ${engineSessionContext.sessionId} for user: ${userId}`);
@@ -6544,6 +6567,22 @@ export class WorkflowEngine implements Engine {
    */
   isCommandEnabled(command: string): boolean {
     return this.commandsEnabled && this.enabledCommands.has(command);
+  }
+
+  /**
+   * Get the current session language
+   */
+  getSessionLanguage(): string | undefined {
+    return this.sessionContext?.language;
+  }
+
+  /**
+   * Set the session language
+   */
+  setSessionLanguage(language: string): void {
+    if (this.sessionContext) {
+      this.sessionContext.language = language;
+    }
   }
 
   /**
