@@ -2502,11 +2502,37 @@ function getCurrentFlowFrame(engine: Engine): FlowFrame {
   return currentFlowFrame;
 }
 
+async function detectLanguage(input: string, engine: Engine): Promise<string> {
+  // Use fetchAiTask() to detect language from input
+  const task = `Detect the language of the following text and respond with the ISO 639-1 language code (e.g., 'en' for English, 'es' for Spanish, 'fr' for French, etc.). If unsure, respond with 'unknown'.\n\nText: "${input}"\n\nLanguage Code:`;
+  const rules = `Respond with only the ISO 639-1 language code or 'unknown'. No explanations.`;
+
+  try {
+    const language = await fetchAiTask(task, rules, '', input, undefined, undefined, engine.aiCallback, engine.aiTimeOut); 
+    if (language && (language === 'unknown' || language.length !== 2)) {
+      return '';
+    }
+    return language;
+  } catch (error: unknown) {
+    logger.error("Error detecting language:", error instanceof Error ? error.message : String(error));
+    return '';
+  }
+}
+
 // === FLOW EXECUTION ENGINE WITH ENHANCED ERROR HANDLING ===
 async function isFlowActivated(input: string, engine: Engine, userId: string = 'anonymous') {
   const flow = await getFlowForInput(input, engine);
 
   if (flow) {
+    if (engine.language == '') {
+      // Determine the language from the input using AI
+      const detectedLanguage = await detectLanguage(input, engine);
+      logger.debug(`Detected language: ${detectedLanguage}`);
+      engine.language = detectedLanguage;
+    } else {
+      logger.debug(`Using language: ${engine.language}`);
+    }
+
     const transaction = TransactionManager.create(flow.name, 'user-input', userId);
 
     // Prepare tentative flow_init message that will be replaced by SAY-GET guidance if present
