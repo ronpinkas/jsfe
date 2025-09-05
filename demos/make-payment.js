@@ -1745,7 +1745,9 @@ const engine = new WorkflowEngine(
    flowsMenu,
    toolsRegistry,
    APPROVED_FUNCTIONS,
-   globalVariables
+   globalVariables,
+   true,
+   '' // Auto-detect Language
 );
 engine.disableCommands(); // Disable default flow commands for this demo
 
