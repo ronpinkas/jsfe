@@ -3014,7 +3014,7 @@ async function getFlowForInput(input: string, engine: Engine): Promise<FlowDefin
 - Return "None" if no workflow applies
 - Consider user intent and the chat context
 - Prioritize the most relevant flow considering all available flows
-- Financial flows should only be triggered in response to explicit user requests. For example, asking about available credit should not trigger a payment flow.
+- Flows should only be triggered in response to explicit user intent. A user prompt asking about available credit should trigger balance flows when available, but not payment flows. Complaints about a charge must not trigger a payment flow. Imagine the frustration of a user asking any question other than "Can I make a payment?" and being forwarded to a payment flow instead of receiving a direct answer.
 `;
 
     // Use chat context when not in a flow (this is where lastChatTurn context is relevant)
