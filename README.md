@@ -783,6 +783,7 @@ their original workflow seamlessly.
 - ✅ **FLOW** - Sub-flow execution with multiple call types
 - ✅ **CASE** - Conditional branching with expressions
 - ✅ **SWITCH** - Conditional branching based on single value matching
+- ✅ **RETURN** - Terminate all flows and return evaluated expression value
 
 ### Expression System
 

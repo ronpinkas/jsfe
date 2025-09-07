@@ -4092,6 +4092,62 @@ Variables operate at multiple levels:
 
 *Note: Advanced branching patterns and complex decision trees are covered in Chapter 4.*
 
+### RETURN Steps - Flow Termination with Value
+
+**Purpose**: Immediately terminate all active flows and return a computed value, useful for early exits or final results.
+
+```javascript
+{
+  id: "early-exit",
+  type: "RETURN",
+  value: "user_name + ' completed the process with status: ' + completion_status"
+}
+```
+
+**Key Features:**
+- **Flow Termination**: Immediately stops execution of all active flows in the stack
+- **Value Evaluation**: Evaluates expressions using the same powerful JavaScript evaluation as SET steps
+- **Clean Exit**: Properly completes transactions and clears flow state
+- **Return Value**: The evaluated expression becomes the final response
+
+**Common Use Cases:**
+```javascript
+// Early validation failure
+{
+  id: "validation-failed",
+  type: "RETURN",
+  value: "'Validation failed: ' + error_message + '. Please correct and try again.'"
+}
+
+// Successful completion with summary
+{
+  id: "process-complete",
+  type: "RETURN",
+  value: "'Process completed successfully! Total processed: ' + processed_count + ', Final balance: $' + final_balance"
+}
+
+// Error handling with context
+{
+  id: "system-error",
+  type: "RETURN",
+  value: "'System error occurred: ' + error_code + '. Transaction ID: ' + transaction_id"
+}
+
+// Simple status return
+{
+  id: "quick-result",
+  type: "RETURN",
+  value: "operation_result"
+}
+```
+
+**Technical Details:**
+- **Expression Support**: Full JavaScript expression evaluation with variable interpolation
+- **Type Conversion**: Automatically converts result to string for response
+- **Transaction Handling**: Properly marks transactions as completed
+- **Stack Cleanup**: Clears all flow stacks to ensure clean state
+- **Audit Logging**: Logs flow termination with reason
+
 ## Step Execution Lifecycle
 
 ### 1. Step Preparation
