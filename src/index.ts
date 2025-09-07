@@ -402,7 +402,7 @@ export function getFlowPrompt(engine: Engine, flowName: string): string {
 }
 
 // === TYPE DEFINITIONS ===
-export type StepType = 'SAY' | 'SAY-GET' | 'SET' | 'CALL-TOOL' | 'FLOW' | 'SWITCH' | 'CASE';
+export type StepType = 'SAY' | 'SAY-GET' | 'SET' | 'CALL-TOOL' | 'FLOW' | 'SWITCH' | 'CASE' | 'RETURN';
 
 // Enhanced context tracking with role information
 export interface ContextEntry {
@@ -2754,6 +2754,12 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
         return result;
       }
 
+      // If this was a RETURN step, return immediately with the evaluated value
+      if (step.type === 'RETURN') {
+        logger.info(`RETURN step executed, terminating all flows and returning value`);
+        return result;
+      }
+
       // For SAY, CALL-TOOL, FLOW, and SET steps, continue processing automatically (non-blocking)
       continue;
 
@@ -2791,7 +2797,8 @@ async function playStep(currentFlowFrame: FlowFrame, engine: Engine): Promise<st
       (step.type === 'SAY-GET' ? '(waiting for user input)' :
         step.type === 'SAY' ? '(no input needed)' :
           step.type === 'SET' ? '(no input needed)' :
-            '(no input available)');
+            step.type === 'RETURN' ? '(no input needed)' :
+              '(no input available)');
 
     logger.info(`[${currentFlowFrame.transaction.id.slice(0, 8)}] Playing step ${step.id || step.type} with input: ${inputDisplay}`);
 
@@ -2810,6 +2817,8 @@ async function playStep(currentFlowFrame: FlowFrame, engine: Engine): Promise<st
         return await handleSwitchStep(currentFlowFrame, engine);
       case 'CASE':
         return await handleCaseStep(currentFlowFrame, engine);
+      case 'RETURN':
+        return handleReturnStep(currentFlowFrame, engine);
       default:
         throw new Error(`Unknown step type: ${step.type}`);
     }
@@ -4048,6 +4057,45 @@ async function handleCaseStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
   return `CASE executed branch '${selectedBranch}', added step '${selectedStep.id || selectedStep.type}' to flow`;
 }
 
+function handleReturnStep(currentFlowFrame: FlowFrame, engine: Engine): string {
+  // Extract what we need from the currentFlowFrame
+  const step = currentFlowFrame.flowStepsStack.pop()!; // This handler pops its own step
+
+  // Evaluate the value expression if provided
+  let returnValue: unknown = '';
+  if (step.value !== undefined) {
+    // Use JavaScript evaluation context for expressions (like SET handler)
+    returnValue = typeof step.value === 'string'
+      ? evaluateExpression(step.value, currentFlowFrame?.variables || {}, [], {
+        securityLevel: 'basic',
+        context: 'javascript-evaluation', // Force JavaScript context for RETURN values
+        returnType: 'auto'
+      }, engine)
+      : step.value;
+    logger.info(`RETURN step: evaluated value expression '${step.value}' to '${returnValue}'`);
+  } else {
+    logger.info(`RETURN step: no value expression provided, returning empty string`);
+  }
+
+  // Terminate all flows by clearing all stacks
+  logger.info(`RETURN step: terminating all flows`);
+  while (engine.flowStacks.length > 0) {
+    const poppedStack = engine.flowStacks.pop();
+    if (poppedStack && poppedStack.length > 0) {
+      for (const flow of poppedStack) {
+        TransactionManager.complete(flow.transaction);
+        auditLogger.logFlowExit(flow.flowName, currentFlowFrame.userId, flow.transaction.id, 'return_step');
+      }
+    }
+  }
+
+  // Re-initialize the flow stacks to ensure clean state
+  initializeFlowStacks(engine);
+
+  // Return the evaluated value as string
+  return String(returnValue);
+}
+
 async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): Promise<string> {
   try {
     logger.info(`Handling sub-flow step in flow: ${currentFlowFrame.flowName}`);
@@ -4086,6 +4134,11 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
           auditLogger.logFlowExit(flow.flowName, currentFlowFrame.userId, flow.transaction.id, 'system_reboot');
         }
       }
+
+      // Also fail the current flow frame that initiated the reboot
+      TransactionManager.fail(currentFlowFrame.transaction, `System rebooted to flow ${subFlow.name}`);
+      exitedFlows.push(currentFlowFrame.flowName);
+      auditLogger.logFlowExit(currentFlowFrame.flowName, currentFlowFrame.userId, currentFlowFrame.transaction.id, 'system_reboot');
 
       // Initialize completely fresh stack system (using proven pattern)
       initializeFlowStacks(engine);
@@ -6981,7 +7034,7 @@ export class WorkflowEngine implements Engine {
     }
 
     // Validate step type
-    const validStepTypes = ['SAY', 'SAY-GET', 'SET', 'SWITCH', 'CASE', 'CALL-TOOL', 'FLOW'];
+    const validStepTypes = ['SAY', 'SAY-GET', 'SET', 'SWITCH', 'CASE', 'CALL-TOOL', 'FLOW', 'RETURN'];
     if (!validStepTypes.includes(step.type)) {
       state.errors.push(`Step "${step.id}" in flow "${flowDef.name}" has invalid type: ${step.type}`);
       return;
