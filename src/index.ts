@@ -4109,6 +4109,7 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
     const subFlow = flowsMenu?.find(f => f.name === subFlowName || f.id === subFlowName);
 
     if (!subFlow) {
+      logger.warn(`Sub-flow not found: ${subFlowName}`);
       return getSystemMessage(engine, 'subflow_not_found', { subFlowName });
     }
 
