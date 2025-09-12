@@ -5489,6 +5489,7 @@ function getEngineSessionVariables(engine: Engine, contextStack: ContextEntry[])
     sessionVars.sessionId = engine.sessionId;
     sessionVars.userId = currentFlowFrame.userId;
     sessionVars.flowName = currentFlowFrame.flowName;
+    sessionVars.language = engine.language;
 
     // Special function-like variables
     sessionVars['currentTime()'] = new Date().toISOString();
@@ -6850,7 +6851,7 @@ export class WorkflowEngine implements Engine {
       validateTools: true,           // Validate tool existence and parameters
       strictSchema: true,            // Enforce strict schema compliance
       checkVariables: true,          // Validate variable usage and scope
-      maxDepth: 10,                 // Maximum recursion depth for sub-flows
+      maxDepth: 20,                  // Maximum recursion depth for sub-flows
       ...options
     };
 
