@@ -2415,6 +2415,7 @@ function initializeFlowStacks(engine: Engine) {
   try {
     // Use the engine method directly since Engine is now an alias for WorkflowEngine
     engine.initializeFlowStacks();
+    engine.getAndClearAccumulatedMessages();
   } catch (error: any) {
     logger.error("Failed to initialize flow stacks:", error.message);
     logger.error(error.stack);
