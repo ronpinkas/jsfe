@@ -2542,6 +2542,7 @@ async function isFlowActivated(input: string, engine: Engine, userId: string = '
       logger.debug(`Detected language: ${detectedLanguage}`);
       // Set language in session context
       engine.setSessionLanguage(detectedLanguage);
+      engine.language = detectedLanguage; // Also set in engine for immediate use
     } else {
       logger.debug(`Using session language: ${sessionLanguage}`);
     }
