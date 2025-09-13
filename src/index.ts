@@ -3567,7 +3567,7 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
 
       if (callType === "reboot") {
         // Clear ALL flows across ALL stacks and start completely fresh with the onFail flow
-        logger.info(`Rebooted due to 'reboot' type of onFail step: ${onFailStep.name} in flow ${currentFlowFrame.flowName} for tool ${step.tool}`);
+        logger.info(`Rebooted due to 'reboot' type of onFail step: ${onFailStep.id || onFailStep.name} in flow ${currentFlowFrame.flowName} for tool ${step.tool}`);
 
         // Clean up ALL existing flows across ALL stacks (using proven user exit pattern)
         const exitedFlows: string[] = [];
@@ -3578,7 +3578,7 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
           }
           // Process all flows in this stack
           for (const flow of poppedStack) {
-            TransactionManager.fail(flow.transaction, `Rebooted due to 'reboot' type of onFail step: ${onFailStep.name} in flow ${flow?.flowName} for tool ${step.tool}`);
+            TransactionManager.fail(flow.transaction, `Popped: ${flow?.flowName} due to 'reboot' type of onFail step: ${onFailStep.id || onFailStep.name} in flow ${flow?.flowName} for tool ${step.tool}`);
             exitedFlows.push(flow.flowName);
             auditLogger.logFlowExit(flow.flowName, currentFlowFrame.userId, flow.transaction.id, 'onFail_reboot');
           }
@@ -3589,7 +3589,7 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
 
         // Start the onFail flow as a new root flow
         if (onFailStep.type === "FLOW") {
-          const rebootFlow = flowsMenu?.find(f => f.name === onFailStep.name);
+          const rebootFlow = flowsMenu?.find(f => f.name === onFailStep.name || f.id === onFailStep.id);
           if (rebootFlow) {
             const transaction = TransactionManager.create(rebootFlow.name, 'reboot-recovery', currentFlowFrame.userId);
 
@@ -3606,6 +3606,8 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
               startTime: Date.now()
             });
             auditLogger.logFlowStart(rebootFlow.name, input, currentFlowFrame.userId, transaction.id);
+          } else {
+            logger.error(`Reboot flow ${onFailStep.id || onFailStep.name} not found in flows menu`);
           }
         } else {
           // Handle non-FLOW onFail steps in reboot mode
