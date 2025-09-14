@@ -3589,7 +3589,7 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
 
         // Start the onFail flow as a new root flow
         if (onFailStep.type === "FLOW") {
-          const rebootFlow = flowsMenu?.find(f => f.name === onFailStep.name || f.id === onFailStep.id);
+          const rebootFlow = flowsMenu?.find(f => f.name === onFailStep.value || f.id === onFailStep.value);
           if (rebootFlow) {
             const transaction = TransactionManager.create(rebootFlow.name, 'reboot-recovery', currentFlowFrame.userId);
 
