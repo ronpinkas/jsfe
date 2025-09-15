@@ -3607,7 +3607,7 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
             });
             auditLogger.logFlowStart(rebootFlow.name, input, currentFlowFrame.userId, transaction.id);
           } else {
-            logger.error(`Reboot flow ${onFailStep.id || onFailStep.name} not found in flows menu`);
+            logger.error(`Reboot flow ${onFailStep.value} in onFail: ${onFailStep.id || onFailStep.name} not found in flows menu`);
           }
         } else {
           // Handle non-FLOW onFail steps in reboot mode
