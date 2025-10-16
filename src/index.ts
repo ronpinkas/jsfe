@@ -17,6 +17,12 @@ DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **/
 
+/*
+  // Deploy new version to NPM:
+  npm version patch -m "chore(release): %s"
+  git push --follow-tags
+*/
+
 import * as crypto from "crypto";
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
@@ -218,7 +224,7 @@ function getCommandSynonyms(engine: Engine, command: string): string[] {
   // Check for session language first, then fallback to engine language
   let language = engine.language || 'en';
   language = engine.getSessionLanguage() || language;
-  
+
   const synonyms = COMMAND_SYNONYMS[language];
 
   if (!synonyms || !synonyms[command]) {
@@ -355,7 +361,7 @@ export const GUIDANCE_CONFIG_EXAMPLES = {
 // === UNIFIED MESSAGING SYSTEM ===
 export function getSystemMessage(engine: Engine, messageId: string, context?: Record<string, unknown>): string {
   const registry = engine.messageRegistry || DEFAULT_MESSAGE_REGISTRY;
-  
+
   // Check for session language first, then fallback to engine language
   let language = engine.language || 'en';
   language = engine.getSessionLanguage() || language;
@@ -383,7 +389,7 @@ export function getFlowPrompt(engine: Engine, flowName: string): string {
   // Check for session language first, then fallback to engine language
   let language = engine.language || 'en';
   language = engine.getSessionLanguage() || language;
-  
+
   const flowsMenu = engine.flowsMenu || [];
   const flow = flowsMenu.find(f => f.name === flowName);
 
@@ -2519,7 +2525,7 @@ async function detectLanguage(input: string, engine: Engine): Promise<string> {
   const rules = `Respond with only the ISO 639-1 language code or 'unknown'. No explanations.`;
 
   try {
-    const language = await fetchAiTask(task, rules, '', input, undefined, undefined, engine.aiCallback, engine.aiTimeOut); 
+    const language = await fetchAiTask(task, rules, '', input, undefined, undefined, engine.aiCallback, engine.aiTimeOut);
     if (language && (language === 'unknown' || language.length !== 2)) {
       return '';
     }
@@ -3681,7 +3687,7 @@ function handleSayStep(currentFlowFrame: FlowFrame, engine: Engine): null {
   // Check for session language first, then fallback to engine language
   let lang = engine.language;
   lang = engine.getSessionLanguage() || lang;
-  
+
   const message = (lang && step[`value_${lang}`]) || step.value || '';
   const interpolated = interpolateMessage(String(message), contextStack, currentFlowFrame?.variables, engine || undefined);
   logger.info(`SAY step executed (non-blocking): "${interpolated}"`);
@@ -3712,7 +3718,7 @@ function handleSayGetStep(currentFlowFrame: FlowFrame, engine: Engine): string {
   // Check for session language first, then fallback to engine language
   let lang = engine.language;
   lang = engine.getSessionLanguage() || lang;
-  
+
   const message = (lang && step[`value_${lang}`]) || step.value || '';
   const interpolated = interpolateMessage(String(message), contextStack, currentFlowFrame?.variables, engine || undefined);
   logger.info(`SAY-GET step executed (blocking): "${interpolated}"`);
