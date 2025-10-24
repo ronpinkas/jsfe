@@ -2794,7 +2794,9 @@ async function playStep(currentFlowFrame: FlowFrame, engine: Engine): Promise<st
       throw new Error("Maximum recursion depth reached in playStep");
     }
 
-    // Extract what we need from the currentFlowFrame
+    // STEP POPPING PATTERN: Each step handler is responsible for popping its own step from flowStepsStack.
+    // Most handlers pop immediately at the start. SAY-GET is special - it peeks without popping initially
+    // since it waits for user input, then pops later after input collection is complete.
     const step = currentFlowFrame.flowStepsStack[currentFlowFrame.flowStepsStack.length - 1];
     //const contextStack = currentFlowFrame.contextStack;
     const inputStack = currentFlowFrame.inputStack;
@@ -3569,7 +3571,7 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
 
       // Handle array of onFail steps
       const onFailStep = Array.isArray(effectiveOnFail) ? effectiveOnFail[0] : effectiveOnFail;
-      const callType = onFailStep.callType || "replace"; // Default to current behavior
+      const callType = onFailStep.callType || (onFailStep.type === "FLOW" ? "replace" : undefined); // Default to replace for FLOW onFail
 
       if (callType === "reboot") {
         // Clear ALL flows across ALL stacks and start completely fresh with the onFail flow
@@ -3624,6 +3626,8 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
         return `System rebooted due to onFail step for tool ${step.tool}. Starting recovery flow ${onFailStep.name}`;
 
       } else if (callType === "replace") {
+        logger.info(`Replacing current flow steps with onFail step(s) for tool ${step.tool}`);
+
         // Current behavior - replace remaining steps in current flow
         if (Array.isArray(effectiveOnFail)) {
           currentFlowFrame.flowStepsStack = effectiveOnFail;
@@ -3633,6 +3637,8 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
         return `Tool ${step.tool} failed, executing onFail step`;
 
       } else if (callType === "call") {
+        logger.info(`Calling onFail step as sub-flow for tool ${step.tool}`);
+
         // New behavior - call onFail as sub-flow (preserves current flow)
         if (onFailStep.type === "FLOW") {
           // Push onFail flow as sub-flow
@@ -3660,6 +3666,11 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
           currentFlowFrame.flowStepsStack.unshift(onFailStep);
           return `Tool ${step.tool} failed, executing onFail step`;
         }
+      } else {
+        logger.info(`Adding non FLOW onFail step: ${onFailStep.id || onFailStep.name} to current flow stack for tool ${step.tool}`);
+        // Handle non-FLOW onFail steps as immediate execution
+        currentFlowFrame.flowStepsStack.unshift(onFailStep);
+        return `Tool ${step.tool} failed, executing onFail step`;
       }
     }
 
