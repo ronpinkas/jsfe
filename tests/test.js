@@ -98,6 +98,341 @@ APPROVED_FUNCTIONS['extractCryptoFromInput'] = extractCryptoFromInput;
 APPROVED_FUNCTIONS['currentTime'] = currentTime;
 APPROVED_FUNCTIONS['rateLimitTestFunction'] = rateLimitTestFunction;
 
+// Add new store location functions
+function findClosestLocation({ city, stores }) {
+  // Simple geocoding simulation - in real implementation, use a geocoding API
+  const cityCoordinates = {
+    'los angeles': { lat: 34.0522, lon: -118.2437 },
+    'san francisco': { lat: 37.7749, lon: -122.4194 },
+    'san diego': { lat: 32.7157, lon: -117.1611 },
+    'phoenix': { lat: 33.4484, lon: -112.0740 },
+    'las vegas': { lat: 36.1699, lon: -115.1398 },
+    'tucson': { lat: 32.2226, lon: -110.9747 },
+    'albuquerque': { lat: 35.0844, lon: -106.6504 },
+    'reno': { lat: 39.5296, lon: -119.8138 },
+    'fresno': { lat: 36.7378, lon: -119.7871 },
+    'sacramento': { lat: 38.5816, lon: -121.4944 },
+    'mesa': { lat: 33.4152, lon: -111.8315 },
+    'henderson': { lat: 36.0395, lon: -114.9817 },
+    'chandler': { lat: 33.3062, lon: -111.8413 },
+    'scottsdale': { lat: 33.4942, lon: -111.9261 },
+    'glendale': { lat: 33.5387, lon: -112.1859 },
+    'gilbert': { lat: 33.3528, lon: -111.7890 },
+    'tempe': { lat: 33.4255, lon: -111.9400 },
+    'peoria': { lat: 33.5806, lon: -112.2374 },
+    'surprise': { lat: 33.6292, lon: -112.3676 },
+    'goodyear': { lat: 33.4353, lon: -112.3577 },
+    'yuma': { lat: 32.6927, lon: -114.6277 },
+    'lake havasu city': { lat: 34.4839, lon: -114.3225 },
+    'kingman': { lat: 35.1894, lon: -114.0530 },
+    'bullhead city': { lat: 35.1478, lon: -114.5683 },
+    'prescott': { lat: 34.5400, lon: -112.4685 },
+    'prescott valley': { lat: 34.6100, lon: -112.3157 },
+    'flagstaff': { lat: 35.1983, lon: -111.6513 },
+    'sedona': { lat: 34.8697, lon: -111.7610 },
+    'show low': { lat: 34.2542, lon: -110.0298 },
+    'winslow': { lat: 35.0242, lon: -110.6974 },
+    'page': { lat: 36.9147, lon: -111.4558 },
+    'lake powell': { lat: 37.0000, lon: -111.0000 },
+    'zion national park': { lat: 37.2982, lon: -113.0263 },
+    'bryce canyon': { lat: 37.5930, lon: -112.1871 },
+    'grand canyon': { lat: 36.1069, lon: -112.1129 },
+    'death valley': { lat: 36.5323, lon: -116.9325 },
+    'joshua tree': { lat: 33.8734, lon: -115.9010 },
+    'yosemite': { lat: 37.8651, lon: -119.5383 },
+    'sequoia': { lat: 36.4864, lon: -118.5658 },
+    'kings canyon': { lat: 36.8879, lon: -118.5551 },
+    'lassen volcanic': { lat: 40.4977, lon: -121.4207 },
+    'redwood': { lat: 41.2132, lon: -124.0046 },
+    'channel islands': { lat: 34.0101, lon: -119.6880 },
+    'point reyes': { lat: 38.0449, lon: -122.7986 },
+    'mendocino': { lat: 39.3077, lon: -123.7995 },
+    'big sur': { lat: 36.2704, lon: -121.8080 },
+    'hearst castle': { lat: 35.6850, lon: -121.1667 },
+    'monterey': { lat: 36.6002, lon: -121.8947 },
+    'carmel': { lat: 36.5552, lon: -121.9233 },
+    'santa cruz': { lat: 36.9741, lon: -122.0308 },
+    'half moon bay': { lat: 37.4636, lon: -122.4286 },
+    'palo alto': { lat: 37.4419, lon: -122.1430 },
+    'menlo park': { lat: 37.4530, lon: -122.1817 },
+    'redwood city': { lat: 37.4852, lon: -122.2364 },
+    'mountain view': { lat: 37.3861, lon: -122.0840 },
+    'sunnyvale': { lat: 37.3688, lon: -122.0363 },
+    'santa clara': { lat: 37.3541, lon: -121.9552 },
+    'san jose': { lat: 37.3382, lon: -121.8863 },
+    'milpitas': { lat: 37.4283, lon: -121.9066 },
+    'fremont': { lat: 37.5483, lon: -121.9886 },
+    'hayward': { lat: 37.6688, lon: -122.0808 },
+    'oakland': { lat: 37.8044, lon: -122.2711 },
+    'berkeley': { lat: 37.8715, lon: -122.2730 },
+    'alameda': { lat: 37.7652, lon: -122.2416 },
+    'san leandro': { lat: 37.7249, lon: -122.1561 },
+    'castro valley': { lat: 37.6941, lon: -122.0864 },
+    'livermore': { lat: 37.6819, lon: -121.7680 },
+    'pleasanton': { lat: 37.6624, lon: -121.8747 },
+    'dublin': { lat: 37.7022, lon: -121.9358 },
+    'san ramon': { lat: 37.7799, lon: -121.9780 },
+    'danville': { lat: 37.8216, lon: -121.9999 },
+    'walnut creek': { lat: 37.9101, lon: -122.0652 },
+    'lafayette': { lat: 37.8858, lon: -122.1180 },
+    'orinda': { lat: 37.8771, lon: -122.1797 },
+    'moraga': { lat: 37.8349, lon: -122.1297 },
+    'piedmont': { lat: 37.8244, lon: -122.2316 },
+    'emeryville': { lat: 37.8313, lon: -122.2852 },
+    'albany': { lat: 37.8869, lon: -122.2977 },
+    'el cerrito': { lat: 37.9161, lon: -122.3108 },
+    'richmond': { lat: 37.9358, lon: -122.3477 },
+    'san pablo': { lat: 37.9621, lon: -122.3455 },
+    'pinole': { lat: 37.9939, lon: -122.2989 },
+    'hercules': { lat: 38.0171, lon: -122.2886 },
+    'martinez': { lat: 37.9974, lon: -122.1341 },
+    'benicia': { lat: 38.0494, lon: -122.1586 },
+    'vallejo': { lat: 38.1041, lon: -122.2566 },
+    'american canyon': { lat: 38.1749, lon: -122.2608 },
+    'fairfield': { lat: 38.2494, lon: -122.0399 },
+    'suisun city': { lat: 38.2382, lon: -122.0402 },
+    'vacaville': { lat: 38.3566, lon: -121.9877 },
+    'dixon': { lat: 38.4455, lon: -121.8233 },
+    'rio vista': { lat: 38.1558, lon: -121.6913 },
+    'isleton': { lat: 38.1619, lon: -121.6116 },
+    'brannan island': { lat: 38.1000, lon: -121.9167 },
+    'walnut grove': { lat: 38.2421, lon: -121.5113 },
+    'clarksburg': { lat: 38.4169, lon: -121.5266 },
+    'hood': { lat: 38.3669, lon: -121.5166 },
+    'elk grove': { lat: 38.4088, lon: -121.3716 },
+    'laguna': { lat: 38.4210, lon: -121.4238 },
+    'thorton': { lat: 38.4210, lon: -121.4238 },
+    'sloughhouse': { lat: 38.4833, lon: -121.0833 },
+    'rancho cordova': { lat: 38.5891, lon: -121.3027 },
+    'gold river': { lat: 38.6263, lon: -121.2466 },
+    'folsom': { lat: 38.6779, lon: -121.1761 },
+    'orangevale': { lat: 38.6785, lon: -121.2258 },
+    'fair oaks': { lat: 38.6446, lon: -121.2708 },
+    'citrus heights': { lat: 38.7071, lon: -121.2811 },
+    'antelope': { lat: 38.7083, lon: -121.3297 },
+    'north highlands': { lat: 38.6857, lon: -121.3722 },
+    'foothill farms': { lat: 38.6818, lon: -121.3519 },
+    'rio linda': { lat: 38.6910, lon: -121.4486 },
+    'arden-arcade': { lat: 38.6025, lon: -121.3785 },
+    'mcclellan': { lat: 38.6667, lon: -121.4000 },
+    'north auburn': { lat: 38.9167, lon: -121.0833 },
+    'auburn': { lat: 38.8966, lon: -121.0769 },
+    'loomis': { lat: 38.8213, lon: -121.1930 },
+    'penryn': { lat: 38.8519, lon: -121.1694 },
+    'rocklin': { lat: 38.7907, lon: -121.2358 },
+    'granite bay': { lat: 38.7632, lon: -121.1638 },
+    'roseville': { lat: 38.7521, lon: -121.2880 },
+    'lincoln': { lat: 38.8916, lon: -121.2930 },
+    'wheatland': { lat: 39.0099, lon: -121.4230 },
+    'yuba city': { lat: 39.1404, lon: -121.6169 },
+    'live oak': { lat: 39.2757, lon: -121.6580 },
+    'marysville': { lat: 39.1457, lon: -121.5914 },
+    'olivehurst': { lat: 39.0954, lon: -121.5474 },
+    'plumas lake': { lat: 39.0167, lon: -121.5333 },
+    'arbuckle': { lat: 39.0167, lon: -122.0500 },
+    'grimes': { lat: 39.0667, lon: -121.8833 },
+    'colusa': { lat: 39.2143, lon: -122.0094 },
+    'williams': { lat: 39.1546, lon: -122.1494 },
+
+    'maxwell': { lat: 39.2833, lon: -122.1833 },
+    'sutter': { lat: 39.1667, lon: -121.7500 },
+    'yuba': { lat: 39.1333, lon: -121.6167 },
+    'browns valley': { lat: 39.2333, lon: -121.2833 },
+
+    'challenge-browns valley': { lat: 39.2333, lon: -121.2833 },
+    'dobbins': { lat: 39.3667, lon: -121.2000 },
+    'rough and ready': { lat: 39.2333, lon: -121.2167 },
+    'pennington': { lat: 39.2833, lon: -121.2833 },
+    'smartsville': { lat: 39.2000, lon: -121.2833 },
+    'beale afb': { lat: 39.1092, lon: -121.3542 },
+    'wheatland': { lat: 39.0099, lon: -121.4230 },
+    'lincoln': { lat: 38.8916, lon: -121.2930 },
+    'rocklin': { lat: 38.7907, lon: -121.2358 },
+    'roseville': { lat: 38.7521, lon: -121.2880 },
+    'citrus heights': { lat: 38.7071, lon: -121.2811 },
+    'antelope': { lat: 38.7083, lon: -121.3297 },
+    'north highlands': { lat: 38.6857, lon: -121.3722 },
+    'foothill farms': { lat: 38.6818, lon: -121.3519 },
+    'rio linda': { lat: 38.6910, lon: -121.4486 },
+    'arden-arcade': { lat: 38.6025, lon: -121.3785 },
+    'mcclellan': { lat: 38.6667, lon: -121.4000 },
+    'north auburn': { lat: 38.9167, lon: -121.0833 },
+    'auburn': { lat: 38.8966, lon: -121.0769 },
+    'loomis': { lat: 38.8213, lon: -121.1930 },
+    'penryn': { lat: 38.8519, lon: -121.1694 },
+    'granite bay': { lat: 38.7632, lon: -121.1638 },
+    'orangevale': { lat: 38.6785, lon: -121.2258 },
+    'fair oaks': { lat: 38.6446, lon: -121.2708 },
+    'folsom': { lat: 38.6779, lon: -121.1761 },
+    'gold river': { lat: 38.6263, lon: -121.2466 },
+    'rancho cordova': { lat: 38.5891, lon: -121.3027 },
+    'elk grove': { lat: 38.4088, lon: -121.3716 },
+    'laguna': { lat: 38.4210, lon: -121.4238 },
+    'thorton': { lat: 38.2452, lon: -121.4422 },
+    'sloughhouse': { lat: 38.4833, lon: -121.0833 },
+    'clarksburg': { lat: 38.4169, lon: -121.5266 },
+    'hood': { lat: 38.3380, lon: -121.5122 },
+    'rio vista': { lat: 38.1558, lon: -121.6913 },
+    'isleton': { lat: 38.1619, lon: -121.6116 },
+    'brannan island': { lat: 38.1000, lon: -121.9167 },
+    'walnut grove': { lat: 38.2421, lon: -121.5113 },
+    'dixon': { lat: 38.4455, lon: -121.8233 },
+    'vacaville': { lat: 38.3566, lon: -121.9877 },
+    'suisun city': { lat: 38.2382, lon: -122.0402 },
+    'fairfield': { lat: 38.2494, lon: -122.0399 },
+    'american canyon': { lat: 38.1749, lon: -122.2608 },
+    'vallejo': { lat: 38.1041, lon: -122.2566 },
+    'benicia': { lat: 38.0494, lon: -122.1586 },
+    'martinez': { lat: 37.9974, lon: -122.1341 },
+    'hercules': { lat: 38.0171, lon: -122.2886 },
+    'pinole': { lat: 37.9939, lon: -122.2989 },
+    'san pablo': { lat: 37.9621, lon: -122.3455 },
+    'richmond': { lat: 37.9358, lon: -122.3477 },
+    'el cerrito': { lat: 37.9161, lon: -122.3108 },
+    'albany': { lat: 37.8869, lon: -122.2977 },
+    'emeryville': { lat: 37.8313, lon: -122.2852 },
+    'piedmont': { lat: 37.8244, lon: -122.2316 },
+    'moraga': { lat: 37.8349, lon: -122.1297 },
+    'orinda': { lat: 37.8771, lon: -122.1797 },
+    'lafayette': { lat: 37.8858, lon: -122.1180 },
+    'walnut creek': { lat: 37.9101, lon: -122.0652 },
+    'danville': { lat: 37.8216, lon: -121.9999 },
+    'san ramon': { lat: 37.7799, lon: -121.9780 },
+    'dublin': { lat: 37.7022, lon: -121.9358 },
+    'pleasanton': { lat: 37.6624, lon: -121.8747 },
+    'livermore': { lat: 37.6819, lon: -121.7680 },
+    'castro valley': { lat: 37.6941, lon: -122.0864 },
+    'san leandro': { lat: 37.7249, lon: -122.1561 },
+    'alameda': { lat: 37.7652, lon: -122.2416 },
+    'berkeley': { lat: 37.8715, lon: -122.2730 },
+    'oakland': { lat: 37.8044, lon: -122.2711 },
+    'hayward': { lat: 37.6688, lon: -122.0808 },
+    'fremont': { lat: 37.5483, lon: -121.9886 },
+    'milpitas': { lat: 37.4283, lon: -121.9066 },
+    'san jose': { lat: 37.3382, lon: -121.8863 },
+    'santa clara': { lat: 37.3541, lon: -121.9552 },
+    'sunnyvale': { lat: 37.3688, lon: -122.0363 },
+    'mountain view': { lat: 37.3861, lon: -122.0840 },
+    'redwood city': { lat: 37.4852, lon: -122.2364 },
+    'menlo park': { lat: 37.4530, lon: -122.1817 },
+    'palo alto': { lat: 37.4419, lon: -122.1430 },
+    'half moon bay': { lat: 37.4636, lon: -122.4286 },
+    'santa cruz': { lat: 36.9741, lon: -122.0308 },
+    'carmel': { lat: 36.5552, lon: -121.9233 },
+    'monterey': { lat: 36.6002, lon: -121.8947 },
+    'hearst castle': { lat: 35.6850, lon: -121.1667 },
+    'big sur': { lat: 36.2704, lon: -121.8080 },
+    'mendocino': { lat: 39.3077, lon: -123.7995 },
+    'point reyes': { lat: 38.0449, lon: -122.7986 },
+    'channel islands': { lat: 34.0101, lon: -119.6880 },
+    'redwood': { lat: 41.2132, lon: -124.0046 },
+    'lassen volcanic': { lat: 40.4977, lon: -121.4207 },
+    'kings canyon': { lat: 36.8879, lon: -118.5551 },
+    'sequoia': { lat: 36.4864, lon: -118.5658 },
+    'yosemite': { lat: 37.8651, lon: -119.5383 },
+    'joshua tree': { lat: 33.8734, lon: -115.9010 },
+    'death valley': { lat: 36.5323, lon: -116.9325 },
+    'grand canyon': { lat: 36.1069, lon: -112.1129 },
+    'bryce canyon': { lat: 37.5930, lon: -112.1871 },
+    'zion national park': { lat: 37.2982, lon: -113.0263 },
+    'lake powell': { lat: 37.0000, lon: -111.0000 },
+    'page': { lat: 36.9147, lon: -111.4558 },
+    'winslow': { lat: 35.0242, lon: -110.6974 },
+    'show low': { lat: 34.2542, lon: -110.0298 },
+    'sedona': { lat: 34.8697, lon: -111.7610 },
+    'flagstaff': { lat: 35.1983, lon: -111.6513 },
+    'prescott valley': { lat: 34.6100, lon: -112.3157 },
+    'prescott': { lat: 34.5400, lon: -112.4685 },
+    'bullhead city': { lat: 35.1478, lon: -114.5683 },
+    'kingman': { lat: 35.1894, lon: -114.0530 },
+    'lake havasu city': { lat: 34.4839, lon: -114.3225 },
+    'yuma': { lat: 32.6927, lon: -114.6277 },
+    'goodyear': { lat: 33.4353, lon: -112.3577 },
+    'surprise': { lat: 33.6292, lon: -112.3676 },
+    'peoria': { lat: 33.5806, lon: -112.2374 },
+    'tempe': { lat: 33.4255, lon: -111.9400 },
+    'gilbert': { lat: 33.3528, lon: -111.7890 },
+    'glendale': { lat: 33.5387, lon: -112.1859 },
+    'scottsdale': { lat: 33.4942, lon: -111.9261 },
+    'chandler': { lat: 33.3062, lon: -111.8413 },
+    'henderson': { lat: 36.0395, lon: -114.9817 },
+    'mesa': { lat: 33.4152, lon: -111.8315 },
+    'tucson': { lat: 32.2226, lon: -110.9747 },
+    'albuquerque': { lat: 35.0844, lon: -106.6504 },
+    'reno': { lat: 39.5296, lon: -119.8138 },
+    'fresno': { lat: 36.7378, lon: -119.7871 },
+    'sacramento': { lat: 38.5816, lon: -121.4944 },
+    'san diego': { lat: 32.7157, lon: -117.1611 },
+    'san francisco': { lat: 37.7749, lon: -122.4194 },
+    'los angeles': { lat: 34.0522, lon: -118.2437 }
+  };
+
+  // Normalize city name for lookup
+  const normalizedCity = city.toLowerCase().trim();
+  const userCoords = cityCoordinates[normalizedCity];
+
+  if (!userCoords) {
+    throw new Error(`Unable to geocode city: ${city}. Please try a different city name.`);
+  }
+
+  // Calculate distances using Haversine formula
+  function haversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371; // Earth's radius in kilometers
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  }
+
+  let closestStore = null;
+  let minDistance = Infinity;
+
+  for (const store of stores) {
+    const distance = haversineDistance(userCoords.lat, userCoords.lon, store.lat, store.lon);
+    if (distance < minDistance) {
+      minDistance = distance;
+      closestStore = { ...store, distance: Math.round(distance * 10) / 10 }; // Round to 1 decimal place
+    }
+  }
+
+  if (!closestStore) {
+    throw new Error('No stores found in the database.');
+  }
+
+  return closestStore;
+}
+
+async function sendSMSMessage({ to, message }) {
+  // Simulate SMS sending - in real implementation, use Twilio, AWS SNS, etc.
+  console.log(`[SMS SIMULATION] Sending message to ${to}: ${message}`);
+  
+  // Simulate API delay
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  // Simulate success/failure randomly (90% success rate)
+  const success = Math.random() > 0.1;
+  
+  if (!success) {
+    throw new Error('SMS sending failed. Please check the phone number and try again.');
+  }
+  
+  return {
+    success: true,
+    to: to,
+    message: message,
+    messageId: `msg_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
+    sentAt: new Date().toISOString(),
+    status: 'sent'
+  };
+}
+
+// Add new functions to approved functions registry
+APPROVED_FUNCTIONS['findClosestLocation'] = findClosestLocation;
+APPROVED_FUNCTIONS['sendSMSMessage'] = sendSMSMessage;
+
 // === TOOL REGISTRY WITH OPENAI FUNCTION CALLING STANDARD ===
 const toolsRegistry = [
   {
@@ -1565,96 +1900,95 @@ Real implementation would parse actual XML structure.
       rateLimit: { requests: 50, window: 60000 }
     }
   },
-
-  // Cryptocurrency Price API (free CoinGecko API)
+  
+  // Store location tools
   {
-    id: 'crypto-price-api',
-    name: 'Crypto Price Check',
-    description: 'Get current cryptocurrency prices',
-    schema: {
-      required: ['crypto'],
-      properties: {
-        crypto: {
-          type: 'string',
-          description: 'Cryptocurrency symbol (bitcoin, ethereum, etc.)'
-        },
-        currency: {
-          type: 'string',
-          description: 'Currency to convert to (usd, eur, etc.)',
-          default: 'usd'
-        }
-      }
-    },
-    implementation: {
-      type: 'http',
-      url: 'https://api.coingecko.com/api/v3/simple/price',
-      method: 'GET',
-      pathParams: ['crypto', 'currency'], // Safely interpolate {crypto} and {currency} placeholders
-      queryParams: ['ids', 'vs_currencies', 'include_24hr_change'],
-      customQuery: 'ids={crypto}&vs_currencies={currency}&include_24hr_change=true',
-      responseMapping: {
-        type: 'jsonPath',
-        mappings: {
-          'crypto_name': {
-            path: '$args.crypto',
-            transform: { type: 'toUpperCase' }
-          },
-          'price': {
-            path: '{crypto}.{currency}',
-            transform: { type: 'parseFloat', fallback: 0 }
-          },
-          'change_24h': {
-            path: '{crypto}.{currency}_24h_change',
-            transform: { type: 'parseFloat', fallback: 0 }
-          },
-          'currency': {
-            path: '$args.currency',
-            transform: { type: 'toUpperCase' }
-          }
-        }
-      },
-      timeout: 10000,
-      retries: 2
-    },
-    riskLevel: 'low',
-    category: 'financial'
-  },
-
-  // Get503Error tool for testing smart retry logic with recoverable server errors
-  {
-    id: "Get503Error",
-    name: "Get 503 Server Error",
-    description: "Makes a request that reliably returns 503 Service Unavailable for testing smart retry logic",
+    id: "find-closest-location",
+    name: "Find Closest Location",
+    description: "Finds the closest store location from a list of stores based on user city geocoding",
     version: "1.0.0",
     
     parameters: {
       type: "object",
-      properties: {},
-      required: []
+      properties: {
+        city: {
+          type: "string",
+          description: "User's city name for geocoding",
+          minLength: 2,
+          maxLength: 100
+        },
+        stores: {
+          type: "array",
+          description: "Array of store objects with lat, lon, and address",
+          items: {
+            type: "object",
+            properties: {
+              lat: { type: "number" },
+              lon: { type: "number" },
+              address: { type: "string" }
+            },
+            required: ["lat", "lon", "address"]
+          }
+        }
+      },
+      required: ["city", "stores"],
+      additionalProperties: false
     },
     
     implementation: {
-      type: "http",
-      url: "https://httpstat.us/503",
-      method: "GET",
+      type: "local",
+      function: "findClosestLocation",
       timeout: 5000,
-      retries: 0, // Disable automatic retries to test smart retry logic
-      
-      responseMapping: {
-        type: "object",
-      }
+      retries: 1
     },
     
     security: {
       requiresAuth: false,
       auditLevel: "low",
-      dataClassification: "test",
-      rateLimit: { requests: 100, window: 60000 }
+      dataClassification: "public",
+      rateLimit: { requests: 50, window: 60000 }
     }
   },
-];
-
-// === ENHANCED FLOW DEFINITIONS WITH BPMN-INSPIRED SCHEMA ===
+  {
+    id: "send-sms-message",
+    name: "Send SMS Message",
+    description: "Sends a custom SMS message to a phone number",
+    version: "1.0.0",
+    
+    parameters: {
+      type: "object",
+      properties: {
+        to: {
+          type: "string",
+          description: "Phone number to send SMS to",
+          pattern: "^\\+?[1-9]\\d{1,14}$"
+        },
+        message: {
+          type: "string",
+          description: "SMS message content",
+          minLength: 1,
+          maxLength: 160
+        }
+      },
+      required: ["to", "message"],
+      additionalProperties: false
+    },
+    
+    implementation: {
+      type: "local",
+      function: "sendSMSMessage",
+      timeout: 10000,
+      retries: 2
+    },
+    
+    security: {
+      requiresAuth: true,
+      auditLevel: "medium",
+      dataClassification: "personal",
+      rateLimit: { requests: 10, window: 60000 }
+    }
+  }
+];// === ENHANCED FLOW DEFINITIONS WITH BPMN-INSPIRED SCHEMA ===
 // 
 // NEW: callType attribute for FLOW steps and onFail handlers:
 // - "call" (default): Normal sub-flow call, preserves current flow on stack
@@ -3554,6 +3888,143 @@ const flowsMenu = [
         value: "📊 This message should NOT appear because automated onFail should have terminated the flow.\n\nIf you see this, the automated onFail did not work as expected."
       }
     ]
+  },
+  
+  // Store location workflow
+  {
+    id: "find-store-locations",
+    name: "FindStoreLocations",
+    primary: true, // User-facing entry point flow for AI intent detection
+    version: "1.0.0",
+    description: "Finds the closest store location based on user city and optionally sends SMS with directions",
+    prompt: "Find store locations",
+    prompt_es: "Encontrar ubicaciones de tienda",
+    interruptable: true,
+    
+    metadata: {
+      author: "system",
+      category: "location",
+      riskLevel: "low",
+      requiresApproval: false,
+      auditRequired: false,
+      createdAt: "2025-08-04T00:00:00Z"
+    },
+    
+    variables: {
+      city: { type: "string", scope: "flow" },
+      stores: { type: "array", scope: "flow" },
+      closest_store: { type: "object", scope: "flow" },
+      want_sms: { type: "string", scope: "flow" },
+      cell_number: { type: "string", scope: "flow" },
+      sms_result: { type: "object", scope: "flow" }
+    },
+    
+    steps: [
+      {
+        id: "ask_city",
+        type: "SAY-GET",
+        value: "I'd be happy to help you find our nearest store location! What city are you in?",
+        value_es: "¡Me encantaría ayudarte a encontrar nuestra tienda más cercana! ¿En qué ciudad estás?",
+        variable: "city"
+      },
+      {
+        id: "set_stores_data",
+        type: "SET",
+        variable: "stores",
+        value: [
+          { lat: 34.0522, lon: -118.2437, address: "Los Angeles Store - 123 Main St, Los Angeles, CA 90001" },
+          { lat: 37.7749, lon: -122.4194, address: "San Francisco Store - 456 Market St, San Francisco, CA 94102" },
+          { lat: 32.7157, lon: -117.1611, address: "San Diego Store - 789 Broadway, San Diego, CA 92101" },
+          { lat: 36.1699, lon: -115.1398, address: "Las Vegas Store - 321 Fremont St, Las Vegas, NV 89101" },
+          { lat: 33.4484, lon: -112.0740, address: "Phoenix Store - 654 Camelback Rd, Phoenix, AZ 85001" },
+          { lat: 32.2217, lon: -110.9265, address: "Tucson Store - 987 Speedway Blvd, Tucson, AZ 85701" },
+          { lat: 35.0844, lon: -106.6504, address: "Albuquerque Store - 147 Central Ave, Albuquerque, NM 87101" },
+          { lat: 39.7392, lon: -104.9903, address: "Denver Store - 258 Colfax Ave, Denver, CO 80202" },
+          { lat: 40.7128, lon: -74.0060, address: "New York Store - 369 Broadway, New York, NY 10001" },
+          { lat: 41.8781, lon: -87.6298, address: "Chicago Store - 741 Michigan Ave, Chicago, IL 60601" },
+          { lat: 29.7604, lon: -95.3698, address: "Houston Store - 852 Texas St, Houston, TX 77001" },
+          { lat: 33.7490, lon: -84.3880, address: "Atlanta Store - 963 Peachtree St, Atlanta, GA 30301" }
+        ]
+      },
+      {
+        id: "find_closest",
+        type: "CALL-TOOL",
+        tool: "find-closest-location",
+        timeout: 5000,
+        variable: "closest_store",
+        args: {
+          city: "{{city}}",
+          stores: "{{stores}}"
+        },
+        onFail: {
+          id: "geocoding-failed",
+          type: "SAY",
+          value: "I'm sorry, I couldn't find your location. Please try entering a different city name or contact our support team for assistance.",
+          value_es: "Lo siento, no pude encontrar tu ubicación. Por favor, intenta con un nombre de ciudad diferente o contacta a nuestro equipo de soporte."
+        }
+      },
+      {
+        id: "present_location",
+        type: "SAY",
+        value: "Great! I found our closest store for you:\n\n📍 {{closest_store.address}}\n\nThis is approximately {{closest_store.distance}} miles from {{city}}.",
+        value_es: "¡Excelente! Encontré nuestra tienda más cercana para ti:\n\n📍 {{closest_store.address}}\n\nEstá aproximadamente a {{closest_store.distance}} millas de {{city}}."
+      },
+      {
+        id: "ask_sms_directions",
+        type: "SAY-GET",
+        value: "Would you like me to send directions and a map link to your phone via SMS? (yes/no)",
+        value_es: "¿Te gustaría que te enviara direcciones y un enlace de mapa a tu teléfono por SMS? (sí/no)",
+        variable: "want_sms"
+      },
+      {
+        id: "handle_sms_choice",
+        type: "CASE",
+        branches: {
+          "condition: want_sms.toLowerCase() === 'yes' || want_sms.toLowerCase() === 'y' || want_sms.toLowerCase() === 'si'": {
+            id: "get_cell_number",
+            type: "SAY-GET",
+            value: "Please provide your cell phone number (including area code, e.g., 555-123-4567):",
+            value_es: "Por favor, proporciona tu número de teléfono celular (incluyendo código de área, ej., 555-123-4567):",
+            variable: "cell_number"
+          },
+          "default": {
+            id: "no_sms_needed",
+            type: "SAY",
+            value: "No problem! You can find directions using any maps app with the address above. Have a great day!",
+            value_es: "¡No hay problema! Puedes encontrar direcciones usando cualquier aplicación de mapas con la dirección de arriba. ¡Que tengas un gran día!"
+          }
+        }
+      },
+      {
+        id: "send_sms",
+        type: "CALL-TOOL",
+        tool: "send-sms-message",
+        timeout: 10000,
+        variable: "sms_result",
+        args: {
+          to: "{{cell_number}}",
+          message: "Directions to our store: {{closest_store.address}}. Map: https://maps.google.com/?q={{closest_store.lat}},{{closest_store.lon}}"
+        },
+        onFail: {
+          id: "sms-failed",
+          type: "SAY",
+          value: "I wasn't able to send the SMS at this time, but you can still use the address above to get directions. Please try again later or contact support if you need immediate assistance.",
+          value_es: "No pude enviar el SMS en este momento, pero aún puedes usar la dirección de arriba para obtener direcciones. Por favor, inténtalo de nuevo más tarde o contacta a soporte si necesitas asistencia inmediata."
+        }
+      },
+      {
+        id: "sms_success",
+        type: "SAY",
+        value: "✅ SMS sent successfully! You should receive directions and a map link shortly. Thank you for choosing us!",
+        value_es: "✅ ¡SMS enviado exitosamente! Deberías recibir direcciones y un enlace de mapa en breve. ¡Gracias por elegirnos!"
+      }
+    ],
+    
+    permissions: {
+      execute: ["customer", "guest"],
+      view: ["customer-service", "support"],
+      modify: ["admin"]
+    }
   }
 ];
 
@@ -4096,8 +4567,13 @@ const TEST_SCENARIOS = {
     'cancel',  // Test restart    
   ],
 
-  // === BUG FIX VALIDATION TESTS ===
-  // These tests validate the specific issues we identified and fixed
+  // Store location workflow test
+  storeLocationTest: [
+    'Find store locations',
+    'Los Angeles',  // User provides city
+    'yes',          // User wants SMS
+    '555-123-4567' // User provides phone number
+  ],
   
   // SWITCH Default Branch Fix
   switchDefaultBranchTest: [
