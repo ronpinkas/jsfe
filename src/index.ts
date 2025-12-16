@@ -453,6 +453,7 @@ export interface EngineSessionContext {
   completedTransactions?: TransactionData[]; // Completed transactions for host access
   cargo: Record<string, unknown> | undefined; // Additional session data
   language?: string; // Language for this session
+  hasTentativeFlowInit?: boolean; // Flag to track if tentative flow_init message should be dropped by SAY-GET
 }
 
 export interface FlowStep {
@@ -2561,8 +2562,9 @@ async function isFlowActivated(input: string, engine: Engine, userId: string = '
       flowName: flow.name,
       flowPrompt: getFlowPrompt(engine, flow.name)
     });
-    // Add to global accumulated messages
+    // Add to global accumulated messages and set flag for SAY-GET to drop it
     engine.addAccumulatedMessage!(tentativeFlowInit);
+    engine.setTentativeFlowInit(true);
 
     const flowFrame: FlowFrame = {
       flowName: flow.name,
@@ -3740,12 +3742,13 @@ function handleSayGetStep(currentFlowFrame: FlowFrame, engine: Engine): string {
   // Use global accumulated messages (simplified - no local fallback)
   if (engine.hasAccumulatedMessages()) {
     const globalMessages = engine.getAndClearAccumulatedMessages!();
-    const initMessage = getSystemMessage(engine, 'flow_init', { flowPrompt: getFlowPrompt(engine, currentFlowFrame.flowName) });
 
-    // Check if the last global message is the tentative flow_init for this flow
-    const hasTentativeFlowInit = globalMessages[globalMessages.length - 1] === initMessage;
+    // Check if we have a tentative flow_init that should be dropped
+    const hasTentativeFlowInit = engine.getTentativeFlowInit();
 
     if (hasTentativeFlowInit) {
+      // Clear the flag
+      engine.setTentativeFlowInit(false);
       // Replace tentative flow_init with SAY messages only (guidance will be added by addFlowContextGuidance)
       if (globalMessages.length > 1) {
         finalMessage = `${globalMessages.slice(0, -1).join('\n\n')}\n\n${interpolated}`;
@@ -6751,6 +6754,18 @@ export class WorkflowEngine implements Engine {
   // Check if there are accumulated messages
   hasAccumulatedMessages(): boolean {
     return this.globalAccumulatedMessages.length > 0;
+  }
+
+  // Set tentative flow_init flag (to be dropped by SAY-GET)
+  setTentativeFlowInit(value: boolean): void {
+    if (this.sessionContext) {
+      this.sessionContext.hasTentativeFlowInit = value;
+    }
+  }
+
+  // Get tentative flow_init flag
+  getTentativeFlowInit(): boolean {
+    return this.sessionContext?.hasTentativeFlowInit || false;
   }
 
   initializeFlowStacks(): void {
