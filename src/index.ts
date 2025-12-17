@@ -4129,7 +4129,14 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
     const input = currentFlowFrame.inputStack[currentFlowFrame.inputStack.length - 1];
     const flowsMenu = engine.flowsMenu; // Access the global flows menu
 
-    const subFlowName = step.value || step.name || step.nextFlow;
+    // Get raw flow name, then interpolate if it contains template syntax
+    const rawFlowName = step.value || step.name || step.nextFlow;
+    const subFlowName = rawFlowName && rawFlowName.includes('{{')
+      ? interpolateMessage(rawFlowName, currentFlowFrame.contextStack, currentFlowFrame.variables, engine)
+      : rawFlowName;
+    
+    logger.debug(`Sub-flow name resolution: raw="${rawFlowName}" -> interpolated="${subFlowName}"`);
+    
     const subFlow = flowsMenu?.find(f => f.name === subFlowName || f.id === subFlowName);
 
     if (!subFlow) {
