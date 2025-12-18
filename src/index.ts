@@ -4661,14 +4661,15 @@ async function callTool(engine: Engine, tool: any, args: any, userId: string = '
         logger.debug(`Schema properties: ${propertyNames.join(', ')}`);
         logger.debug(`Use object parameter: ${useObjectParameter}`);
 
-        // Strategy 1: If schema explicitly indicates object parameter OR function expects 1 param
-        if (useObjectParameter || fnParamCount === 1) {
+        // Strategy 1: Schema explicitly indicates object parameter (JSONSchema format with type: "object")
+        if (useObjectParameter) {
           logger.debug(`Calling function with single object parameter`);
           result = await Promise.race([fn(args), timeoutPromise]);
         }
-        // Strategy 2: If function expects multiple parameters and we have multiple schema properties
-        else if (fnParamCount > 1 && propertyNames.length > 1) {
-          logger.debug(`Calling function with individual parameters (${fnParamCount} params expected)`);
+        // Strategy 2: Flat schema format OR multiple params - use individual parameters
+        // Note: function.length only counts params WITHOUT defaults, so we rely on schema properties count
+        else if (propertyNames.length > 0) {
+          logger.debug(`Calling function with individual parameters (schema has ${propertyNames.length} properties)`);
 
           // For tools with 'parameters' property, use the required array or property order
           let orderedParamNames: string[];
