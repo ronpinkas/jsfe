@@ -5445,7 +5445,10 @@ function evaluateExpression(
 
       // Single expression - return the evaluated result directly to preserve type
       try {
-        const evaluationResult = evaluateJavaScriptExpression(singleExpressionMatch.trim(), context);
+        // Preserve objects for SET steps (javascript-evaluation context) so flow variables can hold objects
+        // RETURN steps also use this context but String() is applied later in handleReturnStep
+        const preserveObjects = opts.context === 'javascript-evaluation';
+        const evaluationResult = evaluateJavaScriptExpression(singleExpressionMatch.trim(), context, preserveObjects);
         logger.debug(`Simplified evaluation complete (single): ${expression} -> ${evaluationResult}`);
         return convertReturnType(evaluationResult, opts.returnType);
       } catch (error: unknown) {
@@ -5586,7 +5589,7 @@ function createSimplifiedEvaluationContext(
 /**
  * Safely evaluate JavaScript expression with injected context
  */
-function evaluateJavaScriptExpression(expression: string, context: Record<string, unknown>): unknown {
+function evaluateJavaScriptExpression(expression: string, context: Record<string, unknown>, preserveObjects: boolean = false): unknown {
   // Filter to only valid JavaScript identifiers (root variables only)
   const validParamNames = Object.keys(context).filter(key =>
     /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)
@@ -5605,7 +5608,15 @@ function evaluateJavaScriptExpression(expression: string, context: Record<string
   });
 
   // Build function body that evaluates the expression
-  const functionBody = `
+  // When preserveObjects is true (e.g., SET steps), don't auto-stringify objects
+  const functionBody = preserveObjects ? `
+    "use strict";
+    try {
+      return (${expression});
+    } catch (e) {
+      throw new Error('Expression evaluation failed: ' + e.message);
+    }
+  ` : `
     "use strict";
     try {
       const result = (${expression});
