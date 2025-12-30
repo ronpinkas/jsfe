@@ -3762,14 +3762,6 @@ function handleSayGetStep(currentFlowFrame: FlowFrame, engine: Engine): string |
   const step = currentFlowFrame.flowStepsStack[currentFlowFrame.flowStepsStack.length - 1]; // Peek at step without popping
   const contextStack = currentFlowFrame.contextStack;
 
-  // Check if the variable is already set (e.g. from parameter extraction)
-  // If so, skip the SAY-GET step entirely
-  if (step.variable && currentFlowFrame.variables && currentFlowFrame.variables[step.variable]) {
-    logger.info(`Skipping SAY-GET step because variable '${step.variable}' is already set to: "${currentFlowFrame.variables[step.variable]}"`);
-    currentFlowFrame.flowStepsStack.pop();
-    return null;
-  }
-
   // Check for session language first, then fallback to engine language
   let lang = engine.language;
   lang = engine.getSessionLanguage() || lang;
