@@ -628,6 +628,11 @@ export interface FlowDefinition {
   version: string;
   primary?: boolean; // Whether this flow is a primary entry point for users (default: false)
   interruptable?: boolean; // Whether this flow can be interrupted by AI intent detection (default: false)
+  parameters?: {
+    name: string; // Variable name to map to
+    description: string; // Description for the AI to understand what to extract
+    type?: string; // Type of the parameter (string, number, etc.)
+  }[];
   steps: FlowStep[];
   variables?: Record<string, {
     type: string;
@@ -2539,9 +2544,12 @@ async function detectLanguage(input: string, engine: Engine): Promise<string> {
 
 // === FLOW EXECUTION ENGINE WITH ENHANCED ERROR HANDLING ===
 async function isFlowActivated(input: string, engine: Engine, userId: string = 'anonymous') {
-  const flow = await getFlowForInput(input, engine);
+  const result = await detectFlowWithParameters(input, engine);
 
-  if (flow) {
+  if (result && result.flow) {
+    const flow = result.flow;
+    const parameters = result.parameters;
+
     // Check if language detection is needed (no session language set)
     const sessionLanguage = engine.getSessionLanguage();
     if (!sessionLanguage) {
@@ -2566,6 +2574,12 @@ async function isFlowActivated(input: string, engine: Engine, userId: string = '
     engine.addAccumulatedMessage!(tentativeFlowInit);
     engine.setTentativeFlowInit(true);
 
+    const variables = getInitialVariables(engine, flow);
+    if (parameters) {
+      logger.info(`Injecting extracted parameters into flow variables: ${JSON.stringify(parameters)}`);
+      Object.assign(variables, parameters);
+    }
+
     const flowFrame: FlowFrame = {
       flowName: flow.name,
       flowId: flow.id,
@@ -2573,7 +2587,7 @@ async function isFlowActivated(input: string, engine: Engine, userId: string = '
       flowStepsStack: [...flow.steps].reverse(),
       contextStack: [{ role: 'user', content: sanitizeInput(input), timestamp: Date.now() }], // Keep activation input in context for reference
       inputStack: [], // Start empty - only SAY-GET responses go here
-      variables: getInitialVariables(engine, flow), // Start with global variables + flow definition variables
+      variables, // Start with global variables + flow definition variables + extracted parameters
       transaction,
       userId,
       startTime: Date.now()
@@ -2926,7 +2940,7 @@ async function fetchAiTask(
   jsonSchema?: string,
   aiCallback?: AiCallbackFunction,
   timeoutMs: number = 1000
-): Promise<string> {
+): Promise<any> {
   try {
     if (!aiCallback) {
       throw new Error('AI callback function is required');
@@ -2949,9 +2963,14 @@ async function fetchAiTask(
     userMessage += `<user-input>\n${sanitizeInput(userInput)}\n</user-input>`;
 
     if (flows && flows.length > 0) {
-      const flowDescriptions = flows.map(flow =>
-        `${flow.name}: ${flow.description} (Risk: ${flow.metadata?.riskLevel || 'unknown'})`
-      ).join('\n');
+      const flowDescriptions = flows.map(flow => {
+        let desc = `${flow.name}: ${flow.description} (Risk: ${flow.metadata?.riskLevel || 'unknown'})`;
+        if (flow.parameters && flow.parameters.length > 0) {
+          const params = flow.parameters.map(p => `${p.name} (${p.type || 'string'}): ${p.description}`).join(', ');
+          desc += `\n   Parameters: ${params}`;
+        }
+        return desc;
+      }).join('\n');
       userMessage += `\n\n<available-flows>\n${flowDescriptions}\n</available-flows>`;
     }
 
@@ -2988,16 +3007,21 @@ async function fetchAiTask(
   }
 }
 
-async function getFlowForInput(input: string, engine: Engine): Promise<FlowDefinition | null> {
+export async function getFlowForInput(input: string, engine: Engine): Promise<FlowDefinition | null> {
+  const result = await detectFlowWithParameters(input, engine);
+  return result ? result.flow : null;
+}
+
+export async function detectFlowWithParameters(input: string, engine: Engine): Promise<{ flow: FlowDefinition, parameters?: Record<string, any> } | null> {
   // CRITICAL: This function requires AI access via engine.aiCallback
   // Without AI, the engine cannot detect user intent and activate flows
   // Sessions would never be activated as no workflows could be triggered
   // For demo or special use cases we do allow null aiCallback with minimal functionality
   try {
-    logger.info(`getFlowForInput called with input: "${input}"`);
+    logger.info(`detectFlowWithParameters called with input: "${input}"`);
 
     if (!input || typeof input !== 'string') {
-      logger.warn(`getFlowForInput received invalid input: ${typeof input} ${input}`);
+      logger.warn(`detectFlowWithParameters received invalid input: ${typeof input} ${input}`);
       return null;
     }
 
@@ -3019,7 +3043,7 @@ async function getFlowForInput(input: string, engine: Engine): Promise<FlowDefin
     );
     if (directMatch) {
       logger.info(`Direct flow name/id match found: ${directMatch.name} (${directMatch.id})`);
-      return directMatch;
+      return { flow: directMatch };
     }
 
     // If no AI callback, only allow exact id or name match (case-insensitive)
@@ -3029,14 +3053,24 @@ async function getFlowForInput(input: string, engine: Engine): Promise<FlowDefin
     }
 
     // If AI callback is present, use AI for intent detection with primary flows only
-    const task = "Considering the chat history when available and applicable, decide if the user input should trigger any available flow.";
+    const task = "Considering the chat history when available and applicable, decide if the user input should trigger any available flow. If a flow is triggered, extract any relevant parameters defined in the flow's 'parameters' section.";
 
     const rules = `- Return the exact flow name if a match is found
 - Return "None" if no workflow applies
 - Consider user intent and the chat context
 - Prioritize the most relevant flow considering all available flows
 - Flows should only be triggered in response to explicit user intent. A user prompt asking about available credit should trigger balance flows when available, but not payment flows. Complaints about a charge must not trigger a payment flow. Imagine the frustration of a user asking any question other than "Can I make a payment?" and being forwarded to a payment flow instead of receiving a direct answer.
+- Extract parameters only if they are explicitly present in the user input.
 `;
+
+    const jsonSchema = JSON.stringify({
+      type: "object",
+      properties: {
+        flowName: { type: "string" },
+        parameters: { type: "object" }
+      },
+      required: ["flowName"]
+    });
 
     // Use chat context when not in a flow (this is where lastChatTurn context is relevant)
     let context = '';
@@ -3048,14 +3082,14 @@ async function getFlowForInput(input: string, engine: Engine): Promise<FlowDefin
     }
 
     try {
-      const aiResponse = await fetchAiTask(task, rules, context, input, flowsForIntentDetection, undefined, engine.aiCallback, engine.aiTimeOut);
+      const aiResponse = await fetchAiTask(task, rules, context, input, flowsForIntentDetection, jsonSchema, engine.aiCallback, engine.aiTimeOut);
 
-      if (aiResponse && aiResponse !== 'None' && aiResponse !== 'null') {
-        const flow = flowsMenu.find(flow => flow.name.toLowerCase() === aiResponse.toLowerCase() || flow.id === aiResponse);
+      if (aiResponse && aiResponse.flowName && aiResponse.flowName !== 'None' && aiResponse.flowName !== 'null') {
+        const flow = flowsMenu.find(flow => flow.name.toLowerCase() === aiResponse.flowName.toLowerCase() || flow.id === aiResponse.flowName);
         if (flow) {
-          return flow;
+          return { flow, parameters: aiResponse.parameters };
         } else {
-          logger.error(`Flow "${aiResponse}" not found in flows menu`);
+          logger.error(`Flow "${aiResponse.flowName}" not found in flows menu`);
         }
       } else {
         logger.info(`No flow activated for input: "${input}"`);
@@ -3066,7 +3100,7 @@ async function getFlowForInput(input: string, engine: Engine): Promise<FlowDefin
 
     return null;
   } catch (error: any) {
-    logger.warn(`Error in getFlowForInput: ${error.message}`);
+    logger.warn(`Error in detectFlowWithParameters: ${error.message}`);
     logger.info(`Stack trace: ${error.stack}`);
     return null;
   }
@@ -3722,11 +3756,19 @@ function handleSayStep(currentFlowFrame: FlowFrame, engine: Engine): null {
 }
 
 // SAY-GET step: outputs all accumulated messages + waits for user input
-function handleSayGetStep(currentFlowFrame: FlowFrame, engine: Engine): string {
+function handleSayGetStep(currentFlowFrame: FlowFrame, engine: Engine): string | null {
   // IMPORTANT: Don't pop the step yet! We need to defer the pop until after user input is processed
   // This prevents the SAY-GET step from being lost during flow interruption/resumption
   const step = currentFlowFrame.flowStepsStack[currentFlowFrame.flowStepsStack.length - 1]; // Peek at step without popping
   const contextStack = currentFlowFrame.contextStack;
+
+  // Check if the variable is already set (e.g. from parameter extraction)
+  // If so, skip the SAY-GET step entirely
+  if (step.variable && currentFlowFrame.variables && currentFlowFrame.variables[step.variable]) {
+    logger.info(`Skipping SAY-GET step because variable '${step.variable}' is already set to: "${currentFlowFrame.variables[step.variable]}"`);
+    currentFlowFrame.flowStepsStack.pop();
+    return null;
+  }
 
   // Check for session language first, then fallback to engine language
   let lang = engine.language;
@@ -4134,9 +4176,9 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
     const subFlowName = rawFlowName && rawFlowName.includes('{{')
       ? interpolateMessage(rawFlowName, currentFlowFrame.contextStack, currentFlowFrame.variables, engine)
       : rawFlowName;
-    
+
     logger.debug(`Sub-flow name resolution: raw="${rawFlowName}" -> interpolated="${subFlowName}"`);
-    
+
     const subFlow = flowsMenu?.find(f => f.name === subFlowName || f.id === subFlowName);
 
     if (!subFlow) {
