@@ -2574,7 +2574,7 @@ async function isFlowActivated(input: string, engine: Engine, userId: string = '
     engine.addAccumulatedMessage!(tentativeFlowInit);
     engine.setTentativeFlowInit(true);
     logger.info(`Added tentative flow_init message: ${tentativeFlowInit}`);
-    logger.debug(`Current accumulated messages: ${JSON.stringify(engine.getAccumulatedMessages!())}`);
+    logger.debug(`Current accumulated messages: ${JSON.stringify(engine.globalAccumulatedMessages)}`);
 
     const variables = getInitialVariables(engine, flow);
     if (parameters) {
@@ -3748,7 +3748,7 @@ function handleSayStep(currentFlowFrame: FlowFrame, engine: Engine): null {
   if (engine && typeof engine.addAccumulatedMessage === 'function') {
     engine.addAccumulatedMessage(interpolated);
     logger.info(`SAY message globally accumulated.`);
-    logger.debug(`Current globally accumulated messages: ${JSON.stringify(engine.getAccumulatedMessages!())}`);
+    logger.debug(`Current globally accumulated messages: ${JSON.stringify(engine.globalAccumulatedMessages)}`);
   } else {
     // This case should ideally not happen in the main engine, but is a fallback.
     logger.warn(`Engine not available for SAY step. Message may be lost: "${interpolated}"`);
@@ -6809,22 +6809,7 @@ export class WorkflowEngine implements Engine {
 
     const messages = [...this.sessionContext.globalAccumulatedMessages];
     this.sessionContext.globalAccumulatedMessages = [];
-
-    return messages;
-  }
-
-  // Get all accumulated messages
-  getAccumulatedMessages(): string[] {
-    if (!this.sessionContext) {
-      logger.warn('No session context available for getAccumulatedMessages');
-      return [];
-    }
-
-    if (!this.sessionContext.globalAccumulatedMessages) {
-      this.sessionContext.globalAccumulatedMessages = [];
-    }
-
-    const messages = [...this.sessionContext.globalAccumulatedMessages];
+    logger.debug(`Cleared ${messages.length} accumulated messages and returned: ${JSON.stringify(messages)}`);
 
     return messages;
   }
