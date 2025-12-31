@@ -2573,6 +2573,8 @@ async function isFlowActivated(input: string, engine: Engine, userId: string = '
     // Add to global accumulated messages and set flag for SAY-GET to drop it
     engine.addAccumulatedMessage!(tentativeFlowInit);
     engine.setTentativeFlowInit(true);
+    logger.info(`Added tentative flow_init message: ${tentativeFlowInit}`);
+    logger.debug(`Current accumulated messages: ${JSON.stringify(engine.getAccumulatedMessages!())}`);
 
     const variables = getInitialVariables(engine, flow);
     if (parameters) {
@@ -3746,6 +3748,7 @@ function handleSayStep(currentFlowFrame: FlowFrame, engine: Engine): null {
   if (engine && typeof engine.addAccumulatedMessage === 'function') {
     engine.addAccumulatedMessage(interpolated);
     logger.info(`SAY message globally accumulated.`);
+    logger.debug(`Current globally accumulated messages: ${JSON.stringify(engine.getAccumulatedMessages!())}`);
   } else {
     // This case should ideally not happen in the main engine, but is a fallback.
     logger.warn(`Engine not available for SAY step. Message may be lost: "${interpolated}"`);
@@ -3776,20 +3779,26 @@ function handleSayGetStep(currentFlowFrame: FlowFrame, engine: Engine): string |
   // Use global accumulated messages (simplified - no local fallback)
   if (engine.hasAccumulatedMessages()) {
     const globalMessages = engine.getAndClearAccumulatedMessages!();
+    logger.info(`SAY-GET retrieved ${globalMessages.length} globally accumulated messages.`);
 
     // Check if we have a tentative flow_init that should be dropped
     const hasTentativeFlowInit = engine.getTentativeFlowInit();
 
     if (hasTentativeFlowInit) {
+      logger.info(`SAY-GET detected tentative flow_init, replacing with current message.`);
+
       // Clear the flag
       engine.setTentativeFlowInit(false);
+      logger.debug(`SAY-GET cleared tentative flow_init flag.`);
+
       // Replace tentative flow_init with SAY messages only (guidance will be added by addFlowContextGuidance)
       if (globalMessages.length > 1) {
         finalMessage = `${globalMessages.slice(0, -1).join('\n\n')}\n\n${interpolated}`;
+        logger.info(`SAY-GET combined ${globalMessages.length} messages, dropping tentative flow_init.`);
       } else {
         finalMessage = interpolated; // Only had flow_init, so just use current message
+        logger.info(`SAY-GET replaced tentative flow_init with current message.`);
       }
-      logger.info(`SAY-GET replaced tentative flow_init with proper guidance handling`);
     } else {
       finalMessage = `${globalMessages.join('\n\n')}\n\n${interpolated}`;
       logger.info(`SAY-GET combined ${globalMessages.length + 1} messages globally`);
@@ -6800,6 +6809,22 @@ export class WorkflowEngine implements Engine {
 
     const messages = [...this.sessionContext.globalAccumulatedMessages];
     this.sessionContext.globalAccumulatedMessages = [];
+
+    return messages;
+  }
+
+  // Get all accumulated messages
+  getAccumulatedMessages(): string[] {
+    if (!this.sessionContext) {
+      logger.warn('No session context available for getAccumulatedMessages');
+      return [];
+    }
+
+    if (!this.sessionContext.globalAccumulatedMessages) {
+      this.sessionContext.globalAccumulatedMessages = [];
+    }
+
+    const messages = [...this.sessionContext.globalAccumulatedMessages];
 
     return messages;
   }
