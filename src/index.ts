@@ -3793,7 +3793,8 @@ function handleSayGetStep(currentFlowFrame: FlowFrame, engine: Engine): string |
 
       // Replace tentative flow_init with SAY messages only (guidance will be added by addFlowContextGuidance)
       if (globalMessages.length > 1) {
-        finalMessage = `${globalMessages.slice(0, -1).join('\n\n')}\n\n${interpolated}`;
+        // Drop the first message (tentative flow_init) and keep the rest (SAY messages)
+        finalMessage = `${globalMessages.slice(1).join('\n\n')}\n\n${interpolated}`;
         logger.info(`SAY-GET combined ${globalMessages.length} messages, dropping tentative flow_init.`);
       } else {
         finalMessage = interpolated; // Only had flow_init, so just use current message
