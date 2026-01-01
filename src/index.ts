@@ -2001,7 +2001,13 @@ function interpolateObject(obj: unknown, data: unknown, args: ArgsType = {}, eng
   } else if (typeof obj === 'object' && obj !== null) {
     const result: Record<string, unknown> = {};
     for (const [key, value] of Object.entries(obj)) {
-      result[key] = interpolateObject(value, data, args, engine);
+      // Interpolate the key if it contains template syntax
+      let newKey = key;
+      if (key.includes('{{')) {
+         const interpolatedKey = interpolateObject(key, data, args, engine);
+         newKey = String(interpolatedKey);
+      }
+      result[newKey] = interpolateObject(value, data, args, engine);
     }
     return result;
   }
