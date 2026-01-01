@@ -4190,6 +4190,22 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
 
     const callType = step.callType || "call"; // Default to normal sub-flow call
 
+    // === PARAMETER HANDLING ===
+    // Extract parameters from the step definition
+    let flowParameters: Record<string, unknown> = {};
+    if (step.parameters && typeof step.parameters === 'object') {
+      logger.info(`Processing parameters for sub-flow ${subFlow.name}:`, step.parameters);
+      
+      // Interpolate parameters using current context
+      const combinedVariables = {
+        ...currentFlowFrame.variables,
+        ...getEngineSessionVariables(engine, currentFlowFrame.contextStack)
+      };
+      
+      flowParameters = interpolateObject(step.parameters, combinedVariables, {}, engine) as Record<string, unknown>;
+      logger.debug(`Interpolated flow parameters:`, flowParameters);
+    }
+
     logger.info(`Starting sub-flow ${subFlow.name} with callType: ${callType}, input: ${input}`);
 
     if (callType === "reboot") {
@@ -4222,6 +4238,9 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
       // Start the reboot flow as the only flow in the system
       const transaction = TransactionManager.create(subFlow.name, 'reboot', currentFlowFrame.userId);
 
+      const variables = getInitialVariables(engine, subFlow);
+      Object.assign(variables, flowParameters); // Inject parameters
+
       pushToCurrentStack(engine, {
         flowName: subFlow.name,
         flowId: subFlow.id,
@@ -4229,7 +4248,7 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
         flowStepsStack: [...subFlow.steps].reverse(),
         contextStack: [{ role: 'user', content: input, timestamp: Date.now() }],
         inputStack: [input],
-        variables: getInitialVariables(engine, subFlow), // Fresh variables for reboot flow
+        variables, // Fresh variables for reboot flow
         transaction,
         userId: currentFlowFrame.userId,
         startTime: Date.now()
@@ -4252,6 +4271,11 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
       addToContextStack(currentFlowFrame.contextStack, 'user', input);
       currentFlowFrame.inputStack.push(input);
 
+      // Inject parameters into current variables
+      if (Object.keys(flowParameters).length > 0) {
+         Object.assign(currentFlowFrame.variables, flowParameters);
+      }
+
       // Update transaction
       TransactionManager.fail(currentFlowFrame.transaction, `Replaced by flow ${subFlow.name}`);
       currentFlowFrame.transaction = TransactionManager.create(subFlow.name, 'replacement', currentFlowFrame.userId);
@@ -4264,6 +4288,9 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
       // Normal sub-flow call - create new transaction for sub-flow
       const subTransaction = TransactionManager.create(subFlow.name, 'sub-flow', currentFlowFrame.userId);
 
+      const variables = getInitialVariables(engine, subFlow, currentFlowFrame.variables);
+      Object.assign(variables, flowParameters); // Inject parameters
+
       // Push sub-flow onto stack - INHERIT parent's variables for unified scope
       pushToCurrentStack(engine, {
         flowName: subFlow.name,
@@ -4272,7 +4299,7 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
         flowStepsStack: [...subFlow.steps].reverse(),
         contextStack: [{ role: 'user', content: input, timestamp: Date.now() }],
         inputStack: [input],
-        variables: getInitialVariables(engine, subFlow, currentFlowFrame.variables), // Inherit + merge flow definition variables
+        variables, // Inherit + merge flow definition variables
         transaction: subTransaction,
         userId: currentFlowFrame.userId,
         startTime: Date.now(),
