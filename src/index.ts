@@ -3617,6 +3617,18 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
       const onFailStep = Array.isArray(effectiveOnFail) ? effectiveOnFail[0] : effectiveOnFail;
       const callType = onFailStep.callType || (onFailStep.type === "FLOW" ? "replace" : undefined); // Default to replace for FLOW onFail
 
+      // Extract parameters from the onFailStep definition (just like handleSubFlowStep)
+      let flowParameters: Record<string, unknown> = {};
+      if (onFailStep.parameters && typeof onFailStep.parameters === 'object') {
+        const combinedVariables = {
+          ...currentFlowFrame.variables,
+          ...getEngineSessionVariables(engine, currentFlowFrame.contextStack)
+        };
+        // Interpolate parameters using current context
+        flowParameters = interpolateObject(onFailStep.parameters, combinedVariables, {}, engine) as Record<string, unknown>;
+        logger.debug(`Interpolated onFail flow parameters:`, flowParameters);
+      }
+
       if (callType === "reboot") {
         // Clear ALL flows across ALL stacks and start completely fresh with the onFail flow
         logger.info(`Rebooted due to 'reboot' type of onFail step: ${onFailStep.id || onFailStep.name} in flow ${currentFlowFrame.flowName} for tool ${step.tool}`);
@@ -3645,6 +3657,9 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
           if (rebootFlow) {
             const transaction = TransactionManager.create(rebootFlow.name, 'reboot-recovery', currentFlowFrame.userId);
 
+            const variables = getInitialVariables(engine, rebootFlow);
+            Object.assign(variables, flowParameters); // Inject interpolated parameters
+
             pushToCurrentStack(engine, {
               flowName: rebootFlow.name,
               flowId: rebootFlow.id,
@@ -3652,7 +3667,7 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
               flowStepsStack: [...rebootFlow.steps].reverse(),
               contextStack: [{ role: 'user', content: input, timestamp: Date.now() }],
               inputStack: [input],
-              variables: getInitialVariables(engine, rebootFlow), // Fresh variables for reboot flow
+              variables: variables, // Fresh variables for reboot flow (with injected params)
               transaction,
               userId: currentFlowFrame.userId,
               startTime: Date.now()
@@ -3678,6 +3693,12 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
         } else {
           currentFlowFrame.flowStepsStack = [effectiveOnFail];
         }
+
+        // Inject parameters into current variables
+        if (Object.keys(flowParameters).length > 0) {
+          Object.assign(currentFlowFrame.variables, flowParameters);
+        }
+
         return `Tool ${step.tool} failed, executing onFail step`;
 
       } else if (callType === "call") {
@@ -3690,6 +3711,9 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
           if (onFailFlow) {
             const transaction = TransactionManager.create(onFailFlow.name, 'onFail-recovery', currentFlowFrame.userId);
 
+            const variables = { ...currentFlowFrame.variables }; // Inherit variables
+            Object.assign(variables, flowParameters); // Inject interpolated parameters
+
             pushToCurrentStack(engine, {
               flowName: onFailFlow.name,
               flowId: onFailFlow.id,
@@ -3697,7 +3721,7 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
               flowStepsStack: [...onFailFlow.steps].reverse(),
               contextStack: [...currentFlowFrame.contextStack], // Inherit context
               inputStack: [...currentFlowFrame.inputStack],
-              variables: { ...currentFlowFrame.variables }, // Inherit variables
+              variables: variables,
               transaction,
               userId: currentFlowFrame.userId,
               startTime: Date.now()
