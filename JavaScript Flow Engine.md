@@ -49,6 +49,36 @@ The engine makes **no assumptions about its hosting environment** (Node and Brow
 - **Custom Applications**: Any system that processes user intent and requires workflow execution
 - **Hybrid Systems**: Mixed human-AI environments where workflows can be triggered by either
 
+### AI-Powered Intent Detection & Parameter Extraction
+
+The engine automatically handles intent detection through `updateActivity()`, but it goes beyond simple matching. It utilizes the AI to:
+
+1.  **Detect Intent**: Analyze the user's natural language input to find the most relevant workflow.
+2.  **Extract Parameters**: Automatically extract structured data from the prompt based on the flow's `parameters` definition.
+
+For example, if a user says *"Send $50 to Bob"* and your payment flow defines `amount` and `payee` parameters, the engine will detect the flow and pre-populate those variables with *"50"* and *"Bob"*.
+
+You can also manually invoke this logic to check for triggers without executing them:
+
+```typescript
+// Detect flow and extract parameters without execution
+const result = await engine.detectFlowWithParameters(userInput);
+
+if (result && result.flow) {
+  console.log(`Input triggers flow: ${result.flow.name}`);
+  if (result.parameters) {
+    // Parameters extracted by AI from the user prompt
+    console.log('Extracted parameters:', result.parameters);
+  }
+}
+```
+
+This is useful for:
+- Pre-flight checks before handing control to the engine
+- UI hints suggesting available actions
+- Routing logic in the host application
+- Debugging intent detection performance
+
 ## ⚠️ Critical Session Management Notice
 
 **IMPORTANT**: All code examples in this guide have been updated to reflect the correct session management pattern. The `updateActivity()` method returns an updated `EngineSessionContext` that **must be captured and used** for all subsequent calls to prevent session corruption.
@@ -91,6 +121,20 @@ const flowsMenu = [
     prompt: "Process a payment",
     description: "Handle payment processing with validation",
     primary: true, // Mark as user-facing entry point flow
+    parameters: [ // Define parameters for AI to extract from user prompt
+      {
+        "name": "amount",
+        "description": "The payment amount mentioned by user (e.g. '50')",
+        "type": "string"
+      }
+    ],
+    variables: { // Optional: Define variables with initial values
+      "amount": {
+        "type": "string",
+        "description": "Payment amount",
+        "value": "" // Automatically populated from extracted parameters if found
+      }
+    },
     steps: [
       { type: "SAY", value: "Let's process your payment." },
       { type: "SAY-GET", variable: "amount", value: "Enter amount:" },
@@ -3957,7 +4001,7 @@ Variables operate at multiple levels:
     currency: "USD",
     method: "{{payment_method}}"
   },
-  onFail: {                            // Error handling
+  onFail: {                            // Error handling (can be SAY or FLOW)
     type: "SAY",
     value: "Payment failed: {{errorMessage}}. Please try again."
   }
@@ -3967,7 +4011,7 @@ Variables operate at multiple levels:
 **Key Features:**
 - **Dynamic Arguments**: Use variables and expressions in tool arguments
 - **Result Storage**: Automatically store tool responses in variables
-- **Error Handling**: Define custom responses for tool failures
+- **Error Handling**: Define custom responses for tool failures. `onFail` supports `parameters` when invoking formatted flows.
 - **Response Mapping**: Transform tool responses into usable data
 
 **Advanced Tool Examples:**
@@ -3982,6 +4026,15 @@ Variables operate at multiple levels:
     location: "{{user_location}}",
     units: "{{user_preference_metric ? 'metric' : 'imperial'}}",
     include_forecast: "{{subscription_tier === 'premium'}}"
+  },
+  onFail: {
+    type: "FLOW",
+    value: "WeatherErrorRecovery",
+    parameters: {
+      location: "{{user_location}}",
+      error: "{{error.message}}",
+      "{{dynamicKey}}": "dynamicValue"
+    }
   }
 }
 
@@ -4010,38 +4063,57 @@ Variables operate at multiple levels:
 {
   id: "verify-identity",
   type: "FLOW",
-  name: "IdentityVerification",         // Target workflow name
+  value: "IdentityVerification",         // Target workflow name
   callType: "call",                     // Execution mode
-  variable: "verification_result"        // Store sub-workflow result
+  variable: "verification_result",       // Store sub-workflow result
+  parameters: {                          // Optional arguments
+    userId: "{{session_user.id}}",
+    "{{dynamic_key}}": "some_value"      // Dynamic key names supported
+  }
 }
 ```
 
+**Key Properties:**
+- **`value`**: The name or ID of the flow to execute. Supports template interpolation `{{...}}` for dynamic flow selection. (Alias: `name` is also supported for backward compatibility)
+- **`callType`**: Controls execution behavior (`call`, `replace`, `reboot`).
+- **`parameters`**: Object of arguments to pass to the sub-flow. Values are interpolated. **Dynamic keys** are supported using template syntax (e.g., `{{keyName}}: "value"`).
+- **`variable`**: (Optional) Variable to store the result of the sub-flow (if it returns a value).
+
 **Call Types:**
 - **`"call"`** (default): Execute sub-workflow, return to current workflow after completion
-- **`"replace"`**: Replace current workflow with new workflow
-- **`"reboot"`**: Clear all workflows and start fresh (emergency recovery)
+- **`"replace"`**: Replace current workflow with new workflow (one-way transfer)
+- **`"reboot"`**: Clear all active workflows (including parents) and start fresh (emergency recovery)
 
 **Sub-workflow Examples:**
+
 ```javascript
-// Standard sub-workflow call
+// Passing parameters to a sub-flow
 {
-  id: "address-verification",
+  id: "check-balance",
   type: "FLOW",
-  name: "AddressVerification",
-  callType: "call",
-  variable: "address_verified"
+  value: "CheckAccountBalance",
+  parameters: {
+    accountId: "{{selected_account.id}}",
+    currency: "USD"
+  }
 }
 
-// Conditional sub-workflow routing
+// Dynamic flow selection
 {
   id: "route-support",
   type: "FLOW",
-  name: "{{user_tier === 'premium' ? 'PremiumSupport' : 'StandardSupport'}}",
+  value: "{{user_tier === 'premium' ? 'PremiumSupport' : 'StandardSupport'}}",
   callType: "call"
 }
 
 // Emergency flow replacement
 {
+  id: "emergency-stop",
+  type: "FLOW",
+  value: "SecurityLockdown",
+  callType: "reboot"
+}
+```
   id: "security-breach-handler",
   type: "FLOW",
   name: "SecurityProtocol",
@@ -5266,6 +5338,33 @@ The JavaScript Flow Engine benefits from community contributions:
 ---
 
 The **JavaScript Flow Engine** provides a robust foundation for building sophisticated conversational workflows. With proper implementation following this guide, you can create reliable, secure, and scalable workflow automation that enhances user experiences across any conversational platform.
+
+---
+
+# Chapter 7: Standard Flows Library
+
+The JavaScript Flow Engine comes with a set of production-ready core flows that handle common conversational patterns. These flows are tested in production and provide robust implementations for system tasks and common integrations.
+
+## System Flows
+These flows handle fundamental interaction patterns:
+
+- **`no-action-needed`**: No-op flow when user input is already handled or requires no action.
+- **`cancel-process`**: Standard cancellation handler that confirms termination to the user.
+- **`contact-support`**: Provides support contact information (configured via cargo).
+- **`switch-to-text`**: Handles transition from voice/other channels to SMS, including sending a welcome message via Twilio.
+- **`authenticate-user`**: Robust multi-channel authentication (SMS/Email) with OTP generation and validation.
+- **`get-cell-or-email`**: Helper flow to collect contact information with validation.
+
+## Shopify Flows
+These flows provide e-commerce capabilities. 
+**Note**: The engine provides the necessary tool definitions in `shopify.tools.json`, so the integrator only needs to provide the Shopify Credentials (api key, secret, and store name).
+
+- **`shopify-product-search`**: Search for products, check availability (including store-specific stock), and pricing.
+- **`shopify-track-order`**: Order tracking workflow (usually requires authentication).
+- **`get-search-query`**: Helper flow to collect a search query if not provided in the initial prompt.
+
+## Usage
+These flows are available in the `flows/` directory and can be added to your `flowsMenu` during engine initialization. Since they are standard object structures, you can import them directly from the JSON files.
 
 ## Related Documentation
 

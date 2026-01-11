@@ -1,4 +1,18 @@
-// support-ticket.js
+/*
+Instructions about scripting in this file:
+
+SAY and SAY-GET Steps should use value and value_es for English and Spanish versions of the text.
+The value and value_es of SAY and SAY-GET message is a sting template that can reference valid JavaScript expressions in double curly braces {{}}.
+Escape (\) in strings literls (SAY/SAY-GET) do NOT require double escaping, except when inside {{}} because those are deffered expressions.
+Similarly, escape sequences in expressions of RETURN/SET steps require double escaping because ALL expressions are deffered evaluations.
+SET and RETURN steps excepect a value({{}} not required) and are expected to be valid JavaScript expressions.
+SET steps can't use cargo.<property> as the variable directly but the assignment value can set cargo properties in the expression.
+FLOW steps expect a flow name but may use {{}} to compute the flow name dynamically.
+*/
+
+
+/* Search and Replace '...' with your actual API end points, keys and secrets before running! */
+
 import { WorkflowEngine } from '../dist/index.js';
 //import { WorkflowEngine } from "jsfe";
 
@@ -41,7 +55,10 @@ const SMTP_PORT = 465
 const SMTP_USER = "mailer@instantaiguru.com"
 const SMTP_PASSWORD = "..."
 
-const config = {dbPrefix: 'myaccount.icuracao.com'};
+const config = { dbPrefix: 'myaccount.icuracao.com' };
+
+// Google API Key - used for both Generative AI and Maps Geocoding
+const SEARCH_API_KEY = '...';
 
 /* ---------- AI callback ---------- */
 async function aiCallback(systemInstruction, userMessage) {
@@ -110,6 +127,28 @@ function validatePhone(phone) {
 function validateEmail(email) {
    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
    return emailRegex.test(email);
+}
+
+function normalizeAndFindCapture(userInput, patterns) {
+   if (!patterns || !Array.isArray(patterns)) return null;
+
+   for (const pattern of patterns) {
+      try {
+         let val = userInput;
+         // Apply normalizer first if present
+         if (pattern.normalizer) {
+            val = val.replace(new RegExp(pattern.normalizer, 'g'), '');
+         }
+
+         const regex = new RegExp(pattern.regex);
+         if (regex.test(val)) {
+            return { variable: pattern.variable, value: val };
+         }
+      } catch (e) {
+         logger.warn(`Invalid regex in capture pattern: ${e.message}`);
+      }
+   }
+   return null;
 }
 
 // Send email using our smtp server
@@ -234,6 +273,7 @@ async function validateOTP(otp, container) {
          // Clear expired OTP
          container.otpHash = null;
          container.otpTimestamp = null;
+         container.otpVerified = false;
          return false;
       }
 
@@ -246,14 +286,771 @@ async function validateOTP(otp, container) {
          // Clear the OTP after successful validation
          container.otpHash = null;
          container.otpTimestamp = null;
+         // Set verified flag for downstream flows (e.g., Shopify order lookup)
+         container.otpVerified = true;
+         container.otpVerifiedAt = Date.now();
       } else {
-         logger.warn(`Invalid OTP`);
+         logger.warn(`Invalid OTP: ${otp}`);
       }
 
       return isValid;
    } catch (error) {
       logger.error(`Error validating OTP: ${error.message}`);
       throw error;
+   }
+}
+
+// Geocoding with retry logic using Google Maps API
+async function geocodeCity(city, retryCount = 0) {
+   const MAX_RETRIES = 2;
+   const GOOGLE_MAPS_URL = 'https://maps.googleapis.com/maps/api/geocode/json';
+
+   try {
+      const geocodeUrl = `${GOOGLE_MAPS_URL}?address=${encodeURIComponent(city)}&key=${SEARCH_API_KEY}`;
+      const response = await fetch(geocodeUrl, {
+         signal: AbortSignal.timeout(5000) // 5 second timeout
+      });
+
+      if (response.ok) {
+         const data = await response.json();
+         if (data.status === 'OK' && data.results && data.results.length > 0) {
+            const location = data.results[0].geometry.location;
+            const result = {
+               lat: location.lat,
+               lon: location.lng,
+               source: 'google'
+            };
+            logger.info(`Geocoded ${city} via Google Maps: (${result.lat}, ${result.lon})`);
+            return result;
+         }
+         logger.warn(`Google Maps failed for ${city}, status: ${data.status}`);
+      } else {
+         logger.warn(`Google Maps HTTP error for ${city}, status: ${response.status}`);
+      }
+
+      // Retry logic with exponential backoff
+      if (retryCount < MAX_RETRIES) {
+         const backoffMs = Math.pow(2, retryCount) * 1000;
+         logger.info(`Retrying geocode for ${city} after ${backoffMs}ms (attempt ${retryCount + 1}/${MAX_RETRIES})`);
+         await new Promise(resolve => setTimeout(resolve, backoffMs));
+         return geocodeCity(city, retryCount + 1);
+      }
+
+      throw new Error(`Could not geocode city: ${city} after ${MAX_RETRIES} retries`);
+
+   } catch (error) {
+      logger.error(`Geocoding failed for ${city}: ${error.message}`);
+      throw error;
+   }
+}
+
+// Find the closest location based on city
+// Generic proximity utility that works with any location list containing lat/lon coordinates
+async function findClosestLocation(city, locations) {
+   try {
+      logger.info(`Finding closest location for city: ${city}`);
+
+      // Use production-grade geocoding with caching, rate limiting, and fallbacks
+      const geocodeResult = await geocodeCity(city);
+      const originLat = geocodeResult.lat;
+      const originLon = geocodeResult.lon;
+
+      logger.info(`Origin location: ${city} (${originLat}, ${originLon})`);
+
+      // Calculate distances to all locations using pre-calculated coordinates
+      const locationsWithDistances = locations.map(location => {
+         // Validate that location has coordinates
+         if (!location.lat || !location.lon) {
+            logger.warn(`Location ${location.city} missing coordinates, skipping`);
+            return null;
+         }
+
+         // Calculate distance using Haversine formula
+         const distance = calculateDistance(originLat, originLon, location.lat, location.lon);
+
+         logger.info(`Location ${location.city}: (${location.lat}, ${location.lon}) - ${distance.toFixed(1)} miles`);
+
+         return {
+            ...location,
+            distance: distance
+         };
+      }).filter(location => location !== null);
+
+      if (locationsWithDistances.length === 0) {
+         throw new Error('No locations with valid coordinates found');
+      }
+
+      // Sort by distance and return closest
+      locationsWithDistances.sort((a, b) => a.distance - b.distance);
+      const closestLocation = locationsWithDistances[0];
+
+      logger.info(`Found closest location: ${closestLocation.city} at distance ${closestLocation.distance.toFixed(1)} miles`);
+
+      // Return generic result structure
+      return {
+         store: {
+            name: closestLocation.name || `Location - ${closestLocation.city}`,
+            address: closestLocation.address,
+            city: closestLocation.city,
+            state: closestLocation.state,
+            phone: closestLocation.phone || "(800) 555-0123"
+         },
+         distance: closestLocation.distance.toFixed(1),
+         directions: `From ${city}, head towards ${closestLocation.city}. The location is at ${closestLocation.address}.`
+      };
+
+   } catch (error) {
+      logger.error(`Error finding closest location: ${error.message}`);
+      throw new Error(`Failed to find location: ${error.message}`);
+   }
+}
+
+// Haversine formula to calculate distance between two points
+function calculateDistance(lat1, lon1, lat2, lon2) {
+   const R = 3959; // Earth's radius in miles
+   const dLat = (lat2 - lat1) * Math.PI / 180;
+   const dLon = (lon2 - lon1) * Math.PI / 180;
+   const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+   return R * c;
+}
+
+// ============================================================================
+// SHOPIFY MCP INTEGRATION
+// ============================================================================
+
+// Storefront MCP (public, no auth needed)
+const SHOPIFY_STORE_DOMAIN = '...';
+const SHOPIFY_MCP_ENDPOINT = `https://${SHOPIFY_STORE_DOMAIN}/api/mcp`;
+
+// Admin API (for authenticated operations like order lookup)
+const SHOPIFY_ADMIN_STORE = '...';
+const SHOPIFY_ADMIN_API_VERSION = '2025-01';
+const SHOPIFY_ADMIN_API_TOKEN = process.env.SHOPIFY_ADMIN_API_TOKEN;
+const SHOPIFY_ADMIN_API_URL = `https://${SHOPIFY_ADMIN_STORE}.myshopify.com/admin/api/${SHOPIFY_ADMIN_API_VERSION}/graphql.json`;
+
+/**
+ * Make a request to the Shopify MCP endpoint
+ */
+async function shopifyMcpRequest(toolName, args) {
+   try {
+      logger.debug(`Shopify MCP Request: ${toolName} with args: ${JSON.stringify(args)}`);
+
+      const response = await fetch(SHOPIFY_MCP_ENDPOINT, {
+         method: 'POST',
+         headers: { 'Content-Type': 'application/json' },
+         body: JSON.stringify({
+            jsonrpc: '2.0',
+            method: 'tools/call',
+            id: Date.now(),
+            params: {
+               name: toolName,
+               arguments: args,
+            },
+         }),
+      });
+
+      if (!response.ok) {
+         logger.error(`Shopify MCP HTTP error: ${response.status} ${response.statusText}`);
+         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      logger.debug(`Shopify MCP Response: ${JSON.stringify(data).substring(0, 500)}`);
+
+      if (data.error) {
+         logger.error(`Shopify MCP error: ${JSON.stringify(data.error)}`);
+         throw new Error(data.error.message || 'MCP request failed');
+      }
+
+      // Parse text content from MCP response
+      if (data.result?.content) {
+         const textContent = data.result.content.find(item => item.type === 'text');
+         if (textContent?.text) {
+            try {
+               return JSON.parse(textContent.text);
+            } catch {
+               return textContent.text;
+            }
+         }
+      }
+
+      return data.result;
+   } catch (error) {
+      logger.error(`Shopify MCP exception: ${error.message}`);
+      throw error;
+   }
+}
+
+/**
+ * Search products in the Shopify catalog
+ */
+async function searchShopifyProducts(query, context = 'Customer browsing', limit = 5) {
+   // Ensure query is a string
+   const queryStr = String(query || '');
+
+   // Sanitize query: replace " (inch mark) with 'inch', handle special chars
+   const sanitizedQuery = queryStr
+      .replace(/"/g, ' inch')           // Replace " with inch
+      .replace(/'/g, "'")               // Normalize apostrophes
+      .replace(/[^\w\s\-.']/g, ' ')     // Remove other special chars
+      .replace(/\s+/g, ' ')             // Collapse multiple spaces
+      .trim();
+
+   logger.debug(`Shopify search: original="${queryStr}" sanitized="${sanitizedQuery}"`);
+
+   return shopifyMcpRequest('search_shop_catalog', {
+      query: sanitizedQuery,
+      context: String(context || 'Customer browsing'),
+      limit: parseInt(limit) || 5,
+      country: 'US',
+      language: 'EN',
+   });
+}
+
+/**
+ * Get details for a specific product
+ */
+async function getShopifyProductDetails(productId, variantOptions = null) {
+   const params = { product_id: productId };
+   if (variantOptions) {
+      params.options = variantOptions;
+   }
+   return shopifyMcpRequest('get_product_details', params);
+}
+
+/**
+ * Get current cart contents
+ */
+async function getShopifyCart(cartId) {
+   return shopifyMcpRequest('get_cart', { cart_id: cartId });
+}
+
+/**
+ * Add items to cart (convenience wrapper)
+ */
+async function addToShopifyCart(cartId, items) {
+   const params = {
+      add_items: items.map(item => ({
+         product_variant_id: item.variantId,
+         quantity: item.quantity || 1,
+      })),
+   };
+
+   if (cartId) {
+      params.cart_id = cartId;
+   }
+
+   return shopifyMcpRequest('update_cart', params);
+}
+
+/**
+ * Update delivery address on cart
+ */
+async function updateShopifyDeliveryAddress(cartId, address) {
+   return shopifyMcpRequest('update_cart', {
+      cart_id: cartId,
+      delivery_addresses_to_replace: [{
+         selected: true,
+         delivery_address: {
+            first_name: address.firstName,
+            last_name: address.lastName,
+            address1: address.address1,
+            address2: address.address2 || '',
+            city: address.city,
+            province_code: address.provinceCode,
+            zip: address.zip,
+            country_code: address.countryCode || 'US',
+            phone: address.phone,
+         },
+      }],
+   });
+}
+
+/**
+ * Apply discount code to cart
+ */
+async function applyShopifyDiscount(cartId, discountCode) {
+   return shopifyMcpRequest('update_cart', {
+      cart_id: cartId,
+      discount_codes: Array.isArray(discountCode) ? discountCode : [discountCode],
+   });
+}
+
+/**
+ * Search store policies and FAQs
+ */
+async function searchShopifyPolicies(query, context = '') {
+   return shopifyMcpRequest('search_shop_policies_and_faqs', {
+      query: String(query || ''),
+      context: String(context || ''),
+   });
+}
+
+/**
+ * Get inventory levels per store location for a product variant
+ * Uses Admin API to query inventory at all locations
+ */
+async function getStoreInventory(variantId) {
+   logger.debug(`getStoreInventory called for variantId: ${variantId}`);
+
+   const query = `
+      query getVariantInventory($variantId: ID!) {
+         productVariant(id: $variantId) {
+            id
+            title
+            product {
+               title
+            }
+            inventoryItem {
+               id
+               inventoryLevels(first: 20) {
+                  edges {
+                     node {
+                        quantities(names: ["available"]) {
+                           name
+                           quantity
+                        }
+                        location {
+                           id
+                           name
+                           address {
+                              address1
+                              city
+                              province
+                              zip
+                           }
+                        }
+                     }
+                  }
+               }
+            }
+         }
+      }
+   `;
+
+   try {
+      const response = await fetch(SHOPIFY_ADMIN_API_URL, {
+         method: 'POST',
+         headers: {
+            'Content-Type': 'application/json',
+            'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN,
+         },
+         body: JSON.stringify({
+            query,
+            variables: { variantId },
+         }),
+      });
+
+      const data = await response.json();
+
+      if (data.errors) {
+         logger.error(`getStoreInventory error: ${JSON.stringify(data.errors)}`);
+         return { success: false, error: data.errors[0]?.message || 'Failed to fetch inventory' };
+      }
+
+      const variant = data.data?.productVariant;
+      if (!variant) {
+         return { success: false, error: 'Product variant not found' };
+      }
+
+      const inventoryLevels = variant.inventoryItem?.inventoryLevels?.edges || [];
+
+      // Filter to only retail stores (exclude warehouse/ecom locations)
+      const storeInventory = inventoryLevels
+         .map(edge => ({
+            locationId: edge.node.location.id,
+            locationName: edge.node.location.name,
+            city: edge.node.location.address?.city,
+            address: edge.node.location.address?.address1,
+            province: edge.node.location.address?.province,
+            zip: edge.node.location.address?.zip,
+            available: edge.node.quantities.find(q => q.name === 'available')?.quantity || 0,
+         }))
+         .filter(loc =>
+            !loc.locationName.toLowerCase().includes('warehouse') &&
+            !loc.locationName.toLowerCase().includes('ecom')
+         );
+
+      return {
+         success: true,
+         productTitle: variant.product?.title,
+         variantTitle: variant.title,
+         inventory: storeInventory,
+      };
+   } catch (error) {
+      logger.error(`getStoreInventory exception: ${error.message}`);
+      return { success: false, error: error.message };
+   }
+}
+
+/**
+ * Find nearest stores with stock for a product variant
+ * Combines inventory lookup with distance calculation
+ */
+async function findNearestStoresWithStock(variantId, city, storeLocations, maxStores = 3) {
+   logger.debug(`findNearestStoresWithStock: variantId=${variantId}, city=${city}`);
+
+   try {
+      // Get inventory at all stores
+      const inventoryResult = await getStoreInventory(variantId);
+      if (!inventoryResult.success) {
+         return { success: false, error: inventoryResult.error };
+      }
+
+      // Geocode the user's city
+      const geocodeResult = await geocodeCity(city);
+      const originLat = geocodeResult.lat;
+      const originLon = geocodeResult.lon;
+
+      // Match inventory with store locations (which have lat/lon)
+      const storesWithStockAndDistance = [];
+
+      for (const inv of inventoryResult.inventory) {
+         if (inv.available <= 0) continue; // Skip out-of-stock locations
+
+         // Find matching store in storeLocations by city name
+         const matchingStore = storeLocations.find(store =>
+            store.city.toLowerCase() === inv.city?.toLowerCase() ||
+            store.name.toLowerCase().includes(inv.locationName.toLowerCase()) ||
+            inv.locationName.toLowerCase().includes(store.city.toLowerCase())
+         );
+
+         if (matchingStore && matchingStore.lat && matchingStore.lon) {
+            const distance = calculateDistance(originLat, originLon, matchingStore.lat, matchingStore.lon);
+            storesWithStockAndDistance.push({
+               name: matchingStore.name,
+               city: matchingStore.city,
+               address: matchingStore.address,
+               state: matchingStore.state,
+               phone: matchingStore.phone,
+               available: inv.available,
+               distance: distance,
+            });
+         }
+      }
+
+      // Sort by distance and take top N
+      storesWithStockAndDistance.sort((a, b) => a.distance - b.distance);
+      const nearestStores = storesWithStockAndDistance.slice(0, maxStores);
+
+      if (nearestStores.length === 0) {
+         return {
+            success: true,
+            found: false,
+            message: 'This product is currently not available for in-store pickup at any location.',
+            productTitle: inventoryResult.productTitle,
+            variantTitle: inventoryResult.variantTitle,
+         };
+      }
+
+      return {
+         success: true,
+         found: true,
+         productTitle: inventoryResult.productTitle,
+         variantTitle: inventoryResult.variantTitle,
+         stores: nearestStores,
+         totalStoresWithStock: storesWithStockAndDistance.length,
+      };
+   } catch (error) {
+      logger.error(`findNearestStoresWithStock error: ${error.message}`);
+      return { success: false, error: error.message };
+   }
+}
+
+/**
+ * Lookup customer orders using Admin API (after OTP verification)
+ */
+async function lookupCustomerOrders(identifier, container) {
+   logger.debug(`lookupCustomerOrders called with identifier: ${identifier}, container type: ${typeof container}`);
+
+   // Handle case where container might be passed as string or undefined
+   if (!container || typeof container !== 'object') {
+      logger.error(`lookupCustomerOrders: Invalid container - ${typeof container}`);
+      return {
+         success: false,
+         error: 'Session container is invalid',
+         requiresOTP: true,
+      };
+   }
+
+   if (!container.otpVerified) {
+      return {
+         success: false,
+         error: 'OTP verification required before order lookup',
+         requiresOTP: true,
+      };
+   }
+
+   // Determine if identifier is email or phone
+   const isEmail = identifier && identifier.includes('@');
+   const queryFilter = isEmail ? `email:${identifier}` : `phone:${identifier}`;
+
+   const query = `
+      query getCustomerOrders($queryFilter: String!) {
+         customers(first: 1, query: $queryFilter) {
+            edges {
+               node {
+                  id
+                  email
+                  phone
+                  firstName
+                  lastName
+                  orders(first: 10, sortKey: CREATED_AT, reverse: true) {
+                     edges {
+                        node {
+                           id
+                           name
+                           createdAt
+                           displayFinancialStatus
+                           displayFulfillmentStatus
+                           cancelledAt
+                           cancelReason
+                           totalPriceSet {
+                              shopMoney {
+                                 amount
+                                 currencyCode
+                              }
+                           }
+                           fulfillments {
+                              trackingInfo {
+                                 number
+                                 url
+                              }
+                              status
+                           }
+                           shippingAddress {
+                              address1
+                              city
+                              province
+                              zip
+                           }
+                        }
+                     }
+                  }
+               }
+            }
+         }
+      }
+   `;
+
+   try {
+      const response = await fetch(SHOPIFY_ADMIN_API_URL, {
+         method: 'POST',
+         headers: {
+            'Content-Type': 'application/json',
+            'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN,
+         },
+         body: JSON.stringify({
+            query,
+            variables: { queryFilter },
+         }),
+      });
+
+      const data = await response.json();
+
+      if (data.errors) {
+         return {
+            success: false,
+            error: data.errors[0]?.message || 'Failed to fetch orders',
+         };
+      }
+
+      const customer = data.data?.customers?.edges?.[0]?.node;
+
+      if (!customer) {
+         return {
+            success: true,
+            orders: [],
+            message: `No orders found for this ${isEmail ? 'email' : 'phone'}`,
+         };
+      }
+
+      function overallStatus(order) {
+         let status = order.displayFulfillmentStatus;
+         if (order.cancelledAt) {
+            status = `CANCELLED${order.cancelReason && order.cancelReason !== 'OTHER' ? `:${order.cancelReason}` : ''}`;
+         }
+         if (order.displayFinancialStatus) {
+            status += ` ${order.displayFinancialStatus}`;
+         }
+         return status;
+      }
+
+      const orders = customer.orders.edges.map(edge => ({
+         orderNumber: edge.node.name,
+         orderId: edge.node.id,
+         createdAt: edge.node.createdAt,
+         financialStatus: edge.node.displayFinancialStatus,
+         overallStatus: overallStatus(edge.node),
+         total: edge.node.totalPriceSet?.shopMoney,
+         tracking: edge.node.fulfillments?.[0]?.trackingInfo,
+         shippingAddress: edge.node.shippingAddress,
+      }));
+
+      return {
+         success: true,
+         customer: {
+            firstName: customer.firstName,
+            lastName: customer.lastName,
+            email: customer.email,
+            phone: customer.phone,
+         },
+         orders,
+      };
+   } catch (error) {
+      return {
+         success: false,
+         error: error.message || 'Failed to lookup orders',
+      };
+   }
+}
+
+/**
+ * Get specific order status (after OTP verification)
+ */
+async function getShopifyOrderStatus(orderNumber, identifier, container, validateIdentifier = true) {
+   logger.debug(`getShopifyOrderStatus called with orderNumber: ${orderNumber}, identifier: ${identifier}`);
+   if (!container.otpVerified) {
+      return {
+         success: false,
+         error: 'OTP verification required',
+         requiresOTP: true,
+      };
+   }
+
+   // Determine if identifier is email or phone
+   const isEmail = identifier && identifier.includes('@');
+
+   const query = `
+      query getOrder($query: String!) {
+         orders(first: 1, query: $query) {
+            edges {
+               node {
+                  id
+                  name
+                  email
+                  phone
+                  createdAt
+                  displayFinancialStatus
+                  displayFulfillmentStatus
+                  cancelledAt
+                  cancelReason
+                  totalPriceSet {
+                     shopMoney {
+                        amount
+                        currencyCode
+                     }
+                  }
+                  lineItems(first: 50) {
+                     edges {
+                        node {
+                           title
+                           quantity
+                        }
+                     }
+                  }
+                  fulfillments {
+                     status
+                     trackingInfo {
+                        number
+                        url
+                        company
+                     }
+                     estimatedDeliveryAt
+                  }
+                  shippingAddress {
+                     firstName
+                     lastName
+                     address1
+                     city
+                     province
+                     zip
+                  }
+               }
+            }
+         }
+      }
+   `;
+
+   try {
+      const cleanOrderNumber = orderNumber.replace(/^#/, '');
+      const queryFilter = isEmail ? `email:${identifier}` : `phone:${identifier}`;
+
+      const response = await fetch(SHOPIFY_ADMIN_API_URL, {
+         method: 'POST',
+         headers: {
+            'Content-Type': 'application/json',
+            'X-Shopify-Access-Token': SHOPIFY_ADMIN_API_TOKEN,
+         },
+         body: JSON.stringify({
+            query,
+            variables: { query: `name:${cleanOrderNumber} ${queryFilter}` },
+         }),
+      });
+
+      const data = await response.json();
+
+      if (data.errors) {
+         return {
+            success: false,
+            error: data.errors[0]?.message || 'Failed to fetch order',
+         };
+      }
+
+      const order = data.data?.orders?.edges?.[0]?.node;
+
+      if (!order) {
+         return {
+            success: false,
+            error: 'Order not found. Please verify the order number.',
+         };
+      }
+
+      // Validate that the order matches the identifier
+      if (validateIdentifier && isEmail && order.email.toLowerCase() !== identifier.toLowerCase()) {
+         logger.warn(`Order email ${order.email} does not match identifier ${identifier}`);
+         return {
+            success: false,
+            error: 'Order email does not match the provided email.',
+         };
+      }
+      if (validateIdentifier && !isEmail && order.phone !== identifier) {
+         logger.warn(`Order phone ${order.phone} does not match identifier ${identifier}`);
+         return {
+            success: false,
+            error: 'Order phone number does not match the provided phone number.',
+         };
+      }
+
+      return {
+         success: true,
+         order: {
+            orderNumber: order.name,
+            createdAt: order.createdAt,
+            financialStatus: order.displayFinancialStatus,
+            fulfillmentStatus: order.displayFulfillmentStatus,
+            cancelled: !!order.cancelledAt,
+            total: order.totalPriceSet?.shopMoney,
+            items: order.lineItems.edges.map(edge => ({
+               title: edge.node.title,
+               quantity: edge.node.quantity,
+            })),
+            fulfillments: order.fulfillments.map(f => ({
+               status: f.status,
+               tracking: f.trackingInfo,
+               estimatedDelivery: f.estimatedDeliveryAt,
+            })),
+            shippingAddress: order.shippingAddress,
+         },
+      };
+   } catch (error) {
+      return {
+         success: false,
+         error: error.message || 'Failed to fetch order status',
+      };
    }
 }
 
@@ -265,14 +1062,29 @@ const APPROVED_FUNCTIONS = {
    "validateDigits": validateDigits,
    "validatePhone": validatePhone,
    "validateEmail": validateEmail,
+   "normalizeAndFindCapture": normalizeAndFindCapture,
    "sendEmail": sendEmail,
    "sendEmailOTP": sendEmailOTP,
+   "findClosestLocation": findClosestLocation,
+   // Shopify MCP functions
+   "searchShopifyProducts": searchShopifyProducts,
+   "getShopifyProductDetails": getShopifyProductDetails,
+   "getShopifyCart": getShopifyCart,
+   "addToShopifyCart": addToShopifyCart,
+   "updateShopifyDeliveryAddress": updateShopifyDeliveryAddress,
+   "applyShopifyDiscount": applyShopifyDiscount,
+   "searchShopifyPolicies": searchShopifyPolicies,
+   "lookupCustomerOrders": lookupCustomerOrders,
+   "getShopifyOrderStatus": getShopifyOrderStatus,
+   // Store inventory functions
+   "getStoreInventory": getStoreInventory,
+   "findNearestStoresWithStock": findNearestStoresWithStock,
 };
 
 const toolsRegistry = [
    {
-      "id": "get-otp-link",
-      "name": "Get OTP Link",
+      "id": "get-payment-link",
+      "name": "Get Payment Link",
       "description": "Generates a one-time payment link and sends it to the user via SMS and optionally email",
       "parameters": {
          "type": "object",
@@ -298,13 +1110,13 @@ const toolsRegistry = [
       },
       "implementation": {
          "type": "http",
-         "url": "https://<your-url>/get-otp-link",
+         "url": "https://...",
          "method": "POST",
          "contentType": "application/json",
          "timeout": 10000,
          "retries": 0,
          "headers": {
-            "Authorization": "Bearer <API_KEY_PLACEHOLDER>"
+            "Authorization": "Bearer ..."
          },
          "responseMapping": {
             "type": "object",
@@ -331,8 +1143,7 @@ const toolsRegistry = [
                         "template": "{{street}}, {{city}}, {{state}} {{zip}}"
                      }
                   }
-               },
-               "api_response": "."
+               }
             }
          }
       },
@@ -392,13 +1203,13 @@ const toolsRegistry = [
       },
       "implementation": {
          "type": "http",
-         "url": "https://<your-url>/create-case",
+         "url": "https://...",
          "method": "POST",
          "contentType": "application/json",
          "timeout": 5000,
          "retries": 0,
          "headers": {
-            "Authorization": "Bearer <CRM_API_KEY_PLACEHOLDER>"
+            "Authorization": "Bearer ..."
          },
          "responseMapping": {
             "type": "object",
@@ -418,8 +1229,7 @@ const toolsRegistry = [
                "error_message": {
                   "path": "message",
                   "fallback": "Unknown error occurred"
-               },
-               "api_response": "."
+               }
             }
          }
       },
@@ -461,13 +1271,13 @@ const toolsRegistry = [
       },
       "implementation": {
          "type": "http",
-         "url": "https://<your-url>/lookup-account",
+         "url": "https://...",
          "method": "POST",
          "contentType": "application/json",
          "timeout": 10000,
          "retries": 0,
          "headers": {
-            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjbGllbnRfaWQiOiJwZXJtYW5lbnRfcHJvZF90b2tlbiIsImlhdCI6MTc1NTMwNTYxOSwiaXNzIjoicG9zX2FpX2FwaSJ9.0fwQn72pU0kUr37HJSverql9verbXYDgD1Yrygw1K2k"
+            "Authorization": "Bearer ..."
          },
          "responseMapping": {
             "type": "object",
@@ -494,8 +1304,7 @@ const toolsRegistry = [
                      "state": "state",
                      "zip": "zip"
                   }
-               },
-               "api_response": "."
+               }
             }
          }
       },
@@ -510,105 +1319,99 @@ const toolsRegistry = [
       }
    },
    {
-      "id": "send-sms-otp",
-      "name": "Send SMS OTP",
-      "description": "Send OTP code via SMS for authentication",
+      "id": "get-subaccounts",
+      "name": "Get Subaccounts",
+      "description": "Retrieve subaccount information for a given account number",
       "parameters": {
-         "accountSid": {
-            "type": "string",
-            "description": "Twilio Account SID"
+         "type": "object",
+         "properties": {
+            "account_number": {
+               "type": "string",
+               "description": "The main account number to get subaccounts for",
+               "default": ""
+            }
          },
-         "from": {
-            "type": "string",
-            "description": "From phone number"
-         },
-         "to": {
-            "type": "string",
-            "description": "To phone number"
-         },
-         "container": {
-            "type": "object",
-            "description": "Session cargo container for OTP storage"
-         }
+         "required": [
+            "account_number"
+         ],
+         "additionalProperties": false
       },
-      "required": ["accountSid", "from", "to", "container"],
-      "additionalProperties": false,
       "implementation": {
-         "type": "local",
-         "function": "sendSMSOTP",
-         "args": ["accountSid", "from", "to", "container"],
-         "timeout": 5000
+         "type": "http",
+         "url": "https://...",
+         "method": "POST",
+         "contentType": "application/json",
+         "timeout": 10000,
+         "retries": 0,
+         "headers": {
+            "Authorization": "Bearer ..."
+         },
+         "responseMapping": {
+            "type": "object",
+            "mappings": {
+               "success": {
+                  "path": "success",
+                  "fallback": false
+               },
+               "subAccounts": {
+                  "path": "data.subAccounts",
+                  "fallback": []
+               },
+               "statementInformation": {
+                  "path": "data.statementInformation",
+                  "fallback": {}
+               },
+               "error": {
+                  "path": "error",
+                  "fallback": null
+               }
+            }
+         }
       },
       "security": {
          "requiresAuth": false,
-         "auditLevel": "medium",
-         "dataClassification": "authentication",
-         "rateLimit": {
-            "requests": 5,
-            "window": 300000
-         }
-      }
-   },
-   {
-      "id": "send-email-otp",
-      "name": "Send Email OTP",
-      "description": "Send OTP code via email for authentication",
-      "parameters": {
-         "to": {
-            "type": "string",
-            "description": "Email address to send OTP to"
-         },
-         "container": {
-            "type": "object",
-            "description": "Session cargo container for OTP storage"
-         },
-      },
-      "required": ["to", "container"],
-      "additionalProperties": false,
-      "implementation": {
-         "type": "local",
-         "function": "sendEmailOTP",
-         "args": ["to", "container"],
-         "timeout": 5000
-      },
-      "security": {
-         "requiresAuth": false,
-         "auditLevel": "medium",
-         "dataClassification": "authentication",
-         "rateLimit": {
-            "requests": 5,
-            "window": 300000
-         }
-      }
-   },
-   {
-      "id": "validate-otp",
-      "name": "Validate OTP",
-      "description": "Validate OTP code entered by user",
-      "parameters": {
-         "otp": {
-            "type": "string",
-            "description": "OTP code to validate"
-         },
-         "container": {
-            "type": "object",
-            "description": "Session cargo container for OTP storage"
-         }
-      },
-      "required": ["otp", "container"],
-      "additionalProperties": false,
-      "implementation": {
-         "type": "local",
-         "function": "validateOTP",
-         "args": ["otp", "container"],
-         "timeout": 5000
-      },
-      "security": {
-         "requiresAuth": false,
-         "auditLevel": "medium",
-         "dataClassification": "authentication",
+         "auditLevel": "high",
+         "dataClassification": "financial",
          "rateLimit": {
             "requests": 10,
+            "window": 60000
+         }
+      }
+   },
+   {
+      "id": "find-closest-location",
+      "name": "Find Closest Location",
+      "description": "Find the closest store location based on user's city",
+      "parameters": {
+         "userCity": {
+            "type": "string",
+            "description": "User's city for location search"
+         },
+         "stores": {
+            "type": "array",
+            "description": "List of store locations with coordinates"
+         }
+      },
+      "required": [
+         "userCity",
+         "stores"
+      ],
+      "additionalProperties": false,
+      "implementation": {
+         "type": "local",
+         "function": "findClosestLocation",
+         "args": [
+            "userCity",
+            "stores"
+         ],
+         "timeout": 5000
+      },
+      "security": {
+         "requiresAuth": false,
+         "auditLevel": "low",
+         "dataClassification": "public",
+         "rateLimit": {
+            "requests": 20,
             "window": 60000
          }
       }
@@ -620,670 +1423,410 @@ const flowsMenu = [
       "id": "start-payment",
       "name": "StartPayment",
       "version": "1.0.0",
-      "description": "Start payment process",
-      "prompt": "Accepting payment",
-      "prompt_es": "Aceptando pago",
+      "description": "This flow allows the user to request a payment link to be sent to the phone number or email address on file with their account. The user may provide their account number, or if unknown, they may provide the cell phone number or email address associated with the account. The payment link will then be sent via text and/or email to the corresponding contact information. Requests for payment arrangements, reporting financial difficulties in making a payment, or questions about amount due or due date should NOT trigger this flow.",
+      "prompt": "Payment",
+      "prompt_es": "Pago",
       "primary": true,
+      "parameters": [
+         {
+            "name": "acct_number",
+            "type": "string",
+            "description": "Customer account number (if user provided it in the query - must start with '5' and be 7-8 digits long)",
+         },
+         {
+            "name": "cell_number",
+            "type": "string",
+            "description": "Customer phone number (if user provided it in the query)",
+         },
+         {
+            "name": "email",
+            "type": "string",
+            "description": "Customer email address (if user provided it in the query - must be valid email format)",
+         }
+      ],
       "variables": {
-         "know_acct_yes_or_no": {
+         "payment_link_choice": {
             "type": "string",
             "description": "User response for knowing account number"
          },
          "acct_number": {
             "type": "string",
-            "description": "Customer account number"
+            "description": "Customer account number",
+            "value": ""
          },
          "cell_or_email": {
             "type": "string",
-            "description": "User choice between cell or email"
+            "description": "User choice between cell or email",
+            "value": ""
          },
          "cell_number": {
             "type": "string",
-            "description": "Customer cell phone number"
+            "description": "Customer cell phone number",
+            "value": ""
          },
          "email": {
             "type": "string",
-            "description": "Customer email address"
+            "description": "Customer email address",
+            "value": ""
          },
-         "otp_link_result": {
+         "payment_link_result": {
             "type": "object",
             "description": "Result from OTP link generation"
          },
-         "payment_aborted": {
-            "type": "boolean",
-            "description": "Flag to indicate if payment was aborted",
-            "value": false
+         "error_message": {
+            "type": "string",
+            "description": "Error message to convey to user",
+            "value": ""
          }
       },
       "steps": [
          {
-            "id": "ask_known_account",
-            "type": "SAY-GET",
-            "variable": "know_acct_yes_or_no",
-            "value": "To facilitate your payment we need to identify your account, {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES if you know your account number. {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO if you don't.",
-            "value_es": "Para facilitar su pago, necesitamos identificar su cuenta, {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb}} SÍ si sabe su número de cuenta. {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb}} NO si no lo sabe.",
-            "digits": {
-               "min": 1,
-               "max": 1
+            "id": "set_support_context",
+            "type": "SET",
+            "variable": "support_context_side_effect",
+            "value": "cargo.support_context = 'payment', cargo.support_context_es = 'pago'"
+         },
+         {
+            "id": "send-payment-link-or-proceed",
+            "type": "CASE",
+            "branches": {
+               "condition: cargo.accountNumber": {
+                  "id": "send_payment_link",
+                  "type": "FLOW",
+                  "value": "send-payment-link",
+                  "callType": "reboot"
+               },
+               "default": {
+                  "id": "proceed_to_send_otp",
+                  "type": "SET",
+                  "variable": "proceed_to_send_otp",
+                  "value": true
+               }
             }
+         },
+         {
+            "id": "ask-acct_info-if-no-param",
+            "type": "CASE",
+            "branches": {
+               "condition: !acct_number && !cell_number && !email && cargo.callerId": {
+                  "id": "ask_account_number_with_caller_id",
+                  "type": "SAY-GET",
+                  "variable": "payment_link_choice",
+                  "value": "To send you a payment link I can locate your account using phone, email or account number. To use your caller id, please {{cargo.verb}} yes. Otherwise, please enter {{cargo.voice ? 'or ' : ''}}{{cargo.verb}} the account number{{cargo.voice ? ' followed by the pound key' : ''}} or, either the phone or email associated with your account{{cargo.voice ? ' followed by the pound key' : ''}}. To exit at any time {{cargo.voice ? 'press the star key or ' : ''}}{{cargo.verb}} EXIT.",
+                  "value_es": "Para enviarte un enlace de pago, puedo localizar su cuenta utilizando el teléfono, el correo electrónico o el número de cuenta. Para usar su identificación de llamada, por favor {{cargo.verb_es}} sí. De lo contrario, por favor ingrese {{cargo.voice ? 'o ' : ''}}{{cargo.verb_es}} el número de cuenta{{cargo.voice ? ' seguido de la tecla numeral' : ''}} o, ya sea el teléfono o el correo electrónico asociado con su cuenta{{cargo.voice ? ' seguido de la tecla numeral' : ''}}. Para salir en cualquier momento {{cargo.voice ? 'presione la tecla de estrella o ' : ''}}{{cargo.verb_es}} SALIR.",
+                  "digits": {
+                     "min": 7,
+                     "max": 12
+                  }
+               },
+               "condition: !acct_number && !cell_number && !email": {
+                  "id": "ask_account_number",
+                  "type": "SAY-GET",
+                  "variable": "payment_link_choice",
+                  "value": "To send you a payment link I can locate your account using phone, email or account number. Please enter {{cargo.voice ? 'or ' : ''}}{{cargo.verb}} the account number{{cargo.voice ? ' followed by the pound key' : ''}} or, either the phone or email associated with your account{{cargo.voice ? ' followed by the pound key' : ''}}. To exit at any time {{cargo.voice ? 'press the star key or ' : ''}}{{cargo.verb}} EXIT.",
+                  "value_es": "Para enviarte un enlace de pago, puedo localizar su cuenta utilizando el teléfono, el correo electrónico o el número de cuenta. Por favor, ingrese {{cargo.voice ? 'o ' : ''}}{{cargo.verb_es}} el número de cuenta{{cargo.voice ? ' seguido de la tecla numeral' : ''}} o, ya sea el teléfono o el correo electrónico asociado con su cuenta{{cargo.voice ? ' seguido de la tecla numeral' : ''}}. Para salir en cualquier momento {{cargo.voice ? 'presione la tecla de estrella o ' : ''}}{{cargo.verb_es}} SALIR.",
+                  "digits": {
+                     "min": 7,
+                     "max": 12
+                  }
+               },
+               "default": {
+                  "id": "proceed_to_locate_account",
+                  "type": "SET",
+                  "variable": "payment_link_choice",
+                  "value": "acct_number"
+               }
+            }
+         },
+         {
+            "id": "start_payment_process_input",
+            "type": "FLOW",
+            "value": "start-payment-process-input",
+            "callType": "call"
+         }
+      ]
+   },
+   {
+      "id": "start-payment-process-input",
+      "name": "StartPaymentProcessInput",
+      "version": "1.0.0",
+      "description": "Get account number, phone, or email from user to start payment link process",
+      "steps": [
+         {
+            "id": "treat_as_account_number",
+            "type": "SET",
+            "variable": "prospective_acct_number",
+            "value": "acct_number || payment_link_choice.replace(/[^0-9]/g, '')"
+         },
+         {
+            "id": "treat_as_cell_number",
+            "type": "SET",
+            "variable": "prospective_cell_number",
+            "value": "cell_number || payment_link_choice.replace(/[^0-9]/g, '')"
+         },
+         {
+            "id": "treat_as_email",
+            "type": "SET",
+            "variable": "prospective_email",
+            "value": "email || payment_link_choice.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/)?.[0]"
+         },
+         {
+            "id": "treat_as_email_allow_spaces",
+            "type": "SET",
+            "variable": "prospective_email2",
+            "value": "email || payment_link_choice.match(/[a-zA-Z0-9._%+\\s-]+@[a-zA-Z0-9.\\s-]+\\s*\\.\\s*[a-zA-Z\\s]{2,}/)?.[0]"
+         },
+         {
+            "id": "normalize_prospective_email",
+            "type": "SET",
+            "variable": "prospective_email",
+            "value": "prospective_email ? prospective_email : (prospective_email2 ? prospective_email2.replace(/\\s+/g, '') : '')"
          },
          {
             "id": "branch_on_account_knowledge",
             "type": "CASE",
             "branches": {
-               "condition: know_acct_yes_or_no === '1' || ['yes', 'yes.', 'sí', 'sí.'].includes(know_acct_yes_or_no.trim().toLowerCase())": {
-                  "id": "goto_acct_flow",
-                  "type": "FLOW",
-                  "value": "get-acct-number",
-                  "mode": "call"
+               "condition: prospective_acct_number[0] == '5' && validateDigits(prospective_acct_number, 7, 9)": {
+                  "id": "treat_as_account_number",
+                  "type": "SET",
+                  "variable": "acct_number",
+                  "value": "prospective_acct_number"
                },
-               "condition: know_acct_yes_or_no === '2' || ['no', 'no.'].includes(know_acct_yes_or_no.trim().toLowerCase())": {
-                  "id": "goto_cell_or_email_flow",
+               "condition: validateDigits(prospective_acct_number, 7, 9)": {
+                  "id": "invalid_account_number_format",
                   "type": "FLOW",
-                  "value": "get-cell-or-email",
-                  "mode": "call"
+                  "value": "generic-retry-with-options",
+                  "callType": "reboot",
+                  "parameters": {
+                     "error_message": "Sorry, I need an account number starting with 5, 7 to 8 digits long.",
+                     "error_message_es": "Lo siento, necesito un número de cuenta que comience con 5, de 7 a 8 dígitos de longitud.",
+                     "retry_flow": "start-payment",
+                     "cancel_flow": "contact-support",
+                     "capture_patterns": [
+                        {
+                           "variable": "acct_number",
+                           "regex": "^5\\d{6,7}$",
+                           "normalizer": "[^0-9]"
+                        },
+                        {
+                           "variable": "cell_number",
+                           "regex": "[0-9\\-\\(\\)\\.\\s]{7,}",
+                           "normalizer": "[^0-9]"
+                        },
+                        {
+                           "variable": "email",
+                           "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
+                        }
+                     ]
+                  }
+               },
+               "condition: validatePhone(prospective_cell_number)": {
+                  "id": "treat_as_phone_number",
+                  "type": "SET",
+                  "variable": "cell_number",
+                  "value": "prospective_cell_number"
+               },
+               "condition: validateEmail(prospective_email)": {
+                  "id": "treat_as_email_address",
+                  "type": "SET",
+                  "variable": "email",
+                  "value": "prospective_email"
+               },
+               "condition: cargo.callerId && (['1', 'yes', 'si', 'sí'].includes(payment_link_choice) || ['phone', 'cell', 'caller id', 'number', 'numero', 'número', 'telefono', 'teléfono', 'celular', 'identificador de llamadas'].some(p => payment_link_choice.includes(p)))": {
+                  "id": "use_caller_id",
+                  "type": "SET",
+                  "variable": "cell_number",
+                  "value": "cargo.callerId"
+               },
+               "condition: ['live', 'agent', 'customer service', 'agente', 'gente', 'gerente', 'al cliente'].some(choice => payment_link_choice.toLowerCase().includes(choice)) || payment_link_choice.trim() == '0'": {
+                  "id": "goto_live_agent",
+                  "type": "FLOW",
+                  "value": "live-agent-requested",
+                  "callType": "reboot"
+               },
+               "condition: ['*', 'abort', 'exit', 'quit', 'salir'].includes(payment_link_choice.toLowerCase())": {
+                  "id": "abort_process",
+                  "type": "FLOW",
+                  "value": "contact-support",
+                  "callType": "reboot"
                },
                "default": {
-                  "id": "retry_start_payment",
+                  "id": "offer_retry_invalid_choice",
                   "type": "FLOW",
-                  "value": "retry-start-payment",
-                  "mode": "replace"
+                  "value": "generic-retry-with-options",
+                  "callType": "reboot",
+                  "parameters": {
+                     "error_message": "Sorry, I didn't understand that.",
+                     "error_message_es": "Lo siento, no entendí eso.",
+                     "retry_flow": "start-payment",
+                     "cancel_flow": "contact-support",
+                     "capture_patterns": [
+                        {
+                           "variable": "acct_number",
+                           "regex": "^5\\d{6,7}$",
+                           "normalizer": "[^0-9]"
+                        },
+                        {
+                           "variable": "cell_number",
+                           "regex": "[0-9\\-\\(\\)\\.\\s]{7,}",
+                           "normalizer": "[^0-9]"
+                        },
+                        {
+                           "variable": "email",
+                           "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
+                        }
+                     ]
+                  }
                }
             }
          },
          {
-            "id": "conditional_generate_otp",
+            "id": "conditional_generate_payment_link",
             "type": "CASE",
             "branches": {
                "condition: (typeof cell_number !== 'undefined' && cell_number) || (typeof email !== 'undefined' && email) || (typeof acct_number !== 'undefined' && acct_number)": {
-                  "id": "generate_otp_link",
+                  "id": "generate_payment_link",
                   "type": "FLOW",
-                  "value": "generate-otp-link",
-                  "mode": "call"
+                  "value": "generate-and-validate-payment-link",
+                  "callType": "call"
                },
                "default": {
-                  "id": "skip_otp_generation",
-                  "type": "SET",
-                  "variable": "otp_skipped",
-                  "value": true
+                  "id": "should-never-get-here",
+                  "type": "FLOW",
+                  "value": "generic-retry-with-options",
+                  "callType": "reboot",
+                  "parameters": {
+                     "error_message": "Sorry, I need an account number starting with 5, 7 to 8 digits long, or either the phone or email associated with your account to proceed.",
+                     "error_message_es": "Lo siento, necesito un número de cuenta que comience con 5, de 7 a 8 dígitos de longitud, o el teléfono o correo electrónico asociado con su cuenta para continuar.",
+                     "retry_flow": "start-payment",
+                     "cancel_flow": "contact-support",
+                     "capture_patterns": [
+                        {
+                           "variable": "acct_number",
+                           "regex": "^5\\d{6,7}$",
+                           "normalizer": "[^0-9]"
+                        },
+                        {
+                           "variable": "cell_number",
+                           "regex": "[0-9\\-\\(\\)\\.\\s]{7,}",
+                           "normalizer": "[^0-9]"
+                        },
+                        {
+                           "variable": "email",
+                           "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
+                        }
+                     ]
+                  }
                }
             }
          },
-         {
-            "id": "conditional_validate_payment_link",
-            "type": "CASE",
-            "branches": {
-               "condition: !payment_aborted && typeof otp_link_result !== 'undefined' && otp_link_result.success !== undefined": {
-                  "id": "validate_payment_link",
-                  "type": "FLOW",
-                  "value": "validate-payment-link",
-                  "mode": "call"
-               },
-               "default": {
-                  "id": "payment_aborted_msg",
-                  "type": "SAY",
-                  "value": "Payment process was cancelled. How else can I assist you?",
-                  "value_es": "El proceso de pago fue cancelado. ¿Cómo más puedo ayudarle?"
-               }
-            }
-         }
       ]
    },
    {
-      "id": "retry-start-payment",
-      "name": "RetryStartPayment",
+      "id": "generate-and-validate-payment-link",
+      "name": "GenerateOtpLink",
       "version": "1.0.0",
-      "description": "Retry the payment process after an error",
-      "variables": {
-         "user_choice": {
-            "type": "string",
-            "description": "User choice for retry or exit"
-         }
-      },
+      "description": "Generate OTP link using collected contact information",
       "steps": [
          {
-            "id": "retry_msg",
-            "type": "SAY",
-            "value": "Sorry, I did not understand that.",
-            "value_es": "Lo siento, no entendí eso."
-         },
-         {
-            "id": "offer_choice",
-            "type": "SAY-GET",
-            "variable": "user_choice",
-            "value": "Would you like to try again? {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES to retry, or {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO to cancel.",
-            "value_es": "¿Le gustaría intentar de nuevo? {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb}} SÍ para reintentar, o {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb}} NO para cancelar.",
-            "digits": {
-               "min": 1,
-               "max": 1
-            }
-         },
-         {
-            "id": "handle_choice",
-            "type": "CASE",
-            "branches": {
-               "condition: user_choice === '1' || ['yes', 'yes.', 'sí', 'sí.'].includes(user_choice.trim().toLowerCase())": {
-                  "id": "restart_payment",
-                  "type": "FLOW",
-                  "value": "start-payment",
-                  "mode": "replace"
-               },
-               "condition: user_choice === '2' || ['no', 'no.'].includes(user_choice.trim().toLowerCase())": {
-                  "id": "provide_contact_info",
-                  "type": "FLOW",
-                  "value": "customer-service-contact",
-                  "mode": "replace"
-               },
-               "default": {
-                  "id": "provide_contact_info_default",
-                  "type": "FLOW",
-                  "value": "customer-service-contact",
-                  "mode": "replace"
-               }
-            }
-         }
-      ]
-   },
-   {
-      "id": "get-acct-number",
-      "name": "GetAcctNumber",
-      "version": "1.0.0",
-      "description": "Collect account number and validate",
-      "steps": [
-         {
-            "id": "ask_acct_number",
-            "type": "SAY-GET",
-            "variable": "acct_number",
-            "value": "Cool. Please {{cargo.verb}} {{cargo.voice ? 'or enter ' : ''}}your account number{{cargo.voice ? ' followed by the pound key' : ''}}.",
-            "value_es": "Genial. Por favor {{cargo.verb}} {{cargo.voice ? 'o ingrese ' : ''}}su número de cuenta{{cargo.voice ? ' seguido de la tecla de almohadilla' : ''}}.",
-            "digits": {
-               "min": 7,
-               "max": 9
-            }
-         },
-         {
-            "id": "remove-non-digits",
+            "id": "normalize_account_number",
             "type": "SET",
-            "variable": "acct_number",
-            "value": "acct_number.replace(/\\D/g, '')"
+            "variable": "normalized_account_number",
+            "value": "cargo.accountNumber || (typeof acct_number !== 'undefined' ? acct_number : '')"
          },
          {
-            "id": "branch_on_account_number",
-            "type": "CASE",
-            "branches": {
-               "condition: validateDigits(acct_number, global_acct_required_digits, global_acct_max_digits)": {
-                  "id": "acct_valid",
-                  "type": "SET",
-                  "variable": "acct_validated",
-                  "value": true
-               },
-               "default": {
-                  "id": "retry_acct_number_flow",
-                  "type": "FLOW",
-                  "value": "retry-get-acct-number",
-                  "mode": "replace"
-               }
-            }
-         }
-      ]
-   },
-   {
-      "id": "retry-get-acct-number",
-      "name": "RetryGetAcctNumber",
-      "version": "1.0.0",
-      "description": "Retry collecting account number after validation error",
-      "variables": {
-         "user_choice": {
-            "type": "string",
-            "description": "User choice for retry or exit"
-         }
-      },
-      "steps": [
-         {
-            "id": "retry_msg",
-            "type": "SAY",
-            "value": "Sorry. '{{acct_number}}' is not a valid account number. (It must be {{global_acct_required_digits}}-{{global_acct_max_digits}} digits).",
-            "value_es": "Lo siento. '{{acct_number}}' no es un número de cuenta válido. (Debe tener entre {{global_acct_required_digits}} y {{global_acct_max_digits}} dígitos)."
-         },
-         {
-            "id": "offer_choice",
-            "type": "SAY-GET",
-            "variable": "user_choice",
-            "value": "Would you like to try again? {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES to retry, or {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO to cancel.",
-            "value_es": "¿Le gustaría intentar de nuevo? {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb}} SÍ para reintentar, o {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb}} NO para cancelar.",
-            "digits": {
-               "min": 1,
-               "max": 1
-            }
-         },
-         {
-            "id": "handle_choice",
-            "type": "CASE",
-            "branches": {
-               "condition: user_choice === '1' || user_choice.trim().toLowerCase() === 'yes' || user_choice.trim().toLowerCase() === 'sí'": {
-                  "id": "retry_acct_entry",
-                  "type": "FLOW",
-                  "value": "get-acct-number",
-                  "mode": "replace"
-               },
-               "condition: user_choice === '2' || user_choice.trim().toLowerCase() === 'no'": {
-                  "id": "provide_contact_info",
-                  "type": "FLOW",
-                  "value": "customer-service-contact",
-                  "mode": "replace"
-               },
-               "default": {
-                  "id": "provide_contact_info_default",
-                  "type": "FLOW",
-                  "value": "customer-service-contact",
-                  "mode": "replace"
-               }
-            }
-         }
-      ]
-   },
-   {
-      "id": "get-cell-or-email",
-      "name": "GetCellOrEmail",
-      "version": "1.0.0",
-      "description": "Let user choose between cell phone or email for contact info",
-      "steps": [
-         {
-            "id": "ask_cell_or_email",
-            "type": "SAY-GET",
-            "variable": "cell_or_email",
-            "value": "Ok. We can locate your account using your phone or email. {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} 'PHONE' to proceed using your phone. {{cargo.voice ? 'Press 2 or ' : ''}}{{cargo.verb}} 'EMAIL' to proceed by email.",
-            "value_es": "Bien. Podemos localizar su cuenta usando su teléfono o correo electrónico. {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb}} 'TELEFONO' para continuar usando su teléfono. {{cargo.voice ? 'Presione 2 o ' : ''}}{{cargo.verb}} 'EMAIL' para continuar por correo electrónico.",
-            "digits": {
-               "min": 1,
-               "max": 1
-            }
-         },
-         {
-            "id": "branch_on_cell_or_email",
-            "type": "CASE",
-            "branches": {
-               "condition: cell_or_email === '1' || ['cell.', 'cell', 'phone.', 'phone', 'telefono.', 'telefono'].includes(cell_or_email.trim().toLowerCase())": {
-                  "id": "goto_cell_flow",
-                  "type": "FLOW",
-                  "value": "get-cell"
-               },
-               "condition: cell_or_email === '2' || ['email.', 'email', 'e-mail.', 'e-mail'].includes(cell_or_email.trim().toLowerCase())": {
-                  "id": "goto_email_flow",
-                  "type": "FLOW",
-                  "value": "get-email"
-               },
-               "default": {
-                  "id": "retry_cell_or_email",
-                  "type": "FLOW",
-                  "value": "retry-get-cell-or-email",
-                  "mode": "replace"
-               }
-            }
-         }
-      ]
-   },
-   {
-      "id": "retry-get-cell-or-email",
-      "name": "RetryGetCellOrEmail",
-      "version": "1.0.0",
-      "description": "Retry choosing between cell phone or email after invalid input",
-      "variables": {
-         "user_choice": {
-            "type": "string",
-            "description": "User choice for retry or exit"
-         }
-      },
-      "steps": [
-         {
-            "id": "offer_choice",
-            "type": "SAY-GET",
-            "variable": "user_choice",
-            "value": "Would you like to try again? {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES to retry, or {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO to cancel.",
-            "value_es": "¿Le gustaría intentar de nuevo? {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb}} SÍ para reintentar, o {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb}} NO para cancelar.",
-            "digits": {
-               "min": 1,
-               "max": 1
-            }
-         },
-         {
-            "id": "handle_choice",
-            "type": "CASE",
-            "branches": {
-               "condition: user_choice === '1' || ['yes', 'yes.', 'sí', 'sí.'].includes(user_choice.trim().toLowerCase())": {
-                  "id": "retry_cell_or_email_choice",
-                  "type": "FLOW",
-                  "value": "get-cell-or-email",
-                  "mode": "replace"
-               },
-               "condition: user_choice === '2' || ['no', 'no.'].includes(user_choice.trim().toLowerCase())": {
-                  "id": "provide_contact_info",
-                  "type": "FLOW",
-                  "value": "customer-service-contact",
-                  "mode": "replace"
-               },
-               "default": {
-                  "id": "provide_contact_info_default",
-                  "type": "FLOW",
-                  "value": "customer-service-contact",
-                  "mode": "replace"
-               }
-            }
-         }
-      ]
-   },
-   {
-      "id": "get-cell",
-      "name": "GetCell",
-      "version": "1.0.0",
-      "description": "Collect and validate cell number",
-      "steps": [
-         {
-            "id": "check_caller_id_available",
-            "type": "CASE",
-            "branches": {
-               "condition: cargo.callerId && cargo.callerId.length >= 10": {
-                  "id": "goto_caller_id_flow",
-                  "type": "FLOW",
-                  "value": "get-cell-with-caller-id",
-                  "mode": "call"
-               },
-               "default": {
-                  "id": "goto_manual_cell_flow",
-                  "type": "FLOW",
-                  "value": "get-cell-manual-entry",
-                  "mode": "call"
-               }
-            }
-         },
-         {
-            "id": "validate_cell_number",
-            "type": "CASE",
-            "branches": {
-               "condition: validatePhone(cell_number)": {
-                  "id": "cell_valid",
-                  "type": "SET",
-                  "variable": "cell_validated",
-                  "value": true
-               },
-               "default": {
-                  "id": "retry_cell_flow",
-                  "type": "FLOW",
-                  "value": "retry-get-cell",
-                  "mode": "replace"
-               }
-            }
-         }
-      ]
-   },
-   {
-      "id": "get-cell-with-caller-id",
-      "name": "GetCellWithCallerId",
-      "version": "1.0.0",
-      "description": "Offer to use detected caller ID for cell number",
-      "variables": {
-         "use_caller_id": {
-            "type": "string",
-            "description": "User choice to use detected caller ID"
-         }
-      },
-      "steps": [
-         {
-            "id": "offer_caller_id",
-            "type": "SAY-GET",
-            "variable": "use_caller_id",
-            "value": "Great. I notice you are using a number ending with {{cargo.callerId.slice(-4).split('').join(', ')}}. {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES to use that cell. {{cargo.voice ? 'Press 2 or ' : ''}}{{cargo.verb}} NO to use another cell.",
-            "value_es": "Genial. Noto que está usando un número que termina en {{cargo.callerId.slice(-4).split('').join(', ')}}. {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb}} SÍ para usar ese celular. {{cargo.voice ? 'Presione 2 o ' : ''}}{{cargo.verb}} NO para usar otro celular.",
-            "digits": {
-               "min": 1,
-               "max": 1
-            }
-         },
-         {
-            "id": "handle_caller_id_choice",
-            "type": "CASE",
-            "branches": {
-               "condition: use_caller_id === '1' || ['yes', 'yes.', 'sí', 'sí.'].includes(use_caller_id.trim().toLowerCase())": {
-                  "id": "use_detected_number",
-                  "type": "SET",
-                  "variable": "cell_number",
-                  "value": "{{cargo.callerId}}"
-               },
-               "condition: use_caller_id === '2' || ['no', 'no.'].includes(use_caller_id.trim().toLowerCase())": {
-                  "id": "goto_manual_entry",
-                  "type": "FLOW",
-                  "value": "get-cell-manual-entry",
-                  "mode": "call"
-               },
-               "default": {
-                  "id": "retry_caller_id_choice",
-                  "type": "FLOW",
-                  "value": "retry-get-cell-with-caller-id",
-                  "mode": "replace"
-               }
-            }
-         }
-      ]
-   },
-   {
-      "id": "get-cell-manual-entry",
-      "name": "GetCellManualEntry",
-      "version": "1.0.0",
-      "description": "Manual cell number entry",
-      "steps": [
-         {
-            "id": "ask_cell_number",
-            "type": "SAY-GET",
-            "variable": "cell_number",
-            "value": "Please {{cargo.verb}} {{cargo.voice ? 'or enter ' : ''}}your cell number{{cargo.voice ? ' followed by the pound key' : ''}}.",
-            "value_es": "Por favor {{cargo.verb}} {{cargo.voice ? 'o ingrese ' : ''}}su número de celular{{cargo.voice ? ' seguido de la tecla de almohadilla' : ''}}.",
-            "digits": {
-               "min": 10,
-               "max": 15
-            }
-         },
-         {
-            "id": "remove-non-digits",
+            "id": "normalize_email",
             "type": "SET",
-            "variable": "cell_number",
-            "value": "cell_number.replace(/\\D/g, '')"
+            "variable": "normalized_email",
+            "value": "typeof email !== 'undefined' ? email : ''"
+         },
+         {
+            "id": "normalize_phone_number",
+            "type": "SET",
+            "variable": "normalized_phone_number",
+            "value": "{{typeof cell_number !== 'undefined' ? cell_number : ''}}"
+         },
+         {
+            "id": "call_get_payment_link",
+            "type": "CALL-TOOL",
+            "tool": "get-payment-link",
+            "variable": "payment_link_result",
+            "args": {
+               "account_number": "{{normalized_account_number}}",
+               "email": "{{normalized_email}}",
+               "phone_number": "{{normalized_phone_number}}"
+            },
+            "onFail": {
+               "id": "otp_generation_failed",
+               "type": "FLOW",
+               "value": "payment-link-failed",
+               "callType": "replace"
+            }
+         },
+         {
+            "id": "validate_payment_link",
+            "type": "FLOW",
+            "value": "validate-payment-link",
+            "callType": "call"
          }
       ]
    },
-
    {
-      "id": "retry-get-cell-with-caller-id",
-      "name": "RetryGetCellWithCallerId",
+      "id": "send-payment-link",
+      "name": "SendPaymentLink",
       "version": "1.0.0",
-      "description": "Retry caller ID choice after invalid input",
-      "variables": {
-         "user_choice": {
-            "type": "string",
-            "description": "User choice for retry or exit"
-         }
-      },
+      "description": "Ask if user wants a payment link for their account ending with ...",
       "steps": [
          {
-            "id": "retry_msg",
-            "type": "SAY",
-            "value": "Sorry, I did not understand that.",
-            "value_es": "Lo siento, no entendí eso."
-         },
-         {
-            "id": "offer_choice",
+            "id": "ask_send_payment_link",
             "type": "SAY-GET",
-            "variable": "user_choice",
-            "value": "Would you like to try again? {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES to retry, or {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO to cancel.",
-            "value_es": "¿Le gustaría intentar de nuevo? {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb}} SÍ para reintentar, o {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb}} NO para cancelar.",
+            "variable": "send_payment_link",
+            "value": "Would you like me to send a payment link for account ending with {{cargo.accountNumber.slice(-4).split('').join(', ')}}? To send the payment link {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. To forget this account so you can start over, {{cargo.verb}} FORGET.",
+            "value_es": "¿Le gustaría que le enviara un enlace de pago para la cuenta que termina en {{cargo.accountNumber.slice(-4).split('').join(', ')}}? Para enviar el enlace de pago {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ. Para olvidar esta cuenta y comenzar de nuevo, {{cargo.verb_es}} OLVIDAR.",
             "digits": {
                "min": 1,
                "max": 1
             }
          },
          {
-            "id": "handle_choice",
-            "type": "CASE",
-            "branches": {
-               "condition: user_choice === '1' || ['yes', 'yes.', 'sí', 'sí.'].includes(user_choice.trim().toLowerCase())": {
-                  "id": "retry_caller_id_flow",
-                  "type": "FLOW",
-                  "value": "get-cell-with-caller-id",
-                  "mode": "replace"
-               },
-               "condition: user_choice === '2' || ['no', 'no.'].includes(user_choice.trim().toLowerCase())": {
-                  "id": "provide_contact_info",
-                  "type": "FLOW",
-                  "value": "customer-service-contact",
-                  "mode": "replace"
-               },
-               "default": {
-                  "id": "provide_contact_info_default",
-                  "type": "FLOW",
-                  "value": "customer-service-contact",
-                  "mode": "replace"
-               }
-            }
-         }
-      ]
-   },
-   {
-      "id": "retry-get-cell",
-      "name": "RetryGetCell",
-      "version": "1.0.0",
-      "description": "Retry collecting cell number after validation error",
-      "variables": {
-         "user_choice": {
-            "type": "string",
-            "description": "User choice for retry or exit"
-         }
-      },
-      "steps": [
-         {
-            "id": "retry_msg",
-            "type": "SAY",
-            "value": "Sorry, '{{cell_number}}' is not a valid cell number.",
-            "value_es": "Lo siento, '{{cell_number}}' no es un número de celular válido."
+            "id": "normalize_send_payment_link",
+            "type": "SET",
+            "variable": "send_payment_link",
+            "value": "send_payment_link.trim().toLowerCase().replace(/[^\\w\\s\\*áéíóúüñ]+/g, '')"
          },
          {
-            "id": "offer_choice",
-            "type": "SAY-GET",
-            "variable": "user_choice",
-            "value": "Would you like to try again? {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES to retry, or {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO to cancel.",
-            "value_es": "¿Le gustaría intentar de nuevo? {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb}} SÍ para reintentar, o {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb}} NO para cancelar.",
-            "digits": {
-               "min": 1,
-               "max": 1
-            }
-         },
-         {
-            "id": "handle_choice",
+            "id": "handle_send_payment_link",
             "type": "CASE",
             "branches": {
-               "condition: user_choice === '1' || user_choice.trim().toLowerCase() === 'yes' || user_choice.trim().toLowerCase() === 'sí'": {
-                  "id": "retry_cell_entry",
+               "condition: ['1', 'yes', 'sure', 'please', 'ok', 'thanks', 'si', 'sí', 'seguro', 'por favor', 'gracias'].some(choice => send_payment_link.includes(choice))": {
+                  "id": "send_and_validate_payment_link",
                   "type": "FLOW",
-                  "value": "get-cell",
-                  "mode": "replace"
+                  "value": "generate-and-validate-payment-link",
+                  "callType": "call"
                },
-               "condition: user_choice === '2' || user_choice.trim().toLowerCase() === 'no'": {
-                  "id": "provide_contact_info",
-                  "type": "FLOW",
-                  "value": "customer-service-contact",
-                  "mode": "replace"
-               },
-               "default": {
-                  "id": "provide_contact_info_default",
-                  "type": "FLOW",
-                  "value": "customer-service-contact",
-                  "mode": "replace"
-               }
-            }
-         }
-      ]
-   },
-   {
-      "id": "get-email",
-      "name": "GetEmail",
-      "version": "1.0.0",
-      "description": "Collect and validate email",
-      "steps": [
-         {
-            "id": "ask_email",
-            "type": "SAY-GET",
-            "variable": "email",
-            "value": "Please {{cargo.verb}} {{cargo.voice ? 'or enter ' : ''}}your email.",
-            "value_es": "Por favor {{cargo.verb}} {{cargo.voice ? 'o ingrese ' : ''}}su correo electrónico."
-         },
-         {
-            "id": "branch_on_email",
-            "type": "CASE",
-            "branches": {
-               "condition: validateEmail(email)": {
-                  "id": "email_valid",
+               "condition: ['forget', 'start over', 'olvidar', 'empezar de nuevo'].some(choice => send_payment_link.includes(choice))": {
+                  "id": "forget_account_and_restart",
                   "type": "SET",
-                  "variable": "email_validated",
-                  "value": true
+                  "variable": "forget_side_effect",
+                  "value": "cargo.accountNumber = null"
+               },
+               "condition: ['*', 'abort', 'exit', 'quit', 'salir', 'no'].some(choice => send_payment_link.includes(choice))": {
+                  "id": "abort_process",
+                  "type": "FLOW",
+                  "value": "contact-support",
+                  "callType": "reboot"
+               },
+               "condition: ['live', 'agent', 'customer service', 'agente', 'gente', 'gerente', 'al cliente'].some(choice => send_payment_link.includes(choice)) || send_payment_link == '0'": {
+                  "id": "goto_live_agent",
+                  "type": "FLOW",
+                  "value": "live-agent-requested",
+                  "callType": "reboot"
                },
                "default": {
-                  "id": "retry_email_flow",
+                  "id": "forward_to_gen_ai",
                   "type": "FLOW",
-                  "value": "retry-get-email",
-                  "mode": "replace"
-               }
-            }
-         }
-      ]
-   },
-   {
-      "id": "retry-get-email",
-      "name": "RetryGetEmail",
-      "version": "1.0.0",
-      "description": "Retry collecting email after validation error",
-      "variables": {
-         "user_choice": {
-            "type": "string",
-            "description": "User choice for retry or exit"
-         }
-      },
-      "steps": [
-         {
-            "id": "retry_msg",
-            "type": "SAY",
-            "value": "Sorry, '{{email}}' is not a valid email address.",
-            "value_es": "Lo siento, '{{email}}' no es una dirección de correo electrónico válida."
-         },
-         {
-            "id": "offer_choice",
-            "type": "SAY-GET",
-            "variable": "user_choice",
-            "value": "Would you like to try again? {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES to retry, or {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO to cancel.",
-            "value_es": "¿Le gustaría intentar de nuevo? {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb}} SÍ para reintentar, o {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb}} NO para cancelar.",
-            "digits": {
-               "min": 1,
-               "max": 1
-            }
-         },
-         {
-            "id": "handle_choice",
-            "type": "CASE",
-            "branches": {
-               "condition: user_choice === '1' || ['yes', 'yes.', 'sí', 'sí.'].includes(user_choice.trim().toLowerCase())": {
-                  "id": "retry_email_entry",
-                  "type": "FLOW",
-                  "value": "get-email",
-                  "mode": "replace"
-               },
-               "condition: user_choice === '2' || ['no', 'no.'].includes(user_choice.trim().toLowerCase())": {
-                  "id": "provide_contact_info",
-                  "type": "FLOW",
-                  "value": "customer-service-contact",
-                  "mode": "replace"
-               },
-               "default": {
-                  "id": "provide_contact_info_default",
-                  "type": "FLOW",
-                  "value": "customer-service-contact",
-                  "mode": "replace"
+                  "value": "no-action-needed",
+                  "callType": "reboot"
                }
             }
          }
@@ -1293,100 +1836,105 @@ const flowsMenu = [
       "id": "validate-payment-link",
       "name": "ValidatePaymentLink",
       "version": "1.0.0",
-      "description": "Validate OTP link generation result and provide appropriate response",
+      "description": "Validate payment link generation result and provide appropriate response",
       "steps": [
          {
-            "id": "validate_otp_result",
+            "id": "validate_payment_link_result",
             "type": "CASE",
             "branches": {
-               "condition: otp_link_result.success": {
-                  "id": "success_msg",
-                  "type": "SAY",
-                  "value": "Great! Payment link was sent to {{otp_link_result.customer_info.email && otp_link_result.customer_info.cell ? 'your email: ' + otp_link_result.customer_info.email + ' and cell: ' + otp_link_result.customer_info.cell : otp_link_result.customer_info.email ? 'your email: ' + otp_link_result.customer_info.email : 'your cell: ' + otp_link_result.customer_info.cell}}. Please click the link to complete your payment. You'll already be logged in, simply select your payment options and submit, it's that easy!",
-                  "value_es": "¡Genial! El enlace de pago fue enviado a {{otp_link_result.customer_info.email && otp_link_result.customer_info.cell ? 'su correo: ' + otp_link_result.customer_info.email + ' y celular: ' + otp_link_result.customer_info.cell : otp_link_result.customer_info.email ? 'su correo: ' + otp_link_result.customer_info.email : 'su celular: ' + otp_link_result.customer_info.cell}}. Por favor haga clic en el enlace para completar su pago. ¡Ya estará conectado, simplemente seleccione sus opciones de pago y envíe, es así de fácil!"
+               "condition: payment_link_result.success": {
+                  "id": "goto-payment-succeeded",
+                  "type": "FLOW",
+                  "value": "payment-link-succeeded",
+                  "callType": "call"
                },
                "default": {
                   "id": "retry_payment",
                   "type": "FLOW",
-                  "value": "payment-failed",
-                  "mode": "replace"
+                  "value": "payment-link-failed",
+                  "callType": "reboot"
                }
             }
          }
       ]
    },
    {
-      "id": "payment-failed",
-      "name": "PaymentFailed",
+      "id": "payment-link-failed",
+      "name": "PaymentLinkFailed",
       "version": "1.0.0",
       "description": "Handle payment failure",
-      "variables": {
-         "user_choice": {
-            "type": "string",
-            "description": "User choice for retry or exit"
-         }
-      },
       "steps": [
          {
-            "id": "say_payment_failed",
-            "type": "SAY",
-            "value": "Sorry, the payment link could not be generated.",
-            "value_es": "Lo siento, no se pudo generar el enlace de pago."
-         },
-         {
-            "id": "offer_choice",
-            "type": "SAY-GET",
-            "variable": "user_choice",
-            "value": "Would you like to try again? {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES to retry, or {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO for customer service contact information.",
-            "value_es": "¿Le gustaría intentar de nuevo? {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb}} SÍ para reintentar, o {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb}} NO para información de contacto de servicio al cliente.",
-            "digits": {
-               "min": 1,
-               "max": 1
-            }
-         },
-         {
-            "id": "handle_choice",
-            "type": "CASE",
-            "branches": {
-               "condition: user_choice === '1' || ['yes', 'yes.', 'sí', 'sí.'].includes(user_choice.trim().toLowerCase())": {
-                  "id": "restart_payment",
-                  "type": "FLOW",
-                  "value": "start-payment",
-                  "mode": "replace"
-               },
-               "condition: user_choice === '2' || ['no', 'no.'].includes(user_choice.trim().toLowerCase())": {
-                  "id": "provide_contact_info",
-                  "type": "FLOW",
-                  "value": "customer-service-contact",
-                  "mode": "replace"
-               },
-               "default": {
-                  "id": "provide_contact_info_default",
-                  "type": "FLOW",
-                  "value": "customer-service-contact",
-                  "mode": "replace"
-               }
+            "id": "offer_retry_start_payment",
+            "type": "FLOW",
+            "value": "generic-retry-with-options",
+            "callType": "reboot",
+            "parameters": {
+               "error_message": "Sorry, either the account could not be found or it doesn't have a cell number on file so I couldn't text the link.",
+               "error_message_es": "Lo siento, o que no se pudo encontrar la cuenta o no tiene un número de celular en el archivo, por lo que no pude enviar el enlace por texto.",
+               "retry_flow": "start-payment",
+               "cancel_flow": "contact-support",
+               "capture_patterns": [
+                  {
+                     "variable": "acct_number",
+                     "regex": "^5\\d{6,7}$",
+                     "normalizer": "[^0-9]"
+                  },
+                  {
+                     "variable": "cell_number",
+                     "regex": "[0-9\\-\\(\\)\\.\\s]{7,}",
+                     "normalizer": "[^0-9]"
+                  },
+                  {
+                     "variable": "email",
+                     "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
+                  }
+               ]
             }
          }
       ]
    },
    {
-      "id": "customer-service-contact",
-      "name": "CustomerServiceContact",
+      "id": "payment-link-succeeded",
+      "name": "PaymentLinkSucceeded",
       "version": "1.0.0",
-      "description": "Provide customer service contact information",
+      "description": "Handle successful payment",
       "steps": [
          {
-            "id": "set_payment_aborted",
+            "id": "set_account_number",
             "type": "SET",
-            "variable": "payment_aborted",
-            "value": true
+            "variable": "validated_account_number",
+            "value": "cargo.accountNumber = payment_link_result.customer_info.cust_id"
          },
          {
-            "id": "provide_contact_info",
+            "id": "set_acccount_cell",
+            "type": "SET",
+            "variable": "validated_account_cell",
+            "value": "cargo.accountCell = payment_link_result.customer_info.cell"
+         },
+         {
+            "id": "set_account_email",
+            "type": "SET",
+            "variable": "validated_account_email",
+            "value": "cargo.accountEmail = payment_link_result.customer_info.email"
+         },
+         {
+            "id": "mask_email",
+            "type": "SET",
+            "variable": "masked_email",
+            "value": "payment_link_result.customer_info.email ? payment_link_result.customer_info.email.replace(/^(.{2})(.*)(@.*)$/, (match, p1, p2, p3) => p1 + '*' + p3) : ''"
+         },
+         {
+            "id": "get_cell_last4",
+            "type": "SET",
+            "variable": "cell_last4",
+            "value": "payment_link_result.customer_info.cell ? payment_link_result.customer_info.cell.slice(-4) : ''"
+         },
+         {
+            "id": "say_payment_succeeded",
             "type": "SAY",
-            "value": "Sorry I couldn't help! For assistance with your payment, please call (Eight Seven Seven) Four Nine Five, Six Seven, Seven Four, or text 'Pay' to: Seven, Zero, Two, Seven, Three, from a cell phone associated with your account.",
-            "value_es": "¡Lo siento, no pude ayudar! Para asistencia con su pago, por favor llame al (Ocho Siete Siete) Cuatro Nueve Cinco, Seis Siete, Siete Cuatro, o envíe un mensaje de texto con la palabra 'Pagar' al: Siete, Cero, Dos, Siete, Tres, desde un celular asociado con su cuenta."
+            "value": "Great! Payment link for account ending with {{cargo.accountNumber.slice(-4).split('').join(', ')}} was sent to {{payment_link_result.customer_info.email && payment_link_result.customer_info.cell ? 'your email ' + masked_email + ' and cell ending with ' + cell_last4 : payment_link_result.customer_info.email ? 'your email ' + masked_email : 'your cell ending with ' + cell_last4}}. Please click the link to complete your payment. You'll already be logged in, simply select your payment options and submit, it's that easy!",
+            "value_es": "¡Genial! El enlace de pago para la cuenta que termina en {{cargo.accountNumber.slice(-4).split('').join(', ')}} fue enviado a {{payment_link_result.customer_info.email && payment_link_result.customer_info.cell ? 'tu correo electrónico ' + masked_email + ' y celular que termina en ' + cell_last4 : payment_link_result.customer_info.email ? 'tu correo electrónico ' + masked_email : 'tu celular que termina en ' + cell_last4}}. Haga clic en el enlace para completar tu pago. ¡Ya estará conectado, simplemente seleccione sus opciones de pago y envíelas, es así de fácil!"
          }
       ]
    },
@@ -1395,6 +1943,8 @@ const flowsMenu = [
       "name": "CreateLiveAgentTicket",
       "version": "1.0.0",
       "description": "Creates a CRM ticket when customer requests live agent assistance",
+      "prompt": "Creating a CRM ticket",
+      "prompt_es": "Creando un ticket de CRM",
       "variables": {
          "ticket_result": {
             "type": "object",
@@ -1469,7 +2019,7 @@ const flowsMenu = [
                "id": "ticket_creation_failed",
                "type": "FLOW",
                "value": "handle-ticket-creation-failure",
-               "mode": "call"
+               "callType": "call"
             }
          },
          {
@@ -1486,51 +2036,8 @@ const flowsMenu = [
                   "id": "ticket_failure_fallback",
                   "type": "FLOW",
                   "value": "handle-ticket-creation-failure",
-                  "mode": "call"
+                  "callType": "call"
                }
-            }
-         }
-      ]
-   },
-   {
-      "id": "generate-otp-link",
-      "name": "GenerateOtpLink",
-      "version": "1.0.0",
-      "description": "Generate OTP link using collected contact information",
-      "steps": [
-         {
-            "id": "normalize_account_number",
-            "type": "SET",
-            "variable": "normalized_account_number",
-            "value": "{{typeof acct_number !== 'undefined' ? acct_number : ''}}"
-         },
-         {
-            "id": "normalize_email",
-            "type": "SET",
-            "variable": "normalized_email",
-            "value": "{{typeof email !== 'undefined' ? email : ''}}"
-         },
-         {
-            "id": "normalize_phone_number",
-            "type": "SET",
-            "variable": "normalized_phone_number",
-            "value": "{{typeof cell_number !== 'undefined' ? cell_number : ''}}"
-         },
-         {
-            "id": "call_get_otp_link",
-            "type": "CALL-TOOL",
-            "tool": "get-otp-link",
-            "variable": "otp_link_result",
-            "args": {
-               "account_number": "{{normalized_account_number}}",
-               "email": "{{normalized_email}}",
-               "phone_number": "{{normalized_phone_number}}"
-            },
-            "onFail": {
-               "id": "otp_generation_failed",
-               "type": "FLOW",
-               "value": "payment-failed",
-               "mode": "replace"
             }
          }
       ]
@@ -1545,7 +2052,7 @@ const flowsMenu = [
             "id": "ticket_failure_msg",
             "type": "SAY",
             "value": "I apologize, but I'm having trouble creating your support ticket at the moment. Result: {{ticket_result}}",
-            "value_es": "Me disculpo, pero estoy teniendo problemas para crear su ticket de soporte en este momento. Resultado: {{ticket_result}}"
+            "value_es": "Me disculpo, pero estoy teniendo problemas para crear tu ticket de soporte en este momento. Resultado: {{ticket_result}}"
          }
       ]
    },
@@ -1553,9 +2060,17 @@ const flowsMenu = [
       "id": "locate-account",
       "name": "LocateAccount",
       "version": "1.0.0",
-      "description": "Help customer locate their account by authenticating with OTP",
-      "prompt": "Account lookup with authentication",
+      "description": "This flow allows the user to get information about their account, to answer questions about their balance, payment due, available credit, etc., by locating and authenticating their account using either their cell phone number or email address.",
+      "prompt": "account information",
+      "prompt_es": "información de la cuenta",
       "primary": true,
+      "parameters": [
+         {
+            "name": "cell_number",
+            "type": "string",
+            "description": "Customer cell number (if user provided it in the query)",
+         }
+      ],
       "variables": {
          "cell_or_email": {
             "type": "string",
@@ -1563,11 +2078,13 @@ const flowsMenu = [
          },
          "cell_number": {
             "type": "string",
-            "description": "Customer cell phone number"
+            "description": "Customer cell phone number",
+            "value": "",
          },
          "email": {
             "type": "string",
-            "description": "Customer email address"
+            "description": "Customer email address",
+            "value": ""
          },
          "otp_code": {
             "type": "string",
@@ -1584,103 +2101,241 @@ const flowsMenu = [
          "lookup_result": {
             "type": "object",
             "description": "Result from account lookup"
+         },
+         "account_lookup_aborted": {
+            "type": "boolean",
+            "description": "Flag to indicate if account lookup was aborted",
+            "value": false
+         },
+         "error_message": {
+            "type": "string",
+            "description": "Error message to display"
          }
       },
       "steps": [
          {
-            "id": "explain_authentication",
-            "type": "SAY",
-            "value": "To locate your account we must authenticate you, sending a code to the phone or email associated with your account.",
-            "value_es": "Para localizar su cuenta debemos autenticarlo, enviando un código al teléfono o correo electrónico asociado con su cuenta."
+            "id": "set_support_context",
+            "type": "SET",
+            "variable": "support_context_side_effect",
+            "value": "cargo.support_context = 'account', cargo.support_context_es = 'cuenta'"
          },
          {
-            "id": "get_contact_info",
+            "id": "abort-if-already-located-account",
+            "type": "CASE",
+            "branches": {
+               "condition: cargo.authenticatedAccount": {
+                  "id": "already_authenticated",
+                  "type": "FLOW",
+                  "value": "no-action-needed",
+                  "callType": "reboot"
+               },
+               "default": {
+                  "id": "proceed_to_lookup",
+                  "type": "SET",
+                  "variable": "proceed_to_lookup",
+                  "value": true
+               }
+            }
+         },
+         {
+            "id": "check_existing_contact_info",
+            "type": "CASE",
+            "branches": {
+               "condition: cargo.otpVerified && cargo.otp_cell_number": {
+                  "id": "already_authenticated_proceed_to_lookup",
+                  "type": "FLOW",
+                  "value": "validate-otp-result-and-perform-account-lookup",
+                  "callType": "replace"
+               },
+               "condition: cargo.otpVerified && cargo.otp_email": {
+                  "id": "already_authenticated_proceed_to_lookup_email",
+                  "type": "FLOW",
+                  "value": "validate-otp-result-and-perform-account-lookup",
+                  "callType": "replace"
+               },
+               "condition: cargo.accountCell": {
+                  "id": "confirm_existing_contact_info",
+                  "type": "FLOW",
+                  "value": "confirm-existing-contact-info",
+                  "callType": "call"
+               },
+               "default": {
+                  "id": "proceed_to_authentication",
+                  "type": "SET",
+                  "variable": "proceed",
+                  "value": true
+               }
+            }
+         },
+         {
+            "id": "authenticate_user",
             "type": "FLOW",
-            "value": "get-cell-or-email",
-            "mode": "call"
-         },
-         {
-            "id": "send_otp_based_on_contact",
-            "type": "CASE",
-            "branches": {
-               "condition: cell_number": {
-                  "id": "send_sms_otp",
-                  "type": "CALL-TOOL",
-                  "tool": "send-sms-otp",
-                  "args": {
-                     "accountSid": null,
-                     "from": "{{cargo.twilioNumber}}",
-                     "to": "{{cell_number}}",
-                     "container": "{{cargo}}"
-                  },
-                  "onFail": {
-                     "id": "sms_failed",
-                     "type": "FLOW",
-                     "value": "retry-get-cell-or-email",
-                     "mode": "replace"
-                  }
-               },
-               "condition: email": {
-                  "id": "send_email_otp",
-                  "type": "CALL-TOOL",
-                  "tool": "send-email-otp",
-                  "args": {
-                     "to": "{{email}}",
-                     "container": "{{cargo}}"
-                  },
-                  "onFail": {
-                     "id": "email_failed",
-                     "type": "FLOW",
-                     "value": "retry-get-cell-or-email",
-                     "mode": "replace"
-                  }
-               },
-               "default": {
-                  "id": "no_contact_error",
-                  "type": "FLOW",
-                  "value": "retry-get-cell-or-email",
-                  "mode": "replace"
-               }
+            "value": "authenticate-user",
+            "callType": "call",
+            "parameters": {
+               "retry_flow": "locate-account",
+               "cancel_flow": "contact-support"
             }
          },
          {
-            "id": "get_otp_from_user",
+            "id": "perform_lookup",
+            "type": "FLOW",
+            "value": "validate-otp-result-and-perform-account-lookup",
+            "callType": "call"
+         }
+      ]
+   },
+   {
+      "id": "confirm-existing-contact-info",
+      "name": "ConfirmExistingContactInfo",
+      "version": "1.0.0",
+      "description": "Confirm with user if they want to use existing contact info on file",
+      "variables": {
+         "use_existing_contact": {
+            "type": "string",
+            "description": "User choice to use existing contact info"
+         }
+      },
+      "steps": [
+         {
+            "id": "offer_existing_contact",
             "type": "SAY-GET",
-            "variable": "otp_code",
-            "value": "Please {{cargo.verb}} the 6-digit verification code you received.",
-            "value_es": "Por favor {{cargo.verb}} el código de verificación de 6 dígitos que recibió.",
+            "variable": "use_existing_contact",
+            "value": "Do you want to authenticate access to account ending with {{cargo.accountNumber.slice(-4).split('').join(', ')}} using the cell ending with {{cargo.accountCell.slice(-4).split('').join(', ')}}? To use this contact info {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. To provide different contact info {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO.",
+            "value_es": "¿Desea autenticar el acceso a la cuenta que termina en {{cargo.accountNumber.slice(-4).split('').join(', ')}} utilizando el celular que termina en {{cargo.accountCell.slice(-4).split('').join(', ')}}? Para usar esta información de contacto {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ. Para proporcionar una información de contacto diferente {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb_es}} NO.",
             "digits": {
-               "min": 6,
-               "max": 6
+               "min": 1,
+               "max": 1
             }
          },
          {
-            "id": "validate_otp_and_lookup",
+            "id": "normalize_use_existing_contact",
+            "type": "SET",
+            "variable": "use_existing_contact",
+            "value": "use_existing_contact.trim().toLowerCase().replace(/[^\\w\\s\\*áéíóúüñ]+/g, '')"
+         },
+         {
+            "id": "treat_as_phone_number",
+            "type": "SET",
+            "variable": "prospective_cell_number",
+            "value": "use_existing_contact.replace(/[^0-9]/g, '')"
+         },
+         {
+            "id": "handle_existing_contact_choice",
             "type": "CASE",
             "branches": {
-               "condition: otp_code && otp_code.length === 6": {
-                  "id": "validate_otp",
-                  "type": "CALL-TOOL",
-                  "tool": "validate-otp",
-                  "variable": "otp_validation_result",
-                  "args": {
-                     "otp": "{{otp_code}}",
-                     "container": "{{cargo}}"
-                  },
-                  "onFail": {
-                     "id": "otp_validation_failed",
-                     "type": "FLOW",
-                     "value": "retry-get-cell-or-email",
-                     "mode": "replace"
-                  }
+               "condition: validatePhone(prospective_cell_number)": {
+                  "id": "treat_as_manual_entry",
+                  "type": "SET",
+                  "variable": "cell_number",
+                  "value": "prospective_cell_number"
+               },
+               "condition: ['1', 'yes', 'sure', 'please', 'ok', 'thanks', 'si', 'sí', 'seguro', 'por favor', 'gracias'].includes(use_existing_contact)": {
+                  "id": "use_existing_contact_info",
+                  "type": "SET",
+                  "variable": "cell_number",
+                  "value": "cargo.accountCell"
+               },
+               "condition: ['2', 'no'].includes(use_existing_contact)": {
+                  "id": "goto_manual_entry",
+                  "type": "FLOW",
+                  "value": "get-cell-or-email",
+                  "callType": "replace"
+               },
+               "condition: ['*', 'abort', 'exit', 'quit', 'salir'].includes(use_existing_contact)": {
+                  "id": "abort_process",
+                  "type": "FLOW",
+                  "value": "cancel-process",
+                  "callType": "reboot"
+               },
+               "condition: ['live', 'agent', 'customer service', 'agente', 'gente', 'gerente', 'al cliente'].some(choice => use_existing_contact.includes(choice)) || use_existing_contact == '0'": {
+                  "id": "goto_live_agent",
+                  "type": "FLOW",
+                  "value": "live-agent-requested",
+                  "callType": "reboot"
                },
                "default": {
-                  "id": "invalid_otp_format",
+                  "id": "retry_existing_contact_choice",
                   "type": "FLOW",
-                  "value": "retry-get-cell-or-email",
-                  "mode": "replace"
+                  "value": "contact-support",
+                  "callType": "reboot"
                }
             }
+         }
+      ]
+   },
+   {
+      "id": "lookup-account-failed-handler",
+      "name": "LookupAccountFailedHandler",
+      "version": "1.0.0",
+      "description": "Handle unexpected failure of lookup-account tool",
+      "steps": [
+         {
+            "id": "clear_cell",
+            "type": "SET",
+            "variable": "cell",
+            "value": "''"
+         },
+         {
+            "id": "clear_email",
+            "type": "SET",
+            "variable": "email",
+            "value": "''"
+         },
+         {
+            "id": "clear_otp_verified",
+            "type": "SET",
+            "variable": "clear_otp_side_effect",
+            "value": "cargo.otpVerified = false, cargo.otp_cell_number = null, cargo.otp_email = null"
+         },
+         {
+            "id": "invoke_generic_retry",
+            "type": "FLOW",
+            "value": "generic-retry-with-options",
+            "callType": "replace",
+            "parameters": {
+               "error_message": "Sorry, I couldn't locate your account with that information.",
+               "error_message_es": "Lo siento, no pude localizar su cuenta con esa información.",
+               "retry_flow": "locate-account",
+               "cancel_flow": "contact-support",
+               "capture_patterns": [
+                  {
+                     "variable": "cell_number",
+                     "regex": "[0-9\\-\\(\\)\\.\\s]{7,}",
+                     "normalizer": "[^0-9]"
+                  },
+                  {
+                     "variable": "email",
+                     "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
+                  }
+               ]
+            }
+         }
+      ]
+   },
+   {
+      "id": "validate-otp-result-and-perform-account-lookup",
+      "name": "ValidateOtpResultAndPerformAccountLookup",
+      "version": "1.0.0",
+      "description": "Validate OTP result and perform account lookup",
+      "steps": [
+         {
+            "id": "set_email_from_cargo_otp",
+            "type": "SET",
+            "variable": "email",
+            "value": "cargo.otp_email || ''"
+         },
+         {
+            "id": "set_cell_number_from_cargo_otp",
+            "type": "SET",
+            "variable": "cell_number",
+            "value": "cargo.otp_cell_number || ''"
+         },
+         {
+            "id": "set_otp_validation_result_if_validated",
+            "type": "SET",
+            "variable": "otp_validation_result",
+            "value": "cargo.otp_email || cargo.otp_cell_number ? true : false"
          },
          {
             "id": "perform_lookup_if_validated",
@@ -1698,15 +2353,21 @@ const flowsMenu = [
                   "onFail": {
                      "id": "lookup_failed",
                      "type": "FLOW",
-                     "value": "retry-get-cell-or-email",
-                     "mode": "replace"
+                     "value": "lookup-account-failed-handler",
+                     "callType": "reboot"
                   }
                },
                "default": {
-                  "id": "otp_not_validated",
+                  "id": "unexpected_otp_failure",
                   "type": "FLOW",
-                  "value": "retry-get-cell-or-email",
-                  "mode": "replace"
+                  "value": "generic-retry-with-options",
+                  "callType": "reboot",
+                  "parameters": {
+                     "error_message": "Sorry, there was an unexpected error validating your information.",
+                     "error_message_es": "Lo siento, hubo un error inesperado al validar su información.",
+                     "retry_flow": "locate-account",
+                     "cancel_flow": "contact-support"
+                  }
                }
             }
          },
@@ -1714,17 +2375,426 @@ const flowsMenu = [
             "id": "show_lookup_results",
             "type": "CASE",
             "branches": {
-               "condition: lookup_result && lookup_result.success": {
+               "condition: lookup_result && lookup_result.success && lookup_result.customer_info.cust_id": {
                   "id": "account_found",
-                  "type": "SAY",
-                  "value": "Account found! Customer: {{lookup_result.customer_info.first_name}} {{lookup_result.customer_info.last_name}}, Account ID: {{lookup_result.customer_info.cust_id}}",
-                  "value_es": "¡Cuenta encontrada! Cliente: {{lookup_result.customer_info.first_name}} {{lookup_result.customer_info.last_name}}, ID de cuenta: {{lookup_result.customer_info.cust_id}}"
+                  "type": "FLOW",
+                  "value": "account-found",
+                  "callType": "replace"
                },
                "default": {
                   "id": "account_not_found",
+                  "type": "FLOW",
+                  "value": "generic-retry-with-options",
+                  "callType": "reboot",
+                  "parameters": {
+                     "error_message": "Sorry, I couldn't locate your account with that information.",
+                     "error_message_es": "Lo siento, no pude localizar su cuenta con esa información.",
+                     "retry_flow": "locate-account",
+                     "cancel_flow": "contact-support"
+                  }
+               }
+            }
+         }
+      ]
+   },
+   {
+      "id": "account-found",
+      "name": "AccountFound",
+      "version": "1.0.0",
+      "description": "Handle successful account lookup",
+      "steps": [
+         {
+            "id": "set_authenticated_account",
+            "type": "SET",
+            "variable": "authenticated_account",
+            "value": "cargo.authenticatedAccount = true"
+         },
+         {
+            "id": "set_acct_number",
+            "type": "SET",
+            "variable": "acct_number",
+            "value": "cargo.accountNumber = lookup_result.customer_info.cust_id"
+         },
+         {
+            "id": "set_first_name",
+            "type": "SET",
+            "variable": "first_name",
+            "value": "cargo.firstName = lookup_result.customer_info.first_name"
+         },
+         {
+            "id": "set_last_name",
+            "type": "SET",
+            "variable": "last_name",
+            "value": "cargo.lastName = lookup_result.customer_info.last_name"
+         },
+         {
+            "id": "get_subaccounts",
+            "type": "CALL-TOOL",
+            "tool": "get-subaccounts",
+            "variable": "subaccounts_result",
+            "args": {
+               "account_number": "{{cargo.accountNumber}}"
+            },
+            "onFail": {
+               "id": "subaccounts_failed",
+               "type": "SET",
+               "variable": "subaccounts_result",
+               "value": "{ success: false, subAccounts: [] }"
+            }
+         },
+         {
+            "id": "set_subaccounts_to_cargo",
+            "type": "SET",
+            "variable": "sub_accounts",
+            "value": "cargo.subAccounts = subaccounts_result.success && Array.isArray(subaccounts_result.subAccounts) ? subaccounts_result.subAccounts : []"
+         },
+         {
+            "id": "set_subaccountsBalance_to_cargo",
+            "type": "SET",
+            "variable": "sub_accounts_balance",
+            "value": "cargo.subAccountsBalance = subaccounts_result.success && Array.isArray(subaccounts_result.subAccounts) && subaccounts_result.subAccounts.length > 0 ? subaccounts_result.subAccounts.reduce((acc, sub) => acc + (sub.balance || 0), 0).toFixed(2) : undefined"
+         },
+         {
+            "id": "set_statement_information_to_cargo",
+            "type": "SET",
+            "variable": "statement_information",
+            "value": "cargo.statementInformation = subaccounts_result.success && subaccounts_result.statementInformation ? subaccounts_result.statementInformation : {}"
+         },
+         {
+            "id": "set-user-context",
+            "type": "SET",
+            "variable": "user_context",
+            "value": "cargo.userContext = { firstName: cargo.firstName, lastName: cargo.lastName, accountNumber: cargo.accountNumber, subAccounts: cargo.subAccounts, statementInformation: cargo.statementInformation, subAccountsBalance: cargo.subAccountsBalance }"
+         },
+         {
+            "id": "confirm_account_found",
+            "type": "SAY",
+            "value": "Hi {{cargo.firstName}} {{cargo.lastName}}, I found your account ending with {{cargo.accountNumber.slice(-4).split('').join(', ')}} with {{cargo.subAccounts?.length || 'no' }} sub accounts. {{typeof cargo.subAccountsBalance === 'string' ? 'Your current balance is ' + cargo.subAccountsBalance + '. ' : ''}}{{cargo.statementInformation?.statementSummary?.totalBalance ? 'Your latest statement balance was ' + cargo.statementInformation.statementSummary.totalBalance + '. ' : ''}}{{cargo.statementInformation?.statementSummary?.availableCredit ? 'Your available credit as of the last statement was ' + cargo.statementInformation.statementSummary.availableCredit + '. ' : ''}}Any other assistance I can help you with?",
+            "value_es": "Hola {{cargo.firstName}} {{cargo.lastName}}, encontré tu cuenta que termina en {{cargo.accountNumber.slice(-4).split('').join(', ')}} con {{cargo.subAccounts?.length || 'ninguna' }} subcuentas. {{typeof cargo.subAccountsBalance === 'string' ? 'Su saldo actual es ' + cargo.subAccountsBalance + '. ' : ''}}{{cargo.statementInformation?.statementSummary?.totalBalance ? 'El saldo de tu último estado de cuenta fue ' + cargo.statementInformation.statementSummary.totalBalance + '. ' : ''}}{{cargo.statementInformation?.statementSummary?.availableCredit ? 'Su crédito disponible la fecha del último estado de cuenta fue ' + cargo.statementInformation.statementSummary.availableCredit + '. ' : ''}}Con qué más puedo ayudarte?"
+         }
+      ]
+   },
+   {
+      "id": "find-locations",
+      "name": "FindLocations",
+      "version": "1.0.0",
+      "description": "Helps customers find our locations, locating the closest location and optionally getting an SMS link with directions. This flow should NOT be activated when customer asks about store hours, nor when they ask about product availability in a given location - it should be activated only when the user explicitly requests to find a store location.",
+      "prompt": "find location",
+      "prompt_es": "encontrar ubicación",
+      "primary": true,
+      parameters: [
+         {
+            name: "user_city",
+            description: "The city the user specified for location search",
+            type: "string"
+         }
+      ],
+      "variables": {
+         "user_city": {
+            "type": "string",
+            "description": "User's city for location search"
+         },
+         "location_result": {
+            "type": "object",
+            "description": "Result from location search"
+         },
+         "send_sms_choice": {
+            "type": "string",
+            "description": "User choice to send SMS directions"
+         },
+         "sms_result": {
+            "type": "object",
+            "description": "Result from SMS sending"
+         }
+      },
+      "steps": [
+         {
+            "id": "ask_for_city_if_no_param",
+            "type": "CASE",
+            "branches": {
+               "condition: !user_city": {
+                  "id": "get_city_from_user",
+                  "type": "FLOW",
+                  "value": "get-user-city-for-location",
+                  "callType": "call"
+               },
+               "default": {
+                  "id": "proceed_with_city",
+                  "type": "SET",
+                  "variable": "proceed",
+                  "value": "true"
+               }
+            }
+         },
+         {
+            "id": "find_location",
+            "type": "CALL-TOOL",
+            "tool": "find-closest-location",
+            "variable": "location_result",
+            "args": {
+               "userCity": "{{user_city}}",
+               "stores": "{{global_store_locations}}"
+            },
+            "onFail": {
+               "id": "location_search_failed",
+               "type": "FLOW",
+               "value": "store-location-failed",
+               "callType": "replace"
+            }
+         },
+         {
+            "id": "validate_location_result",
+            "type": "CASE",
+            "branches": {
+               "condition: !location_result || !location_result.store || !location_result.store.address || !location_result.distance || !location_result.directions": {
+                  "id": "invalid_location_result",
+                  "type": "FLOW",
+                  "value": "store-location-failed",
+                  "callType": "replace"
+               },
+               "default": {
+                  "id": "location_valid",
+                  "type": "SET",
+                  "variable": "location_valid",
+                  "value": "true"
+               }
+            }
+         },
+         {
+            "id": "build_maps_urls",
+            "type": "SET",
+            "variable": "maps_address",
+            "value": "encodeURIComponent(location_result.store.address + ', ' + location_result.store.city + ', ' + location_result.store.state)"
+         },
+         {
+            "id": "display_location_info",
+            "type": "CASE",
+            "branches": {
+               "condition: !cargo.voice": {
+                  "id": "display_with_links",
                   "type": "SAY",
-                  "value": "Account not found with the provided contact information.",
-                  "value_es": "Cuenta no encontrada con la información de contacto proporcionada."
+                  "value": "The closest store to {{user_city}} is:\n\n{{location_result.store.name}}\n{{location_result.store.address}}\n{{location_result.store.city}}, {{location_result.store.state}}\nPhone: {{location_result.store.phone}}\nDistance: {{location_result.distance}} miles\n\nGet Directions:\n🗺️ Google Maps: https://www.google.com/maps/dir/?api=1&destination={{maps_address}}\n🍎 Apple Maps: https://maps.apple.com/?daddr={{maps_address}}&dirflg=d",
+                  "value_es": "La tienda más cercana a {{user_city}} es:\n\n{{location_result.store.name}}\n{{location_result.store.address}}\n{{location_result.store.city}}, {{location_result.store.state}}\nTeléfono: {{location_result.store.phone}}\nDistancia: {{location_result.distance}} millas\n\nObtener Direcciones:\n🗺️ Google Maps: https://www.google.com/maps/dir/?api=1&destination={{maps_address}}\n🍎 Apple Maps: https://maps.apple.com/?daddr={{maps_address}}&dirflg=d"
+               },
+               "default": {
+                  "id": "display_voice_only",
+                  "type": "SAY",
+                  "value": "The closest store to {{user_city}} is:\n\n{{location_result.store.name}}\n{{location_result.store.address}}\n{{location_result.store.city}}, {{location_result.store.state}}\nPhone: {{location_result.store.phone}}\nDistance: {{location_result.distance}} miles\n\nDirections: {{location_result.directions}}",
+                  "value_es": "La tienda más cercana a {{user_city}} es:\n\n{{location_result.store.name}}\n{{location_result.store.address}}\n{{location_result.store.city}}, {{location_result.store.state}}\nTeléfono: {{location_result.store.phone}}\nDistancia: {{location_result.distance}} millas\n\nDirecciones: {{location_result.directions}}"
+               }
+            }
+         },
+         {
+            "id": "ask_send_sms",
+            "type": "CASE",
+            "branches": {
+               "condition: !cargo.voice": {
+                  "id": "skip_sms_for_chat",
+                  "type": "SET",
+                  "variable": "send_sms_choice",
+                  "value": "'no'"
+               },
+               "default": {
+                  "id": "ask_sms_for_voice",
+                  "type": "SAY-GET",
+                  "variable": "send_sms_choice",
+                  "value": "Would you like me to text these directions to your phone? To send by text {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. To skip {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO.",
+                  "value_es": "¿Le gustaría que enviara estas direcciones a tu teléfono por texto? Para enviar por texto {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ. Para omitir {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb_es}} NO.",
+                  "digits": {
+                     "min": 1,
+                     "max": 1
+                  }
+               }
+            }
+         },
+         {
+            "id": "normalize_sms_choice",
+            "type": "SET",
+            "variable": "send_sms_choice",
+            "value": "send_sms_choice.trim().toLowerCase().replace(/[^\\w\\s\\*áéíóúüñ]+/g, '')"
+         },
+         {
+            "id": "handle_sms_choice",
+            "type": "CASE",
+            "branches": {
+               "condition: ['1', 'yes', 'sure', 'please', 'ok', 'thanks', 'si', 'sí', 'seguro', 'por favor', 'gracias'].includes(send_sms_choice) && !cargo.callerId": {
+                  "id": "no_caller_id_available",
+                  "type": "SAY",
+                  "value": "I'm unable to send texts at this time. However, you can text our support number at (213) 205-3155 and ask for store locations - we'll send you the directions right away!",
+                  "value_es": "No puedo enviar mensajes de texto en este momento. Sin embargo, puedes enviar un mensaje de texto a nuestro número de soporte al (213) 205-3155 y pedir las ubicaciones de las tiendas - ¡te enviaremos las direcciones de inmediato!"
+               },
+               "condition: ['1', 'yes', 'sure', 'please', 'ok', 'thanks', 'si', 'sí', 'seguro', 'por favor', 'gracias'].includes(send_sms_choice) && cargo.callerId": {
+                  "id": "send_sms_directions",
+                  "type": "CALL-TOOL",
+                  "tool": "send-twilio-sms",
+                  "variable": "sms_result",
+                  "args": {
+                     "accountSid": "...",
+                     "from": "{{cargo.twilioNumber}}",
+                     "to": "{{cargo.callerId}}",
+                     "message": "{{location_result.store.name}}\n{{location_result.store.address}}, {{location_result.store.city}}, {{location_result.store.state}}\nPhone: {{location_result.store.phone}}\nDistance: {{location_result.distance}} miles\n\nDirections:\nGoogle Maps: https://www.google.com/maps/dir/?api=1&destination={{maps_address}}\n\nApple Maps: https://maps.apple.com/?daddr={{maps_address}}&dirflg=d",
+                     "messageSid": ""
+                  },
+                  "onFail": {
+                     "id": "sms_failed",
+                     "type": "SAY",
+                     "value": "I couldn't send the text message at this time, but here are your directions again:\n\n{{location_result.store.name}}\n{{location_result.store.address}}\n{{location_result.store.city}}, {{location_result.store.state}}\nPhone: {{location_result.store.phone}}",
+                     "value_es": "No pude enviar el mensaje de texto en este momento, pero aquí están tus direcciones nuevamente:\n\n{{location_result.store.name}}\n{{location_result.store.address}}\n{{location_result.store.city}}, {{location_result.store.state}}\nTeléfono: {{location_result.store.phone}}"
+                  }
+               },
+               "condition: ['2', 'no'].includes(send_sms_choice)": {
+                  "id": "skip_sms",
+                  "type": "SAY",
+                  "value": "Feel free to visit us at {{location_result.store.name}} or call {{location_result.store.phone}} for more information. Anything else I can help you with?",
+                  "value_es": "Siéntete libre de visitarnos en {{location_result.store.name}} o llamar al {{location_result.store.phone}} para más información. ¿Hay algo más en lo que pueda ayudarte?"
+               },
+               "condition: ['*', 'abort', 'exit', 'quit', 'salir'].includes(send_sms_choice)": {
+                  "id": "abort_process",
+                  "type": "FLOW",
+                  "value": "cancel-process",
+                  "callType": "reboot"
+               },
+               "condition: ['live', 'agent', 'customer service', 'agente', 'gente', 'gerente', 'al cliente'].some(choice => send_sms_choice.includes(choice)) || send_sms_choice == '0'": {
+                  "id": "goto_live_agent",
+                  "type": "FLOW",
+                  "value": "live-agent-requested",
+                  "callType": "reboot"
+               },
+               "default": {
+                  "id": "invalid_choice",
+                  "type": "SAY",
+                  "value": "I didn't understand that choice. The directions have been displayed above. Is there anything else I can help you with?",
+                  "value_es": "No entendí esa opción. Las direcciones se han mostrado arriba. ¿Hay algo más en lo que pueda ayudarte?"
+               }
+            }
+         },
+         {
+            "id": "sms_confirmation",
+            "type": "CASE",
+            "branches": {
+               "condition: typeof sms_result !== 'undefined' && sms_result": {
+                  "id": "sms_sent_successfully",
+                  "type": "SAY",
+                  "value": "Perfect! I've sent the store directions to your phone with Google Maps and Apple Maps links. You should receive the text message shortly.",
+                  "value_es": "¡Perfecto! He enviado las direcciones de la tienda a tu teléfono con enlaces de Google Maps y Apple Maps. Deberías recibir el mensaje de texto en breve."
+               },
+               "default": {
+                  "id": "no_sms_sent",
+                  "type": "SET",
+                  "variable": "sms_skipped",
+                  "value": true
+               }
+            }
+         }
+      ]
+   },
+   {
+      "id": "get-user-city-for-location",
+      "name": "AskForUserCity",
+      "version": "1.0.0",
+      "description": "Ask user for their city to find nearest store location",
+      "steps": [
+         {
+            "id": "ask_user_city",
+            "type": "SAY-GET",
+            "variable": "user_city",
+            "value": "I'd be happy to help you find our closest location. What city are you in?",
+            "value_es": "Me encantaría ayudarte a encontrar nuestra ubicación más cercana. ¿En qué ciudad te encuentras?"
+         },
+         {
+            "id": "normalize_city",
+            "type": "SET",
+            "variable": "user_city",
+            "value": "user_city.trim()"
+         },
+         {
+            "id": "validate_city_input",
+            "type": "CASE",
+            "branches": {
+               "condition: ['*', 'abort', 'exit', 'quit', 'salir'].includes(search_query.toLowerCase())": {
+                  "id": "abort_process",
+                  "type": "FLOW",
+                  "value": "cancel-process",
+                  "callType": "reboot"
+               },
+               "condition: ['live', 'agent', 'customer service', 'agente', 'gente', 'gerente', 'al cliente'].some(choice => user_city.toLowerCase().includes(choice)) || user_city == '0'": {
+                  "id": "goto_live_agent",
+                  "type": "FLOW",
+                  "value": "live-agent-requested",
+                  "callType": "reboot"
+               },
+               "default": {
+                  "id": "proceed_with_city",
+                  "type": "SET",
+                  "variable": "proceed",
+                  "value": "true"
+               }
+            }
+         },
+      ]
+   },
+   {
+      "id": "store-location-failed",
+      "name": "StoreLocationFailed",
+      "version": "1.0.0",
+      "description": "Handle failed store location search gracefully",
+      "variables": {
+         "user_choice": {
+            "type": "string",
+            "description": "User choice for retry or exit"
+         }
+      },
+      "steps": [
+         {
+            "id": "explain_failure",
+            "type": "SAY",
+            "value": "I'm sorry, I couldn't find store locations near {{user_city}}. This might be because the city name wasn't recognized or there was an issue with the search.",
+            "value_es": "Lo siento, no pude encontrar ubicaciones de tiendas cerca de {{user_city}}. Esto podría ser porque el nombre de la ciudad no fue reconocido o hubo un problema con la búsqueda."
+         },
+         {
+            "id": "offer_retry",
+            "type": "SAY-GET",
+            "variable": "user_choice",
+            "value": "Would you like to try again with a different city? To retry {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. For customer service contact information {{cargo.voice ? 'press 2 or ' : ''}}{{cargo.verb}} NO.",
+            "value_es": "¿Le gustaría intentar de nuevo con una ciudad diferente? Para reintentar {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ. Para información de contacto del servicio al cliente {{cargo.voice ? 'presione 2 o ' : ''}}{{cargo.verb_es}} NO.",
+            "digits": {
+               "min": 1,
+               "max": 1
+            }
+         },
+         {
+            "id": "normalize_choice",
+            "type": "SET",
+            "variable": "user_choice",
+            "value": "user_choice.trim().toLowerCase().replace(/[^\\w\\s\\*áéíóúüñ]+/g, '')"
+         },
+         {
+            "id": "handle_choice",
+            "type": "CASE",
+            "branches": {
+               "condition: ['1', 'yes', 'sure', 'please', 'ok', 'thanks', 'si', 'sí', 'seguro', 'por favor', 'gracias'].includes(user_choice)": {
+                  "id": "retry_location_search",
+                  "type": "FLOW",
+                  "value": "find-locations",
+                  "callType": "reboot"
+               },
+               "condition: ['2', 'no'].includes(user_choice)": {
+                  "id": "provide_contact_info",
+                  "type": "FLOW",
+                  "value": "contact-support",
+                  "callType": "reboot"
+               },
+               "condition: ['live', 'agent', 'customer service', 'agente', 'gente', 'gerente', 'al cliente'].some(choice => user_choice.includes(choice)) || user_choice == '0'": {
+                  "id": "goto_live_agent",
+                  "type": "FLOW",
+                  "value": "live-agent-requested",
+                  "callType": "reboot"
+               },
+               "default": {
+                  "id": "provide_contact_info_default",
+                  "type": "FLOW",
+                  "value": "contact-support",
+                  "callType": "reboot"
                }
             }
          }
@@ -1734,50 +2804,218 @@ const flowsMenu = [
 
 /* ---------- Global Variables ---------- */
 const globalVariables = {
-   global_acct_required_digits: 6,
-   global_acct_max_digits: 12
+   "global_acct_required_digits": 7,
+   "global_acct_max_digits": 8,
+   "global_store_locations": [
+      {
+         "name": "Curacao Anaheim",
+         "city": "Anaheim",
+         "address": "1520 North Lemon Street",
+         "zip": "92801",
+         "state": "CA",
+         "lat": 33.8464,
+         "lon": -117.9196,
+         "phone": "+1 714-738-4900"
+      },
+      {
+         "name": "Curacao Chino",
+         "city": "Chino",
+         "address": "5459 Philadelphia Street",
+         "zip": "91710",
+         "state": "CA",
+         "lat": 34.0335,
+         "lon": -117.6858,
+         "phone": "+1 909-628-1919"
+      },
+      {
+         "name": "Curacao Chula Vista Center",
+         "city": "Chula Vista",
+         "address": "555 Broadway suite 900",
+         "zip": "91910",
+         "state": "CA",
+         "lat": 32.6298,
+         "lon": -117.0851,
+         "phone": "(877) 287-2226"
+      },
+      {
+         "name": "Curacao Huntington Park",
+         "city": "Huntington Park",
+         "address": "5980 Pacific Boulevard",
+         "zip": "90255",
+         "state": "CA",
+         "lat": 33.9877,
+         "lon": -118.2251,
+         "phone": "+1 323-826-3000"
+      },
+      {
+         "name": "Curacao Las Vegas",
+         "city": "Las Vegas",
+         "address": "4200 Meadows Lane",
+         "zip": "89107",
+         "state": "NV",
+         "lat": 36.1702,
+         "lon": -115.2045,
+         "phone": "+1 702-822-6891"
+      },
+      {
+         "name": "Curacao Los Angeles",
+         "city": "Los Angeles",
+         "address": "1605 W Olympic Boulevard",
+         "zip": "90015",
+         "state": "CA",
+         "lat": 34.0493,
+         "lon": -118.2743,
+         "phone": "+1 213-639-2100"
+      },
+      {
+         "name": "Curacao Lynwood",
+         "city": "Lynwood",
+         "address": "3160 East Imperial Highway",
+         "zip": "90262",
+         "state": "CA",
+         "lat": 33.9305,
+         "lon": -118.2152,
+         "phone": "+1 310-632-7711"
+      },
+      {
+         "name": "Curacao Northridge",
+         "city": "Northridge",
+         "address": "9301 Tampa Avenue suite 545",
+         "zip": "91324",
+         "state": "CA",
+         "lat": 34.2383,
+         "lon": -118.5554,
+         "phone": "+1 818-672-7023"
+      },
+      {
+         "name": "Curacao Phoenix",
+         "city": "Phoenix",
+         "address": "7815 West Thomas Road",
+         "zip": "85033",
+         "state": "AZ",
+         "lat": 33.4800,
+         "lon": -112.2259,
+         "phone": "+1 623-848-0040"
+      },
+      {
+         "name": "Curacao San Bernardino",
+         "city": "San Bernardino",
+         "address": "885 Harriman Place",
+         "zip": "92408",
+         "state": "CA",
+         "lat": 34.0658,
+         "lon": -117.2687,
+         "phone": "+1 909-383-5099"
+      },
+      {
+         "name": "Curacao Santa Ana",
+         "city": "Santa Ana",
+         "address": "16111 Harbor Boulevard",
+         "zip": "92708",
+         "state": "CA",
+         "lat": 33.7098,
+         "lon": -117.9198,
+         "phone": "+1 714-775-9700"
+      },
+      {
+         "name": "Curacao South Gate",
+         "city": "South Gate",
+         "address": "8618 Garfield Avenue",
+         "zip": "90280",
+         "state": "CA",
+         "lat": 33.9529,
+         "lon": -118.1640,
+         "phone": "+1 562-927-3027"
+      },
+      {
+         "name": "Curacao Tucson Mall",
+         "city": "Tucson",
+         "address": "4510 North Oracle Road",
+         "zip": "85705",
+         "state": "AZ",
+         "lat": 32.2885,
+         "lon": -110.9784,
+         "phone": "+1 520-576-5565"
+      }
+   ]
 };
-
-/* ---------- Engine Boot ---------- */
-const engine = new WorkflowEngine(
-   logger,
-   aiCallback,
-   flowsMenu,
-   toolsRegistry,
-   APPROVED_FUNCTIONS,
-   globalVariables,
-   true,
-   '' // Auto-detect Language
-);
-engine.disableCommands(); // Disable default flow commands for this demo
 
 /* ---------- Simple REPL ---------- */
 async function main() {
 
    try {
-      fs.writeFileSync(path.resolve(__dirname, 'tests.flow'), JSON.stringify(flowsMenu, null, 2), 'utf8');
-      fs.writeFileSync(path.resolve(__dirname, 'tests.tools'), JSON.stringify(toolsRegistry, null, 2), 'utf8');
-      console.log('✅ Persisted flowsMenu and toolsRegistry to tests.flow and tests.tools');
+      fs.writeFileSync(path.resolve(__dirname, 'make-payment.flows'), JSON.stringify(flowsMenu, null, 2), 'utf8');
+      fs.writeFileSync(path.resolve(__dirname, 'make-payment.tools'), JSON.stringify(toolsRegistry, null, 2), 'utf8');
+      console.log('✅ Persisted flowsMenu and toolsRegistry to make-payment.flows and make-payment.tools');
    } catch (err) {
       console.error('❌ Failed to persist flows/tools:', err);
    }
+
+   // Load system flows and tools
+   try {
+      console.log('Loading system flows and tools...');
+      const systemFlows = JSON.parse(fs.readFileSync('./system.flows.json', 'utf8'));
+      const systemTools = JSON.parse(fs.readFileSync('./system.tools.json', 'utf8'));
+
+      // Merge system flows into flowsMenu (at the beginning)
+      flowsMenu.unshift(...systemFlows);
+
+      // Merge system tools into toolsRegistry (at the beginning)
+      toolsRegistry.unshift(...systemTools);
+
+      console.log(`Loaded ${systemFlows.length} system flows and ${systemTools.length} system tools.`);
+   } catch (error) {
+      console.error('Error loading system flows/tools:', error);
+   }
+
+   // Load Shopify flows and tools if available
+   try {
+      if (fs.existsSync('./shopify.flows.json') && fs.existsSync('./shopify.tools.json')) {
+         console.log('Loading Shopify flows and tools...');
+         const shopifyFlows = JSON.parse(fs.readFileSync('./shopify.flows.json', 'utf8'));
+         const shopifyTools = JSON.parse(fs.readFileSync('./shopify.tools.json', 'utf8'));
+
+         // Merge Shopify flows into flowsMenu
+         flowsMenu.push(...shopifyFlows);
+
+         // Merge Shopify tools into toolsRegistry
+         toolsRegistry.push(...shopifyTools);
+
+         console.log(`Loaded ${shopifyFlows.length} Shopify flows and ${shopifyTools.length} Shopify tools.`);
+      } else {
+         console.log('No Shopify flows/tools found, skipping.');
+      }
+   } catch (error) {
+      console.error('Error loading Shopify flows/tools:', error);
+   }
+
+   /* ---------- Engine Boot ---------- */
+   const engine = new WorkflowEngine(
+      logger,
+      aiCallback,
+      flowsMenu,
+      toolsRegistry,
+      APPROVED_FUNCTIONS,
+      globalVariables,
+      true, //Validate on Init
+      '', // Auto-detect Language
+      3000 // AI Timeout in ms
+   );
+   engine.disableCommands(); // Disable default flow commands for this demo
 
    let session = engine.initSession("user-001", "session-001");
    // You can set session variables like this:
    session.cargo.test_var = "test value";
 
-   // GLOBAL PAYMENT ABORT FEATURE:
-   // The payment_aborted variable is automatically initialized to false
-   // Any retry flow can set it to true to skip payment validation:
-   // session.cargo.payment_aborted = true;
-   // This will bypass the validate-payment-link flow and show a cancellation message
-
    // Simulate caller ID detection - in a real system, this would come from your telephony system
-   session.cargo.twilioNumber = "12132053155"; // Example: Twilio number
-   session.cargo.callerId = "17185105842";   // Example: Caller ID
-   session.cargo.voice = false; // Simulate voice interaction
-   session.cargo.verb = "type";
-   session.cargo.verb_es = "diga";
+   session.cargo.twilioNumber = "..."; // Example: Twilio number
+   session.cargo.callerId = "...";   // Example: Caller ID
+   session.cargo.voice = true; // Simulate voice interaction
+   session.cargo.verb = "say"; // "type";
+   session.cargo.verb_es = "diga"; // "ingrese";
+
+   // Set contact info based on channel (voice vs text)
+   session.cargo.contact_info = "Web: ... - Phone: ... - ... - or ask for \"Live Agent\" to escalate to live support.";
 
    console.log(`Simulated caller ID: ${session.cargo.callerId}`);
 

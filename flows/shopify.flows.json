@@ -1,0 +1,657 @@
+[
+  {
+    "id": "shopify-product-search",
+    "name": "ShopifyProductSearch",
+    "version": "1.0.0",
+    "description": "Help customers search for products, products availability (also availability per location), or pricing - this should not be triggered by prompts asking about general advice, the user prompt should explicitly ask to find a product, product availability (possibly for a given location), or pricing.",
+    "prompt": "product search",
+    "prompt_es": "buscar producto",
+    "primary": true,
+    "parameters": [
+      {
+        "name": "search_query",
+        "description": "The product name, brand, and/or features the user specified in the query prompt",
+        "type": "string"
+      }
+    ],
+    "variables": {
+      "search_query": {
+        "type": "string",
+        "description": "Product search query from user",
+        "value": ""
+      },
+      "search_result": {
+        "type": "object",
+        "description": "Search results from Shopify"
+      },
+      "product_choice": {
+        "type": "string",
+        "description": "User's product selection (1-5)"
+      },
+      "product_idx": {
+        "type": "number",
+        "description": "Index of selected product (0-4)"
+      },
+      "selected_product": {
+        "type": "object",
+        "description": "Product selected by user for store availability check"
+      },
+      "selected_variant": {
+        "type": "object",
+        "description": "Variant selected for availability check"
+      },
+      "user_city": {
+        "type": "string",
+        "description": "User's city for finding nearest stores"
+      },
+      "store_availability": {
+        "type": "object",
+        "description": "Store availability results"
+      },
+      "user_prompt": {
+        "type": "string",
+        "description": "User's follow-up prompt after search when no stores are defined - will be forwarded to Conversational AI due to empty return",
+        "value": ""
+      }
+    },
+    "steps": [
+      {
+        "id": "get-search-query-if-no-param",
+        "type": "CASE",
+        "branches": {
+          "condition: !search_query": {
+            "id": "ask_for_search_query",
+            "type": "FLOW",
+            "value": "get-search-query",
+            "callType": "call"
+          },
+          "default": {
+            "id": "proceed_with_search",
+            "type": "SET",
+            "variable": "proceed",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "search_products",
+        "type": "CALL-TOOL",
+        "tool": "shopify-search-products",
+        "variable": "search_result",
+        "args": {
+          "query": "{{search_query}}",
+          "context": "Customer searching via chat",
+          "limit": 5
+        },
+        "onFail": {
+          "id": "search_failed",
+          "type": "FLOW",
+          "value": "no-action-needed",
+          "callType": "reboot"
+        }
+      },
+      {
+        "id": "display_results",
+        "type": "CASE",
+        "branches": {
+          "condition: search_result && search_result.products && search_result.products.length > 0": {
+            "id": "show_results",
+            "type": "SAY",
+            "value": "Great! Here's what I found for '{{search_query}}':\n\n{{search_result.products.map((p, i) => { const priceDisplay = p.price_range ? (p.price_range.min === p.price_range.max ? `$${p.price_range.min}` : `$${p.price_range.min} - $${p.price_range.max}`) : (p.price ? `$${p.price}` : 'Price varies'); const availableVariants = p.variants ? p.variants.filter(v => v.available) : []; const totalVariants = p.variants ? p.variants.length : 0; const stockStatus = totalVariants === 0 ? '' : availableVariants.length === totalVariants ? 'In Stock' : availableVariants.length > 0 ? `Limited Stock (${availableVariants.length}/${totalVariants} options available)` : 'Out of Stock'; return `${i+1}. ${p.title}\\n   Price: ${priceDisplay}\\n   ${stockStatus}\\n   ${p.url ? 'View: ' + p.url : ''}`; }).join('\\n\\n')}}",
+            "value_es": "¡Genial! Esto es lo que encontré para '{{search_query}}':\n\n{{search_result.products.map((p, i) => { const priceDisplay = p.price_range ? (p.price_range.min === p.price_range.max ? `$${p.price_range.min}` : `$${p.price_range.min} - $${p.price_range.max}`) : (p.price ? `$${p.price}` : 'Precio varía'); const availableVariants = p.variants ? p.variants.filter(v => v.available) : []; const totalVariants = p.variants ? p.variants.length : 0; const stockStatus = totalVariants === 0 ? '' : availableVariants.length === totalVariants ? 'Disponible' : availableVariants.length > 0 ? `Stock Limitado (${availableVariants.length}/${totalVariants} opciones disponibles)` : 'Agotado'; return `${i+1}. ${p.title}\\n   Precio: ${priceDisplay}\\n   ${stockStatus}\\n   ${p.url ? 'Ver: ' + p.url : ''}`; }).join('\\n\\n')}}"
+          },
+          "default": {
+            "id": "no_results",
+            "type": "FLOW",
+            "value": "no-action-needed",
+            "callType": "reboot"
+          }
+        }
+      },
+      {
+        "id": "check_global_store_locations",
+        "type": "CASE",
+        "branches": {
+          "condition: global_store_locations && Array.isArray(global_store_locations) && global_store_locations.length > 0": {
+            "id": "ask_store_check",
+            "type": "SAY-GET",
+            "variable": "product_choice",
+            "value": "Would you like to check which stores near you have any of these in stock? Tell me the product number (1-5), or say 'done' if you're all set.",
+            "value_es": "¿Te gustaría saber qué tiendas tienen alguno de estos en stock cerca de ti? Dime el número del producto (1-5), o di 'listo' si ya terminaste."
+          },
+          "default": {
+            "id": "all_done",
+            "type": "SAY-GET",
+            "variable": "user_prompt",
+            "value": "Is there anything else I can help you with today?",
+            "value_es": "¿Hay algo más en lo que pueda ayudarte hoy?"
+          }
+        }
+      },
+      {
+        "id": "check_product_choice",
+        "type": "CASE",
+        "branches": {
+          "condition: user_prompt": {
+            "id": "no_choice_made",
+            "type": "RETURN",
+            "value": "''"
+          },
+          "condition: /^(done|no|exit|listo|no gracias|salir)$/i.test(String(product_choice?.value || product_choice || '').trim())": {
+            "id": "end_search",
+            "type": "RETURN",
+            "value": "language == 'es' ? '¡Genial! Si necesitas algo más, solo pregunta.' : 'Cool! If you need anything else, just ask.'"
+          },
+          "condition: /^[1-5]$/.test(String(product_choice?.value || product_choice || '').trim())": {
+            "id": "set_product_idx",
+            "type": "SET",
+            "variable": "product_idx",
+            "value": "parseInt(String(product_choice?.value || product_choice || '').trim()) - 1"
+          },
+          "default": {
+            "id": "invalid_choice",
+            "type": "FLOW",
+            "value": "no-action-needed",
+            "callType": "reboot"
+          }
+        }
+      },
+      {
+        "id": "set_selected_product",
+        "type": "SET",
+        "variable": "selected_product",
+        "value": "search_result.products[product_idx]"
+      },
+      {
+        "id": "ask_city",
+        "type": "SAY-GET",
+        "variable": "user_city",
+        "value": "What city are you near? I'll find stores with this item in stock.",
+        "value_es": "¿Cerca de qué ciudad estás? Buscaré tiendas con este artículo en stock."
+      },
+      {
+        "id": "normalize_city",
+        "type": "SET",
+        "variable": "user_city",
+        "value": "String(user_city?.value || user_city || '').trim()"
+      },
+      {
+        "id": "set_selected_variant",
+        "type": "SET",
+        "variable": "selected_variant",
+        "value": "selected_product?.variants?.find(v => v.available) || selected_product?.variants?.[0] || null"
+      },
+      {
+        "id": "check_variant_valid",
+        "type": "CASE",
+        "branches": {
+          "condition: selected_variant && selected_variant.variant_id": {
+            "id": "variant_ok",
+            "type": "SET",
+            "variable": "proceed",
+            "value": "true"
+          },
+          "default": {
+            "id": "no_variants",
+            "type": "RETURN",
+            "value": "language == 'es' ? 'Lo siento, no pude obtener información de variantes para este producto.' : 'Sorry, I couldn\\'t get variant information for this product.'"
+          }
+        }
+      },
+      {
+        "id": "lookup_store_availability",
+        "type": "CALL-TOOL",
+        "tool": "shopify-store-availability",
+        "variable": "store_availability",
+        "args": {
+          "variantId": "{{selected_variant.variant_id}}",
+          "city": "{{user_city}}",
+          "storeLocations": "{{global_store_locations}}",
+          "maxStores": 3
+        },
+        "onFail": {
+          "id": "availability_failed",
+          "type": "RETURN",
+          "value": "language == 'es' ? 'Lo siento, no pude verificar la disponibilidad en tiendas en este momento.' : 'Sorry, I couldn\\'t check store availability at this time.'"
+        }
+      },
+      {
+        "id": "display_availability",
+        "type": "CASE",
+        "branches": {
+          "condition: store_availability && store_availability.success && store_availability.found && store_availability.stores && store_availability.stores.length > 0": {
+            "id": "show_stores",
+            "type": "RETURN",
+            "value": "(() => { const product = store_availability.productTitle + (store_availability.variantTitle ? ' - ' + store_availability.variantTitle : ''); const storeList = store_availability.stores.map((s, i) => `${i+1}. ${s.name} (${s.city})\\n   ${s.available} in stock - ${s.distance.toFixed(1)} miles away\\n   ${s.address}\\n   ${s.phone}`).join('\\n\\n'); const lang = language || 'en'; return lang === 'es' ? `${product}\\n\\nDisponible para recoger en:\\n\\n${storeList}\\n\\n¿Necesitas algo más?` : `${product}\\n\\nAvailable for pickup at:\\n\\n${storeList}\\n\\nNeed anything else?`; })()"
+          },
+          "condition: store_availability && store_availability.success && !store_availability.found": {
+            "id": "no_stock",
+            "type": "RETURN",
+            "value": "language == 'es' ? 'Lo siento, este producto no está disponible para recoger en ninguna tienda en este momento. Puedes ordenarlo en línea para entrega.' : 'Sorry, this product is not currently available for in-store pickup at any location. You can order it online for delivery.'"
+          },
+          "default": {
+            "id": "availability_error",
+            "type": "RETURN",
+            "value": "language == 'es' ? 'No pude verificar la disponibilidad en tiendas. Por favor intenta de nuevo más tarde.' : 'I couldn\\'t check store availability. Please try again later.'"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "get-search-query",
+    "name": "GetSearchQuery",
+    "version": "1.0.0",
+    "description": "Get a search query string from the user for product search",
+    "steps": [
+      {
+        "id": "ask_what_looking_for",
+        "type": "SAY-GET",
+        "variable": "search_query",
+        "value": "Please describe the product you are looking for, using natural language. You can also mention brand names or features.",
+        "value_es": "Por favor describe el producto que estás buscando, usando lenguaje natural. También puedes mencionar nombres de marcas o características."
+      },
+      {
+        "id": "normalize_search",
+        "type": "SET",
+        "variable": "search_query",
+        "value": "search_query.trim()"
+      },
+      {
+        "id": "check_for_exit",
+        "type": "CASE",
+        "branches": {
+          "condition: ['*', 'abort', 'exit', 'quit', 'salir'].includes(search_query.toLowerCase())": {
+            "id": "abort_search",
+            "type": "FLOW",
+            "value": "cancel-process",
+            "callType": "reboot"
+          },
+          "condition: ['live', 'agent', 'customer service', 'agente', 'gente', 'gerente', 'al cliente'].some(choice => search_query.toLowerCase().includes(choice)) || search_query == '0'": {
+            "id": "goto_live_agent",
+            "type": "FLOW",
+            "value": "live-agent-requested",
+            "callType": "reboot"
+          },
+          "default": {
+            "id": "proceed_with_search",
+            "type": "SET",
+            "variable": "proceed",
+            "value": "true"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "shopify-track-order",
+    "name": "ShopifyTrackOrder",
+    "version": "1.0.0",
+    "description": "Help customers view their orders and track their order status - requires OTP verification",
+    "prompt": "track order",
+    "prompt_es": "rastrear pedido",
+    "primary": true,
+    "parameters": [
+      {
+        "name": "order_number",
+        "description": "Order number (if provided in the query)",
+        "type": "string"
+      }
+    ],
+    "variables": {
+      "customer_email": {
+        "type": "string",
+        "description": "Customer's email address"
+      },
+      "order_number": {
+        "type": "string",
+        "description": "Order number to track",
+        "value": ""
+      },
+      "order_result": {
+        "type": "object",
+        "description": "Order lookup result"
+      },
+      "cell_number": {
+        "type": "string",
+        "description": "Customer cell phone number",
+        "value": ""
+      },
+      "email": {
+        "type": "string",
+        "description": "Customer email address",
+        "value": ""
+      },
+      "order_detail": {
+        "type": "object",
+        "description": "Details of the order to display"
+      },
+      "validate_identifier": {
+        "type": "boolean",
+        "description": "Whether to validate email/phone identifier"
+      },
+      "error_message": {
+        "type": "string",
+        "description": "Error message to display"
+      }
+    },
+    "steps": [
+      {
+        "id": "set_validate_if_from_param",
+        "type": "SET",
+        "variable": "validate_identifier",
+        "value": "!!order_number"
+      },
+      {
+        "id": "set_support_context",
+        "type": "SET",
+        "variable": "support_context_side_effect",
+        "value": "cargo.support_context = 'orders', cargo.support_context_es = 'pedidos'"
+      },
+      {
+        "id": "explain_verification",
+        "type": "SAY",
+        "value": "{{cargo.otpVerified && (cargo.otp_email || cargo.otp_cell_number) ? '' : \"I can help you track your order. For your security, I'll need to verify your identity first.\"}}",
+        "value_es": "{{cargo.otpVerified && (cargo.otp_email || cargo.otp_cell_number) ? '' : \"Puedo ayudarte a rastrear tu pedido. Por tu seguridad, primero necesitaré verificar tu identidad.\"}}"
+      },
+      {
+        "id": "check_otp_status",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.otpVerified && (cargo.otp_email || cargo.otp_cell_number)": {
+            "id": "already_verified",
+            "type": "FLOW",
+            "value": "shopify-get-orders-verified",
+            "callType": "replace"
+          },
+          "default": {
+            "id": "perform_auth",
+            "type": "FLOW",
+            "value": "authenticate-user",
+            "callType": "call",
+            "parameters": {
+              "retry_flow": "shopify-track-order",
+              "cancel_flow": "contact-support"
+            }
+          }
+        }
+      },
+      {
+        "id": "proceed_to_orders",
+        "type": "FLOW",
+        "value": "shopify-get-orders-verified",
+        "callType": "replace"
+      }
+    ]
+  },
+  {
+    "id": "shopify-get-orders-verified",
+    "name": "ShopifyGetOrdersVerified",
+    "version": "1.0.0",
+    "description": "Get order list for verified customer",
+    "variables": {
+      "orders_result": {
+        "type": "object",
+        "description": "Orders lookup result"
+      },
+      "order_number": {
+        "type": "string",
+        "description": "Specific order number to track"
+      },
+      "user_choice": {
+        "type": "string",
+        "description": "User selection",
+        "value": ""
+      },
+      "shopify_identifier": {
+        "type": "string",
+        "description": "Email or phone for Shopify lookup"
+      }
+    },
+    "steps": [
+      {
+        "id": "set_shopify_identifier",
+        "type": "SET",
+        "variable": "shopify_identifier",
+        "value": "cargo.otp_email || cargo.otp_cell_number"
+      },
+      {
+        "id": "call_tool_if_no_param",
+        "type": "CASE",
+        "branches": {
+          "condition: !order_number": {
+            "id": "lookup_orders",
+            "type": "CALL-TOOL",
+            "tool": "shopify-lookup-orders",
+            "variable": "orders_result",
+            "args": {
+              "identifier": "{{shopify_identifier}}",
+              "container": "{{cargo}}"
+            },
+            "onFail": {
+              "id": "lookup_failed",
+              "type": "FLOW",
+              "value": "generic-retry-with-options",
+              "callType": "reboot",
+              "parameters": {
+                "error_message": "I had trouble looking up your orders.",
+                "error_message_es": "Tuve problemas buscando tus pedidos.",
+                "retry_flow": "shopify-get-orders-verified",
+                "cancel_flow": "contact-support"
+              }
+            }
+          },
+          "default": {
+            "id": "skip_lookup",
+            "type": "SET",
+            "variable": "orders_result",
+            "value": "{success: true, orders: [{orderNumber: order_number}]}"
+          }
+        }
+      },
+      {
+        "id": "display_orders",
+        "type": "CASE",
+        "branches": {
+          "condition: !orders_result || !orders_result.success": {
+            "id": "lookup_error",
+            "type": "FLOW",
+            "value": "contact-support",
+            "callType": "reboot"
+          },
+          "condition: orders_result.orders.length === 0": {
+            "id": "no_orders",
+            "type": "RETURN",
+            "value": "language == 'es' ? \"Disculpa, no pude encontrar ningún pedido asociado con tu cuenta. ¿Hay algo más en lo que pueda ayudarte?\" : \"Sorry, I couldn't find any orders associated with your account. Is there anything else I can help with?\""
+          },
+          "condition: orders_result.orders.length === 1": {
+            "id": "single_order_auto",
+            "type": "SET",
+            "variable": "order_number",
+            "value": "orders_result.orders[0].orderNumber"
+          },
+          "default": {
+            "id": "show_orders",
+            "type": "SAY-GET",
+            "variable": "user_choice",
+            "value": "Hi {{orders_result.customer.firstName}}! Here are your recent orders:\n\n{{orders_result.orders.slice(0, 5).map((o, i) => `${i+1}. Order ${o.orderNumber}\\n   Date: ${o.createdAt ? new Date(o.createdAt).toLocaleDateString() : 'N/A'}\\n   Status: ${o.overallStatus || 'Processing'}\\n   Total: $${o.total?.amount || 'N/A'}`).join('\\n\\n')}}\n\nTo see details for a specific order, {{cargo.verb}} the order number (e.g., '1' for the first order). Or {{cargo.verb}} anything else if you're done.",
+            "value_es": "¡Hola {{orders_result.customer.firstName}}! Aquí están tus pedidos recientes:\n\n{{orders_result.orders.slice(0, 5).map((o, i) => `${i+1}. Pedido ${o.orderNumber}\\n   Fecha: ${o.createdAt ? new Date(o.createdAt).toLocaleDateString() : 'N/A'}\\n   Estado: ${o.overallStatus || 'Procesando'}\\n   Total: $${o.total?.amount || 'N/A'}`).join('\\n\\n')}}\n\nPara ver detalles de un pedido específico, {{cargo.verb_es}} el número del pedido (ej., '1' para el primer pedido). O {{cargo.verb_es}} cualquier otra cosa si has terminado."
+          }
+        }
+      },
+      {
+        "id": "check_single_order",
+        "type": "CASE",
+        "branches": {
+          "condition: order_number": {
+            "id": "skip_to_details",
+            "type": "SET",
+            "variable": "go_to_details",
+            "value": "true"
+          },
+          "default": {
+            "id": "continue_selection",
+            "type": "SET",
+            "variable": "go_to_details",
+            "value": "false"
+          }
+        }
+      },
+      {
+        "id": "handle_selection",
+        "type": "CASE",
+        "branches": {
+          "condition: go_to_details": {
+            "id": "already_have_order",
+            "type": "SET",
+            "variable": "skip",
+            "value": "true"
+          },
+          "condition: /^[1-5]$/.test(user_choice.trim())": {
+            "id": "get_order_details",
+            "type": "SET",
+            "variable": "order_number",
+            "value": "orders_result.orders[parseInt(user_choice.trim()) - 1]?.orderNumber || ''"
+          },
+          "default": {
+            "id": "finished",
+            "type": "RETURN",
+            "value": "language == 'es' ? '¡Genial! ¿Hay algo más en lo que pueda ayudarte?' : 'Cool! Anything else I can help with?'"
+          }
+        }
+      },
+      {
+        "id": "get_specific_order",
+        "type": "CASE",
+        "branches": {
+          "condition: order_number": {
+            "id": "fetch_order_status",
+            "type": "CALL-TOOL",
+            "tool": "shopify-get-order-status",
+            "variable": "order_detail",
+            "args": {
+              "orderNumber": "{{order_number}}",
+              "identifier": "{{shopify_identifier}}",
+              "container": "{{cargo}}",
+              "validateIdentifier": "{{validate_identifier}}"
+            },
+            "onFail": {
+              "id": "order_detail_failed",
+              "type": "SAY",
+              "value": "I couldn't retrieve details for that order. Please try again.",
+              "value_es": "No pude obtener los detalles de ese pedido. Por favor intenta de nuevo."
+            }
+          },
+          "default": {
+            "id": "unexpected_no_order",
+            "type": "FLOW",
+            "value": "contact-support",
+            "callType": "reboot"
+          }
+        }
+      },
+      {
+        "id": "show_order_detail",
+        "type": "CASE",
+        "branches": {
+          "condition: order_detail && order_detail.success && order_detail.order": {
+            "id": "display_detail",
+            "type": "SAY",
+            "variable": "continue_choice",
+            "value": "Order {{order_detail.order.orderNumber}}\n\nStatus: {{order_detail.order.fulfillmentStatus || 'Processing'}}\nPayment: {{order_detail.order.financialStatus}}\nTotal: ${{order_detail.order.total?.amount}}\n\nItems:\n{{order_detail.order.items.map(item => `- ${item.title} (x${item.quantity})`).join('\\n')}}\n\n{{order_detail.order.fulfillments && order_detail.order.fulfillments.length > 0 && order_detail.order.fulfillments[0].tracking ? 'Tracking: ' + (order_detail.order.fulfillments[0].tracking[0]?.company || '') + ' - ' + (order_detail.order.fulfillments[0].tracking[0]?.number || 'N/A') + (order_detail.order.fulfillments[0].tracking[0]?.url ? '\\nTrack: ' + order_detail.order.fulfillments[0].tracking[0].url : '') : ''}}\n\nShipping to:\n{{order_detail.order.shippingAddress ? order_detail.order.shippingAddress.firstName + ' ' + order_detail.order.shippingAddress.lastName + '\\n' + order_detail.order.shippingAddress.address1 + '\\n' + order_detail.order.shippingAddress.city + ', ' + order_detail.order.shippingAddress.province + ' ' + order_detail.order.shippingAddress.zip : 'N/A'}}\n\nAnything else I can help with?",
+            "value_es": "Pedido {{order_detail.order.orderNumber}}\n\nEstado: {{order_detail.order.fulfillmentStatus || 'Procesando'}}\nPago: {{order_detail.order.financialStatus}}\nTotal: ${{order_detail.order.total?.amount}}\n\nArtículos:\n{{order_detail.order.items.map(item => `- ${item.title} (x${item.quantity})`).join('\\n')}}\n\n{{order_detail.order.fulfillments && order_detail.order.fulfillments.length > 0 && order_detail.order.fulfillments[0].tracking ? 'Rastreo: ' + (order_detail.order.fulfillments[0].tracking[0]?.company || '') + ' - ' + (order_detail.order.fulfillments[0].tracking[0]?.number || 'N/A') + (order_detail.order.fulfillments[0].tracking[0]?.url ? '\\nRastrear: ' + order_detail.order.fulfillments[0].tracking[0].url : '') : ''}}\n\nEnvío a:\n{{order_detail.order.shippingAddress ? order_detail.order.shippingAddress.firstName + ' ' + order_detail.order.shippingAddress.lastName + '\\n' + order_detail.order.shippingAddress.address1 + '\\n' + order_detail.order.shippingAddress.city + ', ' + order_detail.order.shippingAddress.province + ' ' + order_detail.order.shippingAddress.zip : 'N/A'}}\n\n¿Hay algo más en lo que pueda ayudarte?"
+          },
+          "default": {
+            "id": "order_not_found",
+            "type": "SAY",
+            "variable": "continue_choice",
+            "value": "Sorry, I couldn't find that order. Anything else I can help with?",
+            "value_es": "No pude encontrar ese pedido. ¿Hay algo más en lo que pueda ayudarte?"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "shopify-store-policies",
+    "name": "ShopifyStorePolicies",
+    "version": "1.0.0",
+    "description": "Help customers find online store policies and FAQs",
+    "prompt": "store policies",
+    "prompt_es": "políticas de la tienda",
+    "primary": true,
+    "parameters": [
+      {
+        "name": "policy_query",
+        "description": "The user's question about store policies",
+        "type": "string"
+      }
+    ],
+    "variables": {
+      "policy_query": {
+        "type": "string",
+        "description": "User's question about policies",
+        "value": ""
+      },
+      "policy_result": {
+        "type": "object",
+        "description": "Policy search result"
+      }
+    },
+    "steps": [
+      {
+        "id": "check_policy_param",
+        "type": "CASE",
+        "branches": {
+          "condition: !policy_query": {
+            "id": "ask_policy_question",
+            "type": "SAY-GET",
+            "variable": "policy_query",
+            "value": "I can help you find information about our store policies. What would you like to know about? For example: return policy, shipping, refunds, or exchanges.",
+            "value_es": "Puedo ayudarte a encontrar información sobre nuestras políticas de la tienda. ¿Qué te gustaría saber? Por ejemplo: política de devoluciones, envío, reembolsos o cambios."
+          },
+          "default": {
+            "id": "proceed_with_query",
+            "type": "SET",
+            "variable": "proceed",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "search_policies",
+        "type": "CALL-TOOL",
+        "tool": "shopify-search-policies",
+        "variable": "policy_result",
+        "args": {
+          "query": "{{policy_query}}",
+          "context": "Customer asking about store policies via chat"
+        },
+        "onFail": {
+          "id": "policy_search_failed",
+          "type": "FLOW",
+          "value": "no-action-needed",
+          "callType": "reboot"
+        }
+      },
+      {
+        "id": "display_policy",
+        "type": "CASE",
+        "branches": {
+          "condition: policy_result && policy_result.content": {
+            "id": "show_policy",
+            "type": "SAY",
+            "value": "Here's what I found for '{{policy_query}}':\n\n{{policy_result.content}}\n\nIs there anything else you'd like to know?",
+            "value_es": "Esto es lo que encontré para '{{policy_query}}':\n\n{{policy_result.content}}\n\n¿Hay algo más que te gustaría saber?"
+          },
+          "default": {
+            "id": "no_policy_found",
+            "type": "FLOW",
+            "value": "no-action-needed",
+            "callType": "reboot"
+          }
+        }
+      }
+    ]
+  }
+]

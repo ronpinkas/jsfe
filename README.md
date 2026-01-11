@@ -35,6 +35,21 @@ const engine = new WorkflowEngine(
   guidanceConfig       // Optional: User assistance configuration
 );
 
+// Optional: AI-Powered Intent Detection & Parameter Extraction
+// You can manually invoke the engine's AI logic to detect flows and extract parameters
+// without executing the flow immediately. This is useful for pre-flight checks or UI hints.
+const detectionResult = await engine.detectFlowWithParameters(input);
+
+if (detectionResult?.flow) {
+  console.log(`Input triggers flow: ${detectionResult.flow.name}`);
+  
+  // If the flow definition includes parameters, the AI extracts them from the prompt
+  // Example: "Send $50 to Bob" -> { amount: "50", payee: "Bob" }
+  if (detectionResult.parameters) {
+    console.log(`Extracted parameters:`, detectionResult.parameters);
+  }
+}
+
 // 2. Initialize a session for each user
 let sessionContext = engine.initSession(yourLogger, 'user-123', 'session-456');
 

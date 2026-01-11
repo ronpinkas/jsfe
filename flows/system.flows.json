@@ -1,0 +1,930 @@
+[
+  {
+    "id": "no-action-needed",
+    "name": "NoActionNeeded",
+    "version": "1.0.0",
+    "description": "Handle case where no action is needed like when user is already authenticated",
+    "steps": [
+      {
+        "id": "no_action_needed",
+        "type": "RETURN",
+        "value": "''"
+      }
+    ]
+  },
+  {
+    "id": "cancel-process",
+    "name": "CancelProcess",
+    "version": "1.0.0",
+    "description": "Handle flow cancellation by user",
+    "steps": [
+      {
+        "id": "process_cancel_flow",
+        "type": "RETURN",
+        "value": "language == 'es' ? 'El proceso fue cancelado. Algo más en lo que pueda ayudar?' : 'The process has been cancelled. Anything else I can help with?'"
+      }
+    ]
+  },
+  {
+    "id": "contact-support",
+    "name": "ContactSupport",
+    "version": "1.0.0",
+    "description": "Provide customer service contact information",
+    "steps": [
+      {
+        "id": "set_contact_info",
+        "type": "SET",
+        "variable": "contact_info",
+        "value": "cargo.contact_info || 'please contact Customer Support'"
+      },
+      {
+        "id": "set_contact_info_es",
+        "type": "SET",
+        "variable": "contact_info_es",
+        "value": "cargo.contact_info || 'por favor contacte a Servicio al Cliente'"
+      },
+      {
+        "id": "say_support_message",
+        "type": "SAY",
+        "value": "Sorry I couldn't help! {{cargo.support_context ? 'For assistance with your ' + cargo.support_context + ', ' : ''}}{{contact_info}}.",
+        "value_es": "¡Lo siento, no pude ayudar! {{cargo.support_context ? 'Para asistencia con tu ' + (cargo.support_context_es || cargo.support_context) + ', ' : ''}}{{contact_info_es}}."
+      }
+    ]
+  },
+  {
+    "id": "switch-to-text",
+    "name": "SwitchToText",
+    "version": "1.0.0",
+    "prompt": "Switch to text",
+    "prompt_es": "Cambiar a texto",
+    "description": "This flow can be used when the user asks to switch the chat to text/SMS. It will forward their chat context to SMS and send a welcome message.",
+    "primary": true,
+    "variables": {
+      "sms_result": {
+        "type": "object",
+        "description": "Result from SMS sending"
+      }
+    },
+    "steps": [
+      {
+        "id": "check_already_text",
+        "type": "CASE",
+        "branches": {
+          "condition: !cargo.voice": {
+            "id": "already_text_mode",
+            "type": "FLOW",
+            "value": "no-action-needed",
+            "callType": "reboot"
+          },
+          "default": {
+            "id": "proceed_with_sms",
+            "type": "SET",
+            "variable": "proceed_with_sms",
+            "value": true
+          }
+        }
+      },
+      {
+        "id": "set_welcome_message",
+        "type": "SET",
+        "variable": "welcome_message",
+        "value": "language !== 'es' ? 'Hi, I remember our phone conversation and can continue to help you here via text. You can also continue on WhatsApp: https://wa.me/18184162641?text=Hi' : 'Hola, recuerdo nuestra conversación telefónica y puedo seguir ayudándote aquí por mensaje de texto. También puedes continuar en WhatsApp: https://wa.me/18184162641?text=Hola'"
+      },
+      {
+        "id": "send_welcome_sms",
+        "type": "CALL-TOOL",
+        "tool": "switch-to-sms",
+        "variable": "sms_result",
+        "args": {
+          "accountSid": "...",
+          "threadId": "{{sessionId}}",
+          "from": "{{cargo.twilioNumber}}",
+          "to": "{{cargo.callerId}}",
+          "message": "{{welcome_message}}"
+        },
+        "onFail": {
+          "id": "sms_failed_flow",
+          "type": "FLOW",
+          "value": "contact-support",
+          "callType": "reboot"
+        }
+      },
+      {
+        "id": "confirm_sms_sent",
+        "type": "SAY",
+        "value": "I've sent you a text message. Please check your phone and reply via text. Goodbye and take care!",
+        "value_es": "Te he enviado un mensaje de texto. Por favor revisa tu teléfono y responde por texto. ¡Adiós y cuídate!"
+      }
+    ]
+  },
+  {
+    "id": "authenticate-user",
+    "name": "AuthenticateUser",
+    "version": "1.0.0",
+    "description": "Generic flow to authenticate user via OTP sent to cell or email",
+    "parameters": [
+      {
+        "name": "retry_flow",
+        "type": "string",
+        "description": "Flow to reboot if user wants to retry (default: authenticate-user)"
+      },
+      {
+        "name": "cancel_flow",
+        "type": "string",
+        "description": "Flow to reboot if user cancels (default: cancel-process)"
+      }
+    ],
+    "variables": {
+      "cell_or_email": {
+        "type": "string",
+        "description": "User cell or email"
+      },
+      "cell_number": {
+        "type": "string",
+        "description": "Customer cell phone number"
+      },
+      "email": {
+        "type": "string",
+        "description": "Customer email address"
+      }
+    },
+    "steps": [
+      {
+        "id": "check_already_verified",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.otpVerified": {
+            "id": "already_verified",
+            "type": "FLOW",
+            "value": "no-action-needed",
+            "callType": "reboot"
+          },
+          "default": {
+            "id": "proceed_to_auth",
+            "type": "SET",
+            "variable": "proceed",
+            "value": true
+          }
+        }
+      },
+      {
+        "id": "get_contact_info",
+        "type": "FLOW",
+        "value": "get-cell-or-email",
+        "callType": "call",
+        "parameters": {
+          "retry_flow": "{{retry_flow}}",
+          "cancel_flow": "{{cancel_flow}}"
+        }
+      },
+      {
+        "id": "send_otp_based_on_contact",
+        "type": "CASE",
+        "branches": {
+          "condition: cell_number": {
+            "id": "send_sms_otp",
+            "type": "CALL-TOOL",
+            "tool": "send-sms-otp",
+            "args": {
+              "accountSid": null,
+              "from": "{{cargo.twilioNumber}}",
+              "to": "{{cell_number}}",
+              "container": "{{cargo}}"
+            },
+            "onFail": {
+              "id": "sms_failed",
+              "type": "FLOW",
+              "value": "retry-authenticate-generic",
+              "callType": "replace",
+              "parameters": {
+                "error_message": "Sorry, text message delivery failed.",
+                "error_message_es": "Lo siento, la entrega del mensaje de texto falló.",
+                "allow_otp_entry": false
+              }
+            }
+          },
+          "condition: email": {
+            "id": "send_email_otp",
+            "type": "CALL-TOOL",
+            "tool": "send-email-otp",
+            "args": {
+              "to": "{{email}}",
+              "container": "{{cargo}}"
+            },
+            "onFail": {
+              "id": "email_failed",
+              "type": "FLOW",
+              "value": "retry-authenticate-generic",
+              "callType": "replace",
+              "parameters": {
+                "error_message": "Sorry, email delivery failed.",
+                "error_message_es": "Lo siento, la entrega del correo electrónico falló.",
+                "allow_otp_entry": false
+              }
+            }
+          },
+          "default": {
+            "id": "no_contact_error",
+            "type": "FLOW",
+            "value": "retry-authenticate-generic",
+            "callType": "replace",
+            "parameters": {
+              "error_message": "Sorry, there was an unexpected error.",
+              "error_message_es": "Lo siento, hubo un error inesperado.",
+              "allow_otp_entry": false
+            }
+          }
+        }
+      },
+      {
+        "id": "set_cell_number_to_cargo",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.otp_cell_number = cell_number || ''"
+      },
+      {
+        "id": "set_email_to_cargo",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.otp_email = email || ''"
+      },
+      {
+        "id": "get_and_validate_otp_code",
+        "type": "FLOW",
+        "value": "get-and-validate-otp-code",
+        "callType": "call"
+      },
+      {
+        "id": "check_validation_result",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.otpVerified": {
+            "id": "auth_success",
+            "type": "SET",
+            "variable": "auth_result",
+            "value": "true"
+          },
+          "default": {
+            "id": "auth_failed",
+            "type": "FLOW",
+            "value": "retry-authenticate-generic",
+            "callType": "replace",
+            "parameters": {
+              "error_message": "Sorry, the code you entered was invalid or expired.",
+              "error_message_es": "Lo siento, el código que ingresó era inválido o había expirado.",
+              "allow_otp_entry": true
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "get-cell-or-email",
+    "name": "GetCellOrEmail",
+    "version": "1.0.0",
+    "description": "Prompt user to provide either their cell phone number or email address for account lookup",
+    "parameters": [
+      {
+        "name": "retry_flow",
+        "type": "string",
+        "description": "Flow to reboot if user wants to retry"
+      },
+      {
+        "name": "cancel_flow",
+        "type": "string",
+        "description": "Flow to reboot if user cancels"
+      }
+    ],
+    "variables": {
+      "cell_or_email": {
+        "type": "string",
+        "description": "User cell or email"
+      }
+    },
+    "steps": [
+      {
+        "id": "ask_cell_or_email_if_no_param",
+        "type": "CASE",
+        "branches": {
+          "condition: !cell_number && !email && cargo.callerId": {
+            "id": "ask_cell_or_email_with_caller_id",
+            "type": "SAY-GET",
+            "variable": "cell_or_email",
+            "value": "To authenticate using your caller id, please {{cargo.verb}} yes. Otherwise, please enter {{cargo.voice ? 'or ' : ''}}{{cargo.verb}} the phone or email associated with your account{{cargo.voice ? ' followed by the pound key' : ''}}. To exit anytime you can {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
+            "value_es": "Para autenticar usando su identificador de llamadas, por favor {{cargo.verb_es}} sí. De lo contrario, por favor ingrese {{cargo.voice ? 'o ' : ''}}{{cargo.verb_es}} el teléfono o correo electrónico asociado con su cuenta{{cargo.voice ? ' seguido de la tecla numeral' : ''}}. Para salir en cualquier momento, puede {{cargo.voice ? 'presionar la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR."
+          },
+          "condition: !cell_number && !email": {
+            "id": "ask_cell_or_email",
+            "type": "SAY-GET",
+            "variable": "cell_or_email",
+            "value": "Please enter {{cargo.voice ? 'or ' : ''}}{{cargo.verb}} the phone or email associated with your account{{cargo.voice ? ' followed by the pound key' : ''}}. To exit anytime you can {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
+            "value_es": "Por favor ingrese {{cargo.voice ? 'o ' : ''}}{{cargo.verb_es}} el teléfono o correo electrónico asociado con su cuenta{{cargo.voice ? ' seguido de la tecla numeral' : ''}}. Para salir en cualquier momento, puede {{cargo.voice ? 'presionar la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
+            "digits": {
+              "min": 7,
+              "max": 12
+            }
+          },
+          "default": {
+            "id": "use_provided_contact",
+            "type": "SET",
+            "variable": "cell_or_email",
+            "value": "cell_number || email"
+          }
+        }
+      },
+      {
+        "id": "treat_as_phone_number",
+        "type": "SET",
+        "variable": "prospective_cell_number",
+        "value": "cell_or_email.replace(/[^0-9]/g, '')"
+      },
+      {
+        "id": "treat_as_email_address",
+        "type": "SET",
+        "variable": "prospective_email",
+        "value": "cell_or_email.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/)?.[0]"
+      },
+      {
+        "id": "treat_as_email_allow_spaces",
+        "type": "SET",
+        "variable": "prospective_email2",
+        "value": "email || cell_or_email.match(/[a-zA-Z0-9._%+\\s-]+@[a-zA-Z0-9.\\s-]+\\s*\\.\\s*[a-zA-Z\\s]{2,}/)?.[0]"
+      },
+      {
+        "id": "normalize_prospective_email",
+        "type": "SET",
+        "variable": "prospective_email",
+        "value": "prospective_email ? prospective_email : (prospective_email2 ? prospective_email2.replace(/\\s+/g, '') : '')"
+      },
+      {
+        "id": "normalize_cell_or_email",
+        "type": "SET",
+        "variable": "cell_or_email",
+        "value": "cell_or_email.trim().toLowerCase().replace(/[^\\w\\s\\*áéíóúüñ]+/g, '')"
+      },
+      {
+        "id": "branch_on_cell_or_email",
+        "type": "CASE",
+        "branches": {
+          "condition: validatePhone(prospective_cell_number)": {
+            "id": "treat_as_phone_number",
+            "type": "SET",
+            "variable": "cell_number",
+            "value": "prospective_cell_number"
+          },
+          "condition: validateEmail(prospective_email)": {
+            "id": "treat_as_email_address",
+            "type": "SET",
+            "variable": "email",
+            "value": "prospective_email"
+          },
+          "condition: cargo.callerId && (['1', 'yes', 'si', 'sí'].includes(cell_or_email) || ['phone', 'cell', 'caller id', 'number', 'numero', 'número', 'telefono', 'teléfono', 'celular', 'identificador de llamadas'].some(p => cell_or_email.includes(p)))": {
+            "id": "use_caller_id",
+            "type": "SET",
+            "variable": "cell_number",
+            "value": "cargo.callerId"
+          },
+          "condition: ['abort', 'exit', 'quit', 'cancel', 'salir', 'cancelar'].some(choice => cell_or_email.includes(choice)) || cell_or_email === '*'": {
+            "id": "abort_process",
+            "type": "FLOW",
+            "value": "{{cancel_flow}}",
+            "callType": "reboot"
+          },
+          "condition: ['live', 'agent', 'manager', 'support', 'customer service', 'agente', 'gente', 'gerente', 'servicio', 'al cliente'].some(choice => cell_or_email.includes(choice)) || cell_or_email == '0'": {
+            "id": "goto_live_agent",
+            "type": "FLOW",
+            "value": "live-agent-requested",
+            "callType": "reboot"
+          },
+          "default": {
+            "id": "retry_cell_or_email",
+            "type": "FLOW",
+            "value": "generic-retry-with-options",
+            "callType": "replace",
+            "parameters": {
+              "error_message": "Sorry, I do need the the phone or email associated with your account to proceed.",
+              "error_message_es": "Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta para continuar.",
+              "retry_flow": "{{retry_flow}}",
+              "cancel_flow": "{{cancel_flow}}",
+              "capture_patterns": [
+                {
+                  "variable": "cell_number",
+                  "regex": "[0-9\\-\\(\\)\\.\\s]{10,}",
+                  "normalizer": "[^0-9]"
+                },
+                {
+                  "variable": "email",
+                  "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
+                }
+              ]
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "get-and-validate-otp-code",
+    "name": "GetAndValidateOtpCode",
+    "version": "1.0.0",
+    "description": "Get and validate OTP code from user",
+    "variables": {
+      "otp_code": {
+        "type": "string",
+        "description": "OTP code entered by user"
+      },
+      "normalized_otp_code": {
+        "type": "string",
+        "description": "Sanitized OTP code with non-digit characters removed"
+      },
+      "otp_destination": {
+        "type": "string",
+        "description": "Destination where OTP was sent (email or phone)"
+      },
+      "user_choice": {
+        "type": "string",
+        "description": "User choice input",
+        "value": ""
+      }
+    },
+    "steps": [
+      {
+        "id": "set_otp_destination",
+        "type": "SET",
+        "variable": "otp_destination",
+        "value": "cargo.otp_cell_number ? cargo.otp_cell_number : cargo.otp_email"
+      },
+      {
+        "id": "formatted_otp_destination",
+        "type": "SET",
+        "variable": "formatted_otp_destination",
+        "value": "cargo.otp_cell_number ? ('cell ending with ' + cargo.otp_cell_number.slice(-4).split('').join(', ')) : 'email: ' + cargo.otp_email"
+      },
+      {
+        "id": "get_otp_from_user",
+        "type": "SAY-GET",
+        "variable": "otp_code",
+        "value": "Please {{cargo.verb}} {{cargo.voice ? 'or enter ' : ''}}the 6-digit verification code you received at {{formatted_otp_destination}}. You can also {{cargo.voice ? 'Press * or ' : ''}}{{cargo.verb}} EXIT to cancel.",
+        "value_es": "Por favor {{cargo.verb_es}} {{cargo.voice ? 'o ingrese ' : ''}}el código de verificación de 6 dígitos que recibió en {{formatted_otp_destination}}. También puedes {{cargo.voice ? 'Presionar * o ' : ''}}{{cargo.verb_es}} SALIR para cancelar.",
+        "digits": {
+          "min": 6,
+          "max": 6
+        }
+      },
+      {
+        "id": "set_user_choice",
+        "type": "SET",
+        "variable": "user_choice",
+        "value": "otp_code.trim().toLowerCase()"
+      },
+      {
+        "id": "set_otp_code",
+        "type": "SET",
+        "variable": "normalized_otp_code",
+        "value": "otp_code.replace(/\\D/g, '')"
+      },
+      {
+        "id": "proceed_to_validation",
+        "type": "FLOW",
+        "value": "validate-otp-code",
+        "callType": "call"
+      }
+    ]
+  },
+  {
+    "id": "validate-otp-code",
+    "name": "ValidateOtpCode",
+    "version": "1.0.0",
+    "description": "Validate OTP code entered by user - sets cargo.otpVerified on success",
+    "variables": {
+      "otp_validation_result": {
+        "type": "boolean",
+        "description": "Result of OTP validation"
+      }
+    },
+    "steps": [
+      {
+        "id": "validate_otp_and_lookup",
+        "type": "CASE",
+        "branches": {
+          "condition: normalized_otp_code.length === 6": {
+            "id": "validate_otp",
+            "type": "CALL-TOOL",
+            "tool": "validate-otp",
+            "variable": "otp_validation_result",
+            "args": {
+              "otp": "{{normalized_otp_code}}",
+              "container": "{{cargo}}"
+            },
+            "onFail": {
+              "id": "otp_tool_error",
+              "type": "FLOW",
+              "value": "get-and-validate-otp-code",
+              "callType": "replace"
+            }
+          },
+          "condition: ['abort', 'exit', 'quit', 'cancel', 'salir', 'cancelar'].some(choice => user_choice.includes(choice)) || user_choice === '*'": {
+            "id": "abort_process",
+            "type": "FLOW",
+            "value": "contact-support",
+            "callType": "reboot"
+          },
+          "condition: ['live', 'agent', 'manager', 'support', 'customer service', 'agente', 'gente', 'gerente', 'servicio', 'al cliente'].some(choice => user_choice.includes(choice)) || user_choice === '0'": {
+            "id": "goto_live_agent",
+            "type": "FLOW",
+            "value": "live-agent-requested",
+            "callType": "reboot"
+          },
+          "default": {
+            "id": "invalid_otp_format",
+            "type": "SAY",
+            "value": "I was expecting a 6-digit code. Let's try again. You can also {{cargo.voice ? 'Press * or ' : ''}}{{cargo.verb}} EXIT to cancel.",
+            "value_es": "Esperaba un código de 6 dígitos. Intentemos de nuevo. También puedes {{cargo.voice ? 'Presionar * o ' : ''}}{{cargo.verb_es}} SALIR para cancelar."
+          }
+        }
+      },
+      {
+        "id": "retry_if_bad_format",
+        "type": "CASE",
+        "branches": {
+          "condition: normalized_otp_code.length === 6": {
+            "id": "format_was_ok",
+            "type": "SET",
+            "variable": "skip",
+            "value": "true"
+          },
+          "default": {
+            "id": "loop_back_for_code",
+            "type": "FLOW",
+            "value": "get-and-validate-otp-code",
+            "callType": "replace"
+          }
+        }
+      },
+      {
+        "id": "check_validation_result",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.otpVerified": {
+            "id": "otp_success",
+            "type": "SET",
+            "variable": "otp_validated",
+            "value": "true"
+          },
+          "default": {
+            "id": "otp_wrong_code_retry",
+            "type": "SAY",
+            "value": "That code didn't match. Let's try again.",
+            "value_es": "Ese código no coincide. Intentemos de nuevo."
+          }
+        }
+      },
+      {
+        "id": "retry_if_wrong_code",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.otpVerified": {
+            "id": "already_verified",
+            "type": "SET",
+            "variable": "skip",
+            "value": "true"
+          },
+          "default": {
+            "id": "loop_back_for_new_code",
+            "type": "FLOW",
+            "value": "get-and-validate-otp-code",
+            "callType": "replace"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "generic-retry-with-options",
+    "name": "GenericRetryWithOptions",
+    "version": "1.0.0",
+    "description": "Generic flow to offer retry, switch to text, or contact support",
+    "parameters": [
+      {
+        "name": "error_message",
+        "type": "string",
+        "description": "Error message to display"
+      },
+      {
+        "name": "error_message_es",
+        "type": "string",
+        "description": "Error message in Spanish"
+      },
+      {
+        "name": "retry_flow",
+        "type": "string",
+        "description": "Flow to reboot if user wants to retry"
+      },
+      {
+        "name": "cancel_flow",
+        "type": "string",
+        "description": "Flow to reboot if user cancels (default: cancel-process)"
+      },
+      {
+        "name": "capture_patterns",
+        "type": "array",
+        "description": "Array of {variable, regex} to capture from user input"
+      }
+    ],
+    "variables": {
+      "user_choice": {
+        "type": "string"
+      },
+      "smart_capture_result": {
+        "type": "object"
+      }
+    },
+    "steps": [
+      {
+        "id": "say_error_and_prompt",
+        "type": "SAY-GET",
+        "variable": "user_choice",
+        "value": "{{error_message}} Would you like to try again? To retry {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. {{cargo.voice ? 'To switch to text press 9 or ' + cargo.verb + ' TEXT. ' : ''}}To abort {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
+        "value_es": "{{error_message_es}} ¿Le gustaría intentar nuevamente? Para reintentar {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ. {{cargo.voice ? 'Para cambiar a texto presione 9 o ' + cargo.verb_es + ' TEXTO. ' : ''}}Para salir {{cargo.voice ? 'presione la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
+        "digits": {
+          "min": 1,
+          "max": 1
+        }
+      },
+      {
+        "id": "check_smart_capture",
+        "type": "SET",
+        "variable": "smart_capture_result",
+        "value": "normalizeAndFindCapture(user_choice, capture_patterns)"
+      },
+      {
+        "id": "handle_smart_capture",
+        "type": "CASE",
+        "branches": {
+          "condition: smart_capture_result": {
+            "id": "reboot_with_captured_value",
+            "type": "FLOW",
+            "value": "{{retry_flow}}",
+            "callType": "reboot",
+            "parameters": {
+              "{{smart_capture_result.variable}}": "{{smart_capture_result.value}}",
+              "retry_flow": "{{retry_flow}}",
+              "cancel_flow": "{{cancel_flow}}"
+            }
+          },
+          "default": {
+            "id": "continue_standard_processing",
+            "type": "SET",
+            "variable": "proceed",
+            "value": true
+          }
+        }
+      },
+      {
+        "id": "normalize_choice",
+        "type": "SET",
+        "variable": "user_choice",
+        "value": "user_choice.trim().toLowerCase().replace(/[^\\w\\s\\*áéíóúüñ]+/g, '')"
+      },
+      {
+        "id": "handle_choice",
+        "type": "CASE",
+        "branches": {
+          "condition: ['yes', 'sure', 'please', 'ok', 'thanks', 'si', 'sí', 'seguro', 'por favor', 'gracias'].some(choice => user_choice.includes(choice)) || user_choice === '1'": {
+            "id": "do_retry",
+            "type": "FLOW",
+            "value": "{{retry_flow}}",
+            "callType": "reboot"
+          },
+          "condition: ['text', 'texto'].some(choice => user_choice.includes(choice)) || user_choice === '9'": {
+            "id": "do_switch_text",
+            "type": "FLOW",
+            "value": "switch-to-text",
+            "callType": "reboot"
+          },
+          "condition: ['abort', 'exit', 'quit', 'cancel', 'salir', 'cancelar'].some(choice => user_choice.includes(choice)) || user_choice === '*'": {
+            "id": "do_abort",
+            "type": "FLOW",
+            "value": "{{cancel_flow || 'contact-support'}}",
+            "callType": "reboot"
+          },
+          "default": {
+            "id": "do_cancel",
+            "type": "FLOW",
+            "value": "{{cancel_flow || 'contact-support'}}",
+            "callType": "reboot"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "retry-authenticate-generic",
+    "name": "RetryAuthenticateGeneric",
+    "version": "1.0.0",
+    "description": "Generic retry authentication flow",
+    "variables": {
+      "user_choice": {
+        "type": "string",
+        "description": "User choice for retry or exit"
+      },
+      "error_message": {
+        "type": "string",
+        "description": "Error message to display",
+        "value": "Sorry, there was an unexpected error."
+      },
+      "error_message_es": {
+        "type": "string",
+        "description": "Error message in Spanish",
+        "value": "Lo siento, hubo un error inesperado."
+      },
+      "allow_otp_entry": {
+        "type": "boolean",
+        "description": "Allow entering OTP directly",
+        "value": "false"
+      },
+      "normalized_otp_code": {
+        "type": "string",
+        "description": "Sanitized OTP code entered by user"
+      }
+    },
+    "steps": [
+      {
+        "id": "clear_cell",
+        "type": "SET",
+        "variable": "cell_number",
+        "value": "''"
+      },
+      {
+        "id": "clear_email",
+        "type": "SET",
+        "variable": "email",
+        "value": "''"
+      },
+      {
+        "id": "retry_msg",
+        "type": "SAY-GET",
+        "value": "{{error_message}} Would you like to try again to get access to your account? To retry {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. {{cargo.voice ? 'To switch to text press 9 or ' + cargo.verb + ' TEXT. ' : ''}}To abort {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
+        "value_es": "{{error_message_es}} ¿Le gustaría intentar nuevamente obtener acceso a su cuenta? Para reintentar {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ. {{cargo.voice ? 'Para cambiar a texto presione 9 o ' + cargo.verb_es + ' TEXTO. ' : ''}}Para salir {{cargo.voice ? 'presione la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
+        "variable": "user_choice",
+        "digits": {
+          "min": 1,
+          "max": 1
+        }
+      },
+      {
+        "id": "normalize_user_choice",
+        "type": "SET",
+        "variable": "user_choice",
+        "value": "user_choice.trim().toLowerCase().replace(/[^\\w\\s\\*áéíóúüñ]+/g, '')"
+      },
+      {
+        "id": "handle_choice",
+        "type": "CASE",
+        "branches": {
+          "condition: allow_otp_entry && user_choice.replace(/[^0-9]/g, '').length === 6": {
+            "id": "treat_as_otp_entry",
+            "type": "SET",
+            "variable": "normalized_otp_code",
+            "value": "user_choice.replace(/[^0-9]/g, '')"
+          },
+          "condition: ['yes', 'sure', 'please', 'ok', 'thanks', 'phone', 'email', 'si', 'sí', 'seguro', 'por favor', 'gracias', 'teléfono', 'telefono', 'correo electrónico', 'correo'].some(choice => user_choice.includes(choice)) || user_choice === '1'": {
+            "id": "retry_authenticate",
+            "type": "FLOW",
+            "value": "authenticate-user",
+            "callType": "replace"
+          },
+          "condition: ['text', 'texto'].some(choice => user_choice.includes(choice)) || user_choice === '9'": {
+            "id": "switch_to_text",
+            "type": "FLOW",
+            "value": "switch-to-text",
+            "callType": "reboot"
+          },
+          "condition: ['abort', 'exit', 'quit', 'cancel', 'salir', 'cancelar'].some(choice => user_choice.includes(choice)) || user_choice === '*'": {
+            "id": "abort_process",
+            "type": "FLOW",
+            "value": "contact-support",
+            "callType": "reboot"
+          },
+          "condition: ['live', 'agent', 'manager', 'support', 'customer service', 'agente', 'gente', 'gerente', 'servicio', 'al cliente'].some(choice => user_choice.includes(choice)) || user_choice == '0'": {
+            "id": "goto_live_agent",
+            "type": "FLOW",
+            "value": "live-agent-requested",
+            "callType": "reboot"
+          },
+          "default": {
+            "id": "provide_contact_info_default",
+            "type": "FLOW",
+            "value": "contact-support",
+            "callType": "reboot"
+          }
+        }
+      },
+      {
+        "id": "check_and_validate_otp",
+        "type": "CASE",
+        "branches": {
+          "condition: normalized_otp_code": {
+            "id": "validate_otp",
+            "type": "FLOW",
+            "value": "validate-otp-code",
+            "callType": "call"
+          },
+          "default": {
+            "id": "provide_contact_info_default",
+            "type": "FLOW",
+            "value": "contact-support",
+            "callType": "reboot"
+          }
+        }
+      },
+      {
+        "id": "check_validation_result",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.otpVerified": {
+            "id": "auth_success",
+            "type": "SET",
+            "variable": "auth_result",
+            "value": "true"
+          },
+          "default": {
+            "id": "auth_failed_again",
+            "type": "FLOW",
+            "value": "retry-authenticate-generic",
+            "callType": "replace",
+            "parameters": {
+              "error_message": "Sorry, the code you entered was invalid or expired.",
+              "error_message_es": "Lo siento, el código que ingresó era inválido o había expirado.",
+              "allow_otp_entry": true
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "live-agent-requested",
+    "name": "LiveAgentRequested",
+    "version": "1.0.0",
+    "description": "Interception flow when user requests live agent - explains AI capabilities and gives option to continue or transfer",
+    "prompt": "live agent confirmation",
+    "prompt_es": "confirmación de agente en vivo",
+    "primary": false,
+    "variables": {
+      "user_choice": {
+        "type": "string",
+        "description": "User choice to continue with AI or transfer to live agent"
+      }
+    },
+    "steps": [
+      {
+        "id": "ask_user_choice",
+        "type": "SAY-GET",
+        "variable": "user_choice",
+        "value": "Before I try to transfer you, I want you to know that I can help you faster with many inquiries, including account information even if you don't have your account number. I can also locate and provide directions to our nearest location. Many customers find it faster to continue with me. Please wait for my questions and listen to the options before choosing. To have me help you now {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. For a live agent {{cargo.voice ? 'Press 0 or ' : ''}}{{cargo.verb}} LIVE AGENT.",
+        "value_es": "Antes de intentar transferirte, quiero que sepas que puedo ayudarte más rápido con muchas consultas, incluida la información de la cuenta incluso si no tienes tu número de cuenta. También puedo localizar y proporcionar direcciones a nuestra ubicación más cercana. Muchos clientes encuentran que es más rápido continuar conmigo. Por favor espera mis preguntas y escucha las opciones antes de elegir. Para que te ayude ahora {{cargo.voice ? 'Presiona 1 o ' : ''}}{{cargo.verb_es}} SÍ. Para un agente en vivo {{cargo.voice ? 'Presiona 0 o ' : ''}}{{cargo.verb_es}} AGENTE EN VIVO.",
+        "digits": {
+          "min": 1,
+          "max": 1
+        }
+      },
+      {
+        "id": "normalize_choice",
+        "type": "SET",
+        "variable": "user_choice",
+        "value": "user_choice.trim().toLowerCase().replace(/[^\\w\\s\\*áéíóúüñ]+/g, '')"
+      },
+      {
+        "id": "handle_choice",
+        "type": "CASE",
+        "branches": {
+          "condition: ! ['yes', 'continue', 'sure', 'please', 'ok', 'thanks', 'si', 'sí', 'seguro', 'por favor', 'gracias'].some(choice => user_choice.includes(choice)) && user_choice !== '1'": {
+            "id": "transfer_to_agent",
+            "type": "CASE",
+            "branches": {
+              "condition: cargo.agentPhoneNumber": {
+                "id": "confirm_transfer",
+                "type": "RETURN",
+                "value": "language == 'es' ? 'Entendido. Te transfiero a un agente en vivo.' : 'Understood. Let me transfer you to a live agent.'"
+              },
+              "default": {
+                "id": "no_agents_available",
+                "type": "FLOW",
+                "value": "contact-support",
+                "callType": "reboot"
+              }
+            }
+          },
+          "default": {
+            "id": "continue_with_ai",
+            "type": "SAY",
+            "value": "Great! I'm glad to help. What would you like assistance with today?",
+            "value_es": "¡Excelente! Me alegra ayudarle. ¿Con qué le gustaría ayuda hoy?"
+          }
+        }
+      }
+    ]
+  }
+]

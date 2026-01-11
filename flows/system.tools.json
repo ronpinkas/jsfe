@@ -1,0 +1,240 @@
+[
+  {
+    "id": "send-sms-otp",
+    "name": "Send SMS OTP",
+    "description": "Send OTP code via SMS for authentication",
+    "parameters": {
+      "accountSid": {
+        "type": "string",
+        "description": "Twilio Account SID"
+      },
+      "from": {
+        "type": "string",
+        "description": "From phone number"
+      },
+      "to": {
+        "type": "string",
+        "description": "To phone number"
+      },
+      "container": {
+        "type": "object",
+        "description": "Session cargo container for OTP storage"
+      }
+    },
+    "required": [
+      "accountSid",
+      "from",
+      "to",
+      "container"
+    ],
+    "additionalProperties": false,
+    "implementation": {
+      "type": "local",
+      "function": "sendSMSOTP",
+      "args": [
+        "accountSid",
+        "from",
+        "to",
+        "container"
+      ],
+      "timeout": 5000
+    },
+    "security": {
+      "requiresAuth": false,
+      "auditLevel": "medium",
+      "dataClassification": "authentication",
+      "rateLimit": {
+        "requests": 5,
+        "window": 300000
+      }
+    }
+  },
+  {
+    "id": "send-email-otp",
+    "name": "Send Email OTP",
+    "description": "Send OTP code via email for authentication",
+    "parameters": {
+      "to": {
+        "type": "string",
+        "description": "Email address to send OTP to"
+      },
+      "container": {
+        "type": "object",
+        "description": "Session cargo container for OTP storage"
+      }
+    },
+    "required": [
+      "to",
+      "container"
+    ],
+    "additionalProperties": false,
+    "implementation": {
+      "type": "local",
+      "function": "sendEmailOTP",
+      "args": [
+        "to",
+        "container"
+      ],
+      "timeout": 5000
+    },
+    "security": {
+      "requiresAuth": false,
+      "auditLevel": "medium",
+      "dataClassification": "authentication",
+      "rateLimit": {
+        "requests": 5,
+        "window": 300000
+      }
+    }
+  },
+  {
+    "id": "validate-otp",
+    "name": "Validate OTP",
+    "description": "Validate OTP code entered by user",
+    "parameters": {
+      "otp": {
+        "type": "string",
+        "description": "OTP code to validate"
+      },
+      "container": {
+        "type": "object",
+        "description": "Session cargo container for OTP storage"
+      }
+    },
+    "required": [
+      "otp",
+      "container"
+    ],
+    "additionalProperties": false,
+    "implementation": {
+      "type": "local",
+      "function": "validateOTP",
+      "args": [
+        "otp",
+        "container"
+      ],
+      "timeout": 5000
+    },
+    "security": {
+      "requiresAuth": false,
+      "auditLevel": "medium",
+      "dataClassification": "authentication",
+      "rateLimit": {
+        "requests": 10,
+        "window": 60000
+      }
+    }
+  },
+  {
+    "id": "switch-to-sms",
+    "name": "Switch to SMS",
+    "description": "Switch communication to SMS and send confirmation message",
+    "parameters": {
+      "accountSid": {
+        "type": "string",
+        "description": "Twilio Account SID"
+      },
+      "threadId": {
+        "type": "string",
+        "description": "thread ID to switch"
+      },
+      "from": {
+        "type": "string",
+        "description": "From phone number"
+      },
+      "to": {
+        "type": "string",
+        "description": "To phone number"
+      },
+      "message": {
+        "type": "string",
+        "description": "SMS message content"
+      }
+    },
+    "required": [
+      "accountSid",
+      "threadId",
+      "from",
+      "to",
+      "message"
+    ],
+    "additionalProperties": false,
+    "implementation": {
+      "type": "local",
+      "function": "switchToSMS",
+      "args": [
+        "accountSid",
+        "threadId",
+        "from",
+        "to",
+        "message"
+      ],
+      "timeout": 10000
+    },
+    "security": {
+      "requiresAuth": false,
+      "auditLevel": "medium",
+      "dataClassification": "customer_service",
+      "rateLimit": {
+        "requests": 10,
+        "window": 60000
+      }
+    }
+  },
+  {
+    "id": "send-twilio-sms",
+    "name": "Send Twilio SMS",
+    "description": "Send SMS message via Twilio",
+    "parameters": {
+      "accountSid": {
+        "type": "string",
+        "description": "Twilio Account SID"
+      },
+      "from": {
+        "type": "string",
+        "description": "From phone number"
+      },
+      "to": {
+        "type": "string",
+        "description": "To phone number"
+      },
+      "message": {
+        "type": "string",
+        "description": "SMS message content"
+      },
+      "messageSid": {
+        "type": "string",
+        "description": "Optional message SID for tracking",
+        "default": ""
+      }
+    },
+    "required": [
+      "accountSid",
+      "from",
+      "to",
+      "message"
+    ],
+    "additionalProperties": false,
+    "implementation": {
+      "type": "local",
+      "function": "sendTwilioSMS",
+      "args": [
+        "accountSid",
+        "from",
+        "to",
+        "message",
+        "messageSid"
+      ],
+      "timeout": 10000
+    },
+    "security": {
+      "requiresAuth": false,
+      "auditLevel": "medium",
+      "dataClassification": "customer_service",
+      "rateLimit": {
+        "requests": 10,
+        "window": 60000
+      }
+    }
+  }
+]
