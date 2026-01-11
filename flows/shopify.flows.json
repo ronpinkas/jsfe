@@ -267,7 +267,7 @@
             "value": "cancel-process",
             "callType": "reboot"
           },
-          "condition: ['live', 'agent', 'customer service', 'agente', 'gente', 'gerente', 'al cliente'].some(choice => search_query.toLowerCase().includes(choice)) || search_query == '0'": {
+          "condition: ['live', 'agent', 'customer service', 'agente', 'gente', 'gerente', 'al cliente', 'representante'].some(choice => search_query.toLowerCase().includes(choice)) || search_query == '0'": {
             "id": "goto_live_agent",
             "type": "FLOW",
             "value": "live-agent-requested",
