@@ -514,9 +514,10 @@
             "value": "orders_result.orders[parseInt(user_choice.trim()) - 1]?.orderNumber || ''"
           },
           "default": {
-            "id": "finished",
-            "type": "RETURN",
-            "value": "language == 'es' ? '¡Genial! ¿Hay algo más en lo que pueda ayudarte?' : 'Cool! Anything else I can help with?'"
+            "id": "finished-forward-prompt-to-conversational-ai",
+            "type": "FLOW",
+            "value": "no-action-needed",
+            "callType": "reboot"
           }
         }
       },
