@@ -1423,7 +1423,7 @@ const flowsMenu = [
       "id": "start-payment",
       "name": "StartPayment",
       "version": "1.0.0",
-      "description": "This flow allows the user to request a payment link to be sent to the phone number or email address on file with their account. The user may provide their account number, or if unknown, they may provide the cell phone number or email address associated with the account. The payment link will then be sent via text and/or email to the corresponding contact information. Requests for payment arrangements, reporting financial difficulties in making a payment, or questions about amount due or due date should NOT trigger this flow.",
+      "description": "This flow allows the user to request a payment link to be sent to the phone number or email address on file with their account. The user may provide their account number, or if unknown, they may provide the cell phone number or email address associated with the account. The payment link will then be sent via text and/or email to the corresponding contact information. Requests for payment arrangements, reporting financial difficulties in making a payment, or questions about amount due or due date (like: 'What's my payment?' or 'When is my payment due?') should NOT trigger this flow.",
       "prompt": "Payment",
       "prompt_es": "Pago",
       "primary": true,
