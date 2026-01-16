@@ -1781,8 +1781,8 @@ const flowsMenu = [
             "id": "ask_send_payment_link",
             "type": "SAY-GET",
             "variable": "send_payment_link",
-            "value": "Would you like me to send a payment link for account ending with {{cargo.accountNumber.slice(-4).split('').join(', ')}}? To send the payment link {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. To forget this account so you can start over, {{cargo.verb}} FORGET.",
-            "value_es": "¿Le gustaría que le enviara un enlace de pago para la cuenta que termina en {{cargo.accountNumber.slice(-4).split('').join(', ')}}? Para enviar el enlace de pago {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ. Para olvidar esta cuenta y comenzar de nuevo, {{cargo.verb_es}} OLVIDAR.",
+            "value": "Would you like me to send a payment link for account ending with {{cargo.accountNumber.slice(-4).split('').join(', ')}}? To send the payment link {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. To forget this account so you can select a different account, {{cargo.verb}} FORGET.",
+            "value_es": "¿Le gustaría que le enviara un enlace de pago para la cuenta que termina en {{cargo.accountNumber.slice(-4).split('').join(', ')}}? Para enviar el enlace de pago {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ. Para olvidar esta cuenta y seleccionar una cuenta diferente, {{cargo.verb_es}} OLVIDAR.",
             "digits": {
                "min": 1,
                "max": 1
