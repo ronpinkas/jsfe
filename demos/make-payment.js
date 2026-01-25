@@ -51,7 +51,7 @@ const TWILIO_ACCOUNT_SID = '...';
 
 import nodemailer from "nodemailer";
 const SMTP_HOST = "..."
-const SMTP_PORT = 465
+const SMTP_PORT = 587  // Use 587 with STARTTLS - MXroute auto-signs DKIM
 const SMTP_USER = "mailer@instantaiguru.com"
 const SMTP_PASSWORD = "..."
 
@@ -152,12 +152,13 @@ function normalizeAndFindCapture(userInput, patterns) {
 }
 
 // Send email using our smtp server
+// MXroute auto-signs DKIM when using port 587 with STARTTLS
 async function sendEmail(to, cc, subject, body) {
    try {
       const transporter = nodemailer.createTransport({
          host: SMTP_HOST,
          port: SMTP_PORT,
-         secure: true,
+         secure: false,  // Use STARTTLS
          auth: {
             user: SMTP_USER,
             pass: SMTP_PASSWORD
