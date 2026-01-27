@@ -2712,7 +2712,7 @@ const flowsMenu = [
             "id": "validate_city_input",
             "type": "CASE",
             "branches": {
-               "condition: ['*', 'abort', 'exit', 'quit', 'salir'].includes(search_query.toLowerCase())": {
+               "condition: ['*', 'abort', 'exit', 'quit', 'salir'].includes(user_city.toLowerCase())": {
                   "id": "abort_process",
                   "type": "FLOW",
                   "value": "cancel-process",
