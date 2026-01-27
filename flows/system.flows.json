@@ -57,7 +57,7 @@
     "version": "1.0.0",
     "prompt": "Switch to text",
     "prompt_es": "Cambiar a texto",
-    "description": "This flow can be used when the user asks to switch the chat to text/SMS. It will forward their chat context to SMS and send a welcome message.",
+    "description": "This flow can be used when the user asks to switch the chat to text/SMS. It should never ever be used when the user asks to speak to a live agent, human, manager, etc. The user must explictly ask to switch the chat to text or to SMS. It will forward their chat context to SMS and send them a welcome message.",
     "primary": true,
     "variables": {
       "sms_result": {
