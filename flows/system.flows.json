@@ -391,7 +391,7 @@
             "value": "{{cancel_flow}}",
             "callType": "reboot"
           },
-          "condition: ['live', 'agent', 'manager', 'support', 'customer service', 'agente', 'gente', 'gerente', 'servicio', 'al cliente', 'representante'].some(choice => cell_or_email.includes(choice)) || cell_or_email == '0'": {
+          "condition: ['live', 'agent', 'manager', 'support', 'customer service', 'representative', 'agente', 'gente', 'gerente', 'servicio', 'al cliente', 'representante'].some(choice => cell_or_email.includes(choice)) || cell_or_email == '0'": {
             "id": "goto_live_agent",
             "type": "FLOW",
             "value": "live-agent-requested",
@@ -530,7 +530,7 @@
             "value": "contact-support",
             "callType": "reboot"
           },
-          "condition: ['live', 'agent', 'manager', 'support', 'customer service', 'agente', 'gente', 'gerente', 'servicio', 'al cliente', 'representante'].some(choice => user_choice.includes(choice)) || user_choice === '0'": {
+          "condition: ['live', 'agent', 'manager', 'support', 'customer service', 'representative', 'agente', 'gente', 'gerente', 'servicio', 'al cliente', 'representante'].some(choice => user_choice.includes(choice)) || user_choice === '0'": {
             "id": "goto_live_agent",
             "type": "FLOW",
             "value": "live-agent-requested",
@@ -807,7 +807,7 @@
             "value": "contact-support",
             "callType": "reboot"
           },
-          "condition: ['live', 'agent', 'manager', 'support', 'customer service', 'agente', 'gente', 'gerente', 'servicio', 'al cliente', 'representante'].some(choice => user_choice.includes(choice)) || user_choice == '0'": {
+          "condition: ['live', 'agent', 'manager', 'support', 'customer service', 'representative', 'agente', 'gente', 'gerente', 'servicio', 'al cliente', 'representante'].some(choice => user_choice.includes(choice)) || user_choice == '0'": {
             "id": "goto_live_agent",
             "type": "FLOW",
             "value": "live-agent-requested",

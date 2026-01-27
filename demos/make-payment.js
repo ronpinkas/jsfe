@@ -19,7 +19,6 @@ import { WorkflowEngine } from '../dist/index.js';
 import readline from "node:readline/promises";
 
 import winston from 'winston';
-
 const logger = winston.createLogger({
    level: process.env.LOG_LEVEL || 'warn',  // Enable debug logging to trace validation
    format: winston.format.printf(({ level, message }) => {
@@ -188,6 +187,7 @@ async function sendEmailOTP(to, container) {
    try {
       // Generate a 6-digit OTP
       const otp = crypto.randomInt(100000, 999999).toString();
+      //logger.warn(`Generated OTP for email ${to}: ${otp}`);
 
       // Hash the OTP for storage
       const otpHash = crypto.createHash('sha256').update(otp).digest('hex');
@@ -1639,7 +1639,7 @@ const flowsMenu = [
                   "variable": "cell_number",
                   "value": "cargo.callerId"
                },
-               "condition: ['live', 'agent', 'customer service', 'agente', 'gente', 'gerente', 'al cliente'].some(choice => payment_link_choice.toLowerCase().includes(choice)) || payment_link_choice.trim() == '0'": {
+               "condition: ['live', 'agent', 'customer service', 'representative', 'agente', 'gente', 'gerente', 'al cliente', 'representante'].some(choice => payment_link_choice.toLowerCase().includes(choice)) || payment_link_choice.trim() == '0'": {
                   "id": "goto_live_agent",
                   "type": "FLOW",
                   "value": "live-agent-requested",
@@ -1817,7 +1817,7 @@ const flowsMenu = [
                   "value": "contact-support",
                   "callType": "reboot"
                },
-               "condition: ['live', 'agent', 'customer service', 'agente', 'gente', 'gerente', 'al cliente'].some(choice => send_payment_link.includes(choice)) || send_payment_link == '0'": {
+               "condition: ['live', 'agent', 'customer service', 'representative', 'agente', 'gente', 'gerente', 'al cliente', 'representante'].some(choice => send_payment_link.includes(choice)) || send_payment_link == '0'": {
                   "id": "goto_live_agent",
                   "type": "FLOW",
                   "value": "live-agent-requested",
@@ -2249,7 +2249,7 @@ const flowsMenu = [
                   "value": "cancel-process",
                   "callType": "reboot"
                },
-               "condition: ['live', 'agent', 'customer service', 'agente', 'gente', 'gerente', 'al cliente'].some(choice => use_existing_contact.includes(choice)) || use_existing_contact == '0'": {
+               "condition: ['live', 'agent', 'customer service', 'representative', 'agente', 'gente', 'gerente', 'al cliente', 'representante'].some(choice => use_existing_contact.includes(choice)) || use_existing_contact == '0'": {
                   "id": "goto_live_agent",
                   "type": "FLOW",
                   "value": "live-agent-requested",
@@ -2655,7 +2655,7 @@ const flowsMenu = [
                   "value": "cancel-process",
                   "callType": "reboot"
                },
-               "condition: ['live', 'agent', 'customer service', 'agente', 'gente', 'gerente', 'al cliente'].some(choice => send_sms_choice.includes(choice)) || send_sms_choice == '0'": {
+               "condition: ['live', 'agent', 'customer service', 'representative', 'agente', 'gente', 'gerente', 'al cliente', 'representante'].some(choice => send_sms_choice.includes(choice)) || send_sms_choice == '0'": {
                   "id": "goto_live_agent",
                   "type": "FLOW",
                   "value": "live-agent-requested",
@@ -2718,7 +2718,7 @@ const flowsMenu = [
                   "value": "cancel-process",
                   "callType": "reboot"
                },
-               "condition: ['live', 'agent', 'customer service', 'agente', 'gente', 'gerente', 'al cliente'].some(choice => user_city.toLowerCase().includes(choice)) || user_city == '0'": {
+               "condition: ['live', 'agent', 'customer service', 'representative', 'agente', 'gente', 'gerente', 'al cliente', 'representante'].some(choice => user_city.toLowerCase().includes(choice)) || user_city == '0'": {
                   "id": "goto_live_agent",
                   "type": "FLOW",
                   "value": "live-agent-requested",
@@ -2785,7 +2785,7 @@ const flowsMenu = [
                   "value": "contact-support",
                   "callType": "reboot"
                },
-               "condition: ['live', 'agent', 'customer service', 'agente', 'gente', 'gerente', 'al cliente'].some(choice => user_choice.includes(choice)) || user_choice == '0'": {
+               "condition: ['live', 'agent', 'customer service', 'representative', 'agente', 'gente', 'gerente', 'al cliente', 'representante'].some(choice => user_choice.includes(choice)) || user_choice == '0'": {
                   "id": "goto_live_agent",
                   "type": "FLOW",
                   "value": "live-agent-requested",
