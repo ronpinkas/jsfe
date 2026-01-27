@@ -96,7 +96,7 @@
         "tool": "switch-to-sms",
         "variable": "sms_result",
         "args": {
-          "accountSid": "...",
+          "accountSid": null,
           "threadId": "{{sessionId}}",
           "from": "{{cargo.twilioNumber}}",
           "to": "{{cargo.callerId}}",
