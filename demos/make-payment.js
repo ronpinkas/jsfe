@@ -1627,6 +1627,12 @@ const flowsMenu = [
                   "variable": "cell_number",
                   "value": "prospective_cell_number"
                },
+               "condition: validateEmail(prospective_email)": {
+                  "id": "treat_as_email_address",
+                  "type": "SET",
+                  "variable": "email",
+                  "value": "prospective_email"
+               },
                "condition: prospective_cell_number && ! validatePhone(prospective_cell_number)": {
                   "id": "invalid_phone_number_format",
                   "type": "FLOW",
@@ -1654,12 +1660,6 @@ const flowsMenu = [
                         }
                      ]
                   }
-               },
-               "condition: validateEmail(prospective_email)": {
-                  "id": "treat_as_email_address",
-                  "type": "SET",
-                  "variable": "email",
-                  "value": "prospective_email"
                },
                "condition: cargo.callerId && (['1', 'yes', 'please', 'sure', 'thanks', 'thank you', 'si', 'sí', 'por favor', 'gracias'].includes(payment_link_choice) || ['phone', 'cell', 'caller id', 'number', 'numero', 'número', 'telefono', 'teléfono', 'celular', 'identificador de llamadas'].some(p => payment_link_choice.includes(p)))": {
                   "id": "use_caller_id",
