@@ -373,6 +373,29 @@
             "variable": "cell_number",
             "value": "prospective_cell_number"
           },
+          "condition: prospective_cell_number && ! validatePhone(prospective_cell_number)": {
+            "id": "invalid_phone_format",
+            "type": "FLOW",
+            "value": "generic-retry-with-options",
+            "callType": "replace",
+            "parameters": {
+              "error_message": "The phone number you provided isn't valid.",
+              "error_message_es": "El número de teléfono que proporcionó no es válido.",
+              "retry_flow": "{{retry_flow}}",
+              "cancel_flow": "{{cancel_flow}}",
+              "capture_patterns": [
+                {
+                  "variable": "cell_number",
+                  "regex": "[0-9\\-\\(\\)\\.\\s]{10,}",
+                  "normalizer": "[^0-9]"
+                },
+                {
+                  "variable": "email",
+                  "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
+                }
+              ]
+            }
+          },
           "condition: validateEmail(prospective_email)": {
             "id": "treat_as_email_address",
             "type": "SET",

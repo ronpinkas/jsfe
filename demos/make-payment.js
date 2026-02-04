@@ -102,7 +102,7 @@ function validateDigits(input, minDigits, maxDigits) {
    return length >= minDigits && length <= maxDigits;
 }
 
-function validatePhone(phone) {
+function validatePhone(phone, acceptInternational = false) {
    // Remove any non-digit characters for validation
    const cleaned = phone.replace(/\D/g, '');
    logger.debug(`Validating phone format: ${cleaned}`);
@@ -114,7 +114,7 @@ function validatePhone(phone) {
    }
 
    // International format: 11+ digits
-   if (cleaned.length >= 11 && cleaned.length <= 15) {
+   if (acceptInternational && cleaned.length >= 11 && cleaned.length <= 15) {
       logger.debug(`Valid international phone number: ${cleaned}`);
       return true;
    }
@@ -1627,6 +1627,34 @@ const flowsMenu = [
                   "variable": "cell_number",
                   "value": "prospective_cell_number"
                },
+               "condition: prospective_cell_number && ! validatePhone(prospective_cell_number)": {
+                  "id": "invalid_phone_number_format",
+                  "type": "FLOW",
+                  "value": "generic-retry-with-options",
+                  "callType": "reboot",
+                  "parameters": {
+                     "error_message": "Sorry, the phone number you provided isn't valid.",
+                     "error_message_es": "Lo siento, el número de teléfono que proporcionó no es válido.",
+                     "retry_flow": "start-payment",
+                     "cancel_flow": "contact-support",
+                     "capture_patterns": [
+                        {
+                           "variable": "acct_number",
+                           "regex": "^5\\d{6,7}$",
+                           "normalizer": "[^0-9]"
+                        },
+                        {
+                           "variable": "cell_number",
+                           "regex": "[0-9\\-\\(\\)\\.\\s]{7,}",
+                           "normalizer": "[^0-9]"
+                        },
+                        {
+                           "variable": "email",
+                           "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
+                        }
+                     ]
+                  }
+               },
                "condition: validateEmail(prospective_email)": {
                   "id": "treat_as_email_address",
                   "type": "SET",
@@ -2293,7 +2321,7 @@ const flowsMenu = [
             "id": "invoke_generic_retry",
             "type": "FLOW",
             "value": "generic-retry-with-options",
-            "callType": "replace",
+            "callType": "reboot",
             "parameters": {
                "error_message": "Sorry, I couldn't locate your account with that information.",
                "error_message_es": "Lo siento, no pude localizar su cuenta con esa información.",
