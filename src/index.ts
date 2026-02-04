@@ -4303,7 +4303,9 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
 
       // Inject parameters into current variables
       if (Object.keys(flowParameters).length > 0) {
+         logger.info(`Injecting parameters into variables for flow ${subFlow.name}`, flowParameters);
          Object.assign(currentFlowFrame.variables, flowParameters);
+         logger.info(`Variables after injection:`, currentFlowFrame.variables);
       }
 
       // Update transaction
