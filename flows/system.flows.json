@@ -402,7 +402,7 @@
             "variable": "email",
             "value": "prospective_email"
           },
-          "condition: cargo.callerId && (['1', 'yes', 'si', 'sí'].includes(cell_or_email) || ['phone', 'cell', 'caller id', 'number', 'numero', 'número', 'telefono', 'teléfono', 'celular', 'identificador de llamadas'].some(p => cell_or_email.includes(p)))": {
+          "condition: cargo.callerId && (['1', 'yes', 'please', 'sure', 'thanks', 'thank you', 'si', 'sí', 'por favor', 'gracias'].includes(cell_or_email) || ['phone', 'cell', 'caller id', 'number', 'numero', 'número', 'telefono', 'teléfono', 'celular', 'identificador de llamadas'].some(p => cell_or_email.includes(p)))": {
             "id": "use_caller_id",
             "type": "SET",
             "variable": "cell_number",

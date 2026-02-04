@@ -1661,7 +1661,7 @@ const flowsMenu = [
                   "variable": "email",
                   "value": "prospective_email"
                },
-               "condition: cargo.callerId && (['1', 'yes', 'si', 'sí'].includes(payment_link_choice) || ['phone', 'cell', 'caller id', 'number', 'numero', 'número', 'telefono', 'teléfono', 'celular', 'identificador de llamadas'].some(p => payment_link_choice.includes(p)))": {
+               "condition: cargo.callerId && (['1', 'yes', 'please', 'sure', 'thanks', 'thank you', 'si', 'sí', 'por favor', 'gracias'].includes(payment_link_choice) || ['phone', 'cell', 'caller id', 'number', 'numero', 'número', 'telefono', 'teléfono', 'celular', 'identificador de llamadas'].some(p => payment_link_choice.includes(p)))": {
                   "id": "use_caller_id",
                   "type": "SET",
                   "variable": "cell_number",
