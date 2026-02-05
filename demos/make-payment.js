@@ -1633,6 +1633,24 @@ const flowsMenu = [
                   "variable": "email",
                   "value": "prospective_email"
                },
+               "condition: cargo.callerId && (['1', 'yes', 'please', 'sure', 'thanks', 'thank you', 'si', 'sí', 'por favor', 'gracias'].includes(payment_link_choice) || ['phone', 'cell', 'caller id', 'number', 'numero', 'número', 'telefono', 'teléfono', 'celular', 'identificador de llamadas'].some(p => payment_link_choice.includes(p)))": {
+                  "id": "use_caller_id",
+                  "type": "SET",
+                  "variable": "cell_number",
+                  "value": "cargo.callerId"
+               },
+               "condition: ['live', 'agent', 'customer service', 'representative', 'agente', 'gente', 'gerente', 'al cliente', 'representante'].some(choice => payment_link_choice.toLowerCase().includes(choice)) || payment_link_choice.trim() == '0'": {
+                  "id": "goto_live_agent",
+                  "type": "FLOW",
+                  "value": "live-agent-requested",
+                  "callType": "reboot"
+               },
+               "condition: ['*', 'abort', 'exit', 'quit', 'salir'].includes(payment_link_choice.toLowerCase())": {
+                  "id": "abort_process",
+                  "type": "FLOW",
+                  "value": "contact-support",
+                  "callType": "reboot"
+               },
                "condition: prospective_cell_number && ! validatePhone(prospective_cell_number)": {
                   "id": "invalid_phone_number_format",
                   "type": "FLOW",
@@ -1660,24 +1678,6 @@ const flowsMenu = [
                         }
                      ]
                   }
-               },
-               "condition: cargo.callerId && (['1', 'yes', 'please', 'sure', 'thanks', 'thank you', 'si', 'sí', 'por favor', 'gracias'].includes(payment_link_choice) || ['phone', 'cell', 'caller id', 'number', 'numero', 'número', 'telefono', 'teléfono', 'celular', 'identificador de llamadas'].some(p => payment_link_choice.includes(p)))": {
-                  "id": "use_caller_id",
-                  "type": "SET",
-                  "variable": "cell_number",
-                  "value": "cargo.callerId"
-               },
-               "condition: ['live', 'agent', 'customer service', 'representative', 'agente', 'gente', 'gerente', 'al cliente', 'representante'].some(choice => payment_link_choice.toLowerCase().includes(choice)) || payment_link_choice.trim() == '0'": {
-                  "id": "goto_live_agent",
-                  "type": "FLOW",
-                  "value": "live-agent-requested",
-                  "callType": "reboot"
-               },
-               "condition: ['*', 'abort', 'exit', 'quit', 'salir'].includes(payment_link_choice.toLowerCase())": {
-                  "id": "abort_process",
-                  "type": "FLOW",
-                  "value": "contact-support",
-                  "callType": "reboot"
                },
                "default": {
                   "id": "offer_retry_invalid_choice",
