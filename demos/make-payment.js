@@ -1416,6 +1416,51 @@ const toolsRegistry = [
             "window": 60000
          }
       }
+   },
+   {
+      "id": "get-experian-link",
+      "name": "Get Experian Link",
+      "description": "Sends a Credit Monitoring service information link to the customer",
+      "parameters": {
+         "type": "object",
+         "properties": {
+            "cust_id": {
+               "type": "string",
+               "description": "Customer's account/customer ID"
+            }
+         },
+         "required": ["cust_id"],
+         "additionalProperties": false
+      },
+      "implementation": {
+         "type": "http",
+         "url": "https://...",
+         "method": "POST",
+         "contentType": "application/json",
+         "timeout": 10000,
+         "retries": 0,
+         "headers": {
+            "Authorization": "Bearer ..."
+         },
+         "responseMapping": {
+            "type": "object",
+            "mappings": {
+               "success": {
+                  "path": "success",
+                  "fallback": false
+               }
+            }
+         }
+      },
+      "security": {
+         "requiresAuth": false,
+         "auditLevel": "high",
+         "dataClassification": "financial",
+         "rateLimit": {
+            "requests": 10,
+            "window": 60000
+         }
+      }
    }
 ];
 
