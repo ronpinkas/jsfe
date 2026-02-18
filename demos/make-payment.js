@@ -1432,17 +1432,17 @@ const flowsMenu = [
          {
             "name": "acct_number",
             "type": "string",
-            "description": "Customer account number (if user provided it in the query - must start with '5' and be 7-8 digits long)",
+            "description": "Customer account number (if user provided it in the query - must start with '5' and be 7-8 digits long)"
          },
          {
             "name": "cell_number",
             "type": "string",
-            "description": "Customer phone number (if user provided it in the query)",
+            "description": "Customer phone number (if user provided it in the query)"
          },
          {
             "name": "email",
             "type": "string",
-            "description": "Customer email address (if user provided it in the query - must be valid email format)",
+            "description": "Customer email address (if user provided it in the query - must be valid email format)"
          }
       ],
       "variables": {
@@ -1513,19 +1513,21 @@ const flowsMenu = [
                   "id": "ask_account_number_with_caller_id",
                   "type": "SAY-GET",
                   "variable": "payment_link_choice",
-                  "value": "To send you a payment link I can locate your account using phone, email or account number. To use your caller id, please {{cargo.verb}} yes. Otherwise, please enter {{cargo.voice ? 'or ' : ''}}{{cargo.verb}} the account number{{cargo.voice ? ' followed by the pound key' : ''}} or, either the phone or email associated with your account{{cargo.voice ? ' followed by the pound key' : ''}}. To exit at any time {{cargo.voice ? 'press the star key or ' : ''}}{{cargo.verb}} EXIT.",
-                  "value_es": "Para enviarte un enlace de pago, puedo localizar su cuenta utilizando el teléfono, el correo electrónico o el número de cuenta. Para usar su identificación de llamada, por favor {{cargo.verb_es}} sí. De lo contrario, por favor ingrese {{cargo.voice ? 'o ' : ''}}{{cargo.verb_es}} el número de cuenta{{cargo.voice ? ' seguido de la tecla numeral' : ''}} o, ya sea el teléfono o el correo electrónico asociado con su cuenta{{cargo.voice ? ' seguido de la tecla numeral' : ''}}. Para salir en cualquier momento {{cargo.voice ? 'presione la tecla de estrella o ' : ''}}{{cargo.verb_es}} SALIR.",
+                  "value": "To send you a payment link I need to locate your account. To use your caller id please {{cargo.verb}} YES\n Otherwise please enter {{cargo.voice ? 'or ' + cargo.verb : ''}} the account number or either the acount\\'s phone or email{{cargo.voice ? ', followed by the pound key when using the key pad' : ''}}\n To exit at any time {{cargo.voice ? 'just press the star key, or ' : ''}}{{cargo.verb}} EXIT.",
+                  "value_es": "Para enviarte un enlace de pago, necesito localizar tu cuenta. Para usar tu identificador de llamada, por favor {{cargo.verb_es}} SÍ\n De lo contrario, por favor ingresa {{cargo.voice ? 'o ' + cargo.verb_es : ''}} el número de cuenta o ya sea el teléfono o el correo electrónico de la cuenta{{cargo.voice ? ', seguido de la tecla numeral si se ingresa mediante el teclado.' : ''}}\n Para salir en cualquier momento {{cargo.voice ? 'solo presiona la tecla de estrella o ' : ''}}{{cargo.verb_es}} SALIR.",
                   "digits": {
                      "min": 7,
-                     "max": 12
+                     "max": 12,
+                     "autoSubmitChars": ["1"],
+                     "autoSubmitMs": 2500
                   }
                },
                "condition: !acct_number && !cell_number && !email": {
                   "id": "ask_account_number",
                   "type": "SAY-GET",
                   "variable": "payment_link_choice",
-                  "value": "To send you a payment link I can locate your account using phone, email or account number. Please enter {{cargo.voice ? 'or ' : ''}}{{cargo.verb}} the account number{{cargo.voice ? ' followed by the pound key' : ''}} or, either the phone or email associated with your account{{cargo.voice ? ' followed by the pound key' : ''}}. To exit at any time {{cargo.voice ? 'press the star key or ' : ''}}{{cargo.verb}} EXIT.",
-                  "value_es": "Para enviarte un enlace de pago, puedo localizar su cuenta utilizando el teléfono, el correo electrónico o el número de cuenta. Por favor, ingrese {{cargo.voice ? 'o ' : ''}}{{cargo.verb_es}} el número de cuenta{{cargo.voice ? ' seguido de la tecla numeral' : ''}} o, ya sea el teléfono o el correo electrónico asociado con su cuenta{{cargo.voice ? ' seguido de la tecla numeral' : ''}}. Para salir en cualquier momento {{cargo.voice ? 'presione la tecla de estrella o ' : ''}}{{cargo.verb_es}} SALIR.",
+                  "value": "To send you a payment link I need to locate your account. Please enter {{cargo.voice ? 'or ' + cargo.verb : ''}} the account number or either the the account\\'s phone or email{{cargo.voice ? ', followed by the pound key when using the key pad' : ''}}\n To exit at any time {{cargo.voice ? 'just press the star key, or ' : ''}}{{cargo.verb}} EXIT.",
+                  "value_es": "Para enviarte un enlace de pago, necesito localizar tu cuenta. Por favor ingresa {{cargo.voice ? 'o ' + cargo.verb_es : ''}} el número de cuenta o ya sea el teléfono o el correo electrónico de la cuenta{{cargo.voice ? ', seguido de la tecla numeral si se ingresa mediante el teclado.' : ''}}\n Para salir en cualquier momento {{cargo.voice ? 'solo presiona la tecla de estrella o ' : ''}}{{cargo.verb_es}} SALIR.",
                   "digits": {
                      "min": 7,
                      "max": 12
@@ -1584,6 +1586,12 @@ const flowsMenu = [
             "value": "prospective_email ? prospective_email : (prospective_email2 ? prospective_email2.replace(/\\s+/g, '') : '')"
          },
          {
+            "id": "normalize_payment_link_choice",
+            "type": "SET",
+            "variable": "normalized_payment_link_choice",
+            "value": "payment_link_choice.toLowerCase().replace(/\\s+/g, '')"
+         },
+         {
             "id": "branch_on_account_knowledge",
             "type": "CASE",
             "branches": {
@@ -1633,19 +1641,19 @@ const flowsMenu = [
                   "variable": "email",
                   "value": "prospective_email"
                },
-               "condition: cargo.callerId && (['1', 'yes', 'please', 'sure', 'thanks', 'thank you', 'si', 'sí', 'por favor', 'gracias'].includes(payment_link_choice) || ['phone', 'cell', 'caller id', 'number', 'numero', 'número', 'telefono', 'teléfono', 'celular', 'identificador de llamadas'].some(p => payment_link_choice.includes(p)))": {
+               "condition: cargo.callerId && (['1', 'yes', 'please', 'sure', 'thanks', 'thank you', 'si', 'sí', 'por favor', 'gracias'].includes(normalized_payment_link_choice) || ['phone', 'cell', 'caller id', 'number', 'numero', 'número', 'telefono', 'teléfono', 'celular', 'identificador de llamadas'].some(p => normalized_payment_link_choice.includes(p)))": {
                   "id": "use_caller_id",
                   "type": "SET",
                   "variable": "cell_number",
                   "value": "cargo.callerId"
                },
-               "condition: ['live', 'agent', 'customer service', 'representative', 'agente', 'gente', 'gerente', 'al cliente', 'representante'].some(choice => payment_link_choice.toLowerCase().includes(choice)) || payment_link_choice.trim() == '0'": {
+               "condition: ['live', 'agent', 'customer service', 'representative', 'agente', 'gente', 'gerente', 'al cliente', 'representante'].some(choice => normalized_payment_link_choice.includes(choice)) || normalized_payment_link_choice == '0'": {
                   "id": "goto_live_agent",
                   "type": "FLOW",
                   "value": "live-agent-requested",
                   "callType": "reboot"
                },
-               "condition: ['*', 'abort', 'exit', 'quit', 'salir'].includes(payment_link_choice.toLowerCase())": {
+               "condition: ['*', 'abort', 'exit', 'quit', 'salir'].includes(normalized_payment_link_choice)": {
                   "id": "abort_process",
                   "type": "FLOW",
                   "value": "contact-support",
@@ -1748,7 +1756,7 @@ const flowsMenu = [
                   }
                }
             }
-         },
+         }
       ]
    },
    {
@@ -1962,8 +1970,78 @@ const flowsMenu = [
          {
             "id": "say_payment_succeeded",
             "type": "SAY",
-            "value": "Great! Payment link for account ending with {{cargo.accountNumber.slice(-4).split('').join(', ')}} was sent to {{payment_link_result.customer_info.email && payment_link_result.customer_info.cell ? 'your email ' + masked_email + ' and cell ending with ' + cell_last4 : payment_link_result.customer_info.email ? 'your email ' + masked_email : 'your cell ending with ' + cell_last4}}. Please click the link to complete your payment. You'll already be logged in, simply select your payment options and submit, it's that easy!",
-            "value_es": "¡Genial! El enlace de pago para la cuenta que termina en {{cargo.accountNumber.slice(-4).split('').join(', ')}} fue enviado a {{payment_link_result.customer_info.email && payment_link_result.customer_info.cell ? 'tu correo electrónico ' + masked_email + ' y celular que termina en ' + cell_last4 : payment_link_result.customer_info.email ? 'tu correo electrónico ' + masked_email : 'tu celular que termina en ' + cell_last4}}. Haga clic en el enlace para completar tu pago. ¡Ya estará conectado, simplemente seleccione sus opciones de pago y envíelas, es así de fácil!"
+            "value": "Great! Payment link for account ending with {{cargo.accountNumber.slice(-4).split('').join(', ')}} was sent to {{payment_link_result.customer_info.email && payment_link_result.customer_info.cell ? 'your email ' + masked_email + ' and cell ending with ' + cell_last4 : payment_link_result.customer_info.email ? 'your email ' + masked_email : 'your cell ending with ' + cell_last4}}. Click the link and you'll already be logged in. Then, just select your payment options and click submit. It's that easy!",
+            "value_es": "¡Genial! El enlace de pago para la cuenta que termina en {{cargo.accountNumber.slice(-4).split('').join(', ')}} se envió a {{payment_link_result.customer_info.email && payment_link_result.customer_info.cell ? 'tu correo electrónico ' + masked_email + ' y celular que termina en ' + cell_last4 : payment_link_result.customer_info.email ? 'tu correo electrónico ' + masked_email : 'tu celular que termina en ' + cell_last4}}. Haz clic en el enlace y ya estarás conectado. Luego, solo selecciona tus opciones de pago y haz clic en enviar. ¡Es así de fácil!"
+         },
+         {
+            "id": "ask_credit_monitoring",
+            "type": "SAY-GET",
+            "variable": "credit_monitoring_choice",
+            "value": "One quick thing that can save you a headache later, Curacao's Credit Monitor helps you spot suspicious personal credit activity fast and it also includes identity theft support\nIf you want to receive a text with a secure link to review and enroll, just {{cargo.voice ? 'press 1 or ' : ''}}{{cargo.verb}} YES.",
+            "value_es": "Una cosa rápida que puede ahorrarte un dolor de cabeza más adelante, el Monitor de Crédito de Curacao te ayuda a detectar actividad crediticia personal sospechosa rápidamente y también incluye soporte para robo de identidad\nSi deseas recibir un mensaje de texto con un enlace seguro para revisar y registrarte, solo {{cargo.voice ? 'presiona 1 o ' : ''}}{{cargo.verb_es}} SÍ.",
+            "digits": {
+               "min": 1,
+               "max": 1
+            }
+         },
+         {
+            "id": "normalize_credit_monitoring_choice",
+            "type": "SET",
+            "variable": "credit_monitoring_choice",
+            "value": "credit_monitoring_choice.trim().toLowerCase().replace(/[^\\w\\s\\*áéíóúüñ]+/g, '')"
+         },
+         {
+            "id": "handle_credit_monitoring_choice",
+            "type": "CASE",
+            "branches": {
+               "condition: ['1', 'yes', 'sure', 'please', 'ok', 'thanks', 'si', 'sí', 'seguro', 'por favor', 'gracias'].some(choice => credit_monitoring_choice.includes(choice))": {
+                  "id": "call_get_experian_link",
+                  "type": "CALL-TOOL",
+                  "tool": "get-experian-link",
+                  "variable": "experian_link_result",
+                  "args": {
+                     "cust_id": "{{cargo.accountNumber}}"
+                  },
+                  "onFail": {
+                     "id": "experian_link_failed",
+                     "type": "SET",
+                     "variable": "experian_link_result",
+                     "value": {
+                        "success": false
+                     }
+                  }
+               },
+               "default": {
+                  "id": "credit_monitoring_declined",
+                  "type": "SET",
+                  "variable": "credit_monitoring_skipped",
+                  "value": "true"
+               }
+            }
+         },
+         {
+            "id": "show_experian_result",
+            "type": "CASE",
+            "branches": {
+               "condition: experian_link_result && experian_link_result.success": {
+                  "id": "experian_link_sent",
+                  "type": "SAY",
+                  "value": "Great, I sent you the link. Anything else I can help you with today?",
+                  "value_es": "¡Genial, te envié el enlace. ¿Hay algo más en lo que pueda ayudarte hoy?"
+               },
+               "condition: experian_link_result && !experian_link_result.success": {
+                  "id": "experian_link_api_error",
+                  "type": "SAY",
+                  "value": "Sorry, I was not able to send you the link. Please try again later. Anything else I can help you with today?",
+                  "value_es": "Lo siento, no pude enviarte el enlace. Por favor, inténtalo más tarde. ¿Hay algo más en lo que pueda ayudarte hoy?"
+               },
+               "default": {
+                  "id": "no_experian_action",
+                  "type": "SAY",
+                  "value": "Happy to be of help. Anything else I can assist you with today?",
+                  "value_es": "Feliz de poder ayudar. ¿Hay algo más en lo que pueda asistirte hoy?"
+               }
+            }
          }
       ]
    },
@@ -2097,7 +2175,7 @@ const flowsMenu = [
          {
             "name": "cell_number",
             "type": "string",
-            "description": "Customer cell number (if user provided it in the query)",
+            "description": "Customer cell number (if user provided it in the query)"
          }
       ],
       "variables": {
@@ -2108,7 +2186,7 @@ const flowsMenu = [
          "cell_number": {
             "type": "string",
             "description": "Customer cell phone number",
-            "value": "",
+            "value": ""
          },
          "email": {
             "type": "string",
@@ -2498,8 +2576,78 @@ const flowsMenu = [
          {
             "id": "confirm_account_found",
             "type": "SAY",
-            "value": "Hi {{cargo.firstName}} {{cargo.lastName}}, I found your account ending with {{cargo.accountNumber.slice(-4).split('').join(', ')}} with {{cargo.subAccounts?.length || 'no' }} sub accounts. {{typeof cargo.subAccountsBalance === 'string' ? 'Your current balance is ' + cargo.subAccountsBalance + '. ' : ''}}{{cargo.statementInformation?.statementSummary?.totalBalance ? 'Your latest statement balance was ' + cargo.statementInformation.statementSummary.totalBalance + '. ' : ''}}{{cargo.statementInformation?.statementSummary?.availableCredit ? 'Your available credit as of the last statement was ' + cargo.statementInformation.statementSummary.availableCredit + '. ' : ''}}Any other assistance I can help you with?",
-            "value_es": "Hola {{cargo.firstName}} {{cargo.lastName}}, encontré tu cuenta que termina en {{cargo.accountNumber.slice(-4).split('').join(', ')}} con {{cargo.subAccounts?.length || 'ninguna' }} subcuentas. {{typeof cargo.subAccountsBalance === 'string' ? 'Su saldo actual es ' + cargo.subAccountsBalance + '. ' : ''}}{{cargo.statementInformation?.statementSummary?.totalBalance ? 'El saldo de tu último estado de cuenta fue ' + cargo.statementInformation.statementSummary.totalBalance + '. ' : ''}}{{cargo.statementInformation?.statementSummary?.availableCredit ? 'Su crédito disponible la fecha del último estado de cuenta fue ' + cargo.statementInformation.statementSummary.availableCredit + '. ' : ''}}Con qué más puedo ayudarte?"
+            "value": "Hi {{cargo.firstName}} {{cargo.lastName}}, I found your account ending with {{cargo.accountNumber.slice(-4).split('').join(', ')}} with {{cargo.subAccounts?.length || 'no' }} sub accounts\n {{typeof cargo.subAccountsBalance === 'string' ? 'Your current balance is ' + cargo.subAccountsBalance + '\\n' : ''}}{{cargo.statementInformation?.statementSummary?.totalBalance ? 'Your latest statement balance was ' + cargo.statementInformation.statementSummary.totalBalance + '\\n' : ''}}{{cargo.statementInformation?.statementSummary?.availableCredit ? 'Your available credit as of the last statement was ' + cargo.statementInformation.statementSummary.availableCredit + '\\n' : ''}}",
+            "value_es": "Hola {{cargo.firstName}} {{cargo.lastName}}, encontré tu cuenta que termina en {{cargo.accountNumber.slice(-4).split('').join(', ')}} con {{cargo.subAccounts?.length || 'ninguna' }} subcuentas\n {{typeof cargo.subAccountsBalance === 'string' ? 'Su saldo actual es ' + cargo.subAccountsBalance + '\\n' : ''}}{{cargo.statementInformation?.statementSummary?.totalBalance ? 'El saldo de tu último estado de cuenta fue ' + cargo.statementInformation.statementSummary.totalBalance + '\\n' : ''}}{{cargo.statementInformation?.statementSummary?.availableCredit ? 'Su crédito disponible la fecha del último estado de cuenta fue ' + cargo.statementInformation.statementSummary.availableCredit + '\\n' : ''}}"
+         },
+         {
+            "id": "ask_credit_monitoring",
+            "type": "SAY-GET",
+            "variable": "credit_monitoring_choice",
+            "value": "One quick thing that can save you a headache later, Curacao's Credit Monitor helps you spot suspicious personal credit activity fast and it also includes identity theft support\nIf you want to receive a text with a secure link to review and enroll, just {{cargo.voice ? 'press 1 or ' : ''}}{{cargo.verb}} YES.",
+            "value_es": "Una cosa rápida que puede ahorrarte un dolor de cabeza más adelante, el Monitor de Crédito de Curacao te ayuda a detectar actividad crediticia personal sospechosa rápidamente y también incluye soporte para robo de identidad\nSi deseas recibir un mensaje de texto con un enlace seguro para revisar y registrarte, solo {{cargo.voice ? 'presiona 1 o ' : ''}}{{cargo.verb_es}} SÍ.",
+            "digits": {
+               "min": 1,
+               "max": 1
+            }
+         },
+         {
+            "id": "normalize_credit_monitoring_choice",
+            "type": "SET",
+            "variable": "credit_monitoring_choice",
+            "value": "credit_monitoring_choice.trim().toLowerCase().replace(/[^\\w\\s\\*áéíóúüñ]+/g, '')"
+         },
+         {
+            "id": "handle_credit_monitoring_choice",
+            "type": "CASE",
+            "branches": {
+               "condition: ['1', 'yes', 'sure', 'please', 'ok', 'thanks', 'si', 'sí', 'seguro', 'por favor', 'gracias'].some(choice => credit_monitoring_choice.includes(choice))": {
+                  "id": "call_get_experian_link",
+                  "type": "CALL-TOOL",
+                  "tool": "get-experian-link",
+                  "variable": "experian_link_result",
+                  "args": {
+                     "cust_id": "{{cargo.accountNumber}}"
+                  },
+                  "onFail": {
+                     "id": "experian_link_failed",
+                     "type": "SET",
+                     "variable": "experian_link_result",
+                     "value": {
+                        "success": false
+                     }
+                  }
+               },
+               "default": {
+                  "id": "credit_monitoring_declined",
+                  "type": "SET",
+                  "variable": "credit_monitoring_skipped",
+                  "value": "true"
+               }
+            }
+         },
+         {
+            "id": "show_experian_result",
+            "type": "CASE",
+            "branches": {
+               "condition: experian_link_result && experian_link_result.success": {
+                  "id": "experian_link_sent",
+                  "type": "SAY",
+                  "value": "Great, I sent you the link. Anything else I can help you with today?",
+                  "value_es": "¡Genial, te envié el enlace. ¿Hay algo más en lo que pueda ayudarte hoy?"
+               },
+               "condition: experian_link_result && !experian_link_result.success": {
+                  "id": "experian_link_api_error",
+                  "type": "SAY",
+                  "value": "Sorry, I was not able to send you the link. Please try again later. Anything else I can help you with today?",
+                  "value_es": "Lo siento, no pude enviarte el enlace. Por favor, inténtalo más tarde. ¿Hay algo más en lo que pueda ayudarte hoy?"
+               },
+               "default": {
+                  "id": "no_experian_action",
+                  "type": "SAY",
+                  "value": "Happy to be of help. Anything else I can assist you with today?",
+                  "value_es": "Feliz de poder ayudar. ¿Hay algo más en lo que pueda asistirte hoy?"
+               }
+            }
          }
       ]
    },
@@ -2511,11 +2659,11 @@ const flowsMenu = [
       "prompt": "find location",
       "prompt_es": "encontrar ubicación",
       "primary": true,
-      parameters: [
+      "parameters": [
          {
-            name: "user_city",
-            description: "The city the user specified for location search",
-            type: "string"
+            "name": "user_city",
+            "description": "The city the user specified for location search",
+            "type": "string"
          }
       ],
       "variables": {
@@ -2759,7 +2907,7 @@ const flowsMenu = [
                   "value": "true"
                }
             }
-         },
+         }
       ]
    },
    {
