@@ -6530,6 +6530,12 @@ export class WorkflowEngine implements Engine {
     if (validateOnInit && flowsMenu.length > 0) {
       this.performInitializationValidation();
     }
+
+    // Always ensure _branchOrder is set, even when validation is skipped
+    // (performInitializationValidation also calls this, but it's idempotent)
+    if (flowsMenu.length > 0) {
+      this.ensureBranchOrder();
+    }
   }
 
   /**
