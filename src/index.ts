@@ -469,6 +469,7 @@ export interface FlowStep {
   nextFlow?: string;
   callType?: 'call' | 'replace' | 'reboot';
   branches?: Record<string, FlowStep>;  // SWITCH branches contain single steps, not arrays
+  _branchOrder?: string[];  // Preserved key order for branches - survives unordered serialization (e.g. DynamoDB Maps)
   onFail?: FlowStep;
   retryCount?: number;
 
@@ -4099,9 +4100,23 @@ async function handleCaseStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
   let selectedStep: FlowStep | null = null;
   let selectedBranch: string | null = null;
 
+  // Use _branchOrder if available to guarantee correct evaluation order.
+  // DynamoDB Maps are unordered — without _branchOrder, Object.keys/entries
+  // may return branches in arbitrary order after deserialization.
+  const branchKeys = step._branchOrder || Object.keys(step.branches);
+  if (!step._branchOrder) {
+    logger.warn(`CASE step "${step.id}": missing _branchOrder — branch evaluation order may be incorrect after deserialization`);
+  }
+
   // Try condition-based matching (CASE only supports conditions, no variable matching)
-  for (const [branchKey, branchStep] of Object.entries(step.branches)) {
+  for (const branchKey of branchKeys) {
     if (branchKey === 'default') continue; // Skip default, handle later
+
+    const branchStep = step.branches[branchKey];
+    if (!branchStep) {
+      logger.warn(`CASE: _branchOrder references missing branch '${branchKey}' — skipping`);
+      continue;
+    }
 
     // Check if this is a condition branch
     if (branchKey.startsWith('condition:')) {
@@ -7337,6 +7352,10 @@ export class WorkflowEngine implements Engine {
     if (!step.branches.default) {
       state.warnings.push(`SWITCH step "${step.id}" in flow "${flowDef.name}" missing "default" branch - recommended for error handling`);
     }
+
+    // Snapshot branch key order for consistency (SWITCH uses exact lookup so order
+    // doesn't affect correctness, but this ensures consistent serialization behavior).
+    step._branchOrder = Object.keys(step.branches);
   }
 
   /**
@@ -7384,6 +7403,11 @@ export class WorkflowEngine implements Engine {
     if (!step.branches.default) {
       state.warnings.push(`CASE step "${step.id}" in flow "${flowDef.name}" missing "default" branch - recommended for error handling`);
     }
+
+    // CRITICAL: Snapshot branch key order from the original JSON/definition.
+    // DynamoDB Maps are unordered - without this, CASE condition evaluation order
+    // could be randomized after session persistence/deserialization.
+    step._branchOrder = Object.keys(step.branches);
   }
 
   /**
