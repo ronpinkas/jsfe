@@ -7008,6 +7008,45 @@ export class WorkflowEngine implements Engine {
       logger.error(error.stack);
       // Don't throw here to allow engine to initialize even if validation fails
     }
+
+    // Ensure _branchOrder is set on all CASE/SWITCH steps across ALL flows
+    this.ensureBranchOrder();
+  }
+
+  /**
+   * Walks ALL flows in flowsMenu and sets _branchOrder on every CASE/SWITCH step.
+   * This ensures branch evaluation order survives unordered serialization (e.g. DynamoDB Maps).
+   *
+   * Called automatically after performInitializationValidation(), but hosts MUST call this
+   * after adding flows to flowsMenu post-construction (e.g. flowsMenu.unshift(...systemFlows)).
+   */
+  ensureBranchOrder(): void {
+    const setBranchOrder = (step: FlowStep): void => {
+      if (!step || typeof step !== 'object') return;
+
+      // Set _branchOrder on CASE or SWITCH steps that have branches
+      if ((step.type === 'CASE' || step.type === 'SWITCH') && step.branches && typeof step.branches === 'object') {
+        step._branchOrder = Object.keys(step.branches);
+
+        // Recurse into each branch step (branches may themselves contain CASE/SWITCH)
+        for (const branchStep of Object.values(step.branches)) {
+          setBranchOrder(branchStep as FlowStep);
+        }
+      }
+
+      // Also recurse into onFail steps
+      if (step.onFail) {
+        setBranchOrder(step.onFail);
+      }
+    };
+
+    for (const flow of this.flowsMenu) {
+      if (flow.steps && Array.isArray(flow.steps)) {
+        for (const step of flow.steps) {
+          setBranchOrder(step);
+        }
+      }
+    }
   }
 
   // === FLOW VALIDATION METHODS ===
