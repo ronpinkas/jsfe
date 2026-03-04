@@ -2823,6 +2823,29 @@ async function playStep(currentFlowFrame: FlowFrame, engine: Engine): Promise<st
     // Most handlers pop immediately at the start. SAY-GET is special - it peeks without popping initially
     // since it waits for user input, then pops later after input collection is complete.
     const step = currentFlowFrame.flowStepsStack[currentFlowFrame.flowStepsStack.length - 1];
+
+    // Defensive null check with diagnostic logging
+    if (!step || !currentFlowFrame.transaction) {
+      const diagInfo = {
+        stepIsNull: step === null,
+        stepIsUndefined: step === undefined,
+        transactionIsNull: currentFlowFrame.transaction === null,
+        transactionIsUndefined: currentFlowFrame.transaction === undefined,
+        flowName: currentFlowFrame.flowName,
+        flowId: currentFlowFrame.flowId,
+        stackLength: currentFlowFrame.flowStepsStack.length,
+        stackContents: currentFlowFrame.flowStepsStack.map((s: any, i: number) =>
+          s ? `[${i}] ${s.id || s.type || 'unknown'}` : `[${i}] NULL/UNDEFINED`
+        ),
+        pendingVariable: currentFlowFrame.pendingVariable,
+        inputStackLength: currentFlowFrame.inputStack?.length,
+        lastInput: currentFlowFrame.inputStack?.[currentFlowFrame.inputStack.length - 1],
+      };
+      const diagMsg = `playStep null guard: ${JSON.stringify(diagInfo)}`;
+      logger.error(diagMsg);
+      throw new Error(diagMsg);
+    }
+
     //const contextStack = currentFlowFrame.contextStack;
     const inputStack = currentFlowFrame.inputStack;
     const currentInput = inputStack[inputStack.length - 1];
@@ -2859,6 +2882,7 @@ async function playStep(currentFlowFrame: FlowFrame, engine: Engine): Promise<st
     }
   } catch (error: any) {
     logger.error(`Error in playStep: ${error.message}`);
+    logger.error(`Stack trace: ${error.stack}`);
     throw error;
   }
 }
