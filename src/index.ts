@@ -5162,7 +5162,7 @@ async function callHttpTool(tool: any, args: any, userId: string = 'anonymous', 
     }
 
     // === EXECUTE REQUEST WITH TIMEOUT AND RETRIES ===
-    const timeout = implementation.timeout || 10000;
+    const timeout = implementation.timeout || 20000;
     const maxRetries = implementation.retries || 0;
 
     // Unconditional retry logic
