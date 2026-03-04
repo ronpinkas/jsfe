@@ -2685,6 +2685,17 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
       logger.info(`Popped SAY-GET step after variable assignment completed`);
     }
 
+    // Defensive: filter out null/undefined entries from flowStepsStack (DynamoDB corruption recovery)
+    const nullCount = currentFlowFrame.flowStepsStack.filter(s => s == null).length;
+    if (nullCount > 0) {
+      logger.error(`DYNAMO_CORRUPTION: Found ${nullCount} null entries in flowStepsStack for flow ${currentFlowFrame.flowName} (total: ${currentFlowFrame.flowStepsStack.length}). pendingVariable: ${currentFlowFrame.pendingVariable}, pendingVariableContext length: ${currentFlowFrame.pendingVariableContext?.length}`);
+      // Log ALL properties of the flow frame for diagnosis
+      logger.error(`DYNAMO_CORRUPTION frame keys: ${Object.keys(currentFlowFrame).join(', ')}`);
+      logger.error(`DYNAMO_CORRUPTION frame values: flowName=${currentFlowFrame.flowName}, flowId=${currentFlowFrame.flowId}, pendingVariable=${currentFlowFrame.pendingVariable}, inputStack=${JSON.stringify(currentFlowFrame.inputStack)}, stepsStack types: ${JSON.stringify(currentFlowFrame.flowStepsStack.map((s: any) => s === null ? 'NULL' : s === undefined ? 'UNDEF' : typeof s))}`);
+      currentFlowFrame.flowStepsStack = currentFlowFrame.flowStepsStack.filter(s => s != null);
+      logger.error(`DYNAMO_CORRUPTION: After filtering, ${currentFlowFrame.flowStepsStack.length} steps remain`);
+    }
+
     // Flow completion handling
     if (currentFlowFrame.flowStepsStack.length === 0) {
       logger.info(`Flow ${currentFlowFrame.flowName} completed, popping from stack (steps length: ${currentFlowFrame.flowStepsStack.length})`);
@@ -2798,10 +2809,15 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
 
     } catch (error: any) {
       const duration = Date.now() - startTime;
-      TransactionManager.addError(currentFlowFrame.transaction, step, error, duration);
 
-      logger.error(`Step ${step.type} failed: ${error.message}`);
-      logger.info(`Stack trace: ${error.stack}`);
+      // Defensive: step may be null (the very error we're catching)
+      if (step) {
+        TransactionManager.addError(currentFlowFrame.transaction, step, error, duration);
+        logger.error(`Step ${step.type} failed: ${error.message}`);
+      } else {
+        logger.error(`Step execution failed (step was null): ${error.message}`);
+      }
+      logger.error(`Stack trace: ${error.stack}`);
       throw error;
     }
   }
@@ -6606,6 +6622,25 @@ export class WorkflowEngine implements Engine {
       // Store reference to session context - no copying needed! Engine works directly with session data
       this.sessionContext = engineSessionContext;
 
+      // DIAGNOSTIC: Log flowStepsStack state from loaded session (before any processing)
+      if (engineSessionContext.flowStacks) {
+        for (let si = 0; si < engineSessionContext.flowStacks.length; si++) {
+          const stack = engineSessionContext.flowStacks[si];
+          if (Array.isArray(stack)) {
+            for (let fi = 0; fi < stack.length; fi++) {
+              const frame = stack[fi];
+              if (frame?.flowStepsStack) {
+                const nullSteps = frame.flowStepsStack.filter((s: any) => s == null).length;
+                if (nullSteps > 0) {
+                  logger.error(`LOAD_DIAG: Stack[${si}] Frame[${fi}] "${frame.flowName}" has ${nullSteps}/${frame.flowStepsStack.length} null steps! pendingVariable=${frame.pendingVariable}`);
+                  logger.error(`LOAD_DIAG: Step types: ${JSON.stringify(frame.flowStepsStack.map((s: any) => s === null ? 'NULL' : s === undefined ? 'UNDEF' : (s.id || s.type || typeof s)))}`);
+                }
+              }
+            }
+          }
+        }
+      }
+
       // CRITICAL: Reconstruct variable references after potential JSON deserialization
       // This fixes broken object references that are essential for variable inheritance
       this.reconstructVariableReferences();
@@ -6678,6 +6713,25 @@ export class WorkflowEngine implements Engine {
             }
           }
         }
+
+        // DIAGNOSTIC: Log flowStepsStack state BEFORE returning (data will be saved to DynamoDB)
+        if (engineSessionContext.flowStacks) {
+          for (let si = 0; si < engineSessionContext.flowStacks.length; si++) {
+            const stack = engineSessionContext.flowStacks[si];
+            if (Array.isArray(stack)) {
+              for (let fi = 0; fi < stack.length; fi++) {
+                const frame = stack[fi];
+                if (frame?.flowStepsStack) {
+                  const nullSteps = frame.flowStepsStack.filter((s: any) => s == null).length;
+                  if (nullSteps > 0) {
+                    logger.error(`SAVE_DIAG: Stack[${si}] Frame[${fi}] "${frame.flowName}" has ${nullSteps}/${frame.flowStepsStack.length} null steps BEFORE save! pendingVariable=${frame.pendingVariable}`);
+                  }
+                }
+              }
+            }
+          }
+        }
+
         return engineSessionContext;
       } else if (contextEntry.role === 'assistant') {
         // Check if we're in a flow or not
