@@ -24,18 +24,21 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 */
 
 // Use globalThis.crypto for host-agnostic crypto (works in Node.js 19+, browsers, CF Workers)
-// Optional: ajv for JSON Schema validation (graceful skip if not available)
+// Optional: ajv for JSON Schema validation (graceful skip if not available in browser)
 let Ajv: any = null;
 let addFormats: any = null;
-try {
-  // Dynamic import at module init — works in Node.js, skipped in browser without bundler
-  // @ts-ignore
-  Ajv = (await import("ajv")).default;
-  // @ts-ignore
-  addFormats = (await import("ajv-formats")).default;
-} catch {
-  // ajv not available — validation will be skipped
+if (typeof process !== 'undefined' && process.versions?.node) {
+  // Node.js — try to load ajv
+  try {
+    // @ts-ignore
+    Ajv = (await import("ajv")).default;
+    // @ts-ignore
+    addFormats = (await import("ajv-formats")).default;
+  } catch {
+    // ajv not installed — validation will be skipped
+  }
 }
+// In browser: Ajv stays null, validation is skipped
 
 /**
  * Pure JS parser for .tools file content (string or object)
@@ -2047,9 +2050,9 @@ function makeLogger(level: string = (typeof process !== 'undefined' && process.e
 
 let logger: Logger = makeLogger();
 
-// Fallback for any remaining console calls
-if (!(global as Record<string, unknown>).console) {
-  (global as Record<string, unknown>).console = {
+// Fallback for any remaining console calls (host-agnostic: globalThis works in Node, browser, CF Worker)
+if (!(globalThis as Record<string, unknown>).console) {
+  (globalThis as Record<string, unknown>).console = {
     log: (...args: unknown[]) => logger.info(args.join(' ')),
     warn: (...args: unknown[]) => logger.warn(args.join(' ')),
     error: (...args: unknown[]) => logger.error(args.join(' ')),
