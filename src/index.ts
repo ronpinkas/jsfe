@@ -23,7 +23,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
   git push --follow-tags
 */
 
-import * as crypto from "crypto";
+// Use globalThis.crypto for host-agnostic crypto (works in Node.js 19+, browsers, CF Workers)
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
 
@@ -528,7 +528,7 @@ export interface TransactionData {
 export class TransactionManager {
   static create(flowName: string, initiator: string, userId: string): TransactionData {
     return {
-      id: crypto.randomUUID(),
+      id: globalThis.crypto.randomUUID(),
       flowName: flowName,
       initiator: initiator,
       userId: userId,
@@ -541,7 +541,7 @@ export class TransactionManager {
 
   static addStep(transaction: TransactionData, step: FlowStep, result: unknown, duration: number, status: 'success' | 'error' = 'success'): void {
     const transactionStep: TransactionStep = {
-      stepId: step.id || crypto.randomUUID(),
+      stepId: step.id || globalThis.crypto.randomUUID(),
       stepType: step.type || 'unknown',
       timestamp: new Date(),
       duration: duration,
@@ -4990,7 +4990,7 @@ async function callHttpTool(tool: any, args: any, userId: string = 'anonymous', 
     // === HMAC/HASH AUTHENTICATION ===
     if (tool.hashAuth || implementation.hashAuth) {
       const hashConfig = tool.hashAuth || implementation.hashAuth;
-      const hash = generateHash(hashConfig, args);
+      const hash = await generateHash(hashConfig, args);
 
       if (hashConfig.location === 'header') {
         headers[hashConfig.keyName] = hash;
@@ -5275,7 +5275,7 @@ async function callHttpTool(tool: any, args: any, userId: string = 'anonymous', 
 }
 
 // === AUTH HELPERS ===
-function generateHash(hashConfig: any, args: any): string {
+async function generateHash(hashConfig: any, args: any): Promise<string> {
   const { secret, fields, algorithm = 'sha256', encoding = 'hex' } = hashConfig;
 
   if (!secret || !fields) {
@@ -5284,118 +5284,28 @@ function generateHash(hashConfig: any, args: any): string {
 
   // Build the raw string from specified fields
   const raw = fields.map((field: string) => {
-    const value = field.split('.').reduce((obj, part) => obj?.[part], args);
+    const value = field.split('.').reduce((obj: any, part: string) => obj?.[part], args);
     return value ?? '';
   }).join('|');
 
-  // Generate hash with specified algorithm
-  return crypto.createHmac(algorithm, secret).update(raw).digest(encoding);
-}
-
-/**
- * Portable hash/HMAC utility for Node.js and browser/Cloudflare Worker environments.
- * Supports SHA-256 and HMAC-SHA256.
- * Usage: await portableHash('data', 'secret')
- */
-export async function portableHash(data: string | Uint8Array, secret?: string, algorithm: string = 'SHA-256', encoding: 'hex' | 'base64' = 'hex'): Promise<string> {
-  // Convert string to Uint8Array
-  function toBytes(input: string | Uint8Array): Uint8Array {
-    if (typeof input === 'string') {
-      if (typeof TextEncoder !== 'undefined') {
-        return new TextEncoder().encode(input);
-      } else {
-        // Node.js fallback
-        // @ts-ignore
-        return Buffer.from(input, 'utf8');
-      }
-    }
-    return input;
-  }
-
-  // Normalize algorithm for Node.js and Web Crypto
-  function normalizeAlgorithm(algo: string): string {
-    // Node.js expects e.g. 'sha256', Web Crypto expects 'SHA-256'
-    const map: Record<string, string> = {
-      'sha256': 'SHA-256',
-      'sha-256': 'SHA-256',
-      'sha512': 'SHA-512',
-      'sha-512': 'SHA-512',
-      'sha1': 'SHA-1',
-      'sha-1': 'SHA-1',
-    };
-    const lower = algo.toLowerCase();
-    return map[lower] || algo;
-  }
-
-  // Node.js crypto
-  if (typeof process !== 'undefined' && process.versions && process.versions.node) {
-    // Dynamically require to avoid breaking browser/worker builds
-    const nodeCrypto = await import('crypto');
-    const nodeAlgo = algorithm.replace('-', '').toLowerCase();
-    if (secret) {
-      // HMAC
-      const hmac = nodeCrypto.createHmac(nodeAlgo, secret);
-      hmac.update(toBytes(data));
-      return encoding === 'base64' ? hmac.digest('base64') : hmac.digest('hex');
-    } else {
-      // Hash
-      const hash = nodeCrypto.createHash(nodeAlgo);
-      hash.update(toBytes(data));
-      return encoding === 'base64' ? hash.digest('base64') : hash.digest('hex');
-    }
-  }
-
-  // Browser/Cloudflare Worker Web Crypto API
-  const subtle = (typeof globalThis !== 'undefined' && globalThis.crypto && globalThis.crypto.subtle) ? globalThis.crypto.subtle : undefined;
+  // Generate HMAC using Web Crypto API (host-agnostic: Node.js 19+, browser, CF Worker)
+  const subtle = globalThis.crypto?.subtle;
   if (!subtle) throw new Error('No crypto.subtle available in this environment');
 
-  const algo = normalizeAlgorithm(algorithm);
-  // Always use Uint8Array backed by ArrayBuffer (not SharedArrayBuffer)
-  function toStrictArrayBuffer(input: string | Uint8Array): ArrayBuffer {
-    const bytes = toBytes(input);
-    // Always copy to a new ArrayBuffer to guarantee ArrayBuffer, not SharedArrayBuffer
-    const arr = new Uint8Array(bytes.length);
-    for (let i = 0; i < bytes.length; i++) arr[i] = bytes[i];
-    return arr.buffer;
-  }
-  const keyBuffer: ArrayBuffer | undefined = secret ? toStrictArrayBuffer(secret) : undefined;
-  const dataBuffer: ArrayBuffer = toStrictArrayBuffer(data);
+  const enc = new TextEncoder();
+  const algoMap: Record<string, string> = { 'sha256': 'SHA-256', 'sha512': 'SHA-512', 'sha1': 'SHA-1' };
+  const algoName = algoMap[algorithm.toLowerCase().replace('-', '')] || 'SHA-256';
 
-  // Helper for base64 encoding
-  function arrayBufferToBase64(buf: ArrayBuffer): string {
-    let binary = '';
-    const bytes = new Uint8Array(buf);
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
-    }
-    // btoa is available in browsers, but not in all workers; fallback if needed
-    if (typeof btoa !== 'undefined') {
-      return btoa(binary);
-    } else if (typeof Buffer !== 'undefined') {
-      // @ts-ignore
-      return Buffer.from(bytes).toString('base64');
-    } else {
-      throw new Error('No base64 encoder available');
-    }
-  }
+  const key = await subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: { name: algoName } }, false, ['sign']);
+  const sig = await subtle.sign('HMAC', key, enc.encode(raw));
+  const bytes = new Uint8Array(sig);
 
-  if (secret && keyBuffer) {
-    // HMAC
-    const key = await subtle.importKey(
-      'raw',
-      keyBuffer,
-      { name: 'HMAC', hash: { name: algo } },
-      false,
-      ['sign']
-    );
-    const sig = await subtle.sign('HMAC', key, dataBuffer);
-    return encoding === 'base64' ? arrayBufferToBase64(sig) : Array.from(new Uint8Array(sig)).map(b => b.toString(16).padStart(2, '0')).join('');
-  } else {
-    // Hash
-    const hash = await subtle.digest(algo, dataBuffer);
-    return encoding === 'base64' ? arrayBufferToBase64(hash) : Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+  if (encoding === 'base64') {
+    return btoa(String.fromCharCode(...bytes));
   }
+  return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
 }
+
 
 // === UTILITIES ===
 // ===============================================
@@ -6562,7 +6472,7 @@ export class WorkflowEngine implements Engine {
     this.enabledCommands = new Set(['cancel', 'help', 'status', 'switch', 'continue']);
 
     // No longer initialize session-specific data in constructor - it's now in sessionContext
-    this.sessionId = crypto.randomUUID();
+    this.sessionId = globalThis.crypto.randomUUID();
     this.createdAt = new Date();
     this.lastActivity = new Date();
 
@@ -6594,7 +6504,7 @@ export class WorkflowEngine implements Engine {
   initSession(userId: string, sessionId: string, language?: string): EngineSessionContext {
 
     const engineSessionContext: EngineSessionContext = {
-      sessionId: sessionId || crypto.randomUUID(),
+      sessionId: sessionId || globalThis.crypto.randomUUID(),
       userId: userId,
       createdAt: new Date(),
       lastActivity: new Date(),
