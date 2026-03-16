@@ -24,8 +24,18 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 */
 
 // Use globalThis.crypto for host-agnostic crypto (works in Node.js 19+, browsers, CF Workers)
-import Ajv from "ajv";
-import addFormats from "ajv-formats";
+// Optional: ajv for JSON Schema validation (graceful skip if not available)
+let Ajv: any = null;
+let addFormats: any = null;
+try {
+  // Dynamic import at module init — works in Node.js, skipped in browser without bundler
+  // @ts-ignore
+  Ajv = (await import("ajv")).default;
+  // @ts-ignore
+  addFormats = (await import("ajv-formats")).default;
+} catch {
+  // ajv not available — validation will be skipped
+}
 
 /**
  * Pure JS parser for .tools file content (string or object)
@@ -731,9 +741,16 @@ export interface ValidationResult {
   warnings: string[];
 }
 
-// Initialize JSON Schema validator
-const ajv = new Ajv({ allErrors: true, strict: false });
-addFormats(ajv);
+// Initialize JSON Schema validator (optional — skipped if ajv not available)
+let ajv: any = null;
+if (Ajv) {
+  try {
+    ajv = new Ajv({ allErrors: true, strict: false });
+    if (addFormats) addFormats(ajv);
+  } catch {
+    // ajv initialization failed — validation will be skipped
+  }
+}
 
 // === DECLARATIVE RESPONSE MAPPING SYSTEM ===
 // Generic, secure response transformation using declarative mapping rules
@@ -2253,12 +2270,13 @@ function sanitizeInput(input: unknown): unknown {
 
 function validateToolArgs(tool: ToolDefinition, args: Record<string, unknown>): Record<string, unknown> {
   if (!tool.parameters) return args; // No validation schema
+  if (!ajv) return args; // ajv not available — skip validation
 
   const validate = ajv.compile(tool.parameters);
   const valid = validate(args);
 
   if (!valid) {
-    const errors = (validate.errors || []).map(err =>
+    const errors = (validate.errors || []).map((err: any) =>
       `${err.instancePath || 'root'} ${err.message}`
     ).join(', ');
     logger.info(`Tool argument validation failed for ${tool.name}: ${errors}`);
