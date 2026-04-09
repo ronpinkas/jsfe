@@ -86,6 +86,16 @@ export function parseFlows(input: string | object): any[] {
  *   debug(msg: string) { ... }
  * }
  */
+// === JSFE EXECUTION ERROR ===
+// Thrown for "real" flow execution errors (not intent detection failures).
+// The host should catch this and present a user-facing error message.
+export class JSFEExecutionError extends Error {
+  constructor(message: string, public readonly cause?: Error) {
+    super(message);
+    this.name = 'JSFEExecutionError';
+  }
+}
+
 export interface Logger {
   info(message: string, ...args: unknown[]): void;
   warn(message: string, ...args: unknown[]): void;
@@ -3151,28 +3161,25 @@ export async function detectFlowWithParameters(input: string, engine: Engine): P
        </chat-history>\n\n`;
     }
 
-    try {
-      const aiResponse = await fetchAiTask(task, rules, context, input, flowsForIntentDetection, jsonSchema, engine.aiCallback, engine.aiTimeOut);
+    // Let AI errors (timeout, communication failures) propagate to the host
+    const aiResponse = await fetchAiTask(task, rules, context, input, flowsForIntentDetection, jsonSchema, engine.aiCallback, engine.aiTimeOut);
 
-      if (aiResponse && aiResponse.flowName && aiResponse.flowName !== 'None' && aiResponse.flowName !== 'null') {
-        const flow = flowsMenu.find(flow => flow.name.toLowerCase() === aiResponse.flowName.toLowerCase() || flow.id === aiResponse.flowName);
-        if (flow) {
-          return { flow, parameters: aiResponse.parameters };
-        } else {
-          logger.error(`Flow "${aiResponse.flowName}" not found in flows menu`);
-        }
+    if (aiResponse && aiResponse.flowName && aiResponse.flowName !== 'None' && aiResponse.flowName !== 'null') {
+      const flow = flowsMenu.find(flow => flow.name.toLowerCase() === aiResponse.flowName.toLowerCase() || flow.id === aiResponse.flowName);
+      if (flow) {
+        return { flow, parameters: aiResponse.parameters };
       } else {
-        logger.info(`No flow activated for input: "${input}"`);
+        logger.error(`Flow "${aiResponse.flowName}" not found in flows menu`);
       }
-    } catch (error: any) {
-      logger.error("Error in flow detection:", error);
+    } else {
+      logger.info(`No flow activated for input: "${input}"`);
     }
 
     return null;
   } catch (error: any) {
     logger.warn(`Error in detectFlowWithParameters: ${error.message}`);
     logger.info(`Stack trace: ${error.stack}`);
-    return null;
+    throw error;
   }
 }
 
@@ -6334,7 +6341,7 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
           TransactionManager.fail(failedFrame.transaction, error.message);
         }
 
-        return `I encountered an error: ${error.message}. Please try again or contact support if the issue persists.`;
+        throw new JSFEExecutionError(error.message, error);
       }
     }
 
@@ -6363,7 +6370,8 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
       logger.error(`Flow activation error: ${error.message}`);
       logger.info(`Stack trace: ${error.stack}`);
 
-      return `I encountered an error while processing your request: ${error.message}`;
+      // Let intent detection errors (AI timeout, communication failures) propagate to the host
+      throw error;
     }
 
     logger.debug(`No flow activated for input: ${input}`);
@@ -6374,7 +6382,8 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
     logger.error(`Error processing activity for user ${userId}: ${error.message}`);
     logger.info(`Stack trace: ${error.stack}`);
 
-    return `I encountered an error while processing your request: ${error.message}`;
+    // Re-throw as-is — let the host distinguish JSFEExecutionError from intent detection errors
+    throw error;
   }
 }
 
@@ -6709,12 +6718,8 @@ export class WorkflowEngine implements Engine {
       if (logger && logger.error) {
         logger.error(`Error in updateActivity: ${error.message}`);
       }
-      // Return session context with error information
-      if (engineSessionContext) {
-        engineSessionContext.response = `Error: ${error.message}`;
-        return engineSessionContext;
-      }
-      // If no session context provided, we can't return it - this should not happen
+      // Let errors propagate to the host — the host distinguishes
+      // JSFEExecutionError (user-facing) from other errors (intent detection failures)
       throw error;
     }
   }
