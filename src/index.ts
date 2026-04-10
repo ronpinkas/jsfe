@@ -445,7 +445,7 @@ export interface ContextEntry {
 
 // AI Intelligence Callback Interface - (can be null for demo/test mode)
 // If null, engine will only match flows by exact id or name (no AI intent detection)
-export type AiCallbackFunction = ((systemInstruction: string, userMessage: string) => Promise<string>) | null;
+export type AiCallbackFunction = ((systemInstruction: string, userMessage: string, jsonSchema?: string) => Promise<string>) | null;
 
 // Engine Session Context - Encapsulates all session-specific state
 // This object should be maintained by the host application for each user session
@@ -2974,16 +2974,17 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
  * @param timeoutMs - Timeout in milliseconds for the AI call
  * @returns AI response as string
  */
-async function fetchAiResponse(systemInstruction: string, userMessage: string, aiCallback: AiCallbackFunction, timeoutMs: number = 1000): Promise<string> {
+async function fetchAiResponse(systemInstruction: string, userMessage: string, aiCallback: AiCallbackFunction, timeoutMs: number = 1000, jsonSchema?: string): Promise<string> {
   try {
-    logger.debug(`fetchAiResponse called with system instruction length: ${systemInstruction.length}, user message: "${userMessage}", timeout: ${timeoutMs}ms`);
+    logger.debug(`fetchAiResponse called with system instruction length: ${systemInstruction.length}, user message: "${userMessage}", timeout: ${timeoutMs}ms, jsonMode: ${!!jsonSchema}`);
 
     if (!aiCallback) {
       throw new Error('aiCallback is null. AI-powered features are not available.');
     }
 
     // Use the user-provided AI callback function with timeout
-    const aiResponse = await withTimeout(aiCallback(systemInstruction, userMessage), timeoutMs);
+    // Pass jsonSchema so the host can configure the API for structured output
+    const aiResponse = await withTimeout(aiCallback(systemInstruction, userMessage, jsonSchema), timeoutMs);
 
     if (typeof aiResponse !== 'string') {
       throw new Error('AI callback must return a string response');
@@ -3054,7 +3055,7 @@ async function fetchAiTask(
       userMessage += `\n\n<available-flows>\n${flowDescriptions}\n</available-flows>`;
     }
 
-    const aiResponse = await fetchAiResponse(systemMessage, userMessage, aiCallback, timeoutMs);
+    const aiResponse = await fetchAiResponse(systemMessage, userMessage, aiCallback, timeoutMs, jsonSchema);
 
     // If JSON schema was provided, parse and return JSON
     if (jsonSchema) {
