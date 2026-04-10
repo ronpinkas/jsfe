@@ -3156,15 +3156,14 @@ export async function detectFlowWithParameters(input: string, engine: Engine): P
       type: "json_schema",
       json_schema: {
         name: "detect_flow",
-        strict: true,
+        strict: false,
         schema: {
           type: "object",
           properties: {
             flowName: { type: "string" },
-            parameters: { type: "object", additionalProperties: { type: "string" } }
+            parameters: { type: "object" }
           },
-          required: ["flowName", "parameters"],
-          additionalProperties: false
+          required: ["flowName"]
         }
       }
     });
