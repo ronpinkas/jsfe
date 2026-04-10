@@ -3034,8 +3034,16 @@ async function fetchAiTask(
     systemMessage += `<rules>\n${rules}</rules>`;
 
     // Add JSON schema instructions if provided
+    // jsonSchema is an OpenAI-compatible response_format wrapper — extract inner schema for prompt
     if (jsonSchema) {
-      systemMessage += `\n\n<json-schema>\n${jsonSchema}\n</json-schema>\n\n`;
+      let schemaForPrompt = jsonSchema;
+      try {
+        const parsed = JSON.parse(jsonSchema);
+        if (parsed.json_schema?.schema) {
+          schemaForPrompt = JSON.stringify(parsed.json_schema.schema);
+        }
+      } catch { /* use as-is if not parseable */ }
+      systemMessage += `\n\n<json-schema>\n${schemaForPrompt}\n</json-schema>\n\n`;
       systemMessage += `<instructions>\nRespond ONLY with valid JSON matching the schema above. No additional text or explanation.\n</instructions>`;
     }
 
@@ -3145,12 +3153,20 @@ export async function detectFlowWithParameters(input: string, engine: Engine): P
 `;
 
     const jsonSchema = JSON.stringify({
-      type: "object",
-      properties: {
-        flowName: { type: "string" },
-        parameters: { type: "object" }
-      },
-      required: ["flowName"]
+      type: "json_schema",
+      json_schema: {
+        name: "detect_flow",
+        strict: true,
+        schema: {
+          type: "object",
+          properties: {
+            flowName: { type: "string" },
+            parameters: { type: "object", additionalProperties: { type: "string" } }
+          },
+          required: ["flowName", "parameters"],
+          additionalProperties: false
+        }
+      }
     });
 
     // Use chat context when not in a flow (this is where lastChatTurn context is relevant)
@@ -6060,12 +6076,24 @@ ${flowContext}
 ${context}`;
   }
 
-  const jsonSchema = `{
-  "isStrongIntent": true/false,
-  "targetFlow": "FlowName" or null,
-  "confidence": 0.0-1.0,
-  "reasoning": "brief explanation"
-}`;
+  const jsonSchema = JSON.stringify({
+    type: "json_schema",
+    json_schema: {
+      name: "intent_analysis",
+      strict: true,
+      schema: {
+        type: "object",
+        properties: {
+          isStrongIntent: { type: "boolean" },
+          targetFlow: { type: ["string", "null"] },
+          confidence: { type: "number" },
+          reasoning: { type: "string" }
+        },
+        required: ["isStrongIntent", "targetFlow", "confidence", "reasoning"],
+        additionalProperties: false
+      }
+    }
+  });
 
   try {
     const analysis = await fetchAiTask(task, rules, context, input, flowsMenu, jsonSchema, engine.aiCallback, engine.aiTimeOut);
