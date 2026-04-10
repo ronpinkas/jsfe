@@ -3163,7 +3163,7 @@ export async function detectFlowWithParameters(input: string, engine: Engine): P
             flowName: { type: "string" },
             parameters: { type: "object" }
           },
-          required: ["flowName"]
+          required: ["flowName", "parameters"]
         }
       }
     });
