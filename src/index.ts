@@ -2565,14 +2565,32 @@ function getCurrentFlowFrame(engine: Engine): FlowFrame {
 
 async function detectLanguage(input: string, engine: Engine): Promise<string> {
   // Use fetchAiTask() to detect language from input
-  const task = `Detect the language of the following text and respond with the ISO 639-1 language code (e.g., 'en' for English, 'es' for Spanish, 'fr' for French, etc.). If unsure, respond with 'unknown'.\n\nText: "${input}"\n\nLanguage Code:`;
-  const rules = `Respond with only the ISO 639-1 language code or 'unknown'. No explanations.`;
+  const task = `Detect the language of the following text and respond with ONLY the ISO 639-1 two-letter language code (e.g., en, es, fr, de, pt, zh, ja, ko, ar, hi). If unsure, respond with unknown.`;
+  const rules = `Respond with ONLY a two-letter ISO 639-1 language code or unknown. No XML tags, no quotes, no punctuation, no explanation — just the code.`;
 
   try {
-    const language = await fetchAiTask(task, rules, '', input, undefined, undefined, engine.aiCallback, engine.aiTimeOut);
-    if (language && (language === 'unknown' || language.length !== 2)) {
+    const rawResponse = await fetchAiTask(task, rules, '', input, undefined, undefined, engine.aiCallback, engine.aiTimeOut);
+
+    // Strip XML/HTML tags, quotes, whitespace — models may mirror the XML prompt structure
+    let language = String(rawResponse || '')
+      .replace(/<[^>]+>/g, '')  // strip XML/HTML tags
+      .replace(/['"`]/g, '')    // strip quotes and backticks
+      .trim()
+      .toLowerCase();
+
+    // Extract a two-letter ISO 639-1 code if buried in longer text (e.g., "Language: es")
+    // Use last match — the actual answer tends to appear at the end of explanatory text
+    if (language.length !== 2) {
+      const matches = [...language.matchAll(/\b([a-z]{2})\b/g)];
+      language = matches.length ? matches[matches.length - 1][1] : language;
+    }
+
+    if (!language || language === 'unknown' || language.length !== 2) {
+      logger.warn(`detectLanguage: could not extract valid language code from AI response: "${String(rawResponse).substring(0, 100)}"`);
       return '';
     }
+
+    logger.info(`detectLanguage: detected "${language}" from input: "${input.substring(0, 50)}"`);
     return language;
   } catch (error: unknown) {
     logger.error("Error detecting language:", error instanceof Error ? error.message : String(error));
