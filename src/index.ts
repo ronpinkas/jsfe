@@ -3051,21 +3051,16 @@ async function fetchAiTask(
     let systemMessage = `<task>\n${task}\n</task>\n\n`;
     systemMessage += `<rules>\n${rules}</rules>`;
 
-    //TODO: REVIEW
-    // Hack to overcome models deferior support for paramaters when using HSON Schema mode.
-    let jsonSchemaArgument: string | undefined = jsonSchema;
-
     // Add JSON schema instructions if provided
     // jsonSchema is an OpenAI-compatible response_format wrapper — extract inner schema for prompt
+    // Always pass jsonSchema to aiCallback so the host can validate JSON responses.
+    // The host decides whether to enforce json_mode (response_format) based on the schema name.
     if (jsonSchema) {
       let schemaForPrompt = jsonSchema;
       try {
         const parsed = JSON.parse(jsonSchema);
         if (parsed.json_schema?.schema) {
           schemaForPrompt = JSON.stringify(parsed.json_schema.schema);
-        }
-        if (parsed.json_schema?.name === 'detect_flow') {
-          jsonSchemaArgument = undefined;
         }
       } catch { /* use as-is if not parseable */ }
       systemMessage += `\n\n<json-schema>\n${schemaForPrompt}\n</json-schema>\n\n`;
@@ -3088,7 +3083,7 @@ async function fetchAiTask(
       userMessage += `\n\n<available-flows>\n${flowDescriptions}\n</available-flows>`;
     }
 
-    const aiResponse = await fetchAiResponse(systemMessage, userMessage, aiCallback, timeoutMs, jsonSchemaArgument);
+    const aiResponse = await fetchAiResponse(systemMessage, userMessage, aiCallback, timeoutMs, jsonSchema);
 
     // If JSON schema was provided, parse and return JSON
     if (jsonSchema) {
