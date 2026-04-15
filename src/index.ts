@@ -2038,6 +2038,13 @@ function interpolateObject(obj: unknown, data: unknown, args: ArgsType = {}, eng
          const interpolatedKey = interpolateObject(key, data, args, engine);
          newKey = String(interpolatedKey);
       }
+      // Guard against empty-string keys — typically from templates that
+      // resolved to undefined/empty. Persisting such an object to DynamoDB
+      // fails with "ValidationException: Empty attribute name".
+      if (newKey === '' || newKey.trim() === '') {
+         logger.warn(`interpolateObject: skipping empty key (original="${key}")`);
+         continue;
+      }
       result[newKey] = interpolateObject(value, data, args, engine);
     }
     return result;
@@ -3203,7 +3210,19 @@ export async function detectFlowWithParameters(input: string, engine: Engine): P
     if (aiResponse && aiResponse.flowName && aiResponse.flowName !== 'None' && aiResponse.flowName !== 'null') {
       const flow = flowsMenu.find(flow => flow.name.toLowerCase() === aiResponse.flowName.toLowerCase() || flow.id === aiResponse.flowName);
       if (flow) {
-        return { flow, parameters: aiResponse.parameters };
+        // Defensive: strip empty-string keys from AI-generated parameters.
+        // AI occasionally emits { "": value } which would cascade into flow
+        // variables and eventually break DynamoDB persistence on the host.
+        let parameters = aiResponse.parameters;
+        if (parameters && typeof parameters === 'object') {
+          const entries = Object.entries(parameters);
+          const filtered = entries.filter(([k]) => k && k.trim() !== '');
+          if (filtered.length !== entries.length) {
+            logger.warn(`detectFlowWithParameters: stripped ${entries.length - filtered.length} empty-key parameter(s) from AI response for flow "${flow.name}"`);
+            parameters = Object.fromEntries(filtered);
+          }
+        }
+        return { flow, parameters };
       } else {
         logger.error(`Flow "${aiResponse.flowName}" not found in flows menu`);
       }
