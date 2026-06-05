@@ -489,7 +489,6 @@ export interface FlowStep {
   digits?: unknown; // Digit collection configuration for SAY-GET steps (exposed to sessionContext.cargo for platform integration like Twilio ConversationRelay)
   [key: string]: unknown; // Allow for value-xx properties and future extensions
   name?: string;
-  nextFlow?: string;
   callType?: 'call' | 'replace' | 'reboot';
   branches?: Record<string, FlowStep>;  // SWITCH branches contain single steps, not arrays
   _branchOrder?: string[];  // Preserved key order for branches - survives unordered serialization (e.g. DynamoDB Maps)
@@ -4342,7 +4341,7 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
     const flowsMenu = engine.flowsMenu; // Access the global flows menu
 
     // Get raw flow name, then interpolate if it contains template syntax
-    const rawFlowName = step.value || step.name || step.nextFlow;
+    const rawFlowName = step.value || step.name;
     const subFlowName = rawFlowName && rawFlowName.includes('{{')
       ? interpolateMessage(rawFlowName, currentFlowFrame.contextStack, currentFlowFrame.variables, engine)
       : rawFlowName;
@@ -6509,7 +6508,7 @@ export class WorkflowEngine implements Engine {
    * @param globalVariables - Optional global variables shared across all new flows
    * @param validateOnInit - Whether to perform validation on initialization (default: true)
    * @param language - Optional language code for localization
-   * @param aiTimeOut - Optional timeout in milliseconds for AI calls (default: 1000ms)
+   * @param aiTimeOut - Optional timeout in milliseconds for AI calls (default: 2000ms)
    * @param messageRegistry - Optional message registry for custom messages
    * @param guidanceConfig - Optional guidance configuration for AI interactions
    * @example
