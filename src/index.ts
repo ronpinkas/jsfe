@@ -6690,6 +6690,35 @@ export class WorkflowEngine implements Engine {
         // Detect intent to activate a flow or switch flows
         const responseOrNull = await processActivity(String(contextEntry.content), userId, this);
 
+        // Anomaly guard: a flow is STILL ACTIVE but produced no response.
+        // Detect activity by frame EXISTENCE, not by the response value: a frame
+        // still on the stack means the last step did not RETURN, so the flow is
+        // genuinely active and should have produced output (a SAY/SAY-GET).
+        // This deliberately does NOT flag the legitimate "flow is done" case where
+        // a step intentionally returns an empty string (e.g. RETURN "") to relegate
+        // the turn back to the host — RETURN terminates all flows, so no frame
+        // remains and activeFrames is empty.
+        const activeFrames = (this.flowStacks || []).flat().filter(Boolean);
+        if (activeFrames.length > 0 &&
+            (responseOrNull === null || responseOrNull === undefined || responseOrNull === '')) {
+          const activeFlowNames = activeFrames.map((f: any) => f?.flowName || f?.name || '?').join(', ');
+          // Self-protect: the engine left a flow active with no deliverable output —
+          // an inconsistent state it produced. Reset the flow stacks to a clean
+          // baseline (cargo/globalVariables are kept) so the NEXT iteration of this
+          // session starts deterministically with fresh intent detection, regardless
+          // of host behavior — the engine must not leave its own invariants violated.
+          // initializeFlowStacks(engine) resets the stacks AND clears the accumulated
+          // message buffer (getAndClearAccumulatedMessages) — one clean baseline.
+          initializeFlowStacks(this);
+          // Then signal the host with a distinctly-named error (NOT a
+          // JSFEExecutionError, which would surface a user-facing message): the host
+          // logs it, records it in its error list, and the dedicated name lets it
+          // know the state was already self-healed (so it can skip any rollback).
+          const err = new Error(`Active flow(s) [${activeFlowNames}] produced an empty response (${JSON.stringify(responseOrNull)}); the last step yielded no output and was not a RETURN. Flow stacks were reset to a clean state.`);
+          err.name = 'JSFEActiveFlowEmptyResponse';
+          throw err;
+        }
+
         // Store user turn in lastChatTurn if not in a flow
         if (responseOrNull === null) {
           this.sessionContext!.lastChatTurn.user = contextEntry;
