@@ -2,7 +2,7 @@
 
 ## 📖 Documentation
 
-- **[JavaScript Flow Engine User Guide](JavaScript%20Flow%20Engine.md)** - Comprehensive tutorials, examples, and best practices (this document)
+- **[JavaScript Flow Engine User Guide](user-guide.md)** - Comprehensive tutorials, examples, and best practices (this document)
 - **[README.md](README.md)** - Technical API reference and quick start guide
 
 *For technical API documentation, installation instructions, and architecture overview, see the **[README.md](README.md)**.*
