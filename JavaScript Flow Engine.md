@@ -11,7 +11,7 @@
 
 [Introduction: JavaScript Flow Engine Overview](#introduction-javascript-flow-engine-overview)
 
-1. [TOOL-CALL Support: Complete Integration Guide](#chapter-1-tool-call-support-complete-integration-guide)
+1. [CALL-TOOL Support: Complete Integration Guide](#chapter-1-call-tool-support-complete-integration-guide)
 2. [Variable Management and Expression System](#chapter-2-variable-management-and-expression-system)
 3. [Workflows and Step Types](#chapter-3-workflows-and-step-types)
 4. [Conditional Execution and Advanced Branching](#chapter-4-conditional-execution-and-advanced-branching)
@@ -360,8 +360,11 @@ sessionContext.cargo.temporaryState = {
 The `aiCallback` parameter provides the engine access to your AI system for intent detection and workflow triggering. Here's a minimal implementation example:
 
 ```javascript
-// Minimal AI callback implementation
-async function aiCallback(systemInstruction, userMessage) {
+// Minimal AI callback implementation.
+// The engine passes an optional third argument, jsonSchema. When present, the host
+// should request structured (JSON) output from the model conforming to that schema
+// (e.g. OpenAI response_format: { type: "json_schema", json_schema: ... }).
+async function aiCallback(systemInstruction, userMessage, jsonSchema) {
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -1178,15 +1181,15 @@ Safe expression evaluation with multiple security levels:
 
 ---
 
-# Chapter 1: TOOL-CALL Support: Complete Integration Guide
+# Chapter 1: CALL-TOOL Support: Complete Integration Guide
 
 ## Overview
 
-The JavaScript Flow Engine's TOOL-CALL system provides a sophisticated, secure, and flexible way to integrate external tools and APIs into your workflows. It supports multiple implementation types, comprehensive response mapping, advanced error handling, and robust security features.
+The JavaScript Flow Engine's CALL-TOOL system provides a sophisticated, secure, and flexible way to integrate external tools and APIs into your workflows. It supports multiple implementation types, comprehensive response mapping, advanced error handling, and robust security features.
 
 ## Core Concepts
 
-### What is a TOOL-CALL Step?
+### What is a CALL-TOOL Step?
 
 A `CALL-TOOL` step in your workflow executes external tools, whether they are:
 - **Local Functions**: Secure, pre-approved JavaScript functions
@@ -3543,7 +3546,7 @@ Here's a complete example showing a weather tool integration:
 
 ---
 
-This completes the TOOL-CALL support chapter. The system provides enterprise-grade tool integration with comprehensive security, error handling, and response transformation capabilities.
+This completes the CALL-TOOL support chapter. The system provides enterprise-grade tool integration with comprehensive security, error handling, and response transformation capabilities.
 
 ---
 
@@ -4497,6 +4500,62 @@ All step types support error handling through various mechanisms:
   }
 }
 ```
+
+### Step-Level Input Validation
+
+`CALL-TOOL` and `SAY-GET` steps can validate collected input *before* the tool runs, using an `inputValidation` block with regex `patterns` and/or a named `customValidator` (resolved from `APPROVED_FUNCTIONS`):
+
+```javascript
+{
+  id: "collect-amount",
+  type: "SAY-GET",
+  variable: "amount",
+  value: "How much would you like to pay?",
+  inputValidation: {
+    patterns: [
+      {
+        field: "amount",
+        pattern: "^\\$?\\d+(\\.\\d{1,2})?$",
+        message: "Please enter a valid amount (e.g., 25.50 or $25.50)"
+      }
+    ],
+    customValidator: "validatePaymentAmount"   // optional: a function registered in APPROVED_FUNCTIONS
+  }
+}
+```
+
+Each pattern checks one `field` against a regex; on mismatch the step surfaces that pattern's `message`. The optional `customValidator` names an `APPROVED_FUNCTIONS` entry for logic a regex cannot express.
+
+### Step-Level Retry Configuration
+
+Any step can declare automatic retry behavior. By default a failing step retries up to **2** times before its `onFail` (or an engine-generated default) is invoked. Tune it with:
+
+| Field | Purpose |
+|---|---|
+| `maxRetries` | Maximum automatic retries (default 2) |
+| `retryDelay` | Delay between retries, in milliseconds |
+| `retryStrategy` | Backoff: `immediate` \| `exponential` \| `linear` \| `manual` |
+| `retryOnConditions` | Retry only when the error matches a rule: `{ errorPattern, action, fallbackStep? }` |
+
+```javascript
+{
+  id: "process-payment",
+  type: "CALL-TOOL",
+  tool: "PaymentProcessor",
+  maxRetries: 2,
+  retryStrategy: "exponential",
+  retryOnConditions: [
+    { errorPattern: "timeout|network", action: "retry" },
+    { errorPattern: "invalid.*amount", action: "ask_user" }
+  ],
+  onFail: {
+    type: "SAY",
+    value: "Payment processing is unavailable right now. Please try again later."
+  }
+}
+```
+
+`retryOnConditions[].action` is one of `retry`, `skip`, `ask_user`, or `fallback` (the last with an optional `fallbackStep`). When no condition matches, the step falls through to `onFail`.
 
 ## Best Practices for Workflow Design
 

@@ -94,7 +94,7 @@ The WorkflowEngine constructor accepts the following parameters in order, each s
 
 **2. aiCallback** (Function)
 - **Purpose**: AI communication function for intent detection and response generation
-- **Signature**: `async (systemInstruction: string, userMessage: string) => string`
+- **Signature**: `async (systemInstruction: string, userMessage: string, jsonSchema?: string) => string` — the optional `jsonSchema`, when supplied by the engine, asks the host to request structured/JSON output conforming to that schema
 - **Integration**: Engine calls this function when AI analysis is needed
 - **Requirements**: Must return AI response as string, handle errors gracefully
 - **Details**: See dedicated AI Callback Function section below
@@ -235,8 +235,10 @@ const noTimeoutEngine = new WorkflowEngine(logger, aiCallback, flows, tools, fun
 The `aiCallback` parameter provides the engine access to your AI system for intent detection and workflow triggering. Here's a minimal implementation example:
 
 ```javascript
-// Minimal AI callback implementation
-async function aiCallback(systemInstruction, userMessage) {
+// Minimal AI callback implementation.
+// The engine passes an optional third arg, jsonSchema; when present, request
+// structured/JSON output from the model conforming to it.
+async function aiCallback(systemInstruction, userMessage, jsonSchema) {
   try {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -799,6 +801,18 @@ their original workflow seamlessly.
 - ✅ **CASE** - Conditional branching with expressions
 - ✅ **SWITCH** - Conditional branching based on single value matching
 - ✅ **RETURN** - Terminate all flows and return evaluated expression value
+
+### Step Reliability: Validation & Retry
+Any step can also declare:
+- **`inputValidation`** — regex `patterns` (`field` / `pattern` / `message`) and/or a named `customValidator` from `APPROVED_FUNCTIONS`, applied to collected input before the step runs.
+- **Automatic retry** — `maxRetries` (default 2), `retryDelay`, `retryStrategy` (`immediate` / `exponential` / `linear` / `manual`), and `retryOnConditions` (`errorPattern` → `action`), falling through to `onFail` once exhausted.
+
+### Default Timeouts
+- AI callback (`aiTimeOut`): **2000 ms**
+- HTTP / REST tool calls: **20000 ms**
+- Local function tool calls: **5000 ms**
+
+Each tool may override its own `timeout`.
 
 ### Expression System
 
