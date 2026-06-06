@@ -431,7 +431,7 @@ export function getFlowPrompt(engine: Engine, flowName: string): string {
 }
 
 // === TYPE DEFINITIONS ===
-export type StepType = 'SAY' | 'SAY-GET' | 'SET' | 'CALL-TOOL' | 'FLOW' | 'SWITCH' | 'CASE' | 'RETURN';
+export type StepType = 'SAY' | 'SAY-GET' | 'SET' | 'CALL-TOOL' | 'FLOW' | 'SWITCH' | 'CASE' | 'RETURN' | 'END';
 
 // Enhanced context tracking with role information
 export interface ContextEntry {
@@ -2958,6 +2958,8 @@ async function playStep(currentFlowFrame: FlowFrame, engine: Engine): Promise<st
         return await handleCaseStep(currentFlowFrame, engine);
       case 'RETURN':
         return handleReturnStep(currentFlowFrame, engine);
+      case 'END':
+        return handleEndStep(currentFlowFrame);
       default:
         throw new Error(`Unknown step type: ${step.type}`);
     }
@@ -4343,6 +4345,20 @@ function handleReturnStep(currentFlowFrame: FlowFrame, engine: Engine): string {
 
   // Return the evaluated value as string
   return String(returnValue);
+}
+
+function handleEndStep(currentFlowFrame: FlowFrame): string {
+  // END = return from the CURRENT flow only (a functional `return`), in contrast
+  // to RETURN which terminates ALL flows (effectively an EXIT). Clearing this
+  // frame's remaining steps lets the playFlowFrame loop's normal completion path
+  // pop the frame, flush any pending accumulated messages (and drop the tentative
+  // flow_init), and resume the parent flow if there is one. So END inherits all
+  // of that behavior for free. No value is evaluated — variables are already
+  // shared with the parent flow.
+  const flowName = currentFlowFrame.flowName;
+  currentFlowFrame.flowStepsStack.length = 0;
+  logger.info(`END step: ending flow '${flowName}', returning control to the parent flow (if any).`);
+  return `Flow '${flowName}' ended`;
 }
 
 async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): Promise<string> {
@@ -7383,7 +7399,7 @@ export class WorkflowEngine implements Engine {
     }
 
     // Validate step type
-    const validStepTypes = ['SAY', 'SAY-GET', 'SET', 'SWITCH', 'CASE', 'CALL-TOOL', 'FLOW', 'RETURN'];
+    const validStepTypes = ['SAY', 'SAY-GET', 'SET', 'SWITCH', 'CASE', 'CALL-TOOL', 'FLOW', 'RETURN', 'END'];
     if (!validStepTypes.includes(step.type)) {
       state.errors.push(`Step "${step.id}" in flow "${flowDef.name}" has invalid type: ${step.type}`);
       return;

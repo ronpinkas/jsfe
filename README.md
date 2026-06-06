@@ -800,7 +800,8 @@ their original workflow seamlessly.
 - ✅ **FLOW** - Sub-flow execution with multiple call types
 - ✅ **CASE** - Conditional branching with expressions
 - ✅ **SWITCH** - Conditional branching based on single value matching
-- ✅ **RETURN** - Terminate all flows and return evaluated expression value
+- ✅ **RETURN** - Terminate all flows and return evaluated expression value (an EXIT/abort)
+- ✅ **END** - Return from the current flow only, resuming the parent flow — a functional `return` (no value; variables are shared with the parent)
 
 ### Step Reliability: Validation & Retry
 Any step can also declare:

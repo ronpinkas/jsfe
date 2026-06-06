@@ -4223,6 +4223,46 @@ Variables operate at multiple levels:
 - **Stack Cleanup**: Clears all flow stacks to ensure clean state
 - **Audit Logging**: Logs flow termination with reason
 
+### END Steps - Return From the Current Flow
+
+**Purpose**: End the **current** flow only and resume its parent flow (if any) — a functional `return`, in contrast to `RETURN`, which terminates **all** flows (an `EXIT`/abort). Use it to exit a flow early, or to give a `CASE`/`SWITCH` branch a clean "done, nothing more to do" outcome instead of NOOP hacks.
+
+```javascript
+{
+  id: "done",
+  type: "END"
+}
+```
+
+**Key Features:**
+- **Current-Flow Only**: Pops just the current flow frame; the parent flow resumes where it left off. Compare with `RETURN`, which clears the entire stack.
+- **Natural Completion**: Behaves exactly like the flow running out of steps — pending SAY messages are flushed and delivered, the tentative `flow_init` is dropped, and the parent continues. It simply happens *early* and *explicitly*.
+- **No Value**: `END` takes no `value`. Flows already share variables with their parent, so results pass via variables (as on normal completion). Use `RETURN` when you need to emit a final response value and stop everything.
+
+**Common Use Cases:**
+```javascript
+// A CASE branch that should do nothing further and hand back to the parent
+{
+  id: "route",
+  type: "CASE",
+  branches: {
+    "condition: alreadyHandled": { id: "noop", type: "END" },
+    "default": { id: "proceed", type: "SET", variable: "next", value: "'continue'" }
+  }
+}
+
+// Early exit from the current sub-flow once a condition is met — skips its
+// remaining steps but keeps the parent flow alive
+{
+  id: "skip-rest",
+  type: "END"
+}
+```
+
+**END vs RETURN:**
+- `END` — return from the **current** flow to its parent (functional `return`). No value.
+- `RETURN` — terminate **all** flows and emit the evaluated value as the final response (an `EXIT`/abort).
+
 ## Step Execution Lifecycle
 
 ### 1. Step Preparation
