@@ -2771,6 +2771,16 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
         Array.prototype.push.apply(accumulatedMessages, engine.getAndClearAccumulatedMessages!());
       }
 
+      // Drop the tentative flow_init placeholder ("Processing …") when real output
+      // followed — mirrors the SAY-GET handling. A flow that completes WITHOUT ever
+      // hitting a SAY-GET (e.g. the live-agent -> reboot-to-contact path) would
+      // otherwise leak that placeholder into the response.
+      if (engine.getTentativeFlowInit() && accumulatedMessages.length > 1) {
+        accumulatedMessages.shift();
+        engine.setTentativeFlowInit(false);
+        logger.info(`Flow completion dropped tentative flow_init (kept ${accumulatedMessages.length} message(s)).`);
+      }
+
       if (accumulatedMessages.length > 0) {
         finalUserMessage = accumulatedMessages.join('\n\n');
         logger.info(`Flow ${completedFlow.flowName} completed with ${accumulatedMessages.length} accumulated messages`);
