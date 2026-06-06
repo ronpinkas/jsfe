@@ -3771,8 +3771,12 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
           }
         }
 
-        // Initialize completely fresh stack system (using proven pattern)
-        initializeFlowStacks(engine);
+        // Reset the stacks only — NOT the accumulated message buffer, so any
+        // user-facing SAY emitted before the failure carries into the onFail
+        // reboot target and is delivered with its output (same as the FLOW-step
+        // reboot). The free initializeFlowStacks(engine) would also clear the
+        // buffer via getAndClearAccumulatedMessages().
+        engine.initializeFlowStacks();
 
         // Start the onFail flow as a new root flow
         if (onFailStep.type === "FLOW") {
@@ -4399,8 +4403,13 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
       exitedFlows.push(currentFlowFrame.flowName);
       auditLogger.logFlowExit(currentFlowFrame.flowName, currentFlowFrame.userId, currentFlowFrame.transaction.id, 'system_reboot');
 
-      // Initialize completely fresh stack system (using proven pattern)
-      initializeFlowStacks(engine);
+      // Reset the stacks only — NOT the accumulated message buffer. Any SAY
+      // emitted before this reboot (e.g. "our live agent team isn't available
+      // right now") must carry into the reboot target and be delivered with its
+      // output. The free initializeFlowStacks(engine) ALSO calls
+      // getAndClearAccumulatedMessages(), which silently dropped those pending
+      // user-facing messages.
+      engine.initializeFlowStacks();
 
       // Start the reboot flow as the only flow in the system
       const transaction = TransactionManager.create(subFlow.name, 'reboot', currentFlowFrame.userId);
