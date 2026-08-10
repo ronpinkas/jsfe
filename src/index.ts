@@ -462,6 +462,7 @@ export type AiCallbackFunction = ((systemInstruction: string, userMessage: strin
  * @property {string | null} [response] - Latest response from flow processing
  * @property {TransactionData[]} [completedTransactions] - Completed transactions for host access
  * @property {Record<string, unknown> | undefined} cargo - Additional session data for host use
+ * @property {FlowOutcome} [lastFlowOutcome] - Declared outcome of a flow that TERMINATED this turn (one-shot, cleared at the start of each updateActivity)
  */
 export interface EngineSessionContext {
   sessionId: string;
@@ -477,6 +478,31 @@ export interface EngineSessionContext {
   cargo: Record<string, unknown> | undefined; // Additional session data
   language?: string; // Language for this session
   hasTentativeFlowInit?: boolean; // Flag to track if tentative flow_init message should be dropped by SAY-GET
+  lastFlowOutcome?: FlowOutcome; // Declared outcome of a flow that terminated THIS turn (one-shot)
+}
+
+/**
+ * Host-facing outcome a flow declares about its own ending, via an optional
+ * `outcome` (+ `reason`) attribute on a terminal step (RETURN / END / final SAY):
+ *
+ *   { "type": "RETURN", "value": "''", "outcome": "unresolved", "reason": "otp_retries_exhausted" }
+ *
+ * Semantics:
+ *   - 'unresolved': the flow ended WITHOUT resolving the user's need — its
+ *     transaction is marked failed (not completed) and the host can run a
+ *     recovery/post-mortem turn.
+ *   - 'deflected': a decoy ("fake flow") absorbed an intent-detection false
+ *     positive by design — transaction completes; hosts should NOT treat it as
+ *     a user struggle (stats only).
+ *   - 'resolved' (or any other value): informational; transaction completes.
+ *
+ * Flows that declare nothing behave exactly as before.
+ */
+export interface FlowOutcome {
+  flowName: string;
+  outcome: string;
+  reason?: string;
+  endedBy: 'return' | 'completion'; // RETURN terminates all flows; completion = frame ran out of steps (incl. after END)
 }
 
 export interface FlowStep {
@@ -614,6 +640,31 @@ export class TransactionManager {
   }
 }
 
+// Outcome-aware transaction finalization for a TERMINATING flow frame. A frame
+// whose steps declared an outcome (see FlowOutcome) fails its transaction on
+// 'unresolved' (auditable as a failure, not a success) and stamps the one-shot
+// sessionContext.lastFlowOutcome for the host. Undeclared frames complete
+// exactly as before.
+function finalizeFlowTransaction(engine: Engine, frame: FlowFrame, endedBy: FlowOutcome['endedBy']): void {
+  const declared = frame.declaredOutcome;
+  if (declared) {
+    if (declared.outcome === 'unresolved') {
+      TransactionManager.fail(frame.transaction, declared.reason || 'unresolved');
+    } else {
+      TransactionManager.complete(frame.transaction);
+    }
+    engine.stampFlowOutcome({
+      flowName: frame.flowName,
+      outcome: declared.outcome,
+      reason: declared.reason,
+      endedBy: endedBy,
+    });
+    logger.info(`Flow ${frame.flowName} terminated (${endedBy}) with declared outcome '${declared.outcome}'${declared.reason ? ` (${declared.reason})` : ''}`);
+  } else {
+    TransactionManager.complete(frame.transaction);
+  }
+}
+
 export interface FlowFrame {
   flowName: string;
   flowId: string;
@@ -629,6 +680,7 @@ export interface FlowFrame {
   pendingVariableContext?: string; // Question context for AI voice cleanup
   lastSayMessage?: string;
   pendingInterruption?: Record<string, unknown>;
+  declaredOutcome?: { outcome: string; reason?: string }; // From a step's `outcome` attribute — applied when this frame terminates (see FlowOutcome)
   accumulatedMessages?: string[];
   parentTransaction?: string;
   justResumed?: boolean; // Flag to indicate this flow frame was just resumed
@@ -2755,7 +2807,7 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
     if (currentFlowFrame.flowStepsStack.length === 0) {
       logger.info(`Flow ${currentFlowFrame.flowName} completed, popping from stack (steps length: ${currentFlowFrame.flowStepsStack.length})`);
       const completedFlow = popFromCurrentStack(engine)!;
-      TransactionManager.complete(completedFlow.transaction);
+      finalizeFlowTransaction(engine, completedFlow, 'completion');
 
       // When a flow completes, it doesn't "return" a value in the traditional sense.
       // It communicates results by setting variables in the shared `variables` object,
@@ -2851,13 +2903,23 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
       TransactionManager.addStep(currentFlowFrame.transaction, step, result, duration, 'success');
       logger.info(`Step ${step.type} executed successfully, result: ${typeof result === 'object' ? '[object]' : result}`);
 
+      // Declared outcome (see FlowOutcome): remember it on the frame so the
+      // termination paths (completion pop / RETURN) can apply it. RETURN steps
+      // are handled inside handleReturnStep (their frame is gone by now).
+      if (step.outcome !== undefined && step.type !== 'RETURN') {
+        currentFlowFrame.declaredOutcome = {
+          outcome: String(step.outcome),
+          reason: step.reason !== undefined ? String(step.reason) : undefined,
+        };
+      }
+
       // If this was a SAY-GET step, return and wait for user input
       if (step.type === 'SAY-GET') {
         // Check if this was the last step - if so, complete the flow
         if (currentFlowFrame.flowStepsStack.length === 0) {
           logger.info(`SAY-GET step was final step, flow ${currentFlowFrame.flowName} completed`);
           const completedFlow = popFromCurrentStack(engine)!;
-          TransactionManager.complete(completedFlow.transaction);
+          finalizeFlowTransaction(engine, completedFlow, 'completion');
           return result;
         }
         return result;
@@ -4312,6 +4374,15 @@ function handleReturnStep(currentFlowFrame: FlowFrame, engine: Engine): string {
   // Extract what we need from the currentFlowFrame
   const step = currentFlowFrame.flowStepsStack.pop()!; // This handler pops its own step
 
+  // Declared outcome (see FlowOutcome) — applies to the flow executing this RETURN;
+  // parent flows it terminates finalize with their own (usually absent) declaration.
+  if (step.outcome !== undefined) {
+    currentFlowFrame.declaredOutcome = {
+      outcome: String(step.outcome),
+      reason: step.reason !== undefined ? String(step.reason) : undefined,
+    };
+  }
+
   // Evaluate the value expression if provided
   let returnValue: unknown = '';
   if (step.value !== undefined) {
@@ -4334,7 +4405,7 @@ function handleReturnStep(currentFlowFrame: FlowFrame, engine: Engine): string {
     const poppedStack = engine.flowStacks.pop();
     if (poppedStack && poppedStack.length > 0) {
       for (const flow of poppedStack) {
-        TransactionManager.complete(flow.transaction);
+        finalizeFlowTransaction(engine, flow, 'return');
         auditLogger.logFlowExit(flow.flowName, currentFlowFrame.userId, flow.transaction.id, 'return_step');
       }
     }
@@ -6663,6 +6734,11 @@ export class WorkflowEngine implements Engine {
       // Store reference to session context - no copying needed! Engine works directly with session data
       this.sessionContext = engineSessionContext;
 
+      // One-shot semantics: a declared flow outcome belongs to the turn in which
+      // the flow terminated — drop any stale stamp from a prior turn before
+      // processing (finalizeFlowTransaction re-stamps if a flow ends this turn).
+      delete this.sessionContext.lastFlowOutcome;
+
       // DIAGNOSTIC: Log flowStepsStack state from loaded session (before any processing)
       if (engineSessionContext.flowStacks) {
         for (let si = 0; si < engineSessionContext.flowStacks.length; si++) {
@@ -7048,6 +7124,16 @@ export class WorkflowEngine implements Engine {
   setTentativeFlowInit(value: boolean): void {
     if (this.sessionContext) {
       this.sessionContext.hasTentativeFlowInit = value;
+    }
+  }
+
+  // Stamp the one-shot host-facing outcome for a flow that terminated this turn
+  // (sessionContext is private; finalizeFlowTransaction goes through this).
+  stampFlowOutcome(outcome: FlowOutcome): void {
+    if (this.sessionContext) {
+      this.sessionContext.lastFlowOutcome = outcome;
+    } else {
+      logger.warn(`stampFlowOutcome: no sessionContext for flow ${outcome.flowName}`);
     }
   }
 
