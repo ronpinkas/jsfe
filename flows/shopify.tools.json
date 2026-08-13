@@ -17,6 +17,11 @@
         "type": "integer",
         "description": "Maximum number of results to return",
         "default": 5
+      },
+      "language": {
+        "type": "string",
+        "description": "BCP 47 language tag for search relevance / localization (e.g., 'en', 'es'). Falls back to 'en'.",
+        "default": "en"
       }
     },
     "required": [
@@ -29,7 +34,8 @@
       "args": [
         "query",
         "context",
-        "limit"
+        "limit",
+        "language"
       ],
       "timeout": 10000
     },

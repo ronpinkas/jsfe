@@ -81,7 +81,8 @@
         "args": {
           "query": "{{search_query}}",
           "context": "Customer searching via chat",
-          "limit": 5
+          "limit": 5,
+          "language": "{{language}}"
         },
         "onFail": {
           "id": "search_failed",
@@ -97,8 +98,8 @@
           "condition: search_result && search_result.products && search_result.products.length > 0": {
             "id": "show_results",
             "type": "SAY",
-            "value": "Great! Here's what I found for '{{search_query}}':\n\n{{search_result.products.map((p, i) => { const priceDisplay = p.price_range ? (p.price_range.min === p.price_range.max ? `$${p.price_range.min}` : `$${p.price_range.min} - $${p.price_range.max}`) : (p.price ? `$${p.price}` : 'Price varies'); const availableVariants = p.variants ? p.variants.filter(v => v.available) : []; const totalVariants = p.variants ? p.variants.length : 0; const stockStatus = totalVariants === 0 ? '' : availableVariants.length === totalVariants ? 'In Stock' : availableVariants.length > 0 ? `Limited Stock (${availableVariants.length}/${totalVariants} options available)` : 'Out of Stock'; return `${i+1}. ${p.title}\\n   Price: ${priceDisplay}\\n   ${stockStatus}\\n   ${p.url ? 'View: ' + p.url : ''}`; }).join('\\n\\n')}}",
-            "value_es": "¡Genial! Esto es lo que encontré para '{{search_query}}':\n\n{{search_result.products.map((p, i) => { const priceDisplay = p.price_range ? (p.price_range.min === p.price_range.max ? `$${p.price_range.min}` : `$${p.price_range.min} - $${p.price_range.max}`) : (p.price ? `$${p.price}` : 'Precio varía'); const availableVariants = p.variants ? p.variants.filter(v => v.available) : []; const totalVariants = p.variants ? p.variants.length : 0; const stockStatus = totalVariants === 0 ? '' : availableVariants.length === totalVariants ? 'Disponible' : availableVariants.length > 0 ? `Stock Limitado (${availableVariants.length}/${totalVariants} opciones disponibles)` : 'Agotado'; return `${i+1}. ${p.title}\\n   Precio: ${priceDisplay}\\n   ${stockStatus}\\n   ${p.url ? 'Ver: ' + p.url : ''}`; }).join('\\n\\n')}}"
+            "value": "Great! Here's what I found for '{{search_query}}':\n\n{{search_result.products.slice(0, cargo?.voice ? 3 : 5).map((p, i) => { const pMin = p.price_range?.min?.amount != null ? (p.price_range.min.amount / 100).toFixed(2) : p.price_range?.min; const pMax = p.price_range?.max?.amount != null ? (p.price_range.max.amount / 100).toFixed(2) : p.price_range?.max; const priceDisplay = p.price_range ? (pMin === pMax ? `$${pMin}` : `$${pMin} - $${pMax}`) : (p.price ? `$${p.price?.amount != null ? (p.price.amount / 100).toFixed(2) : p.price}` : 'Price varies'); const availableVariants = p.variants ? p.variants.filter(v => v.availability?.available ?? v.available) : []; const totalVariants = p.variants ? p.variants.length : 0; const stockStatus = totalVariants === 0 ? '' : availableVariants.length === totalVariants ? 'In Stock' : availableVariants.length > 0 ? `Limited Stock (${availableVariants.length}/${totalVariants} options available)` : 'Out of Stock'; return `${i+1}. ${p.title}\\n   Price: ${priceDisplay}\\n   ${stockStatus}\\n   ${p.url ? 'View: ' + p.url : ''}`; }).join('\\n\\n')}}",
+            "value_es": "¡Genial! Esto es lo que encontré para '{{search_query}}':\n\n{{search_result.products.slice(0, cargo?.voice ? 3 : 5).map((p, i) => { const pMin = p.price_range?.min?.amount != null ? (p.price_range.min.amount / 100).toFixed(2) : p.price_range?.min; const pMax = p.price_range?.max?.amount != null ? (p.price_range.max.amount / 100).toFixed(2) : p.price_range?.max; const priceDisplay = p.price_range ? (pMin === pMax ? `$${pMin}` : `$${pMin} - $${pMax}`) : (p.price ? `$${p.price?.amount != null ? (p.price.amount / 100).toFixed(2) : p.price}` : 'Precio varía'); const availableVariants = p.variants ? p.variants.filter(v => v.availability?.available ?? v.available) : []; const totalVariants = p.variants ? p.variants.length : 0; const stockStatus = totalVariants === 0 ? '' : availableVariants.length === totalVariants ? 'Disponible' : availableVariants.length > 0 ? `Stock Limitado (${availableVariants.length}/${totalVariants} opciones disponibles)` : 'Agotado'; return `${i+1}. ${p.title}\\n   Precio: ${priceDisplay}\\n   ${stockStatus}\\n   ${p.url ? 'Ver: ' + p.url : ''}`; }).join('\\n\\n')}}"
           },
           "default": {
             "id": "no_results",
@@ -179,17 +180,17 @@
         "id": "set_selected_variant",
         "type": "SET",
         "variable": "selected_variant",
-        "value": "selected_product?.variants?.find(v => v.available) || selected_product?.variants?.[0] || null"
+        "value": "selected_product?.variants?.find(v => v.availability?.available ?? v.available) || selected_product?.variants?.[0] || null"
       },
       {
         "id": "check_variant_valid",
         "type": "CASE",
         "branches": {
-          "condition: selected_variant && selected_variant.variant_id": {
+          "condition: selected_variant && (selected_variant.id ?? selected_variant.variant_id)": {
             "id": "variant_ok",
             "type": "SET",
-            "variable": "proceed",
-            "value": "true"
+            "variable": "variant_gid",
+            "value": "selected_variant.id ?? selected_variant.variant_id"
           },
           "default": {
             "id": "no_variants",
@@ -204,7 +205,7 @@
         "tool": "shopify-store-availability",
         "variable": "store_availability",
         "args": {
-          "variantId": "{{selected_variant.variant_id}}",
+          "variantId": "{{variant_gid}}",
           "city": "{{user_city}}",
           "storeLocations": "{{global_store_locations}}",
           "maxStores": 3
@@ -559,8 +560,8 @@
             "id": "display_detail",
             "type": "SAY",
             "variable": "continue_choice",
-            "value": "Order {{order_detail.order.orderNumber}}\n\nStatus: {{order_detail.order.fulfillmentStatus || 'Processing'}}\nPayment: {{order_detail.order.financialStatus}}\nTotal: ${{order_detail.order.total?.amount}}\n\nItems:\n{{order_detail.order.items.map(item => `- ${item.title} (x${item.quantity})`).join('\\n')}}\n\n{{order_detail.order.fulfillments && order_detail.order.fulfillments.length > 0 && order_detail.order.fulfillments[0].tracking ? 'Tracking: ' + (order_detail.order.fulfillments[0].tracking[0]?.company || '') + ' - ' + (order_detail.order.fulfillments[0].tracking[0]?.number || 'N/A') + (order_detail.order.fulfillments[0].tracking[0]?.url ? '\\nTrack: ' + order_detail.order.fulfillments[0].tracking[0].url : '') : ''}}\n\nShipping to:\n{{order_detail.order.shippingAddress ? order_detail.order.shippingAddress.firstName + ' ' + order_detail.order.shippingAddress.lastName + '\\n' + order_detail.order.shippingAddress.address1 + '\\n' + order_detail.order.shippingAddress.city + ', ' + order_detail.order.shippingAddress.province + ' ' + order_detail.order.shippingAddress.zip : 'N/A'}}\n\nAnything else I can help with?",
-            "value_es": "Pedido {{order_detail.order.orderNumber}}\n\nEstado: {{order_detail.order.fulfillmentStatus || 'Procesando'}}\nPago: {{order_detail.order.financialStatus}}\nTotal: ${{order_detail.order.total?.amount}}\n\nArtículos:\n{{order_detail.order.items.map(item => `- ${item.title} (x${item.quantity})`).join('\\n')}}\n\n{{order_detail.order.fulfillments && order_detail.order.fulfillments.length > 0 && order_detail.order.fulfillments[0].tracking ? 'Rastreo: ' + (order_detail.order.fulfillments[0].tracking[0]?.company || '') + ' - ' + (order_detail.order.fulfillments[0].tracking[0]?.number || 'N/A') + (order_detail.order.fulfillments[0].tracking[0]?.url ? '\\nRastrear: ' + order_detail.order.fulfillments[0].tracking[0].url : '') : ''}}\n\nEnvío a:\n{{order_detail.order.shippingAddress ? order_detail.order.shippingAddress.firstName + ' ' + order_detail.order.shippingAddress.lastName + '\\n' + order_detail.order.shippingAddress.address1 + '\\n' + order_detail.order.shippingAddress.city + ', ' + order_detail.order.shippingAddress.province + ' ' + order_detail.order.shippingAddress.zip : 'N/A'}}\n\n¿Hay algo más en lo que pueda ayudarte?"
+            "value": "Order {{order_detail.order.orderNumber}}\n\nStatus: {{order_detail.order.fulfillmentStatus || 'Processing'}}\nPayment: {{order_detail.order.financialStatus}}\nTotal: ${{order_detail.order.total?.amount}}\n\nItems:\n{{order_detail.order.items.map(item => `- ${item.title} (x${item.quantity})`).join('\\n')}}\n\n{{order_detail.order.fulfillments && order_detail.order.fulfillments.length > 0 && order_detail.order.fulfillments[0].tracking ? 'Tracking: ' + (order_detail.order.fulfillments[0].tracking[0]?.company || '') + ' - ' + (order_detail.order.fulfillments[0].tracking[0]?.number || 'N/A') + (order_detail.order.fulfillments[0].tracking[0]?.url ? '\\nTrack: ' + order_detail.order.fulfillments[0].tracking[0].url : '') : ''}}\n\nShipping to:\n{{(() => { const sa = order_detail.order.shippingAddress; if (!sa) return 'N/A'; const line1 = [sa.firstName, sa.lastName].filter(Boolean).join(' '); const line2 = sa.address1 || ''; const cityProv = [sa.city, sa.province].filter(Boolean).join(', '); const line3 = [cityProv, sa.zip].filter(Boolean).join(' '); const lines = [line1, line2, line3].filter(s => s && s.trim()); return lines.length ? lines.join('\\n') : 'N/A'; })()}}\n\nAnything else I can help with?",
+            "value_es": "Pedido {{order_detail.order.orderNumber}}\n\nEstado: {{order_detail.order.fulfillmentStatus || 'Procesando'}}\nPago: {{order_detail.order.financialStatus}}\nTotal: ${{order_detail.order.total?.amount}}\n\nArtículos:\n{{order_detail.order.items.map(item => `- ${item.title} (x${item.quantity})`).join('\\n')}}\n\n{{order_detail.order.fulfillments && order_detail.order.fulfillments.length > 0 && order_detail.order.fulfillments[0].tracking ? 'Rastreo: ' + (order_detail.order.fulfillments[0].tracking[0]?.company || '') + ' - ' + (order_detail.order.fulfillments[0].tracking[0]?.number || 'N/A') + (order_detail.order.fulfillments[0].tracking[0]?.url ? '\\nRastrear: ' + order_detail.order.fulfillments[0].tracking[0].url : '') : ''}}\n\nEnvío a:\n{{(() => { const sa = order_detail.order.shippingAddress; if (!sa) return 'N/A'; const line1 = [sa.firstName, sa.lastName].filter(Boolean).join(' '); const line2 = sa.address1 || ''; const cityProv = [sa.city, sa.province].filter(Boolean).join(', '); const line3 = [cityProv, sa.zip].filter(Boolean).join(' '); const lines = [line1, line2, line3].filter(s => s && s.trim()); return lines.length ? lines.join('\\n') : 'N/A'; })()}}\n\n¿Hay algo más en lo que pueda ayudarte?"
           },
           "default": {
             "id": "order_not_found",

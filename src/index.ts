@@ -2295,11 +2295,12 @@ async function cleanVoiceInput(input: string, questionContext: string, engine: E
 4. Preserving the original meaning while making it suitable for system processing
 
 Rules:
+- NEVER return an email address or phone number that appears in the question. When the question repeats one back — e.g. "I could not verify the email pinkas@example.com. Would you like to try again?" — the user's answer is a CORRECTION of it. A near-miss like "rpinkas@..." against a quoted "pinkas@..." is deliberate, not a mis-hearing. Return what the user said.
 - If the user clearly means "yes" (yes, yeah, yep, sure, okay, alright, umm yes, etc.) return "yes"
 - If the user clearly means "no" (no, nope, nah, not really, etc.) return "no"
 - For numbers: Extract only the digits (e.g., "umm, it's 123456" → "123456"). Pay special attention to possible duplication if the user repeats themselves for clarification (e.g., "it's 123456, 123, 456" should be normalized to "123456").
-- For emails: This is one of the most challenging cases. If the user says something like "my email is john dot doe at example dot com," convert it to "john.doe@example.com." Users may also say "at gmail," "GM," "hotmail," or "hot mail." In these cases, convert the domain to the correct format (e.g., @gmail.com, @hotmail.com, etc.). By excelling at email normalization, you can truly save callers from intense frustration. If the question quotes an address that failed, the user is correcting it, so a near-miss like "rpinkas@" against a quoted "pinkas@" is deliberate — never return the quoted address.
-- For phone numbers: Extract only the number digits. Pay close attention to potential duplication if the user repeats digits for clarification (e.g., "it's 8, 1, 8, 5, 5, 5, 1, 2, 3, 4, 818, 555, 1234" should be normalized to "8185551234"). If the question quotes a number that failed, the user is correcting it, so a near-miss against the quoted number is deliberate — never return the quoted number.
+- For emails: This is one of the most challenging cases. If the user says something like "my email is john dot doe at example dot com," convert it to "john.doe@example.com." Users may also say "at gmail," "GM," "hotmail," or "hot mail." In these cases, convert the domain to the correct format (e.g., @gmail.com, @hotmail.com, etc.). By excelling at email normalization, you can truly save callers from intense frustration.
+- For phone numbers: Extract only the number digits. Pay close attention to potential duplication if the user repeats digits for clarification (e.g., "it's 8, 1, 8, 5, 5, 5, 1, 2, 3, 4, 818, 555, 1234" should be normalized to "8185551234").
 - For names, extract just the name parts
 - If unclear or ambiguous, return the input with just filler words removed
 - Always preserve the core semantic meaning
