@@ -170,6 +170,14 @@
       "contact_valid": {
         "type": "boolean",
         "description": "Whether the contact may receive an OTP. True when no validator applies; otherwise the validator must set it true (fail-closed)."
+      },
+      "unverified_contact": {
+        "type": "string",
+        "description": "The contact that failed validation, phrased for the retry message ('the number 555…' / 'the email a@b.c'). Computed so cell and email share ONE rejection branch."
+      },
+      "unverified_contact_es": {
+        "type": "string",
+        "description": "Spanish counterpart of unverified_contact."
       }
     },
     "steps": [
@@ -238,29 +246,42 @@
         }
       },
       {
+        "id": "describe_unverified_contact",
+        "type": "SET",
+        "variable": "unverified_contact",
+        "value": "cell_number ? ('the number ' + cell_number) : ('the email ' + email)"
+      },
+      {
+        "id": "describe_unverified_contact_es",
+        "type": "SET",
+        "variable": "unverified_contact_es",
+        "value": "cell_number ? ('el número ' + cell_number) : ('el correo electrónico ' + email)"
+      },
+      {
         "id": "gate_otp_on_contact_valid",
         "type": "CASE",
         "branches": {
-          "condition: !contact_valid && cell_number": {
-            "id": "cell_not_verified",
-            "type": "FLOW",
-            "value": "retry-authenticate-generic",
-            "callType": "replace",
-            "parameters": {
-              "error_message": "Sorry, I could not verify the number {{cell_number}}.",
-              "error_message_es": "Lo siento, no pude verificar el número {{cell_number}}.",
-              "allow_otp_entry": false
-            }
-          },
           "condition: !contact_valid": {
-            "id": "email_not_verified",
+            "id": "contact_not_verified",
             "type": "FLOW",
-            "value": "retry-authenticate-generic",
+            "value": "generic-retry-with-options",
             "callType": "replace",
             "parameters": {
-              "error_message": "Sorry, I could not verify the email {{email}}.",
-              "error_message_es": "Lo siento, no pude verificar el correo electrónico {{email}}.",
-              "allow_otp_entry": false
+              "error_message": "Sorry, I could not verify {{unverified_contact}}.",
+              "error_message_es": "Lo siento, no pude verificar {{unverified_contact_es}}.",
+              "retry_flow": "{{retry_flow}}",
+              "cancel_flow": "{{cancel_flow}}",
+              "capture_patterns": [
+                {
+                  "variable": "cell_number",
+                  "regex": "[0-9\\-\\(\\)\\.\\s]{10,}",
+                  "normalizer": "[^0-9]"
+                },
+                {
+                  "variable": "email",
+                  "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
+                }
+              ]
             }
           },
           "default": {
