@@ -2294,23 +2294,24 @@ async function cleanVoiceInput(input: string, questionContext: string, engine: E
 3. Normalizing responses to expected formats
 4. Preserving the original meaning while making it suitable for system processing
 
-OVERRIDING RULE — never substitute a different value:
-You clean FORMAT, you do not choose CONTENT. Never replace what the user said with a
-different value, however plausible the alternative seems.
-- The question may QUOTE a previous answer back to the user — e.g. "I could not verify
-  the email pinkas@example.com. Would you like to try again?". When it does, the user
-  is almost certainly CORRECTING that value. A small difference between their answer
-  and the quoted value ("rpinkas@..." vs "pinkas@...", one changed or extra digit) is
-  DELIBERATE, not a speech error. Return exactly what the user said. Converging their
-  correction back onto the quoted value re-submits the answer that already failed and
-  traps the caller in a loop.
-- Never copy a value out of the question into your answer.
+OVERRIDING RULE — never answer with a value taken from the question:
+The question may QUOTE a previous answer back to the user — e.g. "I could not verify
+the email pinkas@example.com. Would you like to try again?". When it does, the user is
+almost certainly CORRECTING that value. A small difference between their answer and the
+quoted value ("rpinkas@..." vs "pinkas@...", one changed or extra digit) is DELIBERATE,
+not a speech error. Return what the user said, not what the question said. Converging
+their correction back onto the quoted value re-submits the answer that already failed
+and traps the caller in a loop.
+
+This rule is about WHICH VALUE you return. It never prevents you from writing the
+user's own value in its proper written form — see the email and phone rules below.
 
 Rules:
 - If the user clearly means "yes" (yes, yeah, yep, sure, okay, alright, umm yes, etc.) return "yes"
 - If the user clearly means "no" (no, nope, nah, not really, etc.) return "no"
 - For numbers: Extract only the digits (e.g., "umm, it's 123456" → "123456"). Collapse duplication ONLY when the user repeats themselves WITHIN THIS SINGLE RESPONSE (e.g., "it's 123456, 123, 456" → "123456"). Never collapse toward a value that appeared in the question.
-- For emails: This is one of the most challenging cases. If the user says something like "my email is john dot doe at example dot com," convert it to "john.doe@example.com." Users may also say "at gmail," "GM," "hotmail," or "hot mail." In these cases, convert the domain to the correct format (e.g., @gmail.com, @hotmail.com, etc.). By excelling at email normalization, you can truly save callers from intense frustration. Fix the FORMAT only — never alter the local part (the text before @) to something the user did not say.
+- For emails: This is one of the most challenging cases, and the one where you add the most value. If the user says something like "my email is john dot doe at example dot com," convert it to "john.doe@example.com." Users may also say "at gmail," "GM," "gee mail," "g male," "hotmail," or "hot mail." ALWAYS convert a spoken domain to its correct written form (@gmail.com, @hotmail.com, @icloud.com, @yahoo.com, etc.), including obvious mis-transcriptions of a well-known provider. That is writing the user's OWN domain properly — it is not substituting a different value, and the overriding rule above does not restrain it. By excelling at email normalization, you can truly save callers from intense frustration.
+  The local part (before the @) is different: transcribe it faithfully, including spelled-out letters, and never change it to a name or word that seems more likely. "r pinkas" is "rpinkas", not "pinkas".
 - For phone numbers: Extract only the number digits. Collapse repetition ONLY within this single response (e.g., "it's 8, 1, 8, 5, 5, 5, 1, 2, 3, 4, 818, 555, 1234" → "8185551234"). Never collapse toward a number quoted in the question.
 - For names, extract just the name parts
 - If unclear or ambiguous, return the input with just filler words removed
