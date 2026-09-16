@@ -554,6 +554,83 @@ return aiResponse;
 - **Response checking**: Check `sessionContext.response` to determine if a workflow handled the input
 - **Persistence**: Your application should persist the updated session context between requests
 
+### Host Responsibilities: Tool Calls, Cancellation and Concurrency
+
+A flow can take actions in the outside world through `CALL-TOOL` — charge a card, send an SMS,
+create a ticket. **The session returned by `updateActivity` is the only record that those steps
+already ran.** The engine cannot protect that record once it leaves `updateActivity`; the host
+owns it from there. Getting any of the rules below wrong lets a flow repeat an action the user
+asked for once.
+
+This is not hypothetical. In production a caller confirmed a payment and repeated "confirm" a
+second later. The host cancelled the first turn while its charge was in flight and restored the
+session it had snapshotted before the turn. The flow was back at "Say CONFIRM to pay", the
+repeated word confirmed it again, and the card was charged twice.
+`tests/host-tool-calls.test.mjs` reproduces it.
+
+**1. Never restore a pre-turn session after the turn attempted a tool.**
+`engineSessionContext.lastTurnToolCalls` lists every tool call the most recent `updateActivity`
+attempted. A host may discard or roll back a turn's session only when that list is empty. When it
+is not, persist exactly the session `updateActivity` returned, even if the turn's reply is never
+delivered.
+
+**2. A cancelled turn is still running — wait for it.** Cancelling on the host side (the user
+barged in, a request was abandoned, a host timeout fired) does not stop the engine or a tool it
+is calling. Always `await` the in-flight `updateActivity` before persisting or discarding the
+session, and before passing that session to another `updateActivity` call.
+
+**3. One `updateActivity` at a time per conversation, and per engine instance.** The engine keeps
+a reference to the session it is processing. Two concurrent calls on the same conversation both
+start from the pre-call state and both execute its next step, and concurrent calls on one engine
+instance corrupt each other's session reference. Serialise per conversation (a lock, a queue),
+and make a newer turn wait for an older turn's `updateActivity` to finish rather than proceed
+after a fixed timeout.
+
+**4. Make external side effects idempotent.** The rules above close every gap the engine and host
+can see. They cannot close one: a host process that dies after a tool took effect but before the
+session was persisted. For actions that must never repeat, such as payments, pass an idempotency
+key to the external service (for example a transaction id the flow generates once and stores in a
+variable) so a repeat is rejected at the source.
+
+#### `lastTurnToolCalls`
+
+```typescript
+interface ToolCallRecord {
+  tool: string;              // tool name
+  implementation: string;    // 'local' | 'http' | ...
+  transactionId: string | null;
+  at: number;                // epoch ms
+}
+```
+
+- **One-shot.** Reset at the start of every `updateActivity` call, user or assistant role, so it
+  describes that call only. Read it before making the next `updateActivity` call.
+- **Attempts, not successes.** A record is written before the tool is invoked, including retries
+  and calls that then throw or time out, because those may still have taken effect remotely.
+- **Covers every `CALL-TOOL` step.** Local functions (`APPROVED_FUNCTIONS`) and HTTP tools pass
+  through the same entry point.
+- **Only calls that were attempted.** A call refused before invocation (argument validation,
+  rate limiting) is not recorded, because nothing was sent.
+- **Does NOT cover functions called from expressions.** `APPROVED_FUNCTIONS` are also callable
+  inside templates, `SET` values, conditions and `customValidator`, and those calls are not
+  recorded. This is deliberate: expressions call formatting and matching helpers on nearly every
+  turn, and recording them would make every turn look like it acted, so a host could never discard
+  a turn at all. **Anything with an external side effect must be invoked through `CALL-TOOL`**,
+  never from an expression, or the host cannot see it.
+
+```javascript
+const before = structuredClone(session);
+// Awaited even when the turn is being cancelled: the engine and its tools keep running.
+const after = await engine.updateActivity({ role: 'user', content: input }, session);
+
+if (turnWasCancelled && after.lastTurnToolCalls.length === 0) {
+  session = before;      // nothing happened in the world: safe to discard an unheard prompt
+} else {
+  session = after;       // a tool may have run: keep the record of it
+}
+await persist(session);
+```
+
 ## Architecture Overview
 
 ### Stack-of-Stacks Design

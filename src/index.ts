@@ -479,6 +479,23 @@ export interface EngineSessionContext {
   language?: string; // Language for this session
   hasTentativeFlowInit?: boolean; // Flag to track if tentative flow_init message should be dropped by SAY-GET
   lastFlowOutcome?: FlowOutcome; // Declared outcome of a flow that terminated THIS turn (one-shot)
+  lastTurnToolCalls?: ToolCallRecord[]; // Tool calls ATTEMPTED during the most recent updateActivity (one-shot)
+}
+
+/**
+ * One tool call the engine ATTEMPTED during an updateActivity call — see
+ * EngineSessionContext.lastTurnToolCalls and "Host Responsibilities" in the README.
+ *
+ * Recorded at the entry of callTool, BEFORE anything is sent, for every attempt including
+ * internal retries. It is deliberately an attempt and not a success: a call that timed out
+ * or threw may still have taken effect on the remote side (a card charged, an SMS sent), so
+ * the host must treat any record here as "an external action may have happened".
+ */
+export interface ToolCallRecord {
+  tool: string;
+  implementation: string; // 'local' | 'http' | ...
+  transactionId: string | null;
+  at: number; // epoch ms
 }
 
 /**
@@ -4945,6 +4962,17 @@ function generateSimpleFallbackArgs(schema: any, input: any): any {
 }
 
 async function callTool(engine: Engine, tool: any, args: any, userId: string = 'anonymous', transactionId: string | null = null): Promise<any> {
+  // Recorded BEFORE the try, so every attempt is visible to the host — including one that
+  // throws or times out, which may still have taken effect remotely. This is the single
+  // entry point for local and HTTP tools and for retries (see the retry path below), so a
+  // host that reads lastTurnToolCalls sees every external action this turn may have taken.
+  engine.recordToolCall({
+    tool: String(tool?.name ?? tool?.id ?? 'unknown'),
+    implementation: String(tool?.implementation?.type ?? 'unknown'),
+    transactionId,
+    at: Date.now(),
+  });
+
   try {
     logger.info(`Calling tool ${tool.name} with args:`, args);
 
@@ -6605,6 +6633,22 @@ export class WorkflowEngine implements Engine {
   }
 
   /**
+   * Engine-internal: note a tool call about to be attempted on the current session.
+   * Called by callTool before anything is sent. Public only so the module-level tool
+   * executor can reach the private session; hosts READ the result from
+   * `engineSessionContext.lastTurnToolCalls` and never call this.
+   */
+  recordToolCall(record: ToolCallRecord): void {
+    if (!this.sessionContext) {
+      return; // no active updateActivity — nothing to attribute the call to
+    }
+    if (!Array.isArray(this.sessionContext.lastTurnToolCalls)) {
+      this.sessionContext.lastTurnToolCalls = [];
+    }
+    this.sessionContext.lastTurnToolCalls.push(record);
+  }
+
+  /**
    * Initialize a new EngineSessionContext for a user session.
    * If hostLogger is null, uses the global default logger.
    * @param hostLogger - Logger instance for this session. Must implement info, warn, error, and debug methods.
@@ -6739,6 +6783,11 @@ export class WorkflowEngine implements Engine {
       // the flow terminated — drop any stale stamp from a prior turn before
       // processing (finalizeFlowTransaction re-stamps if a flow ends this turn).
       delete this.sessionContext.lastFlowOutcome;
+
+      // Same one-shot semantics for tool calls: the record describes THIS call only, so a
+      // host deciding whether this turn's session may be discarded is not misled by a tool
+      // that ran on an earlier turn. See recordToolCall and "Host Responsibilities".
+      this.sessionContext.lastTurnToolCalls = [];
 
       // DIAGNOSTIC: Log flowStepsStack state from loaded session (before any processing)
       if (engineSessionContext.flowStacks) {
