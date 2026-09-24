@@ -445,7 +445,36 @@ export interface ContextEntry {
 
 // AI Intelligence Callback Interface - (can be null for demo/test mode)
 // If null, engine will only match flows by exact id or name (no AI intent detection)
-export type AiCallbackFunction = ((systemInstruction: string, userMessage: string, jsonSchema?: string) => Promise<string>) | null;
+//
+// The optional 4th argument, `request`, is the same call in structured form. It is passed ONLY for
+// intent detection (task 'detect_flow'), so a host can answer that call with a classifier instead
+// of a text model: `systemInstruction` and `userMessage` are still the complete text prompt, and the
+// reply is still a JSON string `{ flowName, parameters }` that the engine validates the same way
+// either way. Hosts that ignore the 4th argument behave exactly as before.
+export type AiCallbackFunction = ((systemInstruction: string, userMessage: string, jsonSchema?: string, request?: AiCallbackRequest) => Promise<string>) | null;
+
+/** A flow parameter as the intent-detection call sees it. */
+export interface FlowParameterDefinition {
+  name: string; // Variable name to map to
+  description: string; // Description for the AI to understand what to extract
+  type?: string; // Type of the parameter (string, number, boolean, etc.)
+  enum?: string[]; // Allowed values (string parameters only). Any other value is dropped, so the flow asks.
+}
+
+/** Structured form of the intent-detection call; see AiCallbackFunction. */
+export interface DetectFlowRequest {
+  task: 'detect_flow';
+  input: string; // The user input, exactly as it appears in <user-input>
+  conversation: { role: 'user' | 'assistant'; content: string }[]; // lastChatTurn, oldest first; empty when none
+  flows: {
+    id: string;
+    name: string; // The value to return as flowName
+    description: string;
+    parameters: FlowParameterDefinition[];
+  }[];
+}
+
+export type AiCallbackRequest = DetectFlowRequest;
 
 // Engine Session Context - Encapsulates all session-specific state
 // This object should be maintained by the host application for each user session
@@ -720,11 +749,7 @@ export interface FlowDefinition {
   version: string;
   primary?: boolean; // Whether this flow is a primary entry point for users (default: false)
   interruptable?: boolean; // Whether this flow can be interrupted by AI intent detection (default: false)
-  parameters?: {
-    name: string; // Variable name to map to
-    description: string; // Description for the AI to understand what to extract
-    type?: string; // Type of the parameter (string, number, etc.)
-  }[];
+  parameters?: FlowParameterDefinition[];
   steps: FlowStep[];
   variables?: Record<string, {
     type: string;
@@ -3090,7 +3115,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
  * @param timeoutMs - Timeout in milliseconds for the AI call
  * @returns AI response as string
  */
-async function fetchAiResponse(systemInstruction: string, userMessage: string, aiCallback: AiCallbackFunction, timeoutMs: number = 1000, jsonSchema?: string): Promise<string> {
+async function fetchAiResponse(systemInstruction: string, userMessage: string, aiCallback: AiCallbackFunction, timeoutMs: number = 1000, jsonSchema?: string, request?: AiCallbackRequest): Promise<string> {
   try {
     logger.debug(`fetchAiResponse called with system instruction length: ${systemInstruction.length}, user message: "${userMessage}", timeout: ${timeoutMs}ms, jsonMode: ${!!jsonSchema}`);
 
@@ -3100,7 +3125,11 @@ async function fetchAiResponse(systemInstruction: string, userMessage: string, a
 
     // Use the user-provided AI callback function with timeout
     // Pass jsonSchema so the host can configure the API for structured output
-    const aiResponse = await withTimeout(aiCallback(systemInstruction, userMessage, jsonSchema), timeoutMs);
+    // request (the structured form of the call) is passed only when the caller built one — the
+    // callback's arity is unchanged for every other task.
+    const aiResponse = await withTimeout(
+      request ? aiCallback(systemInstruction, userMessage, jsonSchema, request) : aiCallback(systemInstruction, userMessage, jsonSchema),
+      timeoutMs);
 
     if (typeof aiResponse !== 'string') {
       throw new Error('AI callback must return a string response');
@@ -3126,6 +3155,7 @@ async function fetchAiResponse(systemInstruction: string, userMessage: string, a
  * @param jsonSchema - Optional JSON schema for structured responses
  * @param aiCallback - User-provided AI communication function
  * @param timeoutMs - Timeout in milliseconds for the AI call
+ * @param request - Structured form of the call, passed to aiCallback as its 4th argument (intent detection only)
  * @returns AI response as string or parsed JSON object
  */
 async function fetchAiTask(
@@ -3136,7 +3166,8 @@ async function fetchAiTask(
   flows?: FlowDefinition[],
   jsonSchema?: string,
   aiCallback?: AiCallbackFunction,
-  timeoutMs: number = 1000
+  timeoutMs: number = 1000,
+  request?: AiCallbackRequest
 ): Promise<any> {
   try {
     if (!aiCallback) {
@@ -3173,7 +3204,7 @@ async function fetchAiTask(
       const flowDescriptions = flows.map(flow => {
         let desc = `${flow.name}: ${flow.description} (Risk: ${flow.metadata?.riskLevel || 'unknown'})`;
         if (flow.parameters && flow.parameters.length > 0) {
-          const params = flow.parameters.map(p => `${p.name} (${p.type || 'string'}): ${p.description}`).join(', ');
+          const params = flow.parameters.map(p => `${p.name} (${describeParameterType(p)}): ${p.description}`).join(', ');
           desc += `\n   Parameters: ${params}`;
         }
         return desc;
@@ -3181,7 +3212,7 @@ async function fetchAiTask(
       userMessage += `\n\n<available-flows>\n${flowDescriptions}\n</available-flows>`;
     }
 
-    const aiResponse = await fetchAiResponse(systemMessage, userMessage, aiCallback, timeoutMs, jsonSchema);
+    const aiResponse = await fetchAiResponse(systemMessage, userMessage, aiCallback, timeoutMs, jsonSchema, request);
 
     // If JSON schema was provided, parse and return JSON
     if (jsonSchema) {
@@ -3212,6 +3243,72 @@ async function fetchAiTask(
     logger.error(`fetchAiTask error: ${error.message}`);
     throw new Error(`AI task processing failed: ${error.message}`);
   }
+}
+
+/** "string" / "boolean" / … and, for an enum, the allowed values: `string, one of: "a" | "b"`. */
+function describeParameterType(p: FlowParameterDefinition): string {
+  const type = p.type || 'string';
+  if (Array.isArray(p.enum) && p.enum.length > 0) {
+    return `${type}, one of: ${p.enum.map(v => JSON.stringify(v)).join(' | ')}`;
+  }
+  return type;
+}
+
+/**
+ * Enforces each declared enum on the parameters intent detection returned. A value that matches an
+ * allowed value ignoring case and surrounding whitespace is replaced by the declared spelling; any
+ * other value is DROPPED (with a warning), so the flow asks for it rather than running on a value
+ * it never declared. Parameters without an enum pass through unchanged.
+ */
+function enforceParameterEnums(flow: FlowDefinition, parameters: Record<string, any>): Record<string, any> {
+  const result: Record<string, any> = { ...parameters };
+  for (const p of flow.parameters || []) {
+    if (!Array.isArray(p.enum) || p.enum.length === 0) {
+      continue; // no enum declared - value passes through as before
+    }
+    if (!(p.name in result)) {
+      continue; // not extracted - the flow asks
+    }
+    const value = result[p.name];
+    const match = typeof value === 'string'
+      ? p.enum.find(v => v.toLowerCase() === value.trim().toLowerCase())
+      : undefined;
+    if (match !== undefined) {
+      result[p.name] = match;
+    } else {
+      logger.warn(`detectFlowWithParameters: dropped parameter "${p.name}" of flow "${flow.name}" - ${JSON.stringify(value)} is not one of ${JSON.stringify(p.enum)}`);
+      delete result[p.name];
+    }
+  }
+  return result;
+}
+
+/** The structured form of the intent-detection call, passed to aiCallback as its 4th argument. */
+function buildDetectFlowRequest(input: string, lastChatTurn: { user?: ContextEntry; assistant?: ContextEntry } | undefined, flows: FlowDefinition[]): DetectFlowRequest {
+  const conversation: DetectFlowRequest['conversation'] = [];
+  for (const entry of [lastChatTurn?.user, lastChatTurn?.assistant]) {
+    if (entry && (entry.role === 'user' || entry.role === 'assistant')) {
+      conversation.push({ role: entry.role, content: typeof entry.content === 'object' ? JSON.stringify(entry.content) : String(entry.content) });
+    } else {
+      // absent, or a role the conversation cannot carry
+    }
+  }
+  return {
+    task: 'detect_flow',
+    input: String(sanitizeInput(input)),
+    conversation,
+    flows: flows.map(flow => ({
+      id: flow.id,
+      name: flow.name,
+      description: flow.description,
+      parameters: (flow.parameters || []).map(p => ({
+        name: p.name,
+        description: p.description,
+        ...(p.type !== undefined ? { type: p.type } : {}),
+        ...(Array.isArray(p.enum) ? { enum: [...p.enum] } : {})
+      }))
+    }))
+  };
 }
 
 export async function getFlowForInput(input: string, engine: Engine): Promise<FlowDefinition | null> {
@@ -3296,7 +3393,8 @@ export async function detectFlowWithParameters(input: string, engine: Engine): P
     }
 
     // Let AI errors (timeout, communication failures) propagate to the host
-    const aiResponse = await fetchAiTask(task, rules, context, input, flowsForIntentDetection, jsonSchema, engine.aiCallback, engine.aiTimeOut);
+    const request = buildDetectFlowRequest(input, engine.lastChatTurn, flowsForIntentDetection);
+    const aiResponse = await fetchAiTask(task, rules, context, input, flowsForIntentDetection, jsonSchema, engine.aiCallback, engine.aiTimeOut, request);
 
     if (aiResponse && aiResponse.flowName && aiResponse.flowName !== 'None' && aiResponse.flowName !== 'null') {
       const flow = flowsMenu.find(flow => flow.name.toLowerCase() === aiResponse.flowName.toLowerCase() || flow.id === aiResponse.flowName);
@@ -3312,6 +3410,7 @@ export async function detectFlowWithParameters(input: string, engine: Engine): P
             logger.warn(`detectFlowWithParameters: stripped ${entries.length - filtered.length} empty-key parameter(s) from AI response for flow "${flow.name}"`);
             parameters = Object.fromEntries(filtered);
           }
+          parameters = enforceParameterEnums(flow, parameters);
         }
         return { flow, parameters };
       } else {
@@ -7483,6 +7582,60 @@ export class WorkflowEngine implements Engine {
     if (flowDef.metadata) {
       if (flowDef.metadata.riskLevel && !['low', 'medium', 'high', 'critical'].includes(flowDef.metadata.riskLevel)) {
         state.warnings.push(`Flow "${flowDef.name}" has invalid riskLevel: ${flowDef.metadata.riskLevel}`);
+      }
+    }
+
+    this._validateFlowParameters(flowDef, state);
+  }
+
+  /**
+   * Validates the parameters intent detection extracts: unique names, and a well-formed enum.
+   * An enum is a non-empty list of unique, non-empty strings, allowed only on a string parameter -
+   * values are matched as strings, so on any other type it could never match.
+   */
+  private _validateFlowParameters(flowDef: any, state: any): void {
+    if (flowDef.parameters === undefined) {
+      return;
+    }
+    if (!Array.isArray(flowDef.parameters)) {
+      state.errors.push(`Flow "${flowDef.name}" parameters must be an array`);
+      return;
+    }
+    const seen = new Set<string>();
+    for (const p of flowDef.parameters) {
+      if (!p || typeof p.name !== 'string' || p.name.trim() === '') {
+        state.errors.push(`Flow "${flowDef.name}" has a parameter without a name`);
+        continue;
+      }
+      if (seen.has(p.name)) {
+        state.errors.push(`Flow "${flowDef.name}" declares parameter "${p.name}" more than once`);
+      } else {
+        seen.add(p.name);
+      }
+      if (p.enum === undefined) {
+        continue;
+      }
+      const where = `Flow "${flowDef.name}" parameter "${p.name}"`;
+      if (p.type !== undefined && p.type !== 'string') {
+        state.errors.push(`${where}: enum is allowed only on a string parameter, not type "${p.type}"`);
+      }
+      if (!Array.isArray(p.enum) || p.enum.length === 0) {
+        state.errors.push(`${where}: enum must be a non-empty array of strings`);
+        continue;
+      }
+      const values = new Set<string>();
+      for (const v of p.enum) {
+        if (typeof v !== 'string' || v.trim() === '') {
+          state.errors.push(`${where}: enum value ${JSON.stringify(v)} is not a non-empty string`);
+        } else if (v !== v.trim()) {
+          // A reply is trimmed before matching, so a padded value could never match.
+          state.errors.push(`${where}: enum value ${JSON.stringify(v)} has leading or trailing whitespace`);
+        } else if (values.has(v.trim().toLowerCase())) {
+          // Values are matched ignoring case, so these two could never be told apart.
+          state.errors.push(`${where}: enum value ${JSON.stringify(v)} is listed more than once (ignoring case)`);
+        } else {
+          values.add(v.trim().toLowerCase());
+        }
       }
     }
   }
