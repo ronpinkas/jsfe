@@ -126,6 +126,11 @@ const flowsMenu = [
         "name": "amount",
         "description": "The payment amount mentioned by user (e.g. '50')",
         "type": "string"
+      },
+      {
+        "name": "method",
+        "description": "How the user wants to pay",
+        "enum": ["Card", "Bank Transfer"] // Optional: allowed values; any other value is dropped
       }
     ],
     variables: { // Optional: Define variables with initial values
@@ -397,7 +402,8 @@ async function aiCallback(systemInstruction, userMessage, jsonSchema) {
 ```
 
 **AI Callback Interface:**
-- **Input**: `systemInstruction` (string), `userMessage` (string)
+- **Input**: `systemInstruction` (string), `userMessage` (string), optional `jsonSchema` (string), and
+  optional `request` (object — intent detection only, see below)
 - **Output**: AI response as a string
 - **Purpose**: Analyzes user input to detect workflow intents and generate responses
 - **Integration**: The engine calls this function when it needs AI analysis for intent detection
@@ -413,6 +419,27 @@ async function aiCallback(systemInstruction, userMessage, jsonSchema) {
   - Session state and variables needed for intent analysis
 
 Both parameters are carefully engineered by the engine to work together for optimal intent detection. The engine automatically constructs comprehensive, context-aware prompts that provide the AI with all necessary information for accurate workflow selection and response generation. Your aiCallback implementation only needs to send these pre-constructed arguments to your AI service and return the response.
+
+**The structured `request` argument (intent detection only):**
+For intent detection — and only there — the engine passes a 4th argument: the same call in
+structured form, so a host can answer it with a classifier instead of a text model.
+
+```javascript
+async function aiCallback(systemInstruction, userMessage, jsonSchema, request) {
+  if (request?.task === 'detect_flow') {
+    // request.input         — the user input, exactly as in <user-input>
+    // request.conversation  — [{ role: 'user' | 'assistant', content }], oldest first; [] when none
+    // request.flows         — [{ id, name, description, parameters: [{ name, description, type?, enum? }] }]
+    // Reply exactly as the text path does: a JSON string { flowName, parameters }, flowName being a
+    // flow's name (or "None"). The engine validates it the same way, enums included.
+  }
+  // ... every other call, and the text path: unchanged
+}
+```
+
+`systemInstruction` and `userMessage` are still the complete text prompt on that call, so a host can
+run its text model alongside the classifier (for example, for free-text parameters). A callback that
+ignores the 4th argument behaves exactly as before; every other call still receives three arguments.
 
 **Alternative AI Services:**
 You can integrate any AI service (Claude, Gemini, local LLMs, etc.) by implementing this same interface. The engine only requires a function that takes system instructions and user input, then returns an AI response.
@@ -464,6 +491,17 @@ interface FlowDefinition {
   - `primary: false` or omitted: Helper/sub-flows called by other flows, not directly accessible
   - **Validation Impact**: Only primary flows are validated as top-level workflows during initialization
   - **AI Detection**: Only primary flows are considered for intent detection and user interaction
+- **Parameters**: `parameters` lists the values intent detection may extract from the triggering input
+  and inject as flow variables. Each is `{ name, description, type?, enum? }`:
+  - `type` defaults to `"string"`.
+  - `enum` (string parameters only) lists the allowed values. The prompt shows them
+    (`ticket_type (string, one of: "Fraud" | "Cancellation")`), and the engine enforces them on the
+    reply: a value matching ignoring case and surrounding whitespace is replaced by the declared
+    spelling, and any other value is **dropped** with a warning — so the flow asks for it instead of
+    running on a value it never declared. Validation rejects an empty enum, a non-string or padded
+    value, a value repeated ignoring case, and an enum on a non-string type.
+  - Declare an enum wherever the allowed values are a closed set. It also lets a host answer intent
+    detection with a classifier instead of a text model (see the `request` argument of `aiCallback`).
 - **Multi-language Support**: Engine automatically selects appropriate prompt based on user's language preference
 - **Variable Management**: Define flow-specific variables with types, scopes, and initial values
 - **Risk Classification**: `metadata.riskLevel` enables security-conscious flow handling
