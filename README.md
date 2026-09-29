@@ -310,6 +310,28 @@ async function aiCallback(systemInstruction, userMessage, jsonSchema, request) {
 run its text model alongside the classifier (for example, for free-text parameters). A callback that
 ignores the 4th argument behaves exactly as before; every other call still receives three arguments.
 
+**Host helpers — `jsfe/host`:**
+Pure functions for the host side of `aiCallback`, so a production host and a local test harness
+share one implementation. Loading `jsfe/host` never loads the engine.
+
+```javascript
+import { buildAiRequest, isDetectFlowRequest, toFlowRequest, fromFlowAnswers } from 'jsfe/host';
+
+// An OpenAI-compatible chat-completions body from a model description. It picks the right
+// response_format for each kind of jsonSchema argument, and never sends `response_format: null`.
+const body = buildAiRequest(
+  { name: 'gpt-4o-mini', reservedReplySize: 1024, supportsSchema: true },
+  systemInstruction, userMessage, jsonSchema);
+```
+
+- `buildAiRequest(model, systemInstruction, userMessage, jsonSchema)`, `parseSchemaArg`, `schemaName`.
+  `model` fields: `name`, `reservedReplySize`, and the optional `tokenParam`, `supportsSchema`,
+  `fixedSampling` and `extraParams`.
+- `isDetectFlowRequest`, `toFlowRequest` / `fromFlowAnswers` (which flow), `toParameterRequest` /
+  `fromParameterAnswers` (its enum and boolean parameters), `freeTextParameters`,
+  `mergeTextParameters`, `INTENT_YES_THRESHOLD`: these map the structured intent-detection
+  request to TypeSafe System One and back. The host sends the requests.
+
 **Alternative AI Services:**
 You can integrate any AI service (Claude, Gemini, local LLMs, etc.) by implementing this same interface. The engine only requires a function that takes system instructions and user input, then returns an AI response.
 

@@ -1,6 +1,6 @@
 {
   "name": "jsfe",
-  "version": "0.9.86",
+  "version": "0.9.87",
   "description": "TypeScript workflow engine for conversational/automation apps: multi-flow orchestration, interrupt/resume, stack-based control, robust errors, and flexible tool/REST integration.",
   "license": "MIT",
   "author": "Ron Pinkas",
@@ -14,6 +14,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./host": {
+      "types": "./dist/host/index.d.ts",
+      "import": "./dist/host/index.js"
     }
   },
   "main": "./dist/index.js",
