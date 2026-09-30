@@ -28,8 +28,20 @@
   {
     "id": "contact-support",
     "name": "ContactSupport",
-    "version": "1.0.0",
-    "description": "Provide customer service contact information",
+    "version": "1.1.0",
+    "description": "Provide customer service contact information. Optional closing_prompt / closing_prompt_es parameters are spoken after the contact info.",
+    "parameters": [
+      {
+        "name": "closing_prompt",
+        "type": "string",
+        "description": "Optional English sentence spoken after the contact info, e.g. a follow-up question"
+      },
+      {
+        "name": "closing_prompt_es",
+        "type": "string",
+        "description": "Optional Spanish sentence spoken after the contact info"
+      }
+    ],
     "steps": [
       {
         "id": "set_contact_info",
@@ -46,8 +58,8 @@
       {
         "id": "say_support_message",
         "type": "SAY",
-        "value": "Sorry I couldn't help! {{cargo.support_context ? 'For assistance with your ' + cargo.support_context + ', ' : ''}}{{contact_info}}.",
-        "value_es": "¡Lo siento, no pude ayudar! {{cargo.support_context ? 'Para asistencia con tu ' + (cargo.support_context_es || cargo.support_context) + ', ' : ''}}{{contact_info_es}}.",
+        "value": "Sorry I couldn't help! {{cargo.support_context ? 'For assistance with your ' + cargo.support_context + ', ' : ''}}{{contact_info}}.{{typeof closing_prompt !== 'undefined' && closing_prompt ? ' ' + closing_prompt : ''}}",
+        "value_es": "¡Lo siento, no pude ayudar! {{cargo.support_context ? 'Para asistencia con tu ' + (cargo.support_context_es || cargo.support_context) + ', ' : ''}}{{contact_info_es}}.{{typeof closing_prompt_es !== 'undefined' && closing_prompt_es ? ' ' + closing_prompt_es : ''}}",
         "outcome": "unresolved",
         "reason": "contact_support_fallback"
       }
@@ -304,7 +316,8 @@
               "accountSid": null,
               "from": "{{cargo.twilioNumber}}",
               "to": "{{cell_number}}",
-              "container": "{{cargo}}"
+              "container": "{{cargo}}",
+              "language": "{{language}}"
             },
             "onFail": {
               "id": "sms_failed",
@@ -324,7 +337,8 @@
             "tool": "send-email-otp",
             "args": {
               "to": "{{email}}",
-              "container": "{{cargo}}"
+              "container": "{{cargo}}",
+              "language": "{{language}}"
             },
             "onFail": {
               "id": "email_failed",
@@ -526,7 +540,7 @@
             "value": "{{cancel_flow}}",
             "callType": "reboot"
           },
-          "condition: matchesChoice(cell_or_email, ['live', 'agent', 'manager', 'support', 'customer service', 'representative', 'agente', 'gente', 'gerente', 'servicio', 'al cliente', 'representante']) || cell_or_email == '0'": {
+          "condition: matchesChoice(cell_or_email, ['live', 'agent', 'manager', 'support', 'customer service', 'representative', 'human', 'operator', 'someone', 'somebody', 'real person', 'agente', 'gente', 'gerente', 'servicio', 'al cliente', 'representante', 'alguien', 'persona', 'humano', 'operador', 'operadora', 'recepcionista', 'recepcion', 'recepción']) || cell_or_email == '0'": {
             "id": "goto_live_agent",
             "type": "FLOW",
             "value": "live-agent-requested",
@@ -678,6 +692,14 @@
       "otp_validation_result": {
         "type": "boolean",
         "description": "Result of OTP validation"
+      },
+      "invite_text": {
+        "type": "string",
+        "description": "WhatsApp invite wording for this session's language; empty means the feature is off"
+      },
+      "whatsapp_invite_sent": {
+        "type": "boolean",
+        "description": "True only if an invite text was actually sent — gates whether we mention it"
       }
     },
     "steps": [
@@ -707,17 +729,41 @@
             "value": "contact-support",
             "callType": "reboot"
           },
-          "condition: matchesChoice(user_choice, ['live', 'agent', 'manager', 'support', 'customer service', 'representative', 'agente', 'gente', 'gerente', 'servicio', 'al cliente', 'representante']) || user_choice === '0'": {
+          "condition: matchesChoice(user_choice, ['live', 'agent', 'manager', 'support', 'customer service', 'representative', 'human', 'operator', 'someone', 'somebody', 'real person', 'agente', 'gente', 'gerente', 'servicio', 'al cliente', 'representante', 'alguien', 'persona', 'humano', 'operador', 'operadora', 'recepcionista', 'recepcion', 'recepción']) || user_choice === '0'": {
             "id": "goto_live_agent",
             "type": "FLOW",
             "value": "live-agent-requested",
             "callType": "reboot"
           },
-          "default": {
+          "condition: matchesChoice(user_choice, ['text', 'texto', 'sms', 'message', 'mensaje', 'text me', 'by text', 'por texto', 'mensaje de texto', 'whatsapp', 'escríbeme', 'escribeme'])": {
+            "id": "goto_switch_to_text",
+            "type": "FLOW",
+            "value": "switch-to-text",
+            "callType": "reboot"
+          },
+          "condition: matchesChoice(user_choice, ['resend', 'send again', 'send it again', 'not received', 'never received', 'did not receive', 'didn t receive', 'didn t get', 'haven t received', 'nothing came', 'no code', 'no text', 'no llegó', 'no llego', 'no llega', 'no ha llegado', 'no me llegó', 'no me llego', 'no le llegó', 'no le llego', 'no me ha llegado', 'no recibí', 'no recibi', 'no lo recibí', 'no lo recibi', 'no tengo el código', 'no tengo el codigo', 'no lo tengo', 'no alcancé', 'no alcance', 'mándame el código', 'mandame el codigo', 'envíame el código', 'enviame el codigo', 'reenviar', 'reenvíe', 'reenvie'])": {
+            "id": "code_not_arrived",
+            "type": "SAY",
+            "value": "The code was sent and may take longer to arrive. Take your time.",
+            "value_es": "El código ya fue enviado y puede tardar un poco en llegar. Tómate tu tiempo."
+          },
+          "condition: matchesChoice(user_choice, ['driving', 'i am driving', 'i m busy', 'im busy', 'not now', 'later', 'call me later', 'call back', 'cant right now', 'can t right now', 'can t now', 'cannot right now', 'manejando', 'conduciendo', 'estoy manejando', 'voy manejando', 'ahora no', 'ahora no puedo', 'no puedo ahora', 'más tarde', 'mas tarde', 'estoy ocupado', 'estoy ocupada'])": {
+            "id": "cannot_do_it_now",
+            "type": "SAY",
+            "value": "No problem. Say TEXT and I'll continue with you by message so you can do this when you are free, or {{cargo.verb}} the code whenever you are ready.",
+            "value_es": "No hay problema. Diga TEXTO y sigo con usted por mensaje para que lo haga cuando esté libre, o {{cargo.verb_es}} el código cuando pueda."
+          },
+          "condition: normalized_otp_code.length > 0": {
             "id": "invalid_otp_format",
             "type": "SAY",
             "value": "I was expecting a 6-digit code. Let's try again. You can also {{cargo.voice ? 'Press * or ' : ''}}{{cargo.verb}} EXIT to cancel.",
             "value_es": "Esperaba un código de 6 dígitos. Intentemos de nuevo. También puedes {{cargo.voice ? 'Presionar * o ' : ''}}{{cargo.verb_es}} SALIR para cancelar."
+          },
+          "default": {
+            "id": "no_digits_explain",
+            "type": "SAY",
+            "value": "Let me explain. I sent you a message with a six-digit code in it. Read those six digits back to me. You can also {{cargo.verb}} AGENT to reach a person, or EXIT to cancel.",
+            "value_es": "Le explico. Le envié un mensaje con un código de seis dígitos. Dígame esos seis dígitos. También puede {{cargo.verb_es}} AGENTE para hablar con una persona, o SALIR para cancelar."
           }
         }
       },
@@ -758,6 +804,62 @@
         }
       },
       {
+        "id": "set_invite_text",
+        "type": "SET",
+        "variable": "invite_text",
+        "value": "language == 'es' ? (typeof global_whatsapp_invite_es !== 'undefined' ? global_whatsapp_invite_es : '') : (typeof global_whatsapp_invite !== 'undefined' ? global_whatsapp_invite : '')"
+      },
+      {
+        "id": "invite_if_wrong_code",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.otpVerified": {
+            "id": "no_invite_needed",
+            "type": "SET",
+            "variable": "skip",
+            "value": "true"
+          },
+          "default": {
+            "id": "invite_whatsapp",
+            "type": "CALL-TOOL",
+            "tool": "send-whatsapp-invite",
+            "variable": "whatsapp_invite_sent",
+            "args": {
+              "accountSid": null,
+              "from": "{{cargo.twilioNumber}}",
+              "to": "{{cargo.otp_cell_number}}",
+              "inviteText": "{{invite_text}}",
+              "language": "{{language}}",
+              "container": "{{cargo}}"
+            },
+            "onFail": {
+              "id": "invite_failed_ignore",
+              "type": "SET",
+              "variable": "whatsapp_invite_sent",
+              "value": "false"
+            }
+          }
+        }
+      },
+      {
+        "id": "mention_whatsapp_invite",
+        "type": "CASE",
+        "branches": {
+          "condition: whatsapp_invite_sent": {
+            "id": "say_whatsapp_invite",
+            "type": "SAY",
+            "value": "I texted you a WhatsApp link so you can try again on WhatsApp to help overcome voice limitations.",
+            "value_es": "Te envié por texto un enlace de WhatsApp para que puedas intentarlo de nuevo allí y así evitar las limitaciones de la voz."
+          },
+          "default": {
+            "id": "no_invite_to_mention",
+            "type": "SET",
+            "variable": "skip",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "retry_if_wrong_code",
         "type": "CASE",
         "branches": {
@@ -780,7 +882,7 @@
   {
     "id": "generic-retry-with-options",
     "name": "GenericRetryWithOptions",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Generic flow to offer retry, switch to text, or contact support",
     "parameters": [
       {
@@ -806,7 +908,7 @@
       {
         "name": "capture_patterns",
         "type": "array",
-        "description": "Array of {variable, regex} to capture from user input"
+        "description": "Optional array of {variable, regex} to capture from user input. Omitted by most callers; the SET step guards the reference, so absence means no smart capture rather than an evaluation failure."
       }
     ],
     "variables": {
@@ -833,7 +935,7 @@
         "id": "check_smart_capture",
         "type": "SET",
         "variable": "smart_capture_result",
-        "value": "normalizeAndFindCapture(user_choice, capture_patterns)"
+        "value": "typeof capture_patterns !== 'undefined' && capture_patterns ? normalizeAndFindCapture(user_choice, capture_patterns) : null"
       },
       {
         "id": "handle_smart_capture",
@@ -984,7 +1086,7 @@
             "value": "contact-support",
             "callType": "reboot"
           },
-          "condition: matchesChoice(user_choice, ['live', 'agent', 'manager', 'support', 'customer service', 'representative', 'agente', 'gente', 'gerente', 'servicio', 'al cliente', 'representante']) || user_choice == '0'": {
+          "condition: matchesChoice(user_choice, ['live', 'agent', 'manager', 'support', 'customer service', 'representative', 'human', 'operator', 'someone', 'somebody', 'real person', 'agente', 'gente', 'gerente', 'servicio', 'al cliente', 'representante', 'alguien', 'persona', 'humano', 'operador', 'operadora', 'recepcionista', 'recepcion', 'recepción']) || user_choice == '0'": {
             "id": "goto_live_agent",
             "type": "FLOW",
             "value": "live-agent-requested",
@@ -1062,8 +1164,8 @@
   {
     "id": "live-agent-requested",
     "name": "LiveAgentRequested",
-    "version": "1.0.0",
-    "description": "Interception flow when user requests live agent - explains AI capabilities and gives option to continue or transfer",
+    "version": "1.1.0",
+    "description": "Interception flow when user requests live agent - explains AI capabilities and gives option to continue or transfer. When no agent is available, speaks the optional global_live_agents_comment / global_live_agents_comment_es global variables (e.g. agent hours) before the contact info.",
     "prompt": "live agent confirmation",
     "prompt_es": "confirmación de agente en vivo",
     "primary": false,
@@ -1081,8 +1183,8 @@
           "condition: !cargo.agentPhoneNumber": {
             "id": "no_agent_msg",
             "type": "SAY",
-            "value": "Our live agent team isn't available right now. Let me share our contact information so we can still help you.",
-            "value_es": "Nuestro equipo de agentes no está disponible en este momento. Permítame compartirle nuestra información de contacto para que podamos ayudarle."
+            "value": "Our live agent team isn't available right now. {{typeof global_live_agents_comment !== 'undefined' && global_live_agents_comment ? global_live_agents_comment + ' ' : ''}}Let me share our contact information so we can still help you.",
+            "value_es": "Nuestro equipo de agentes no está disponible en este momento. {{typeof global_live_agents_comment_es !== 'undefined' && global_live_agents_comment_es ? global_live_agents_comment_es + ' ' : ''}}Permítame compartir nuestra información de contacto para que aún podamos ayudarle."
           },
           "default": {
             "id": "agent_available",
@@ -1100,7 +1202,11 @@
             "id": "fallback_to_contact",
             "type": "FLOW",
             "value": "contact-support",
-            "callType": "reboot"
+            "callType": "reboot",
+            "parameters": {
+              "closing_prompt": "What else can I assist you with?",
+              "closing_prompt_es": "¿En qué más puedo ayudarle?"
+            }
           },
           "default": {
             "id": "proceed_to_prompt",
@@ -1144,7 +1250,11 @@
                 "id": "no_agents_available",
                 "type": "FLOW",
                 "value": "contact-support",
-                "callType": "reboot"
+                "callType": "reboot",
+                "parameters": {
+                  "closing_prompt": "What else can I assist you with?",
+                  "closing_prompt_es": "¿En qué más puedo ayudarle?"
+                }
               }
             }
           },

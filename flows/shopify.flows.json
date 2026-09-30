@@ -407,6 +407,10 @@
       "shopify_identifier": {
         "type": "string",
         "description": "Email or phone for Shopify lookup"
+      },
+      "tracking_detail": {
+        "type": "object",
+        "description": "ShipStation real-time tracking result"
       }
     },
     "steps": [
@@ -462,8 +466,13 @@
           },
           "condition: orders_result.orders.length === 0": {
             "id": "no_orders",
-            "type": "RETURN",
-            "value": "language == 'es' ? \"Disculpa, no pude encontrar ningún pedido asociado con tu cuenta. ¿Hay algo más en lo que pueda ayudarte?\" : \"Sorry, I couldn't find any orders associated with your account. Is there anything else I can help with?\""
+            "type": "FLOW",
+            "value": "shipstation-track-by-number-verified",
+            "callType": "replace",
+            "parameters": {
+              "intro_message": "Sorry, I couldn't find any orders associated with your account. If you have a package tracking number, I can look it up directly.",
+              "intro_message_es": "Disculpa, no pude encontrar ningún pedido asociado con tu cuenta. Si tienes un número de rastreo del paquete, puedo buscarlo directamente."
+            }
           },
           "condition: orders_result.orders.length === 1": {
             "id": "single_order_auto",
@@ -553,6 +562,34 @@
         }
       },
       {
+        "id": "fetch_shipstation_tracking",
+        "type": "CASE",
+        "branches": {
+          "condition: order_detail && order_detail.success && order_detail.order && order_detail.order.fulfillments && order_detail.order.fulfillments.length > 0 && order_detail.order.fulfillments[0].tracking && order_detail.order.fulfillments[0].tracking.length > 0 && !!order_detail.order.fulfillments[0].tracking[0].number": {
+            "id": "call_shipstation",
+            "type": "CALL-TOOL",
+            "tool": "shipstation-get-tracking",
+            "variable": "tracking_detail",
+            "args": {
+              "trackingNumber": "{{order_detail.order.fulfillments[0].tracking[0].number}}",
+              "container": "{{cargo}}"
+            },
+            "onFail": {
+              "id": "shipstation_unavailable",
+              "type": "SET",
+              "variable": "tracking_detail",
+              "value": "{success: false}"
+            }
+          },
+          "default": {
+            "id": "no_tracking_number",
+            "type": "SET",
+            "variable": "tracking_detail",
+            "value": "{success: false}"
+          }
+        }
+      },
+      {
         "id": "show_order_detail",
         "type": "CASE",
         "branches": {
@@ -560,8 +597,8 @@
             "id": "display_detail",
             "type": "SAY",
             "variable": "continue_choice",
-            "value": "Order {{order_detail.order.orderNumber}}\n\nStatus: {{order_detail.order.fulfillmentStatus || 'Processing'}}\nPayment: {{order_detail.order.financialStatus}}\nTotal: ${{order_detail.order.total?.amount}}\n\nItems:\n{{order_detail.order.items.map(item => `- ${item.title} (x${item.quantity})`).join('\\n')}}\n\n{{order_detail.order.fulfillments && order_detail.order.fulfillments.length > 0 && order_detail.order.fulfillments[0].tracking ? 'Tracking: ' + (order_detail.order.fulfillments[0].tracking[0]?.company || '') + ' - ' + (order_detail.order.fulfillments[0].tracking[0]?.number || 'N/A') + (order_detail.order.fulfillments[0].tracking[0]?.url ? '\\nTrack: ' + order_detail.order.fulfillments[0].tracking[0].url : '') : ''}}\n\nShipping to:\n{{(() => { const sa = order_detail.order.shippingAddress; if (!sa) return 'N/A'; const line1 = [sa.firstName, sa.lastName].filter(Boolean).join(' '); const line2 = sa.address1 || ''; const cityProv = [sa.city, sa.province].filter(Boolean).join(', '); const line3 = [cityProv, sa.zip].filter(Boolean).join(' '); const lines = [line1, line2, line3].filter(s => s && s.trim()); return lines.length ? lines.join('\\n') : 'N/A'; })()}}\n\nAnything else I can help with?",
-            "value_es": "Pedido {{order_detail.order.orderNumber}}\n\nEstado: {{order_detail.order.fulfillmentStatus || 'Procesando'}}\nPago: {{order_detail.order.financialStatus}}\nTotal: ${{order_detail.order.total?.amount}}\n\nArtículos:\n{{order_detail.order.items.map(item => `- ${item.title} (x${item.quantity})`).join('\\n')}}\n\n{{order_detail.order.fulfillments && order_detail.order.fulfillments.length > 0 && order_detail.order.fulfillments[0].tracking ? 'Rastreo: ' + (order_detail.order.fulfillments[0].tracking[0]?.company || '') + ' - ' + (order_detail.order.fulfillments[0].tracking[0]?.number || 'N/A') + (order_detail.order.fulfillments[0].tracking[0]?.url ? '\\nRastrear: ' + order_detail.order.fulfillments[0].tracking[0].url : '') : ''}}\n\nEnvío a:\n{{(() => { const sa = order_detail.order.shippingAddress; if (!sa) return 'N/A'; const line1 = [sa.firstName, sa.lastName].filter(Boolean).join(' '); const line2 = sa.address1 || ''; const cityProv = [sa.city, sa.province].filter(Boolean).join(', '); const line3 = [cityProv, sa.zip].filter(Boolean).join(' '); const lines = [line1, line2, line3].filter(s => s && s.trim()); return lines.length ? lines.join('\\n') : 'N/A'; })()}}\n\n¿Hay algo más en lo que pueda ayudarte?"
+            "value": "Order {{order_detail.order.orderNumber}}\n\nStatus: {{order_detail.order.fulfillmentStatus || 'Processing'}}\nPayment: {{order_detail.order.financialStatus}}\nTotal: ${{order_detail.order.total?.amount}}\n\nItems:\n{{order_detail.order.items.map(item => `- ${item.title} (x${item.quantity})`).join('\\n')}}\n\n{{order_detail.order.fulfillments && order_detail.order.fulfillments.length > 0 && order_detail.order.fulfillments[0].tracking ? 'Tracking: ' + (order_detail.order.fulfillments[0].tracking[0]?.company || '') + ' - ' + (order_detail.order.fulfillments[0].tracking[0]?.number || 'N/A') + (order_detail.order.fulfillments[0].tracking[0]?.url ? '\\nTrack: ' + order_detail.order.fulfillments[0].tracking[0].url : '') : ''}}{{(() => { const t = tracking_detail; if (!t || !t.success) return ''; const lines = []; lines.push('Delivery status: ' + (t.statusDescription || 'Unknown')); if (t.exception) lines.push('Delivery issue: ' + t.exception); if (t.lastEvent) lines.push('Last update: ' + t.lastEvent); if (t.actualDelivery) lines.push('Delivered on: ' + new Date(t.actualDelivery).toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })); else if (t.estimatedDelivery) lines.push('Estimated delivery: ' + new Date(t.estimatedDelivery).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })); return '\\n' + lines.join('\\n'); })()}}\n\nShipping to:\n{{(() => { const sa = order_detail.order.shippingAddress; if (!sa) return 'N/A'; const line1 = [sa.firstName, sa.lastName].filter(Boolean).join(' '); const line2 = sa.address1 || ''; const cityProv = [sa.city, sa.province].filter(Boolean).join(', '); const line3 = [cityProv, sa.zip].filter(Boolean).join(' '); const lines = [line1, line2, line3].filter(s => s && s.trim()); return lines.length ? lines.join('\\n') : 'N/A'; })()}}\n\nAnything else I can help with?",
+            "value_es": "Pedido {{order_detail.order.orderNumber}}\n\nEstado: {{order_detail.order.fulfillmentStatus || 'Procesando'}}\nPago: {{order_detail.order.financialStatus}}\nTotal: ${{order_detail.order.total?.amount}}\n\nArtículos:\n{{order_detail.order.items.map(item => `- ${item.title} (x${item.quantity})`).join('\\n')}}\n\n{{order_detail.order.fulfillments && order_detail.order.fulfillments.length > 0 && order_detail.order.fulfillments[0].tracking ? 'Rastreo: ' + (order_detail.order.fulfillments[0].tracking[0]?.company || '') + ' - ' + (order_detail.order.fulfillments[0].tracking[0]?.number || 'N/A') + (order_detail.order.fulfillments[0].tracking[0]?.url ? '\\nRastrear: ' + order_detail.order.fulfillments[0].tracking[0].url : '') : ''}}{{(() => { const t = tracking_detail; if (!t || !t.success) return ''; const map = { AC: 'Aceptado', IT: 'En tránsito', DE: 'Entregado', EX: 'Excepción', AT: 'Intento de entrega', NY: 'Aún no en el sistema', SP: 'Entregado en punto de recogida', UN: 'Desconocido' }; const lines = []; lines.push('Estado de entrega: ' + (map[t.status] || t.statusDescription || 'Desconocido')); if (t.exception) lines.push('Problema de entrega: ' + t.exception); if (t.lastEventEs) lines.push('Última actualización: ' + t.lastEventEs); if (t.actualDelivery) lines.push('Entregado el: ' + new Date(t.actualDelivery).toLocaleString('es-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })); else if (t.estimatedDelivery) lines.push('Entrega estimada: ' + new Date(t.estimatedDelivery).toLocaleDateString('es-US', { weekday: 'long', month: 'short', day: 'numeric' })); return '\\n' + lines.join('\\n'); })()}}\n\nEnvío a:\n{{(() => { const sa = order_detail.order.shippingAddress; if (!sa) return 'N/A'; const line1 = [sa.firstName, sa.lastName].filter(Boolean).join(' '); const line2 = sa.address1 || ''; const cityProv = [sa.city, sa.province].filter(Boolean).join(', '); const line3 = [cityProv, sa.zip].filter(Boolean).join(' '); const lines = [line1, line2, line3].filter(s => s && s.trim()); return lines.length ? lines.join('\\n') : 'N/A'; })()}}\n\n¿Hay algo más en lo que pueda ayudarte?"
           },
           "default": {
             "id": "order_not_found",
@@ -577,7 +614,7 @@
   {
     "id": "shopify-store-policies",
     "name": "ShopifyStorePolicies",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Help customers find online store policies and FAQs",
     "prompt": "store policies",
     "prompt_es": "políticas de la tienda",
@@ -596,11 +633,34 @@
         "value": ""
       },
       "policy_result": {
-        "type": "object",
-        "description": "Policy search result"
+        "type": "array",
+        "description": "Shopify policy/FAQ matches: [{ question, answer }] (the tool's `returns`)"
+      },
+      "policy_text": {
+        "type": "string",
+        "description": "Formatted Shopify policy answers (empty when none)",
+        "value": ""
       }
     },
     "steps": [
+      {
+        "id": "check_shopify_policy_optin",
+        "type": "CASE",
+        "branches": {
+          "condition: !(typeof global_shopify_policy !== 'undefined' && !!global_shopify_policy && !['false', '0', ''].includes(String(global_shopify_policy).trim().toLowerCase()))": {
+            "id": "answer_with_guru",
+            "type": "FLOW",
+            "value": "no-action-needed",
+            "callType": "reboot"
+          },
+          "default": {
+            "id": "use_shopify_policies",
+            "type": "SET",
+            "variable": "proceed",
+            "value": "true"
+          }
+        }
+      },
       {
         "id": "check_policy_param",
         "type": "CASE",
@@ -637,20 +697,203 @@
         }
       },
       {
+        "id": "format_policy_answers",
+        "type": "SET",
+        "variable": "policy_text",
+        "value": "Array.isArray(policy_result) && policy_result.length > 0 ? (cargo.voice ? policy_result.slice(0, 3).map(p => p.answer).join(' ') : policy_result.slice(0, 3).map(p => '• ' + p.question + ' — ' + p.answer).join(String.fromCharCode(10))) : ''"
+      },
+      {
         "id": "display_policy",
         "type": "CASE",
         "branches": {
-          "condition: policy_result && policy_result.content": {
+          "condition: policy_text": {
             "id": "show_policy",
             "type": "SAY",
-            "value": "Here's what I found for '{{policy_query}}':\n\n{{policy_result.content}}\n\nIs there anything else you'd like to know?",
-            "value_es": "Esto es lo que encontré para '{{policy_query}}':\n\n{{policy_result.content}}\n\n¿Hay algo más que te gustaría saber?"
+            "value": "Here's what I found for '{{policy_query}}':\n\n{{policy_text}}\n\nIs there anything else you'd like to know?",
+            "value_es": "Esto es lo que encontré para '{{policy_query}}':\n\n{{policy_text}}\n\n¿Hay algo más que te gustaría saber?"
           },
           "default": {
             "id": "no_policy_found",
             "type": "FLOW",
             "value": "no-action-needed",
             "callType": "reboot"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "shipstation-track-by-number-verified",
+    "name": "ShipStationTrackByNumberVerified",
+    "version": "1.0.0",
+    "description": "Collect a tracking number and read back real-time ShipStation tracking for verified customer",
+    "variables": {
+      "tracking_number": {
+        "type": "string",
+        "description": "Carrier tracking number",
+        "value": ""
+      },
+      "tn_input": {
+        "type": "string",
+        "description": "Raw tracking number input",
+        "value": ""
+      },
+      "tn_clean": {
+        "type": "string",
+        "description": "Normalized tracking number",
+        "value": ""
+      },
+      "intro_message": {
+        "type": "string",
+        "description": "Optional intro spoken before asking",
+        "value": ""
+      },
+      "intro_message_es": {
+        "type": "string",
+        "description": "Optional Spanish intro",
+        "value": ""
+      },
+      "tracking_detail": {
+        "type": "object",
+        "description": "ShipStation tracking result"
+      }
+    },
+    "steps": [
+      {
+        "id": "guard_tracking_number",
+        "type": "SET",
+        "variable": "tracking_number",
+        "value": "typeof tracking_number === 'undefined' ? '' : String(tracking_number)"
+      },
+      {
+        "id": "guard_intro_message",
+        "type": "SET",
+        "variable": "intro_message",
+        "value": "typeof intro_message === 'undefined' ? '' : intro_message"
+      },
+      {
+        "id": "guard_intro_message_es",
+        "type": "SET",
+        "variable": "intro_message_es",
+        "value": "typeof intro_message_es === 'undefined' ? '' : intro_message_es"
+      },
+      {
+        "id": "clean_param",
+        "type": "SET",
+        "variable": "tn_clean",
+        "value": "tracking_number.replace(/[^A-Za-z0-9]/g, '')"
+      },
+      {
+        "id": "ask_if_missing",
+        "type": "CASE",
+        "branches": {
+          "condition: tn_clean.length >= 8 && tn_clean.length <= 40": {
+            "id": "use_param",
+            "type": "SET",
+            "variable": "tn_input",
+            "value": "tracking_number"
+          },
+          "default": {
+            "id": "ask_tracking_number",
+            "type": "SAY-GET",
+            "variable": "tn_input",
+            "value": "{{intro_message ? intro_message + ' ' : ''}}Please {{cargo.verb}}{{cargo.voice ? ' or enter' : ''}} your tracking number{{cargo.voice ? ', followed by the pound key if entered using the dial pad' : ''}}. To exit anytime you can {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
+            "value_es": "{{intro_message_es ? intro_message_es + ' ' : ''}}Por favor {{cargo.verb_es}}{{cargo.voice ? ' o ingrese' : ''}} su número de rastreo{{cargo.voice ? ', seguido de la tecla numeral si se ingresó usando el teclado de marcación' : ''}}. Para salir en cualquier momento, puede {{cargo.voice ? 'presionar la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
+            "digits": {
+              "min": 8,
+              "max": 34
+            }
+          }
+        }
+      },
+      {
+        "id": "normalize_input",
+        "type": "SET",
+        "variable": "tn_clean",
+        "value": "tn_input.replace(/[^A-Za-z0-9]/g, '').toUpperCase()"
+      },
+      {
+        "id": "route_input",
+        "type": "CASE",
+        "branches": {
+          "condition: (matchesChoice(tn_input, ['abort', 'exit', 'quit', 'cancel', 'salir', 'cancelar']) && tn_input.trim().split(/\\s+/).length <= 2) || tn_input.trim() === '*'": {
+            "id": "abort_tracking",
+            "type": "FLOW",
+            "value": "no-action-needed",
+            "callType": "reboot"
+          },
+          "condition: matchesChoice(tn_input, ['live', 'agent', 'manager', 'support', 'customer service', 'representative', 'agente', 'gente', 'gerente', 'servicio', 'al cliente', 'representante']) || tn_input.trim() == '0'": {
+            "id": "goto_live_agent",
+            "type": "FLOW",
+            "value": "live-agent-requested",
+            "callType": "reboot"
+          },
+          "condition: tn_clean.length >= 8 && tn_clean.length <= 40 && /[0-9]/.test(tn_clean)": {
+            "id": "call_shipstation",
+            "type": "CALL-TOOL",
+            "tool": "shipstation-get-tracking",
+            "variable": "tracking_detail",
+            "args": {
+              "trackingNumber": "{{tn_clean}}",
+              "container": "{{cargo}}"
+            },
+            "onFail": {
+              "id": "shipstation_lookup_failed",
+              "type": "FLOW",
+              "value": "generic-retry-with-options",
+              "callType": "reboot",
+              "parameters": {
+                "error_message": "I had trouble looking up that tracking number.",
+                "error_message_es": "Tuve problemas buscando ese número de rastreo.",
+                "retry_flow": "shipstation-track-by-number-verified",
+                "cancel_flow": "contact-support"
+              }
+            }
+          },
+          "default": {
+            "id": "invalid_tracking_number",
+            "type": "FLOW",
+            "value": "generic-retry-with-options",
+            "callType": "replace",
+            "parameters": {
+              "error_message": "That doesn't look like a valid tracking number. Tracking numbers are at least 8 letters and digits.",
+              "error_message_es": "Eso no parece un número de rastreo válido. Los números de rastreo tienen al menos 8 letras y dígitos.",
+              "retry_flow": "shipstation-track-by-number-verified",
+              "cancel_flow": "contact-support",
+              "capture_patterns": [
+                {
+                  "variable": "tracking_number",
+                  "regex": "[A-Za-z0-9]{8,40}"
+                }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": "show_result",
+        "type": "CASE",
+        "branches": {
+          "condition: tracking_detail && tracking_detail.success": {
+            "id": "display_tracking",
+            "type": "SAY",
+            "variable": "continue_choice",
+            "value": "Here's the latest on tracking number {{cargo.voice ? 'ending in ' + tn_clean.slice(-4).split('').join(', ') : tn_clean}}:{{(() => { const t = tracking_detail; if (!t || !t.success) return ''; const lines = []; lines.push('Delivery status: ' + (t.statusDescription || 'Unknown')); if (t.exception) lines.push('Delivery issue: ' + t.exception); if (t.lastEvent) lines.push('Last update: ' + t.lastEvent); if (t.actualDelivery) lines.push('Delivered on: ' + new Date(t.actualDelivery).toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })); else if (t.estimatedDelivery) lines.push('Estimated delivery: ' + new Date(t.estimatedDelivery).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })); return '\\n' + lines.join('\\n'); })()}}\n\nAnything else I can help with?",
+            "value_es": "Esto es lo último sobre el número de rastreo {{cargo.voice ? 'terminando en ' + tn_clean.slice(-4).split('').join(', ') : tn_clean}}:{{(() => { const t = tracking_detail; if (!t || !t.success) return ''; const map = { AC: 'Aceptado', IT: 'En tránsito', DE: 'Entregado', EX: 'Excepción', AT: 'Intento de entrega', NY: 'Aún no en el sistema', SP: 'Entregado en punto de recogida', UN: 'Desconocido' }; const lines = []; lines.push('Estado de entrega: ' + (map[t.status] || t.statusDescription || 'Desconocido')); if (t.exception) lines.push('Problema de entrega: ' + t.exception); if (t.lastEventEs) lines.push('Última actualización: ' + t.lastEventEs); if (t.actualDelivery) lines.push('Entregado el: ' + new Date(t.actualDelivery).toLocaleString('es-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })); else if (t.estimatedDelivery) lines.push('Entrega estimada: ' + new Date(t.estimatedDelivery).toLocaleDateString('es-US', { weekday: 'long', month: 'short', day: 'numeric' })); return '\\n' + lines.join('\\n'); })()}}\n\n¿Hay algo más en lo que pueda ayudarte?"
+          },
+          "condition: tracking_detail && tracking_detail.notFound": {
+            "id": "tracking_not_found",
+            "type": "SAY",
+            "variable": "continue_choice",
+            "value": "I couldn't find tracking number {{cargo.voice ? 'ending in ' + tn_clean.slice(-4).split('').join(', ') : tn_clean}} in our shipping system. Please double-check the number. Anything else I can help with?",
+            "value_es": "No pude encontrar el número de rastreo {{cargo.voice ? 'terminando en ' + tn_clean.slice(-4).split('').join(', ') : tn_clean}} en nuestro sistema de envíos. Por favor verifica el número. ¿Hay algo más en lo que pueda ayudarte?"
+          },
+          "default": {
+            "id": "tracking_error",
+            "type": "SAY",
+            "variable": "continue_choice",
+            "value": "I wasn't able to retrieve tracking information right now. Please try again later. Anything else I can help with?",
+            "value_es": "No pude obtener la información de rastreo en este momento. Por favor intenta más tarde. ¿Hay algo más en lo que pueda ayudarte?"
           }
         }
       }

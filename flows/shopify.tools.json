@@ -47,6 +47,185 @@
         "requests": 30,
         "window": 60000
       }
+    },
+    "returns": {
+      "description": "Upstream Shopify UCP search_catalog response, passed through unchanged. Object branch describes the UCP shape per CLAUDE.md and a live probe; the code itself reads none of it.",
+      "anyOf": [
+        {
+          "type": "object",
+          "description": "UCP search_catalog payload (parsed from the MCP text item)",
+          "properties": {
+            "ucp": {
+              "type": "object",
+              "description": "UCP envelope {version, status, services, capabilities, ...} (upstream)"
+            },
+            "products": {
+              "type": "array",
+              "description": "Matched products, up to pagination.limit (flow passes 5)",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "description": "product GID, gid://shopify/Product/<n>"
+                  },
+                  "title": {
+                    "type": "string",
+                    "description": "upstream"
+                  },
+                  "url": {
+                    "type": "string",
+                    "description": "storefront URL, .../products/<handle> (CLAUDE.md)"
+                  },
+                  "handle": {
+                    "type": "string",
+                    "description": "upstream"
+                  },
+                  "description": {
+                    "type": "object",
+                    "description": "upstream, {html}"
+                  },
+                  "price_range": {
+                    "type": "object",
+                    "properties": {
+                      "min": {
+                        "type": "object",
+                        "description": "UCP money — amount in MINOR units (cents)",
+                        "properties": {
+                          "amount": {
+                            "type": "number",
+                            "description": "integer cents, e.g. 8999 = $89.99 (CLAUDE.md + live probe)"
+                          },
+                          "currency": {
+                            "type": "string",
+                            "description": "ISO currency, e.g. USD"
+                          }
+                        }
+                      },
+                      "max": {
+                        "type": "object",
+                        "description": "UCP money — amount in MINOR units (cents)",
+                        "properties": {
+                          "amount": {
+                            "type": "number",
+                            "description": "integer cents, e.g. 8999 = $89.99 (CLAUDE.md + live probe)"
+                          },
+                          "currency": {
+                            "type": "string",
+                            "description": "ISO currency, e.g. USD"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "list_price_range": {
+                    "type": "object",
+                    "description": "compare-at range, same shape as price_range (CLAUDE.md)"
+                  },
+                  "variants": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "description": "variant GID, gid://shopify/ProductVariant/<n>"
+                        },
+                        "sku": {
+                          "type": "string",
+                          "description": "upstream"
+                        },
+                        "title": {
+                          "type": "string",
+                          "description": "upstream, e.g. 'Default Title'"
+                        },
+                        "price": {
+                          "type": "object",
+                          "description": "UCP money — amount in MINOR units (cents)",
+                          "properties": {
+                            "amount": {
+                              "type": "number",
+                              "description": "integer cents, e.g. 8999 = $89.99 (CLAUDE.md + live probe)"
+                            },
+                            "currency": {
+                              "type": "string",
+                              "description": "ISO currency, e.g. USD"
+                            }
+                          }
+                        },
+                        "availability": {
+                          "type": "object",
+                          "properties": {
+                            "available": {
+                              "type": "boolean",
+                              "description": "upstream in-stock flag (CLAUDE.md: variants[].availability.available)"
+                            }
+                          }
+                        },
+                        "checkout_url": {
+                          "type": "string",
+                          "description": "upstream"
+                        }
+                      }
+                    }
+                  },
+                  "options": {
+                    "type": "array"
+                  },
+                  "media": {
+                    "type": "array"
+                  }
+                }
+              }
+            },
+            "pagination": {
+              "type": "object",
+              "properties": {
+                "has_next_page": {
+                  "type": "boolean",
+                  "description": "upstream"
+                },
+                "cursor": {
+                  "type": "string",
+                  "description": "upstream"
+                }
+              }
+            },
+            "messages": {
+              "type": "array",
+              "description": "UCP messages (upstream)"
+            }
+          },
+          "required": []
+        },
+        {
+          "type": "string",
+          "description": "MCP text content that was not valid JSON (line 1746) — e.g. an upstream error message returned with isError:true"
+        },
+        {
+          "description": "Any other JSON value JSON.parse can yield from the MCP text item (line 1744), upstream-defined",
+          "type": [
+            "array",
+            "number",
+            "boolean",
+            "null"
+          ]
+        },
+        {
+          "type": "object",
+          "description": "Raw JSON-RPC result when it has no text content item (line 1751)",
+          "properties": {
+            "content": {
+              "type": "array",
+              "description": "MCP content items (upstream)"
+            },
+            "isError": {
+              "type": "boolean",
+              "description": "MCP tool error flag (upstream)"
+            }
+          }
+        }
+      ]
     }
   },
   {
@@ -85,6 +264,169 @@
         "requests": 30,
         "window": 60000
       }
+    },
+    "returns": {
+      "description": "Upstream Shopify UCP get_product response, passed through unchanged.",
+      "anyOf": [
+        {
+          "type": "object",
+          "description": "UCP get_product payload",
+          "properties": {
+            "ucp": {
+              "type": "object",
+              "description": "UCP envelope (upstream)"
+            },
+            "product": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "product GID, gid://shopify/Product/<n>"
+                },
+                "title": {
+                  "type": "string",
+                  "description": "upstream"
+                },
+                "url": {
+                  "type": "string",
+                  "description": "storefront URL, .../products/<handle> (CLAUDE.md)"
+                },
+                "handle": {
+                  "type": "string",
+                  "description": "upstream"
+                },
+                "description": {
+                  "type": "object",
+                  "description": "upstream, {html}"
+                },
+                "price_range": {
+                  "type": "object",
+                  "properties": {
+                    "min": {
+                      "type": "object",
+                      "description": "UCP money — amount in MINOR units (cents)",
+                      "properties": {
+                        "amount": {
+                          "type": "number",
+                          "description": "integer cents, e.g. 8999 = $89.99 (CLAUDE.md + live probe)"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "description": "ISO currency, e.g. USD"
+                        }
+                      }
+                    },
+                    "max": {
+                      "type": "object",
+                      "description": "UCP money — amount in MINOR units (cents)",
+                      "properties": {
+                        "amount": {
+                          "type": "number",
+                          "description": "integer cents, e.g. 8999 = $89.99 (CLAUDE.md + live probe)"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "description": "ISO currency, e.g. USD"
+                        }
+                      }
+                    }
+                  }
+                },
+                "list_price_range": {
+                  "type": "object",
+                  "description": "compare-at range, same shape as price_range (CLAUDE.md)"
+                },
+                "variants": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "description": "variant GID, gid://shopify/ProductVariant/<n>"
+                      },
+                      "sku": {
+                        "type": "string",
+                        "description": "upstream"
+                      },
+                      "title": {
+                        "type": "string",
+                        "description": "upstream, e.g. 'Default Title'"
+                      },
+                      "price": {
+                        "type": "object",
+                        "description": "UCP money — amount in MINOR units (cents)",
+                        "properties": {
+                          "amount": {
+                            "type": "number",
+                            "description": "integer cents, e.g. 8999 = $89.99 (CLAUDE.md + live probe)"
+                          },
+                          "currency": {
+                            "type": "string",
+                            "description": "ISO currency, e.g. USD"
+                          }
+                        }
+                      },
+                      "availability": {
+                        "type": "object",
+                        "properties": {
+                          "available": {
+                            "type": "boolean",
+                            "description": "upstream in-stock flag (CLAUDE.md: variants[].availability.available)"
+                          }
+                        }
+                      },
+                      "checkout_url": {
+                        "type": "string",
+                        "description": "upstream"
+                      }
+                    }
+                  }
+                },
+                "options": {
+                  "type": "array"
+                },
+                "media": {
+                  "type": "array"
+                }
+              },
+              "description": "The product; same product shape as search_catalog plus 'selected' (live probe)"
+            },
+            "messages": {
+              "type": "array",
+              "description": "UCP messages (upstream)"
+            }
+          },
+          "required": []
+        },
+        {
+          "type": "string",
+          "description": "MCP text content that was not valid JSON (line 1746) — e.g. an upstream error message returned with isError:true"
+        },
+        {
+          "description": "Any other JSON value JSON.parse can yield from the MCP text item (line 1744), upstream-defined",
+          "type": [
+            "array",
+            "number",
+            "boolean",
+            "null"
+          ]
+        },
+        {
+          "type": "object",
+          "description": "Raw JSON-RPC result when it has no text content item (line 1751)",
+          "properties": {
+            "content": {
+              "type": "array",
+              "description": "MCP content items (upstream)"
+            },
+            "isError": {
+              "type": "boolean",
+              "description": "MCP tool error flag (upstream)"
+            }
+          }
+        }
+      ]
     }
   },
   {
@@ -117,6 +459,43 @@
         "requests": 30,
         "window": 60000
       }
+    },
+    "returns": {
+      "description": "Upstream Shopify MCP cart response, passed through unchanged; shape not constructed or read by code.",
+      "anyOf": [
+        {
+          "type": "object",
+          "description": "Parsed MCP text payload (upstream-defined cart object)",
+          "required": []
+        },
+        {
+          "type": "string",
+          "description": "MCP text content that was not valid JSON (line 1746) — e.g. an upstream error message returned with isError:true"
+        },
+        {
+          "description": "Any other JSON value JSON.parse can yield from the MCP text item (line 1744), upstream-defined",
+          "type": [
+            "array",
+            "number",
+            "boolean",
+            "null"
+          ]
+        },
+        {
+          "type": "object",
+          "description": "Raw JSON-RPC result when it has no text content item (line 1751)",
+          "properties": {
+            "content": {
+              "type": "array",
+              "description": "MCP content items (upstream)"
+            },
+            "isError": {
+              "type": "boolean",
+              "description": "MCP tool error flag (upstream)"
+            }
+          }
+        }
+      ]
     }
   },
   {
@@ -155,6 +534,43 @@
         "requests": 20,
         "window": 60000
       }
+    },
+    "returns": {
+      "description": "Upstream Shopify MCP cart response, passed through unchanged; shape not constructed or read by code.",
+      "anyOf": [
+        {
+          "type": "object",
+          "description": "Parsed MCP text payload (upstream-defined cart object)",
+          "required": []
+        },
+        {
+          "type": "string",
+          "description": "MCP text content that was not valid JSON (line 1746) — e.g. an upstream error message returned with isError:true"
+        },
+        {
+          "description": "Any other JSON value JSON.parse can yield from the MCP text item (line 1744), upstream-defined",
+          "type": [
+            "array",
+            "number",
+            "boolean",
+            "null"
+          ]
+        },
+        {
+          "type": "object",
+          "description": "Raw JSON-RPC result when it has no text content item (line 1751)",
+          "properties": {
+            "content": {
+              "type": "array",
+              "description": "MCP content items (upstream)"
+            },
+            "isError": {
+              "type": "boolean",
+              "description": "MCP tool error flag (upstream)"
+            }
+          }
+        }
+      ]
     }
   },
   {
@@ -193,6 +609,43 @@
         "requests": 10,
         "window": 60000
       }
+    },
+    "returns": {
+      "description": "Upstream Shopify MCP cart response, passed through unchanged; shape not constructed or read by code.",
+      "anyOf": [
+        {
+          "type": "object",
+          "description": "Parsed MCP text payload (upstream-defined cart object)",
+          "required": []
+        },
+        {
+          "type": "string",
+          "description": "MCP text content that was not valid JSON (line 1746) — e.g. an upstream error message returned with isError:true"
+        },
+        {
+          "description": "Any other JSON value JSON.parse can yield from the MCP text item (line 1744), upstream-defined",
+          "type": [
+            "array",
+            "number",
+            "boolean",
+            "null"
+          ]
+        },
+        {
+          "type": "object",
+          "description": "Raw JSON-RPC result when it has no text content item (line 1751)",
+          "properties": {
+            "content": {
+              "type": "array",
+              "description": "MCP content items (upstream)"
+            },
+            "isError": {
+              "type": "boolean",
+              "description": "MCP tool error flag (upstream)"
+            }
+          }
+        }
+      ]
     }
   },
   {
@@ -231,6 +684,52 @@
         "requests": 20,
         "window": 60000
       }
+    },
+    "returns": {
+      "description": "Upstream search_shop_policies_and_faqs response, passed through unchanged. Live: a JSON ARRAY of {question, answer}.",
+      "anyOf": [
+        {
+          "type": "array",
+          "description": "Parsed MCP text payload (live probe icuracao.com 2026-09-30, mimeType application/json)",
+          "items": {
+            "type": "object",
+            "properties": {
+              "question": {
+                "type": "string",
+                "description": "FAQ question (upstream)"
+              },
+              "answer": {
+                "type": "string",
+                "description": "FAQ answer (upstream)"
+              }
+            }
+          }
+        },
+        {
+          "type": "object",
+          "description": "Any object payload (upstream) — not observed; also the raw-result path (line 1751) {content:[...], isError}",
+          "properties": {
+            "content": {
+              "description": "Present ONLY on the raw-result path: the MCP content ARRAY, not text"
+            },
+            "isError": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "string",
+          "description": "MCP text content that was not valid JSON (line 1746) — e.g. an upstream error message returned with isError:true"
+        },
+        {
+          "type": [
+            "number",
+            "boolean",
+            "null"
+          ],
+          "description": "other JSON (line 1744)"
+        }
+      ]
     }
   },
   {
@@ -270,6 +769,185 @@
         "requests": 10,
         "window": 60000
       }
+    },
+    "returns": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "description": "every path. false on config/OTP/GraphQL/exception failures; true on 'no customer' and on success"
+        },
+        "error": {
+          "type": "string",
+          "description": "present when success:false. Literals: 'Shopify Admin API is not configured' (2059), 'Session container is invalid' (2068), 'OTP verification required before order lookup' (2076); otherwise the upstream GraphQL message / 'Failed to fetch orders' (2151) or exception message / 'Failed to lookup orders' (2200)"
+        },
+        "requiresOTP": {
+          "type": "boolean",
+          "enum": [
+            true
+          ],
+          "description": "present (always true) only on the invalid-container (2068) and not-verified (2076) paths"
+        },
+        "message": {
+          "type": "string",
+          "description": "present only when no customer matched (2160): 'No orders found for this email' | 'No orders found for this phone'"
+        },
+        "customer": {
+          "type": "object",
+          "description": "present only on full success (2189)",
+          "properties": {
+            "firstName": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Shopify Customer.firstName (nullable upstream)"
+            },
+            "lastName": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Customer.lastName"
+            },
+            "email": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Customer.email"
+            },
+            "phone": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "Customer.phone"
+            }
+          },
+          "required": [
+            "firstName",
+            "lastName",
+            "email",
+            "phone"
+          ]
+        },
+        "orders": {
+          "type": "array",
+          "description": "present when success:true — [] when no customer matched (2160); up to 10 newest-first orders otherwise (2178). A customer with no orders also yields [] WITH a customer object and without message.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "orderNumber": {
+                "type": "string",
+                "description": "Order.name, e.g. '#1001'"
+              },
+              "orderId": {
+                "type": "string",
+                "description": "Order GID, gid://shopify/Order/<n>"
+              },
+              "createdAt": {
+                "type": "string",
+                "description": "ISO-8601 DateTime"
+              },
+              "financialStatus": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "displayFinancialStatus, upstream enum e.g. PAID, PENDING, REFUNDED, PARTIALLY_REFUNDED, VOIDED; nullable"
+              },
+              "overallStatus": {
+                "type": "string",
+                "description": "computed (2167-2176): displayFulfillmentStatus (e.g. UNFULFILLED, FULFILLED, PARTIALLY_FULFILLED) or 'CANCELLED' / 'CANCELLED:<cancelReason>' (reason omitted when OTHER), then ' <displayFinancialStatus>' appended when non-null, e.g. 'FULFILLED PAID'"
+              },
+              "total": {
+                "type": "object",
+                "description": "totalPriceSet.shopMoney (?.) — may be undefined",
+                "properties": {
+                  "amount": {
+                    "type": "string",
+                    "description": "Shopify Decimal serialized as a STRING in MAJOR units, e.g. '129.99' (NOT cents, unlike UCP)"
+                  },
+                  "currencyCode": {
+                    "type": "string",
+                    "description": "e.g. USD"
+                  }
+                }
+              },
+              "tracking": {
+                "type": "array",
+                "description": "fulfillments[0].trackingInfo — ONLY the first fulfillment's; undefined when the order has no fulfillments",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "number": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "tracking number"
+                    },
+                    "url": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "tracking URL"
+                    }
+                  }
+                }
+              },
+              "shippingAddress": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "Order.shippingAddress (nullable upstream)",
+                "properties": {
+                  "address1": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": ""
+                  },
+                  "city": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": ""
+                  },
+                  "province": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": ""
+                  },
+                  "zip": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": ""
+                  }
+                }
+              }
+            },
+            "required": [
+              "orderNumber",
+              "orderId",
+              "createdAt",
+              "overallStatus"
+            ]
+          }
+        }
+      },
+      "required": [
+        "success"
+      ]
     }
   },
   {
@@ -319,6 +997,207 @@
         "requests": 10,
         "window": 60000
       }
+    },
+    "returns": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "description": "every path"
+        },
+        "error": {
+          "type": "string",
+          "description": "present when success:false. Literals: 'Shopify Admin API is not configured' (2214), 'OTP verification required' (2221), 'Order not found. Please verify the order number.' (2310), 'Order email does not match the provided email.' (2319), 'Order phone number does not match the provided phone number.' (2326); else GraphQL message / 'Failed to fetch order' (2301) or exception message / 'Failed to fetch order status' (2354)"
+        },
+        "requiresOTP": {
+          "type": "boolean",
+          "enum": [
+            true
+          ],
+          "description": "present (true) only on the not-verified path (2221)"
+        },
+        "order": {
+          "type": "object",
+          "description": "present only on success (2332)",
+          "properties": {
+            "orderNumber": {
+              "type": "string",
+              "description": "Order.name, e.g. '#1001'"
+            },
+            "createdAt": {
+              "type": "string",
+              "description": "ISO-8601 DateTime"
+            },
+            "financialStatus": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "displayFinancialStatus, upstream e.g. PAID/PENDING/REFUNDED; nullable"
+            },
+            "fulfillmentStatus": {
+              "type": "string",
+              "description": "displayFulfillmentStatus, upstream e.g. UNFULFILLED/FULFILLED/PARTIALLY_FULFILLED — NOT cancellation-aware (see cancelled)"
+            },
+            "cancelled": {
+              "type": "boolean",
+              "description": "!!order.cancelledAt (2339)"
+            },
+            "total": {
+              "type": "object",
+              "description": "totalPriceSet.shopMoney (?.)",
+              "properties": {
+                "amount": {
+                  "type": "string",
+                  "description": "Decimal STRING in major units, e.g. '129.99'"
+                },
+                "currencyCode": {
+                  "type": "string",
+                  "description": "e.g. USD"
+                }
+              }
+            },
+            "items": {
+              "type": "array",
+              "description": "lineItems(first:50) (2341)",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string",
+                    "description": "line item title"
+                  },
+                  "quantity": {
+                    "type": "number",
+                    "description": "integer"
+                  }
+                },
+                "required": [
+                  "title",
+                  "quantity"
+                ]
+              }
+            },
+            "fulfillments": {
+              "type": "array",
+              "description": "one entry per Shopify fulfillment (2345)",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "description": "Fulfillment.status, upstream e.g. SUCCESS/CANCELLED"
+                  },
+                  "tracking": {
+                    "type": "array",
+                    "description": "Fulfillment.trackingInfo list",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "number": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "description": ""
+                        },
+                        "url": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "description": ""
+                        },
+                        "company": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "description": "carrier name"
+                        }
+                      }
+                    }
+                  },
+                  "estimatedDelivery": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "estimatedDeliveryAt, ISO DateTime or null"
+                  }
+                },
+                "required": [
+                  "status",
+                  "tracking",
+                  "estimatedDelivery"
+                ]
+              }
+            },
+            "shippingAddress": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "description": "Order.shippingAddress (nullable)",
+              "properties": {
+                "firstName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": ""
+                },
+                "lastName": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": ""
+                },
+                "address1": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": ""
+                },
+                "city": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": ""
+                },
+                "province": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": ""
+                },
+                "zip": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "description": ""
+                }
+              }
+            }
+          },
+          "required": [
+            "orderNumber",
+            "createdAt",
+            "fulfillmentStatus",
+            "cancelled",
+            "items",
+            "fulfillments"
+          ]
+        }
+      },
+      "required": [
+        "success"
+      ]
     }
   },
   {
@@ -369,6 +1248,235 @@
         "requests": 20,
         "window": 60000
       }
+    },
+    "returns": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "description": "every path; false on inventory failure or any caught exception"
+        },
+        "error": {
+          "type": "string",
+          "description": "present when success:false: getStoreInventory's error ('Product variant not found', GraphQL message, 'Failed to fetch inventory', or its exception message) (1989), or this function's exception message (2048), e.g. geocode failure 'Could not geocode city: <city> after 2 retries' or a TypeError from a malformed storeLocations"
+        },
+        "found": {
+          "type": "boolean",
+          "description": "present when success:true — false (2029) when no stocked store matched, true (2038) otherwise"
+        },
+        "message": {
+          "type": "string",
+          "enum": [
+            "This product is currently not available for in-store pickup at any location."
+          ],
+          "description": "present only when found:false (2032)"
+        },
+        "productTitle": {
+          "type": "string",
+          "description": "present when success:true — variant.product?.title (1972)"
+        },
+        "variantTitle": {
+          "type": "string",
+          "description": "present when success:true — ProductVariant.title, e.g. 'Default Title'"
+        },
+        "stores": {
+          "type": "array",
+          "description": "present only when found:true; 1..maxStores entries sorted by distance ascending",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "description": "from the caller's storeLocations entry (tenant data, not typed by code; .toLowerCase() is called on it, so a string)",
+                "type": "string"
+              },
+              "city": {
+                "type": "string",
+                "description": "from storeLocations (.toLowerCase() called)"
+              },
+              "address": {
+                "description": "from storeLocations, passed through untyped"
+              },
+              "state": {
+                "description": "from storeLocations, passed through untyped"
+              },
+              "phone": {
+                "description": "from storeLocations, passed through untyped (may be absent)"
+              },
+              "available": {
+                "type": "number",
+                "description": "Shopify 'available' quantity at the matched location, > 0 (1963, 2000)"
+              },
+              "distance": {
+                "type": "number",
+                "description": "miles, Haversine from geocoded city (calculateDistance:1239, R=3959)"
+              }
+            },
+            "required": [
+              "name",
+              "city",
+              "available",
+              "distance"
+            ]
+          }
+        },
+        "totalStoresWithStock": {
+          "type": "number",
+          "description": "present only when found:true — count before the maxStores cut"
+        }
+      },
+      "required": [
+        "success"
+      ]
+    }
+  },
+  {
+    "id": "shipstation-get-tracking",
+    "name": "Get ShipStation Tracking",
+    "description": "Get real-time carrier tracking status and events for a shipment by tracking number via ShipStation. REQUIRES OTP verification first",
+    "parameters": {
+      "trackingNumber": {
+        "type": "string",
+        "description": "Carrier tracking number from the order's fulfillment"
+      },
+      "container": {
+        "type": "object",
+        "description": "Session container with OTP verification status"
+      }
+    },
+    "required": [
+      "trackingNumber",
+      "container"
+    ],
+    "additionalProperties": false,
+    "implementation": {
+      "type": "local",
+      "function": "getShipStationTracking",
+      "args": [
+        "trackingNumber",
+        "container"
+      ],
+      "timeout": 15000
+    },
+    "security": {
+      "requiresAuth": true,
+      "authType": "otp",
+      "auditLevel": "high",
+      "dataClassification": "financial",
+      "rateLimit": {
+        "requests": 10,
+        "window": 60000
+      }
+    },
+    "returns": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "description": "every path"
+        },
+        "error": {
+          "type": "string",
+          "description": "present when success:false. Literals: 'OTP verification required' (2391), 'ShipStation is not configured' (2402), 'No tracking number provided' (2408), 'ShipStation label lookup failed (<status>)' (2428), 'Shipment not found in ShipStation' (2439), 'ShipStation tracking request failed (<status>)' (2452); else exception message / 'Failed to fetch ShipStation tracking' (2502)"
+        },
+        "requiresOTP": {
+          "type": "boolean",
+          "enum": [
+            true
+          ],
+          "description": "present (true) only on the not-verified path (2391)"
+        },
+        "notFound": {
+          "type": "boolean",
+          "enum": [
+            true
+          ],
+          "description": "present (true) only when no ShipStation label matched (2439) — expected for labels not bought through ShipStation"
+        },
+        "trackingNumber": {
+          "type": "string",
+          "description": "present on success — upstream tracking_number, or the input"
+        },
+        "status": {
+          "type": "string",
+          "description": "present on success — upstream status_code or 'UN' default; upstream codes e.g. AC, IT, DE, EX, AT, NY, SP, UN"
+        },
+        "statusDescription": {
+          "type": "string",
+          "description": "present on success — upstream status_description or 'Unknown'"
+        },
+        "delivered": {
+          "type": "boolean",
+          "description": "present on success — status_code is 'DE' or 'SP'"
+        },
+        "exception": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "present on success — exception_description or null"
+        },
+        "shippedDate": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "present on success — shipped_date or null"
+        },
+        "estimatedDelivery": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "present on success — estimated_delivery_date or null"
+        },
+        "actualDelivery": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "present on success — actual_delivery_date or null"
+        },
+        "lastEvent": {
+          "type": "string",
+          "description": "present on success — newest event rendered 'description - City, ST - <en-US date>'; '' when there are no events"
+        },
+        "lastEventEs": {
+          "type": "string",
+          "description": "present on success — same, es-US date; '' when no events"
+        },
+        "events": {
+          "type": "array",
+          "description": "present on success — newest-first, at most 5",
+          "items": {
+            "type": "object",
+            "properties": {
+              "occurredAt": {
+                "type": "string",
+                "description": "upstream occurred_at (may be undefined)"
+              },
+              "description": {
+                "type": "string",
+                "description": "upstream (may be undefined)"
+              },
+              "city": {
+                "type": "string",
+                "description": "upstream city_locality (may be undefined)"
+              },
+              "state": {
+                "type": "string",
+                "description": "upstream state_province (may be undefined)"
+              },
+              "eventCode": {
+                "type": "string",
+                "description": "upstream event_code (may be undefined)"
+              }
+            }
+          }
+        }
+      },
+      "required": [
+        "success"
+      ]
     }
   }
 ]

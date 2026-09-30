@@ -19,6 +19,10 @@
       "container": {
         "type": "object",
         "description": "Session cargo container for OTP storage"
+      },
+      "language": {
+        "type": "string",
+        "description": "Session language for the message body (e.g. 'es'). Optional; omitted or unrecognised sends English."
       }
     },
     "required": [
@@ -35,7 +39,8 @@
         "accountSid",
         "from",
         "to",
-        "container"
+        "container",
+        "language"
       ],
       "timeout": 5000
     },
@@ -47,6 +52,11 @@
         "requests": 5,
         "window": 300000
       }
+    },
+    "returns": {
+      "type": "string",
+      "description": "Lowercase hex SHA-256 digest (64 chars) of the 6-digit OTP. On the test-number path (to normalizes to 0000000000 or +10000000000) it is the hash of the fixed code '123456'; otherwise the hash of the freshly generated code that was texted. The same value is also written to container.otpHash (with container.otpTimestamp). The plaintext code is never returned.",
+      "pattern": "^[0-9a-f]{64}$"
     }
   },
   {
@@ -61,6 +71,10 @@
       "container": {
         "type": "object",
         "description": "Session cargo container for OTP storage"
+      },
+      "language": {
+        "type": "string",
+        "description": "Session language for the message body (e.g. 'es'). Optional; omitted or unrecognised sends English."
       }
     },
     "required": [
@@ -73,6 +87,80 @@
       "function": "sendEmailOTP",
       "args": [
         "to",
+        "container",
+        "language"
+      ],
+      "timeout": 5000
+    },
+    "security": {
+      "requiresAuth": false,
+      "auditLevel": "medium",
+      "dataClassification": "authentication",
+      "rateLimit": {
+        "requests": 5,
+        "window": 300000
+      }
+    },
+    "returns": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$",
+          "description": "Test-account path only (to, lower-cased, === 'test@instantaiguru.com'): hex SHA-256 of the fixed code '123456', also stored in container.otpHash."
+        },
+        {
+          "not": {},
+          "description": "Real path: the function falls off the end of the try block with no return statement, so it resolves to undefined. JSON Schema cannot express undefined; `not: {}` marks 'no JSON value'. A consumer must treat the result as absent."
+        }
+      ],
+      "description": "string (test account) or undefined (every real send). Never an object."
+    }
+  },
+  {
+    "id": "send-whatsapp-invite",
+    "name": "Send WhatsApp Invite",
+    "description": "Text the caller a wa.me link so they can finish authenticating on WhatsApp. Returns true only if a text was actually sent.",
+    "parameters": {
+      "accountSid": {
+        "type": "string",
+        "description": "Twilio Account SID"
+      },
+      "from": {
+        "type": "string",
+        "description": "From phone number"
+      },
+      "to": {
+        "type": "string",
+        "description": "Caller mobile that already received the OTP text"
+      },
+      "inviteText": {
+        "type": "string",
+        "description": "Invite wording from global_whatsapp_invite / _es. EMPTY MEANS THE FEATURE IS OFF for this tenant - there is no separate boolean."
+      },
+      "language": {
+        "type": "string",
+        "description": "Session language, for logging and future wording"
+      },
+      "container": {
+        "type": "object",
+        "description": "Session cargo. Used ONLY for the once-per-call latch (container.whatsappInvited); the RESULT comes back as the return value."
+      }
+    },
+    "required": [
+      "accountSid",
+      "from",
+      "to"
+    ],
+    "additionalProperties": false,
+    "implementation": {
+      "type": "local",
+      "function": "sendWhatsAppInvite",
+      "args": [
+        "accountSid",
+        "from",
+        "to",
+        "inviteText",
+        "language",
         "container"
       ],
       "timeout": 5000
@@ -85,6 +173,10 @@
         "requests": 5,
         "window": 300000
       }
+    },
+    "returns": {
+      "type": "boolean",
+      "description": "true only when the invite SMS was handed to Twilio (sendTwilioSMS resolved). false on every skip and on every error — the function never throws (catch at 12224 returns false). Skip reasons returning false: container.whatsappInvited already set; inviteText empty/whitespace (feature off); missing from/to; tenant config has no 'config.wa-*' alias; the alias config has no usable phone_number digits; any exception (S3 load, sendTwilioSMS failure incl. out-of-region / non-SMS line)."
     }
   },
   {
@@ -123,6 +215,10 @@
         "requests": 10,
         "window": 60000
       }
+    },
+    "returns": {
+      "type": "boolean",
+      "description": "true when sha256(otp.toString()) equals container.otpHash and the code is at most 10 minutes old (then otpHash/otpTimestamp are cleared and container.otpVerified = true, container.otpVerifiedAt set). false when no code is stored, when it expired (container cleared, otpVerified = false), or on a hash mismatch (container untouched, so the same code may be retried)."
     }
   },
   {
@@ -179,6 +275,11 @@
         "requests": 10,
         "window": 60000
       }
+    },
+    "returns": {
+      "type": "boolean",
+      "const": true,
+      "description": "Always the literal true: the only non-throwing path is `return true` after the chat context is re-saved under <toNumber>-<dbPrefix> with a fresh engine session carrying the old cargo, and the SMS is sent. Every failure (ChatContextManager.load, initSession, save, sendTwilioSMS) is rethrown."
     }
   },
   {
@@ -235,6 +336,10 @@
         "requests": 10,
         "window": 60000
       }
+    },
+    "returns": {
+      "type": "string",
+      "description": "The `status` field of the Twilio Message resource returned by twilioClient.messages.create() for the LAST part sent (reply is split by splitSmsParts; parts are sent sequentially). Value comes from the Twilio API, not from code literals — typically 'queued' (or 'accepted' when sending via a Messaging Service). Not enumerated because the code sets it only from the upstream response."
     }
   }
 ]
