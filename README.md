@@ -444,10 +444,26 @@ const toolsRegistry = [
       requiresAuth: true,
       auditLevel: "critical",
       dataClassification: "financial"
+    },
+    // Optional output contract: the shape of what the CALL-TOOL `variable` receives (after
+    // responseMapping, if any). Lets flow authors and AI co-pilots read result paths
+    // (payment_result.transaction.id) from the definition instead of guessing them.
+    returns: {
+      type: "object",
+      required: ["success"],
+      properties: {
+        success: { type: "boolean" },
+        transaction: { type: "object", properties: { id: { type: "string" } } }
+      }
     }
   }
 ];
 ```
+
+**`returns` is optional and never changes behaviour.** A tool with or without it runs identically.
+A host can opt in to a diagnostic, `engine.validateToolReturns = true` (default `false`), which checks
+each result against `returns` and logs a warning on a mismatch or on a schema that does not compile.
+The result is still delivered unchanged either way.
 
 #### 3. **Approved Functions Registry** - Secure Local Functions
 
@@ -776,6 +792,7 @@ their original workflow seamlessly.
      };
      apiKey?: string;                               // Authentication token
      riskLevel?: 'low' | 'medium' | 'high';         // Security classification
+     returns?: object;                              // JSON Schema of the result the flow receives (optional)
    }
    ```
    

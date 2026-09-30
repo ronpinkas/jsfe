@@ -804,6 +804,16 @@ export interface ToolDefinition {
   apiKey?: string;
   riskLevel?: 'low' | 'medium' | 'high';
   category?: string;
+  /**
+   * Optional JSON Schema of the value this tool hands the flow — the CALL-TOOL `variable`, i.e. after
+   * `responseMapping` when there is one. The tool's output contract, as `parameters` is its input
+   * contract: flow authors and AI co-pilots read result paths from it instead of guessing them.
+   *
+   * The engine never changes, blocks or re-shapes a result because of it. Only when the host opts in
+   * with `engine.validateToolReturns = true` is each result checked against it, and a mismatch (or a
+   * schema that does not compile) is logged as a warning — the result is still delivered unchanged.
+   */
+  returns?: Record<string, unknown>;
 }
 
 export interface PropertySchema {
@@ -2380,6 +2390,37 @@ function sanitizeInput(input: unknown): unknown {
   if (typeof input !== 'string') return input;
   // Simple trim - no HTML encoding since user input is treated as literal data
   return input.trim();
+}
+
+// Compiled `returns` validators, per tool definition object; `false` records a schema that did not
+// compile, so it is reported once rather than on every call.
+const returnsValidators = new WeakMap<object, any>();
+
+/**
+ * Opt-in diagnostic: check a tool result against the tool's `returns` schema. Never throws and never
+ * touches the result — a host that has not set `engine.validateToolReturns` gets no work done here
+ * at all, so behaviour without the opt-in is exactly what it was before `returns` existed.
+ */
+function checkToolReturns(engine: Engine, tool: ToolDefinition, result: unknown): void {
+  if (!engine.validateToolReturns || !tool?.returns || !ajv) return;
+  try {
+    let validate = returnsValidators.get(tool);
+    if (validate === undefined) {
+      try {
+        validate = ajv.compile(tool.returns);
+      } catch (e: any) {
+        validate = false;
+        logger.warn(`Tool ${tool.id}: its returns schema does not compile (${e.message}); results are not checked`);
+      }
+      returnsValidators.set(tool, validate);
+    }
+    if (validate && !validate(result)) {
+      const detail = (validate.errors || []).map((e: any) => `${e.instancePath || '(root)'} ${e.message}`).join('; ');
+      logger.warn(`Tool ${tool.id}: result does not match its returns schema — ${detail}`);
+    }
+  } catch (e: any) {
+    logger.warn(`Tool ${tool.id}: returns check failed (${e.message}); result delivered unchanged`);
+  }
 }
 
 function validateToolArgs(tool: ToolDefinition, args: Record<string, unknown>): Record<string, unknown> {
@@ -4821,7 +4862,9 @@ async function generateToolCallAndResponse(
 
     const validatedArgs = validateToolArgs(tool, rawArgs);
 
-    return await callTool(engine, tool, validatedArgs, userId, transactionId);
+    const result = await callTool(engine, tool, validatedArgs, userId, transactionId);
+    checkToolReturns(engine, tool, result);
+    return result;
   } catch (error: any) {
     logger.info(`Error generating tool call for ${toolName}: ${error.message}`);
     throw error;
@@ -6702,6 +6745,11 @@ export class WorkflowEngine implements Engine {
   public globalVariables?: Record<string, unknown>;
   public aiCallback: AiCallbackFunction;
   public aiTimeOut: number;
+  /**
+   * Opt-in (default false): check every tool result against its tool's `returns` schema and log a
+   * warning on a mismatch. Diagnostic only — a result is never altered or withheld because of it.
+   */
+  public validateToolReturns: boolean = false;
 
   // Command management for different application types (chat vs voice vs automation)
   private enabledCommands: Set<string>;
