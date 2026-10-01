@@ -882,7 +882,7 @@
   {
     "id": "generic-retry-with-options",
     "name": "GenericRetryWithOptions",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "description": "Generic flow to offer retry, switch to text, or contact support",
     "parameters": [
       {
@@ -909,6 +909,16 @@
         "name": "capture_patterns",
         "type": "array",
         "description": "Optional array of {variable, regex} to capture from user input. Omitted by most callers; the SET step guards the reference, so absence means no smart capture rather than an evaluation failure."
+      },
+      {
+        "name": "caller_outcome",
+        "type": "string",
+        "description": "Optional. The caller's declared outcome for the failure that led here (usually 'unresolved'). Declared by the DISPATCH of an unrecognised answer, and kept only when intent detection matches no flow. Omitted = no outcome."
+      },
+      {
+        "name": "caller_reason",
+        "type": "string",
+        "description": "Optional. The caller's reason for caller_outcome (e.g. 'invalid_identifier')."
       }
     ],
     "variables": {
@@ -988,11 +998,17 @@
             "value": "{{cancel_flow || 'contact-support'}}",
             "callType": "reboot"
           },
-          "default": {
-            "id": "do_cancel",
+          "condition: user_choice === '' || /^\\d$/.test(user_choice)": {
+            "id": "do_cancel_no_intent",
             "type": "FLOW",
             "value": "{{cancel_flow || 'contact-support'}}",
             "callType": "reboot"
+          },
+          "default": {
+            "id": "dispatch_unrecognised",
+            "type": "DISPATCH",
+            "outcome": "{{typeof caller_outcome !== 'undefined' && caller_outcome ? caller_outcome : ''}}",
+            "reason": "{{typeof caller_reason !== 'undefined' && caller_reason ? caller_reason : ''}}"
           }
         }
       }

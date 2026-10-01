@@ -40,7 +40,7 @@ Everything below is read from the JSON. Where a flow's `description` text and it
 **Ending a flow.**
 - `RETURN` terminates **all** flows and makes its value the response. `RETURN ''` (used by `no-action-needed` and by `get-cell-or-email`'s off-topic branch) produces an empty response, so the host handles the user's message itself.
 - `END` returns from the current flow only, resuming its caller.
-- `DISPATCH` terminates **all** flows (queued SAYs included) and routes the turn's input through intent detection; with no match the response is empty and the host answers. No system flow uses it yet.
+- `DISPATCH` terminates **all** flows (queued SAYs included) and routes the turn's input through intent detection; with no match the response is empty and the host answers. The ended flows' declared outcome is kept only on a no-match. Used by `generic-retry-with-options` for an unrecognised answer.
 - A terminal step may declare `outcome` / `reason`. Two system steps declare `outcome: "unresolved"`: `contact-support`'s SAY (`contact_support_fallback`) and `get-cell-or-email`'s off-topic RETURN (`auth_prompt_off_topic`). The engine fails that flow's transaction and reports it once in `sessionContext.lastFlowOutcome`.
 
 **`onFail` on a CALL-TOOL.** A `FLOW` `onFail` runs with its `callType` (default `replace`): `replace` / `reboot` leave the failed flow, `call` runs the handler and then resumes the failed flow at its next step. A non-FLOW `onFail` (SAY / SET / RETURN) runs **immediately** after the failed tool step; a SAY or SET then lets the flow continue with its remaining steps, a RETURN ends it. Before the onFail runs, the CALL-TOOL `variable` holds the error text (a truthy string with no `.success`), so a SET `onFail` that writes a `{ success: false }`-style value is the safest pattern, and a SAY `onFail` is followed by the flow's remaining steps, which may contradict it. (jsfe ≤ 0.9.88 ran a non-FLOW onFail only after the remaining steps, and never ran a FLOW `call` onFail; fixed in 0.9.89.)
@@ -388,7 +388,7 @@ graph TD
 ---
 
 ## GenericRetryWithOptions
-**ID**: `generic-retry-with-options` · **Version**: 1.0.1 · **Sub-flow**  
+**ID**: `generic-retry-with-options` · **Version**: 1.1.0 · **Sub-flow**  
 **Description**: Generic flow to offer retry, switch to text, or contact support.
 
 ### Parameters
@@ -397,6 +397,7 @@ graph TD
 *   `retry_flow` (string): Flow to reboot if the user wants to retry.
 *   `cancel_flow` (string): Flow to reboot if the user cancels. Falls back to `contact-support` when empty.
 *   `capture_patterns` (array): Optional `[{variable, regex, normalizer?}]` to capture from the user's answer. Most callers omit it; the SET step guards the reference, so absence means no smart capture rather than an evaluation failure.
+*   `caller_outcome`, `caller_reason` (string): Optional. The caller's declared outcome (usually `unresolved`) and reason for the failure that led here. The `DISPATCH` of an unrecognised answer declares them, so they reach the host only when intent detection matches no flow. Omitted = no outcome.
 
 ### Steps
 1. `say_error_and_prompt` (SAY-GET `user_choice`, `digits: {min 1, max 1}`) — "{error_message} Would you like to try again? To retry [Press 1 or] {verb} YES. [To switch to text press 9 or {verb} TEXT.] To abort [press the asterisk key or] {verb} EXIT." The bracketed keypad and TEXT options appear on voice only.
@@ -407,10 +408,11 @@ graph TD
    - yes words (`yes, sure, please, ok, okay, thanks, si, sí, seguro, por favor, gracias`) or contact words (`phone, email, cell, mobile, teléfono, celular, móvil, correo`…) or `1` → FLOW `{{retry_flow}}` (`reboot`).
    - `text` / `texto` or `9` → FLOW `switch-to-text` (`reboot`).
    - EXIT words or `*` → FLOW `{{cancel_flow || 'contact-support'}}` (`reboot`).
-   - default → the same cancel target (`reboot`).
+   - empty input or a lone digit (no intent to detect) → the same cancel target (`reboot`).
+   - default → `DISPATCH` (outcome/reason = `caller_outcome`/`caller_reason`): the answer is routed through intent detection — a matching flow starts in the same turn, otherwise the host answers. (≤ 1.0.1 sent it to the cancel target: 87 conversations a week, measured 2026-09-24…30.)
 
 ### Ends
-Always by a `reboot` into another flow.
+By a `reboot` into another flow, or by `DISPATCH` (default branch).
 
 ### Flowchart
 ```mermaid
@@ -424,7 +426,8 @@ graph TD
     handle_choice -->|yes / contact words / 1| do_retry["FLOW reboot: {{retry_flow}}"]
     handle_choice -->|text / 9| do_switch_text[FLOW reboot: switch-to-text]
     handle_choice -->|EXIT / *| do_abort["FLOW reboot: cancel_flow or contact-support"]
-    handle_choice -->|default| do_cancel["FLOW reboot: cancel_flow or contact-support"]
+    handle_choice -->|empty / lone digit| do_cancel_no_intent["FLOW reboot: cancel_flow or contact-support"]
+    handle_choice -->|default| dispatch_unrecognised["DISPATCH: intent detection, else host"]
 ```
 
 ---
