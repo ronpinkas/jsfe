@@ -12,6 +12,7 @@ npm i jsfe
 - **[JavaScript Flow Engine User Guide](user-guide.md)** 
 - Comprehensive tutorials, examples, and best practices
 - **[README.md](README.md)** - Technical API reference (this document)
+- **[System Flows](docs/system-flows.md)** and **[Shopify Flows](docs/shopify-flows.md)** - the bundled flow and tool libraries in `flows/`, step by step
 
 *For detailed tutorials, step-by-step examples, and comprehensive workflow patterns, see the **[User Guide](user-guide.md)**.*
 
@@ -297,7 +298,7 @@ structured form, so a host can answer it with a classifier instead of a text mod
 async function aiCallback(systemInstruction, userMessage, jsonSchema, request) {
   if (request?.task === 'detect_flow') {
     // request.input         — the user input, exactly as in <user-input>
-    // request.conversation  — [{ role: 'user' | 'assistant', content }], oldest first; [] when none
+    // request.conversation  — the last user/assistant turn: [{ role, content }], oldest first; [] when none
     // request.flows         — [{ id, name, description, parameters: [{ name, description, type?, enum? }] }]
     // Reply exactly as the text path does: a JSON string { flowName, parameters }, flowName being a
     // flow's name (or "None"). The engine validates it the same way, enums included.
@@ -327,10 +328,18 @@ const body = buildAiRequest(
 - `buildAiRequest(model, systemInstruction, userMessage, jsonSchema)`, `parseSchemaArg`, `schemaName`.
   `model` fields: `name`, `reservedReplySize`, and the optional `tokenParam`, `supportsSchema`,
   `fixedSampling` and `extraParams`.
-- `isDetectFlowRequest`, `toFlowRequest` / `fromFlowAnswers` (which flow), `toParameterRequest` /
-  `fromParameterAnswers` (its enum and boolean parameters), `freeTextParameters`,
-  `mergeTextParameters`, `INTENT_YES_THRESHOLD`: these map the structured intent-detection
-  request to TypeSafe System One and back. The host sends the requests.
+- `isDetectFlowRequest`, `toFlowRequest` / `fromFlowAnswers` (which flow), `hasJevParameters` /
+  `toParameterRequest` / `fromParameterAnswers` (its enum and boolean parameters),
+  `freeTextParameters`, `mergeTextParameters`, `INTENT_YES_THRESHOLD`: these map the structured
+  intent-detection request to TypeSafe System One and back. The host sends the requests.
+  - Stage 1 asks one yes/no probability per flow and picks the highest if it reaches
+    `INTENT_YES_THRESHOLD` (0.5), else `"None"`. Stage 2, for the chosen flow only, asks one per enum
+    value and one per boolean parameter. Below the threshold a parameter is omitted (the flow asks for
+    it), never set to `false`.
+  - Any question that comes back unanswered makes the decoder **throw**, so the host can fall back
+    to a text model rather than read a missing answer as "no".
+  - `mergeTextParameters` adds a text model's free-text parameters only when the text model chose
+    the same flow. The classifier's enum and boolean values always win.
 
 **Alternative AI Services:**
 You can integrate any AI service (Claude, Gemini, local LLMs, etc.) by implementing this same interface. The engine only requires a function that takes system instructions and user input, then returns an AI response.
@@ -380,6 +389,8 @@ const flowsMenu = [
     value, a value repeated ignoring case, and an enum on a non-string type.
   - Declare an enum wherever the allowed values are a closed set. It also lets a host answer intent
     detection with a classifier instead of a text model (see the `request` argument of `aiCallback`).
+  - Validation also requires `parameters` to be an array, every parameter to have a non-empty
+    `name`, and names to be unique within the flow.
 - **`steps`** (required): Array of workflow steps to execute
 - **`variables`** (optional): Flow-specific variable definitions with types and descriptions
 - **`version`** (optional): Flow version for compatibility tracking (defaults to "1.0")
@@ -517,6 +528,22 @@ sessionContext.cargo.userProfile = {
 sessionContext = await engine.updateActivity(userEntry, sessionContext);
 ```
 
+#### Voice Sessions: `cargo.voice` and `cargo.digits`
+
+Two cargo fields connect the engine to a voice channel:
+
+- **`cargo.voice`** (set by the host): when truthy, the answer a `SAY-GET` collects into its
+  `variable` is cleaned by `aiCallback` before it is stored. The cleaner receives the question just asked and the caller's
+  words. It removes filler words, maps yes/no answers to `"yes"` / `"no"`, and writes spoken
+  numbers, phone numbers and emails in their written form ("john dot doe at gmail dot com" →
+  `john.doe@gmail.com`). It **never returns an email address or phone number that appears in the
+  question**: when a prompt reads a failed value back ("I could not verify the email
+  pinkas@example.com…"), the caller's answer is treated as a correction, and a near-miss such as
+  `rpinkas@…` is kept as said. If the cleanup fails or returns nothing, the raw answer is used.
+- **`cargo.digits`** (set by the engine): when a `SAY-GET` step declares `digits` (for example
+  `{ "min": 6, "max": 6 }`), the engine copies it to `cargo.digits` while the answer is awaited, so
+  the host can configure keypad (DTMF) collection. It is removed once the input is collected.
+
 #### Correct Session Update Pattern
 
 ```javascript
@@ -588,6 +615,10 @@ The method returns an updated `EngineSessionContext` containing:
 - **Updated flow state**: Modified flow stacks, variables, and execution context
 - **Response data**: If a workflow was triggered, `sessionContext.response` contains the result
 - **Session metadata**: Updated timestamps, accumulated messages, and transaction data
+- **`lastTurnToolCalls`**: every tool call this `updateActivity` attempted (see
+  [Host Responsibilities](#host-responsibilities-tool-calls-cancellation-and-concurrency))
+- **`lastFlowOutcome`**: the declared outcome of a flow that terminated during this call, if any
+  (see [Declared flow outcomes](#declared-flow-outcomes-lastflowoutcome))
 
 ### Integration Pattern
 
@@ -624,6 +655,11 @@ return aiResponse;
 - **Session isolation**: Each user/conversation needs its own session context
 - **Response checking**: Check `sessionContext.response` to determine if a workflow handled the input
 - **Persistence**: Your application should persist the updated session context between requests
+- **`JSFEActiveFlowEmptyResponse`**: if a flow is still active but its last step produced no output
+  and was not a `RETURN`, `updateActivity` resets the session's flow stacks (cargo and global
+  variables are kept), clears pending messages, and throws an error with this `name`. The session
+  is already repaired: the next turn starts with fresh intent detection. Log or record the error;
+  no rollback is needed. A deliberate `RETURN ''` (which ends every flow) is not flagged.
 
 ### Host Responsibilities: Tool Calls, Cancellation and Concurrency
 
@@ -702,6 +738,40 @@ if (turnWasCancelled && after.lastTurnToolCalls.length === 0) {
 await persist(session);
 ```
 
+### Declared flow outcomes: `lastFlowOutcome`
+
+A flow can say how it ended, not just that it ended. An optional `outcome` (and `reason`) on a step
+is remembered on the flow and applied when the flow terminates. Put it on the step that ends the
+flow: a `RETURN`, an `END` or a final `SAY`:
+
+```json
+{ "id": "say_support_message", "type": "SAY", "value": "Sorry I couldn't help! ...",
+  "outcome": "unresolved", "reason": "contact_support_fallback" }
+```
+
+- `"unresolved"`: the flow ended without resolving the user's need. Its transaction is marked
+  **failed** (reason = `reason`, or `"unresolved"`), so audits count it as a failure, not a success.
+- `"deflected"`: a decoy flow absorbed an intent-detection false positive by design. The
+  transaction completes; do not treat it as a user struggle.
+- `"resolved"` or any other value: informational; the transaction completes.
+- A flow that declares nothing completes exactly as before.
+
+The engine also stamps `engineSessionContext.lastFlowOutcome` for the host:
+
+```typescript
+interface FlowOutcome {
+  flowName: string;
+  outcome: string;
+  reason?: string;
+  endedBy: 'return' | 'completion'; // RETURN ended all flows; completion = ran out of steps (incl. after END)
+}
+```
+
+It is **one-shot**: cleared at the start of every `updateActivity`, and set only when a flow that
+declared an outcome terminated during that call. Hosts use it to run a recovery turn after an
+`"unresolved"` ending. When a `RETURN` terminates several flows, only the flow that executed it
+carries the RETURN's declaration; the others finalize with their own (usually none).
+
 ## Architecture Overview
 
 ### Stack-of-Stacks Design
@@ -735,6 +805,7 @@ their original workflow seamlessly.
      lastSayMessage?: string;                       // Last SAY step output for context
      pendingInterruption?: Record<string, unknown>; // Interruption state management
      accumulatedMessages?: string[];                // Accumulated SAY messages for batching
+     declaredOutcome?: { outcome: string; reason?: string }; // From a step's `outcome`, applied when the frame terminates
      parentTransaction?: string;                    // Parent transaction ID for sub-flow tracking
      justResumed?: boolean;                         // Flag indicating flow was just resumed
    }
@@ -939,7 +1010,7 @@ their original workflow seamlessly.
 - ✅ **Flow Interruption** - Suspend current flow for new task
 - ✅ **Flow Resumption** - Return to previously suspended flows
 - ✅ **Flow Replacement** - Replace current flow with new flow
-- ✅ **Flow Reboot** - Nuclear option: clear all flows and restart
+- ✅ **Flow Reboot** - Nuclear option: clear all flows and restart (SAY output accumulated before the reboot is kept and delivered with the new flow's output)
 
 ### Step Types
 - ✅ **SAY** - Non-blocking output messages (accumulated)
@@ -951,6 +1022,9 @@ their original workflow seamlessly.
 - ✅ **SWITCH** - Conditional branching based on single value matching
 - ✅ **RETURN** - Terminate all flows and return evaluated expression value (an EXIT/abort)
 - ✅ **END** - Return from the current flow only, resuming the parent flow — a functional `return` (no value; variables are shared with the parent)
+
+A terminal step (`RETURN`, `END` or a final `SAY`) may also carry `outcome` / `reason`; see
+[Declared flow outcomes](#declared-flow-outcomes-lastflowoutcome).
 
 ### Step Reliability: Validation & Retry
 Any step can also declare:

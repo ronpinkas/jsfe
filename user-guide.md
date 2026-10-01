@@ -17,6 +17,7 @@
 4. [Conditional Execution and Advanced Branching](#chapter-4-conditional-execution-and-advanced-branching)
 5. [Flow Interruption and Resumption](#chapter-5-flow-interruption-and-resumption)
 6. [Testing and Debugging Workflows](#chapter-6-testing-and-debugging-workflows)
+7. [Standard Flows Library](#chapter-7-standard-flows-library)
 
 [Conclusion and Next Steps](#conclusion-and-next-steps) 
 
@@ -166,10 +167,24 @@ const toolsRegistry = [
       requiresAuth: true,
       auditLevel: "critical",
       dataClassification: "financial"
+    },
+    // Optional output contract: the shape of what the CALL-TOOL `variable` receives (after
+    // responseMapping, if any). Lets flow authors and AI co-pilots read result paths
+    // (payment_result.transaction.id) from the definition instead of guessing them.
+    returns: {
+      type: "object",
+      required: ["success"],
+      properties: {
+        success: { type: "boolean" },
+        transaction: { type: "object", properties: { id: { type: "string" } } }
+      }
     }
   }
 ];
 ```
+
+**`returns` is optional and never changes behaviour.** A tool with or without it runs identically.
+See [Output Contract: `returns`](#output-contract-returns) for the opt-in `engine.validateToolReturns` diagnostic.
 
 #### 3. **Approved Functions Registry** - Secure Local Functions
 ```javascript
@@ -428,7 +443,7 @@ structured form, so a host can answer it with a classifier instead of a text mod
 async function aiCallback(systemInstruction, userMessage, jsonSchema, request) {
   if (request?.task === 'detect_flow') {
     // request.input         — the user input, exactly as in <user-input>
-    // request.conversation  — [{ role: 'user' | 'assistant', content }], oldest first; [] when none
+    // request.conversation  — the last user/assistant turn: [{ role, content }], oldest first; [] when none
     // request.flows         — [{ id, name, description, parameters: [{ name, description, type?, enum? }] }]
     // Reply exactly as the text path does: a JSON string { flowName, parameters }, flowName being a
     // flow's name (or "None"). The engine validates it the same way, enums included.
@@ -440,6 +455,45 @@ async function aiCallback(systemInstruction, userMessage, jsonSchema, request) {
 `systemInstruction` and `userMessage` are still the complete text prompt on that call, so a host can
 run its text model alongside the classifier (for example, for free-text parameters). A callback that
 ignores the 4th argument behaves exactly as before; every other call still receives three arguments.
+
+**Host helpers — `jsfe/host`:**
+Pure functions for the host side of `aiCallback`, so a production host and a local test harness
+share one implementation. Loading `jsfe/host` never loads the engine.
+
+```javascript
+import { buildAiRequest, isDetectFlowRequest, toFlowRequest, fromFlowAnswers } from 'jsfe/host';
+
+// An OpenAI-compatible chat-completions body from a model description.
+const body = buildAiRequest(
+  { name: 'gpt-4o-mini', reservedReplySize: 1024, supportsSchema: true },
+  systemInstruction, userMessage, jsonSchema);
+```
+
+- **`parseSchemaArg(jsonSchema)`**: the `jsonSchema` argument is not always JSON. The engine passes
+  a JSON `response_format` wrapper (e.g. `{type: 'json_schema', json_schema: {name: 'detect_flow', …}}`),
+  a plain-text schema description on the tool-argument path, or nothing at all (voice cleanup,
+  language detection). Returns the parsed wrapper, or `null` for the last two.
+  **`schemaName(jsonSchema)`** returns its `json_schema.name` (`detect_flow` or `intent_analysis`), or `null`.
+- **`buildAiRequest(model, systemInstruction, userMessage, jsonSchema)`**: `model` is
+  `{ name, reservedReplySize?, tokenParam?, supportsSchema?, fixedSampling?, extraParams? }`.
+  - `tokenParam` names the token-cap field (default `max_tokens`).
+  - `extraParams` is merged into the body.
+  - Sampling is deterministic (temperature 0, fixed seed) unless `fixedSampling`.
+  - `response_format` is omitted for `detect_flow` and for a plain-text schema (never sent as
+    `null`). It is sent as-is when the model `supportsSchema`, and is `{type: 'json_object'}`
+    otherwise.
+- **Intent detection with TypeSafe System One**: `isDetectFlowRequest`, `toFlowRequest` /
+  `fromFlowAnswers`, `hasJevParameters` / `toParameterRequest` / `fromParameterAnswers`,
+  `freeTextParameters`, `mergeTextParameters` and `INTENT_YES_THRESHOLD` (0.5) map the structured
+  `request` to System One questions and the answers back to `{ flowName, parameters }`. The host
+  sends the requests and owns the HTTP, the key and the timeouts.
+  - **Stage 1** asks one probability per flow and picks the highest if it reaches the threshold,
+    else `"None"`.
+  - **Stage 2**, for the chosen flow only, asks one per enum value and one per boolean parameter.
+    Below the threshold a parameter is omitted (the flow asks for it), never set to `false`.
+  - An unanswered question makes the decoder throw, so the host can fall back to a text model.
+  - Free-text parameters are not the classifier's (`freeTextParameters`). `mergeTextParameters`
+    takes them from a text model's reply only when that model chose the same flow.
 
 **Alternative AI Services:**
 You can integrate any AI service (Claude, Gemini, local LLMs, etc.) by implementing this same interface. The engine only requires a function that takes system instructions and user input, then returns an AI response.
@@ -502,6 +556,8 @@ interface FlowDefinition {
     value, a value repeated ignoring case, and an enum on a non-string type.
   - Declare an enum wherever the allowed values are a closed set. It also lets a host answer intent
     detection with a classifier instead of a text model (see the `request` argument of `aiCallback`).
+  - Validation also requires `parameters` to be an array, every parameter to have a non-empty
+    `name`, and names to be unique within the flow.
 - **Multi-language Support**: Engine automatically selects appropriate prompt based on user's language preference
 - **Variable Management**: Define flow-specific variables with types, scopes, and initial values
 - **Risk Classification**: `metadata.riskLevel` enables security-conscious flow handling
@@ -645,6 +701,9 @@ interface ToolDefinition {
       window: number;                  // Time window in milliseconds
     };
   };
+
+  // Output Contract (optional)
+  returns?: Record<string, unknown>;   // JSON Schema of the value the CALL-TOOL variable receives
 }
 ```
 
@@ -655,6 +714,53 @@ interface ToolDefinition {
 - **Flexible Implementation**: Support for both local functions and HTTP APIs
 - **Security Controls**: Rate limiting, risk classification, and authentication
 - **Response Transformation**: Declarative mapping to structure API responses
+- **Output Contract**: Optional `returns` schema describing the result the flow receives
+
+#### Output Contract: `returns`
+
+`parameters` describes what a tool takes; `returns` describes what it hands back. It is a JSON Schema
+of the value the CALL-TOOL step's `variable` receives (after `responseMapping`, when the tool has
+one). Flow authors and AI co-pilots read result paths such as `order_detail.order.fulfillmentStatus`
+from it instead of guessing them from example flows, and it is the natural place to document a
+tool's failure shape (`{ success: false, error }`).
+
+```javascript
+{
+  id: "get-order-status",
+  // ...parameters, implementation...
+  returns: {
+    type: "object",
+    required: ["success"],
+    properties: {
+      success: { type: "boolean" },
+      error:   { type: "string", description: "present when success is false" },
+      order: {
+        type: "object",
+        properties: {
+          orderNumber:       { type: "string" },
+          fulfillmentStatus: { type: "string" }
+        }
+      }
+    }
+  }
+}
+```
+
+- **Optional, and never changes behaviour.** A tool with or without `returns` runs identically. The
+  engine never changes, blocks or re-shapes a result because of it.
+- **Opt-in check: `engine.validateToolReturns = true`** (default `false`). With it on, each result is
+  checked against `returns`, and a mismatch is logged as a **warning** naming the tool and the
+  offending paths. The result is still delivered to the flow unchanged, and the check never throws.
+- **A schema that does not compile** is reported once per tool definition, as a warning, and that
+  tool's results are then not checked.
+- **Failures are unaffected.** A tool that throws reaches its `onFail` exactly as before; only
+  successful results are checked.
+- Set the option on the engine instance after construction; there is no constructor parameter:
+
+```javascript
+const engine = new WorkflowEngine(logger, aiCallback, flowsMenu, toolsRegistry, APPROVED_FUNCTIONS);
+engine.validateToolReturns = true; // e.g. in development or CI
+```
 
 **Local Function Tool Example:**
 ```javascript
@@ -967,6 +1073,66 @@ async function handleUserInput(input, sessionContext) {
   return reply;
 }
 ```
+
+#### What Else updateActivity() Returns
+
+Besides `response`, the returned session carries two one-shot fields. Both are reset at the start of
+every `updateActivity` call, so they describe that call only; read them before the next one.
+
+- **`lastTurnToolCalls`**: every tool call this call **attempted**, as
+  `{ tool, implementation, transactionId, at }`. A record is written before the tool is invoked,
+  including retries and calls that then throw or time out, because those may still have taken
+  effect remotely. It covers every `CALL-TOOL` step (local and HTTP). It does **not** cover
+  `APPROVED_FUNCTIONS` called from templates, `SET` values or conditions, so anything with an
+  external side effect must be a `CALL-TOOL` step. A call refused before invocation (argument
+  validation, rate limiting) is not recorded.
+- **`lastFlowOutcome`**: `{ flowName, outcome, reason?, endedBy }` when a flow that declared an
+  `outcome` terminated during this call (see
+  [Declaring How a Flow Ended](#declaring-how-a-flow-ended-outcome-and-reason)). Use it to run a
+  recovery turn after an `"unresolved"` ending.
+
+#### Host Responsibilities: Tool Calls, Cancellation and Concurrency
+
+A `CALL-TOOL` step can act in the outside world: charge a card, send an SMS. The session
+`updateActivity` returns is the only record that it already ran. Getting the rules below wrong lets a
+flow repeat an action the user asked for once. In production, a host cancelled a turn whose charge
+was in flight, restored the pre-turn session, and the caller's repeated "confirm" charged the card a
+second time (`tests/host-tool-calls.test.mjs` reproduces it).
+
+1. **Never restore a pre-turn session after the turn attempted a tool.** Discard or roll back a
+   turn's session only when its `lastTurnToolCalls` is empty. Otherwise persist exactly the session
+   `updateActivity` returned, even if its reply is never delivered.
+2. **A cancelled turn is still running; wait for it.** Cancelling on the host side does not stop
+   the engine or a tool it is calling. Always `await` the in-flight `updateActivity` before
+   persisting or discarding the session, or passing it to another call.
+3. **One `updateActivity` at a time per conversation, and per engine instance.** Serialize per
+   conversation (a lock or a queue). A newer turn should wait for an older turn to finish, not
+   proceed after a fixed timeout.
+4. **Make external side effects idempotent.** For actions that must never repeat, such as payments,
+   pass an idempotency key to the external service. That covers a host process that dies after the
+   tool took effect but before the session was persisted.
+
+```javascript
+const before = structuredClone(session);
+// Awaited even when the turn is being cancelled: the engine and its tools keep running.
+const after = await engine.updateActivity({ role: 'user', content: input }, session);
+
+if (turnWasCancelled && after.lastTurnToolCalls.length === 0) {
+  session = before;      // nothing happened in the world: safe to discard an unheard prompt
+} else {
+  session = after;       // a tool may have run: keep the record of it
+}
+await persist(session);
+```
+
+#### The `JSFEActiveFlowEmptyResponse` Error
+
+If a flow is still active but its last step produced no output and was not a `RETURN`, the engine
+is in a state it should never produce. `updateActivity` repairs it: it resets the flow stacks (cargo
+and global variables are kept) and clears pending messages, so the next turn starts with fresh
+intent detection. It then throws an error whose `name` is `JSFEActiveFlowEmptyResponse`, so the host
+can log or record it. The state is already self-healed, so no rollback is needed. A deliberate
+`RETURN ''`, which ends every flow and hands the turn to the host, is not flagged.
 
 ## Critical Session Management Patterns
 
@@ -1281,7 +1447,10 @@ Every tool must be registered in the `toolsRegistry` with this structure:
   security: { /* security settings */ },
   
   // Optional: API authentication
-  apiKey: "bearer-token-here"
+  apiKey: "bearer-token-here",
+
+  // Optional: output contract — JSON Schema of the result the flow receives
+  returns: { /* see "Output Contract: returns" */ }
 }
 ```
 
@@ -2712,7 +2881,7 @@ Handle tool failures gracefully:
 **CallType Options:**
 - `"call"`: Execute onFail as sub-flow, return to original flow after
 - `"replace"`: Replace current flow with onFail flow
-- `"reboot"`: Clear all flows and start fresh with onFail flow
+- `"reboot"`: Clear all flows and start fresh with onFail flow (SAY output accumulated before the failure is delivered with the onFail flow's output)
 
 ### Smart Default Error Handling
 
@@ -3428,6 +3597,9 @@ Store tool results for later use:
 // Later in the flow, access with {{accountDetails.balance}}
 ```
 
+The paths available on the variable are those of the tool's result. When the tool declares a
+[`returns`](#output-contract-returns) schema, read them from there.
+
 ### Timeout and Retries
 
 Configure resilience:
@@ -3973,6 +4145,25 @@ Variables operate at multiple levels:
 }
 ```
 
+**Voice input cleanup (`cargo.voice`):** when the session's `cargo.voice` is truthy, the answer is
+cleaned by `aiCallback` before it is stored in `variable`. The cleaner sees the question just asked
+and the caller's words, nothing else. It:
+- removes filler words;
+- maps yes/no answers to `"yes"` / `"no"`;
+- writes spoken numbers, phone numbers and emails in their written form ("john dot doe at gmail
+  dot com" → `john.doe@gmail.com`; "hot mail" → `@hotmail.com`).
+
+It never returns an email address or phone number that appears **in the question**. When a prompt
+reads a failed value back ("Sorry, I could not verify the email pinkas@example.com. Would you like
+to try again?"), the caller's answer is a correction, so a near-miss such as `rpinkas@…` is kept as
+said rather than converged onto the rejected value. If the cleanup fails or returns nothing, the raw
+answer is stored.
+
+**Keypad collection (`digits`):** a SAY-GET may declare `digits` (e.g. `{ "min": 6, "max": 6 }`). The
+engine copies it to `cargo.digits` while the answer is awaited, so a voice host can configure
+DTMF collection, and removes it once the input is collected. The engine does not interpret the
+fields; the host does.
+
 ### SET Steps - Variable Assignment and Calculations
 
 **Purpose**: Assign values to variables using expressions, calculations, or static values.
@@ -4123,7 +4314,7 @@ Variables operate at multiple levels:
 **Call Types:**
 - **`"call"`** (default): Execute sub-workflow, return to current workflow after completion
 - **`"replace"`**: Replace current workflow with new workflow (one-way transfer)
-- **`"reboot"`**: Clear all active workflows (including parents) and start fresh (emergency recovery)
+- **`"reboot"`**: Clear all active workflows (including parents) and start fresh (emergency recovery). SAY output accumulated before the reboot is not lost: it is delivered together with the new flow's output.
 
 **Sub-workflow Examples:**
 
@@ -4257,7 +4448,8 @@ Variables operate at multiple levels:
 **Technical Details:**
 - **Expression Support**: Full JavaScript expression evaluation with variable interpolation
 - **Type Conversion**: Automatically converts result to string for response
-- **Transaction Handling**: Properly marks transactions as completed
+- **Transaction Handling**: Marks the terminated flows' transactions as completed, unless a flow declared `outcome: "unresolved"` (then failed; see [Declaring How a Flow Ended](#declaring-how-a-flow-ended-outcome-and-reason))
+- **Empty Value**: `RETURN ''` produces an empty response, so the host handles the user's message itself (the standard `no-action-needed` flow is exactly this)
 - **Stack Cleanup**: Clears all flow stacks to ensure clean state
 - **Audit Logging**: Logs flow termination with reason
 
@@ -4301,6 +4493,36 @@ Variables operate at multiple levels:
 - `END` — return from the **current** flow to its parent (functional `return`). No value.
 - `RETURN` — terminate **all** flows and emit the evaluated value as the final response (an `EXIT`/abort).
 
+### Declaring How a Flow Ended: `outcome` and `reason`
+
+A flow that ends has not necessarily succeeded. A deliberate give-up, such as "Sorry I couldn't help,
+please call us", ends a flow just as cleanly as a finished task. An optional `outcome` (and `reason`)
+on a step lets the flow say which. It is remembered on the flow and applied when the flow
+terminates, so put it on the step that ends the flow: a `RETURN`, an `END` or a final `SAY`.
+
+```javascript
+{
+  id: "say_support_message",
+  type: "SAY",
+  value: "Sorry I couldn't help! {{contact_info}}.",
+  outcome: "unresolved",
+  reason: "contact_support_fallback"
+}
+```
+
+| `outcome` | Transaction | Meaning for the host |
+|---|---|---|
+| `"unresolved"` | **failed** (reason = `reason`, or `"unresolved"`) | the user's need was not met; consider a recovery turn |
+| `"deflected"` | completed | a decoy flow absorbed an intent-detection false positive by design; not a user struggle |
+| `"resolved"` / anything else | completed | informational |
+| *(none)* | completed | unchanged behaviour |
+
+When a flow with a declared outcome terminates, the engine sets the one-shot
+`sessionContext.lastFlowOutcome` to `{ flowName, outcome, reason, endedBy }`. `endedBy` is
+`'return'` when a `RETURN` ended all flows, and `'completion'` when the flow ran out of steps
+(including after `END`). When a `RETURN` terminates several flows, only the flow that executed it
+carries the RETURN's declaration.
+
 ## Step Execution Lifecycle
 
 ### 1. Step Preparation
@@ -4326,6 +4548,11 @@ Variables operate at multiple levels:
 - Conditional branching based on results
 - Sub-workflow calls or returns
 - Flow completion or termination
+
+When intent detection starts a flow, the engine queues a placeholder message (`flow_init`,
+"Processing {{flowPrompt}}" by default) as the turn's first output. The placeholder is dropped as
+soon as the flow produces output of its own: at its first SAY-GET, or when the flow completes
+having said something.
 
 ## Multi-language Support and Internationalization
 
@@ -5483,22 +5710,30 @@ The **JavaScript Flow Engine** provides a robust foundation for building sophist
 The JavaScript Flow Engine comes with a set of production-ready core flows that handle common conversational patterns. These flows are tested in production and provide robust implementations for system tasks and common integrations.
 
 ## System Flows
-These flows handle fundamental interaction patterns:
+`flows/system.flows.json` and `flows/system.tools.json`. Full reference, step by step: **[docs/system-flows.md](docs/system-flows.md)**.
 
-- **`no-action-needed`**: No-op flow when user input is already handled or requires no action.
-- **`cancel-process`**: Standard cancellation handler that confirms termination to the user.
-- **`contact-support`**: Provides support contact information (configured via cargo).
-- **`switch-to-text`**: Handles transition from voice/other channels to SMS, including sending a welcome message via Twilio.
-- **`authenticate-user`**: Robust multi-channel authentication (SMS/Email) with OTP generation and validation.
-- **`get-cell-or-email`**: Helper flow to collect contact information with validation.
+- **`authenticate-user`**: OTP authentication by SMS or email. It collects the contact, can run optional tenant validator flows (`cell_validator` / `email_validator`, fail-closed), sends the code, and verifies it. It sets `cargo.otpVerified`.
+- **`get-cell-or-email`**: collects and normalizes a phone number or email, with caller-ID support.
+- **`get-and-validate-otp-code`** / **`validate-otp-code`**: prompt for the 6-digit code and verify it, with help for "didn't get it" / "I'm driving" answers and an optional WhatsApp invite after a wrong code.
+- **`generic-retry-with-options`**: the shared "try again / switch to text / exit" menu, with smart capture of a corrected value.
+- **`retry-authenticate-generic`**: the authentication-specific retry menu.
+- **`live-agent-requested`**: offers to keep helping, then transfers (the host performs the transfer), or shares contact info when no agent is available.
+- **`switch-to-text`** (the only primary system flow): moves a voice call to SMS.
+- **`contact-support`**: shares support contact info. It ends with `outcome: "unresolved"`.
+- **`cancel-process`**: confirms a cancellation.
+- **`no-action-needed`**: `RETURN ''`, which hands the turn back to the host.
 
 ## Shopify Flows
-These flows provide e-commerce capabilities. 
-**Note**: The engine provides the necessary tool definitions in `shopify.tools.json`, so the integrator only needs to provide the Shopify Credentials (api key, secret, and store name).
+`flows/shopify.flows.json` and `flows/shopify.tools.json`. Full reference, including every tool's `returns` contract: **[docs/shopify-flows.md](docs/shopify-flows.md)**.
 
-- **`shopify-product-search`**: Search for products, check availability (including store-specific stock), and pricing.
-- **`shopify-track-order`**: Order tracking workflow (usually requires authentication).
-- **`get-search-query`**: Helper flow to collect a search query if not provided in the initial prompt.
+**Note**: the tool definitions are `local` tools. The engine ships their definitions, not their implementations: the host must register the named functions (`searchShopifyProducts`, `lookupCustomerOrders`, `getShipStationTracking`…) in `APPROVED_FUNCTIONS`, together with the expression helpers the flows call (`matchesChoice`, `validatePhone`, `validateEmail`, `normalizeAndFindCapture`, `textWithUrlToSpeech`). `demos/make-payment.js` contains reference implementations of many of them.
+
+- **`shopify-product-search`** (primary): catalog search, then optional nearest-store stock lookup (needs the `global_store_locations` global variable).
+- **`get-search-query`**: helper that asks for a search query when the prompt did not contain one.
+- **`shopify-track-order`** (primary): authenticates with `authenticate-user`, then hands off to `shopify-get-orders-verified`.
+- **`shopify-get-orders-verified`**: lists the verified customer's orders and shows one order's detail, adding live ShipStation tracking when the order has a tracking number.
+- **`shipstation-track-by-number-verified`**: looks up a tracking number directly in ShipStation, offered when the customer has no Shopify orders.
+- **`shopify-store-policies`** (primary): answers policy/FAQ questions from Shopify, but only when the tenant opts in with the `global_shopify_policy` global variable. Otherwise it hands the question to the host.
 
 ## Usage
 These flows are available in the `flows/` directory and can be added to your `flowsMenu` during engine initialization. Since they are standard object structures, you can import them directly from the JSON files.
