@@ -560,7 +560,7 @@ export interface FlowOutcome {
   flowName: string;
   outcome: string;
   reason?: string;
-  endedBy: 'return' | 'completion'; // RETURN terminates all flows; completion = frame ran out of steps (incl. after END)
+  endedBy: 'return' | 'completion' | 'dispatch'; // RETURN terminates all flows; completion = frame ran out of steps (incl. after END); dispatch = ended by a DISPATCH that matched no flow
 }
 
 export interface FlowStep {
@@ -720,6 +720,28 @@ function finalizeFlowTransaction(engine: Engine, frame: FlowFrame, endedBy: Flow
     logger.info(`Flow ${frame.flowName} terminated (${endedBy}) with declared outcome '${declared.outcome}'${declared.reason ? ` (${declared.reason})` : ''}`);
   } else {
     TransactionManager.complete(frame.transaction);
+  }
+}
+
+// A step's `outcome` / `reason`, interpolated with the frame's variables — so a flow can pass a
+// caller's outcome along (e.g. a retry menu declaring the outcome its caller handed it). An outcome
+// that interpolates to an empty string is no declaration. Literal values are returned unchanged.
+function resolveDeclaredOutcome(step: FlowStep, frame: FlowFrame, engine: Engine): { outcome: string; reason?: string } | undefined {
+  const resolve = (value: unknown): string => {
+    const text = String(value);
+    if (text.includes('{{')) {
+      return interpolateMessage(text, frame.contextStack, frame.variables, engine).trim();
+    } else {
+      return text;
+    }
+  };
+  const outcome = resolve(step.outcome);
+  if (!outcome) {
+    logger.info(`Step ${step.id || step.type} in ${frame.flowName}: outcome interpolated to empty — no outcome declared`);
+    return undefined;
+  } else {
+    const reason = step.reason !== undefined ? resolve(step.reason) : '';
+    return { outcome, reason: reason || undefined };
   }
 }
 
@@ -3000,13 +3022,10 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
       logger.info(`Step ${step.type} executed successfully, result: ${typeof result === 'object' ? '[object]' : result}`);
 
       // Declared outcome (see FlowOutcome): remember it on the frame so the
-      // termination paths (completion pop / RETURN) can apply it. RETURN steps
-      // are handled inside handleReturnStep (their frame is gone by now).
-      if (step.outcome !== undefined && step.type !== 'RETURN') {
-        currentFlowFrame.declaredOutcome = {
-          outcome: String(step.outcome),
-          reason: step.reason !== undefined ? String(step.reason) : undefined,
-        };
+      // termination paths (completion pop / RETURN) can apply it. RETURN and
+      // DISPATCH steps are handled inside their handlers (their frame is gone by now).
+      if (step.outcome !== undefined && step.type !== 'RETURN' && step.type !== 'DISPATCH') {
+        currentFlowFrame.declaredOutcome = resolveDeclaredOutcome(step, currentFlowFrame, engine);
       }
 
       // If this was a SAY-GET step, return and wait for user input
@@ -4565,10 +4584,7 @@ function handleReturnStep(currentFlowFrame: FlowFrame, engine: Engine): string {
   // Declared outcome (see FlowOutcome) — applies to the flow executing this RETURN;
   // parent flows it terminates finalize with their own (usually absent) declaration.
   if (step.outcome !== undefined) {
-    currentFlowFrame.declaredOutcome = {
-      outcome: String(step.outcome),
-      reason: step.reason !== undefined ? String(step.reason) : undefined,
-    };
+    currentFlowFrame.declaredOutcome = resolveDeclaredOutcome(step, currentFlowFrame, engine);
   }
 
   // Evaluate the value expression if provided
@@ -4611,23 +4627,36 @@ function handleDispatchStep(currentFlowFrame: FlowFrame, engine: Engine): string
   // processActivity runs intent detection on the input the turn started with (never a flow
   // variable a step may have rewritten). It resets ALL engine flow state — every stack, the
   // queued messages and the tentative flow_init flag — so nothing said by the ended flows is
-  // delivered. It declares no outcome and clears any outcome stamped earlier this turn: the
-  // turn's result is now whatever the re-routing produces. Tool calls already attempted this
-  // turn stay recorded (lastTurnToolCalls) — the host must still see them.
-  currentFlowFrame.flowStepsStack.pop(); // This handler pops its own step
+  // delivered. The ended flows finalize as any terminating flow does, so an outcome they
+  // declared — on this DISPATCH step itself or earlier — is stamped (endedBy 'dispatch').
+  // processActivity keeps that outcome when intent detection matches no flow (the flows'
+  // ending stands) and swallows it when a flow matches (the user is being served). Tool calls
+  // already attempted this turn stay recorded (lastTurnToolCalls) — the host must still see them.
+  const step = currentFlowFrame.flowStepsStack.pop()!; // This handler pops its own step
   const fromFlow = currentFlowFrame.flowName;
 
+  if (step.outcome !== undefined) {
+    currentFlowFrame.declaredOutcome = resolveDeclaredOutcome(step, currentFlowFrame, engine);
+  } else {
+    // no outcome on the DISPATCH step — any earlier declaration on this frame stands
+  }
+
+  // Bottom frames first, the dispatching frame last: when several declared, the dispatching
+  // flow's own declaration is the one the host sees (as RETURN's last-stamp-wins does).
   const exitedFlows: string[] = [];
   for (const stack of engine.flowStacks) {
     for (const flow of stack) {
-      TransactionManager.fail(flow.transaction, `Dispatched: flow ended by DISPATCH in ${fromFlow}`);
+      if (flow.declaredOutcome) {
+        finalizeFlowTransaction(engine, flow, 'dispatch');
+      } else {
+        TransactionManager.fail(flow.transaction, `Dispatched: flow ended by DISPATCH in ${fromFlow}`);
+      }
       exitedFlows.push(flow.flowName);
       auditLogger.logFlowExit(flow.flowName, currentFlowFrame.userId, flow.transaction.id, 'dispatch_step');
     }
   }
 
   engine.resetFlowState();
-  engine.clearFlowOutcome();
   engine.pendingDispatchFrom = fromFlow;
 
   logger.info(`DISPATCH step in '${fromFlow}': ended flows [${exitedFlows.join(', ')}]; this turn's input goes to intent detection.`);
@@ -6767,7 +6796,14 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
 
       if (dispatchedFrom !== null) {
         engine.recordDispatch({ fromFlow: dispatchedFrom, matchedFlow: activatedFlow ? activatedFlow.name : null });
-        logger.info(`DISPATCH from '${dispatchedFrom}': intent detection ${activatedFlow ? `started '${activatedFlow.name}'` : 'matched no flow; the host answers this turn'}`);
+        if (activatedFlow) {
+          // A flow serves the user now: the ended flows' outcome is swallowed.
+          engine.clearFlowOutcome();
+          logger.info(`DISPATCH from '${dispatchedFrom}': intent detection started '${activatedFlow.name}'; the ended flows' outcome (if any) is swallowed`);
+        } else {
+          // Nothing matched: the ended flows' ending stands — their outcome (if any) reaches the host.
+          logger.info(`DISPATCH from '${dispatchedFrom}': intent detection matched no flow; the host answers this turn, with the ended flows' outcome (if any)`);
+        }
       } else {
         // ordinary turn with no active flow — nothing to record
       }
@@ -7975,10 +8011,11 @@ export class WorkflowEngine implements Engine {
         this._validateSubFlowStep(step, flowDef, state, opts, currentScope);
         break;
       case 'DISPATCH': {
-        // DISPATCH takes nothing: it always routes the turn's own input, and never declares an outcome
-        const extra = Object.keys(step).filter(k => k !== 'id' && k !== 'type');
+        // DISPATCH always routes the turn's own input — no value. It may declare the ending of the
+        // flows it ends (`outcome` / `reason`, kept only when no flow matches).
+        const extra = Object.keys(step).filter(k => !['id', 'type', 'outcome', 'reason'].includes(k));
         if (extra.length > 0) {
-          state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" has invalid attribute(s) ${extra.map(k => `"${k}"`).join(', ')} - DISPATCH takes only "id"`);
+          state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" has invalid attribute(s) ${extra.map(k => `"${k}"`).join(', ')} - DISPATCH takes only "id", "outcome" and "reason"`);
         } else {
           // well-formed
         }

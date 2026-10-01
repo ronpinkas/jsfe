@@ -4513,7 +4513,7 @@ fields; the host does.
 - **No flow matches**: the engine returns no response (`null`) and leaves no flow active, so the host answers the turn (as on any turn with no active flow).
 - **Everything is reset**: every flow stack, the queued SAY messages and the tentative `flow_init`. Nothing the ended flows said is delivered.
 - **The input is the turn's own**: the message the turn started with, never a flow variable a step rewrote (e.g. a normalised `user_choice`).
-- **No outcome, no attributes**: `DISPATCH` takes only `id`. It declares no `outcome` and clears any outcome stamped earlier in the turn; the turn's result is whatever the re-routing produces.
+- **Outcome — kept only when nothing matches**: the ended flows finalize like any terminating flow, so an `outcome` they declared (on the `DISPATCH` step itself, or earlier) is stamped with `endedBy: 'dispatch'`. When intent detection matches a flow, that outcome is **swallowed** (the user is being served); when nothing matches, it **reaches the host** (the flows' ending stands). `DISPATCH` takes only `id`, `outcome` and `reason` — no `value`.
 - **Tool calls stay recorded**: a tool attempted earlier in the turn remains in `lastTurnToolCalls`.
 - **Reported to the host**: `engineSessionContext.lastTurnDispatch = { fromFlow, matchedFlow }` (`matchedFlow` is `null` when nothing matched), one-shot like `lastFlowOutcome`.
 
@@ -4529,7 +4529,10 @@ fields; the host does.
 A flow that ends has not necessarily succeeded. A deliberate give-up, such as "Sorry I couldn't help,
 please call us", ends a flow just as cleanly as a finished task. An optional `outcome` (and `reason`)
 on a step lets the flow say which. It is remembered on the flow and applied when the flow
-terminates, so put it on the step that ends the flow: a `RETURN`, an `END` or a final `SAY`.
+terminates, so put it on the step that ends the flow: a `RETURN`, an `END`, a `DISPATCH` or a final `SAY`.
+Both may use `{{…}}` interpolation with the flow's variables (e.g. `"reason": "{{failure_reason}}"`,
+so a caller can pass its reason into a shared flow); an `outcome` that interpolates to an empty
+string declares nothing.
 
 ```javascript
 {

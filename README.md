@@ -744,7 +744,8 @@ await persist(session);
 
 A flow can say how it ended, not just that it ended. An optional `outcome` (and `reason`) on a step
 is remembered on the flow and applied when the flow terminates. Put it on the step that ends the
-flow: a `RETURN`, an `END` or a final `SAY`:
+flow: a `RETURN`, an `END`, a `DISPATCH` or a final `SAY`. Both may use `{{…}}` interpolation with
+the flow's variables; an `outcome` that interpolates to empty declares nothing:
 
 ```json
 { "id": "say_support_message", "type": "SAY", "value": "Sorry I couldn't help! ...",
@@ -765,9 +766,11 @@ interface FlowOutcome {
   flowName: string;
   outcome: string;
   reason?: string;
-  endedBy: 'return' | 'completion'; // RETURN ended all flows; completion = ran out of steps (incl. after END)
+  endedBy: 'return' | 'completion' | 'dispatch'; // RETURN ended all flows; completion = ran out of steps (incl. after END); dispatch = a DISPATCH ended them and no flow matched
 }
 ```
+
+A `DISPATCH` that starts a flow swallows the ended flows' outcome; one that matches nothing keeps it.
 
 It is **one-shot**: cleared at the start of every `updateActivity`, and set only when a flow that
 declared an outcome terminated during that call. Hosts use it to run a recovery turn after an
@@ -1024,7 +1027,7 @@ their original workflow seamlessly.
 - ✅ **SWITCH** - Conditional branching based on single value matching
 - ✅ **RETURN** - Terminate all flows and return evaluated expression value (an EXIT/abort)
 - ✅ **END** - Return from the current flow only, resuming the parent flow — a functional `return` (no value; variables are shared with the parent)
-- ✅ **DISPATCH** - End all flows and route this turn's input through intent detection, as if no flow had been active (a matched flow starts in the same turn; no match → no response, the host answers). Resets everything, declares no outcome, takes only `id`. See the user guide's *DISPATCH Steps*
+- ✅ **DISPATCH** - End all flows and route this turn's input through intent detection, as if no flow had been active (a matched flow starts in the same turn; no match → no response, the host answers). Resets everything; the ended flows' declared outcome is kept only when no flow matches. Takes `id`, `outcome`, `reason`. See the user guide's *DISPATCH Steps*
 
 A terminal step (`RETURN`, `END` or a final `SAY`) may also carry `outcome` / `reason`; see
 [Declared flow outcomes](#declared-flow-outcomes-lastflowoutcome).

@@ -6,9 +6,11 @@
 // The contract pinned here:
 // - A matched flow starts in the same turn; its output is the whole reply.
 // - No match: the engine returns no response (null) and leaves no flow active — the host answers.
-// - Everything is reset: nothing the ended flows queued is delivered, and DISPATCH declares no
-//   outcome (an outcome stamped earlier this turn is cleared). Tool calls attempted this turn stay
-//   recorded — the host's "never roll back a turn that attempted a tool" depends on them.
+// - Everything is reset: nothing the ended flows queued is delivered. Tool calls attempted this
+//   turn stay recorded — the host's "never roll back a turn that attempted a tool" depends on them.
+// - Outcome: the ended flows finalize like any terminating flow (endedBy 'dispatch'), including an
+//   `outcome`/`reason` on the DISPATCH step itself (interpolated). No match: that outcome reaches
+//   the host. A match: it is swallowed — the user is being served.
 // - The input routed is the one the turn started with, never a flow variable a step rewrote.
 // - The input is routed once per turn: a started flow reaching DISPATCH before any SAY-GET is an
 //   invalid flow (the validator rejects it); at runtime the host answers that turn.
@@ -106,12 +108,50 @@ async function session(flows) {
   eq(t.s.response, null, 'and with no match it is dropped too — the host answers alone');
   eq(t.s.globalAccumulatedMessages, [], 'with nothing left queued for a later turn');
 }
+// ── Outcome: kept when nothing matches, swallowed when a flow matches ───────────────────────────
 {
   const t = await session([menu([{ id: 'call', type: 'FLOW', value: 'Sub', callType: 'call' }]), pay, sub]);
   await t.say('Menu');
   await t.say('nothing matches this');
-  eq(t.s.lastFlowOutcome, undefined, 'DISPATCH clears an outcome stamped earlier this turn and declares none');
-  eq(markers(t.s.response), [], 'and the sub-flow\'s SAY is not delivered');
+  eq(t.s.lastFlowOutcome?.outcome, 'unresolved', 'no match: an outcome declared earlier this turn reaches the host');
+  eq(markers(t.s.response), [], 'and the sub-flow\'s SAY is still not delivered');
+}
+{
+  const t = await session([menu([{ id: 'call', type: 'FLOW', value: 'Sub', callType: 'call' }]), pay, sub]);
+  await t.say('Menu');
+  await t.say('Pay');
+  eq(t.s.lastFlowOutcome, undefined, 'a match swallows the ended flows\' outcome');
+}
+const declaring = (outcome, reason) => flow('Menu', [
+  { id: 'ask', type: 'SAY-GET', variable: 'choice', value: '[menu prompt]' },
+  { id: 'route', type: 'CASE', branches: {
+    "condition: choice === 'yes'": { id: 'again', type: 'SAY-GET', variable: 'x', value: '[retried]' },
+    default: { id: 'dispatch_unrecognised', type: 'DISPATCH', outcome, ...(reason !== undefined ? { reason } : {}) } } },
+], { variables: { why: { type: 'string', value: 'lookup_failed' }, none: { type: 'string', value: '' } } });
+{
+  const t = await session([declaring('unresolved', 'retry_declined'), pay]);
+  await t.say('Menu');
+  await t.say('nothing matches this');
+  eq(t.s.lastFlowOutcome, { flowName: 'Menu', outcome: 'unresolved', reason: 'retry_declined', endedBy: 'dispatch' },
+    'no match: the DISPATCH step\'s own outcome is stamped, endedBy dispatch');
+}
+{
+  const t = await session([declaring('unresolved', 'retry_declined'), pay]);
+  await t.say('Menu');
+  await t.say('Pay');
+  eq(t.s.lastFlowOutcome, undefined, 'a match swallows the DISPATCH step\'s own outcome too');
+}
+{
+  const t = await session([declaring('unresolved', '{{why}}'), pay]);
+  await t.say('Menu');
+  await t.say('nothing matches this');
+  eq(t.s.lastFlowOutcome?.reason, 'lookup_failed', 'reason interpolates flow variables (a caller can pass its failure reason in)');
+}
+{
+  const t = await session([declaring('{{none}}', 'x'), pay]);
+  await t.say('Menu');
+  await t.say('nothing matches this');
+  eq(t.s.lastFlowOutcome, undefined, 'an outcome that interpolates to empty is no declaration');
 }
 {
   const t = await session([menu([{ id: 'tool', type: 'CALL-TOOL', tool: 'fine', variable: 'r' }]), pay]);
@@ -120,6 +160,21 @@ async function session(flows) {
   await t.say('Pay');
   eq(toolCalls - before, 1, 'the tool ran');
   eq((t.s.lastTurnToolCalls || []).map((c) => c.tool), ['fine'], 'a tool attempted before DISPATCH stays recorded for the host');
+}
+
+// ── outcome/reason interpolation is shared by every terminal step ───────────────────────────────
+{
+  const giveUp = flow('GiveUp', [
+    { id: 'set', type: 'SET', variable: 'why', value: "'otp_retries_exhausted'" },
+    { id: 'r', type: 'RETURN', value: "''", outcome: 'unresolved', reason: '{{why}}' },
+  ]);
+  const t = await session([giveUp]);
+  await t.say('GiveUp');
+  eq(t.s.lastFlowOutcome?.reason, 'otp_retries_exhausted', 'a RETURN\'s reason interpolates too');
+  const literal = flow('Literal', [{ id: 'r', type: 'RETURN', value: "''", outcome: 'unresolved', reason: 'auth_prompt_off_topic' }]);
+  const u = await session([literal]);
+  await u.say('Literal');
+  eq(u.s.lastFlowOutcome, { flowName: 'Literal', outcome: 'unresolved', reason: 'auth_prompt_off_topic', endedBy: 'return' }, 'a literal outcome is unchanged');
 }
 
 // ── The routed input is the turn's own, not a rewritten variable ────────────────────────────────
@@ -182,10 +237,18 @@ async function session(flows) {
 {
   const withOutcome = flow('WithOutcome', [
     { id: 'ask', type: 'SAY-GET', variable: 'y', value: '[ask]' },
-    { id: 'd', type: 'DISPATCH', outcome: 'unresolved' },
+    { id: 'd', type: 'DISPATCH', outcome: 'unresolved', reason: 'r' },
   ]);
   const e = new WorkflowEngine(quiet, null, [withOutcome], tools, APPROVED_FUNCTIONS, {}, false, 'en');
-  ok(e.validateFlow('WithOutcome').errors.some((m) => /DISPATCH step "d".*"outcome"/.test(m)), 'DISPATCH never takes an outcome (or any attribute)');
+  eq(e.validateFlow('WithOutcome').errors.filter((m) => /DISPATCH step "d"/.test(m)), [], 'DISPATCH may declare outcome and reason');
+}
+{
+  const withValue = flow('WithValue', [
+    { id: 'ask', type: 'SAY-GET', variable: 'y', value: '[ask]' },
+    { id: 'd', type: 'DISPATCH', value: "'x'" },
+  ]);
+  const e = new WorkflowEngine(quiet, null, [withValue], tools, APPROVED_FUNCTIONS, {}, false, 'en');
+  ok(e.validateFlow('WithValue').errors.some((m) => /DISPATCH step "d".*"value"/.test(m)), 'any other attribute (e.g. value) is an error');
 }
 
 console.log(`dispatch: ${checks} checks passed`);
