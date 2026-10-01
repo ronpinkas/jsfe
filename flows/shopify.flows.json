@@ -2,7 +2,7 @@
   {
     "id": "shopify-product-search",
     "name": "ShopifyProductSearch",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Help customers search for products, products availability (also availability per location), or pricing - this should not be triggered by prompts asking about general advice, the user prompt should explicitly ask to find a product, product availability (possibly for a given location), or pricing.",
     "prompt": "product search",
     "prompt_es": "buscar producto",
@@ -135,8 +135,7 @@
         "branches": {
           "condition: user_prompt": {
             "id": "no_choice_made",
-            "type": "RETURN",
-            "value": "''"
+            "type": "DISPATCH"
           },
           "condition: /^(done|no|exit|listo|no gracias|salir)$/i.test(String(product_choice?.value || product_choice || '').trim())": {
             "id": "end_search",
@@ -151,9 +150,7 @@
           },
           "default": {
             "id": "invalid_choice",
-            "type": "FLOW",
-            "value": "no-action-needed",
-            "callType": "reboot"
+            "type": "DISPATCH"
           }
         }
       },
@@ -388,7 +385,7 @@
   {
     "id": "shopify-get-orders-verified",
     "name": "ShopifyGetOrdersVerified",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Get order list for verified customer",
     "variables": {
       "orders_result": {
@@ -525,9 +522,7 @@
           },
           "default": {
             "id": "finished-forward-prompt-to-conversational-ai",
-            "type": "FLOW",
-            "value": "no-action-needed",
-            "callType": "reboot"
+            "type": "DISPATCH"
           }
         }
       },

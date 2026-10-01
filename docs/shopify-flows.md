@@ -52,10 +52,10 @@ Everything below is read from the JSON. The flows call the system flows (`no-act
    No products → FLOW `no-action-needed` (`reboot`).
 4. `check_global_store_locations` (CASE) — `global_store_locations` is a non-empty array → SAY-GET `product_choice`: "Would you like to check which stores near you have any of these in stock? Tell me the product number (1-5), or say 'done'…". Otherwise → SAY-GET `user_prompt`: "Is there anything else I can help you with today?"
 5. `check_product_choice` (CASE, first match wins):
-   - `user_prompt` set → **`RETURN ''`**. The follow-up goes to the host.
+   - `user_prompt` set (the answer to "Anything else?") → **`DISPATCH`** (1.1.0): the answer goes to intent detection — another flow can start at once — else to the host.
    - `done | no | exit | listo | no gracias | salir` (whole answer, case-insensitive) → `RETURN` "Cool! If you need anything else, just ask."
    - `1`–`5` → SET `product_idx` (0-based).
-   - anything else → FLOW `no-action-needed` (`reboot`).
+   - anything else → **`DISPATCH`** (1.1.0).
 6. `set_selected_product` → `search_result.products[product_idx]`.
 7. `ask_city` (SAY-GET `user_city`) — "What city are you near? I'll find stores with this item in stock." Then `normalize_city` trims the answer.
 8. `set_selected_variant` — the first variant that is available, else the first variant, else `null`.
@@ -90,7 +90,7 @@ graph TD
     choice -->|user_prompt set| no_choice_made["RETURN '' — host answers"]
     choice -->|done / no / exit| end_search[RETURN: Cool!]
     choice -->|1-5| set_product_idx[SET: product_idx, selected_product]
-    choice -->|other| invalid_choice[FLOW reboot: no-action-needed]
+    choice -->|other| invalid_choice[DISPATCH]
     set_product_idx --> ask_city[SAY-GET: which city?]
     ask_city --> set_selected_variant[SET: first available variant]
     set_selected_variant --> check_variant_valid{variant id?}
@@ -190,7 +190,7 @@ Reached by `replace` from `shopify-track-order`, so it keeps that flow's variabl
    - one order → SET `order_number = orders_result.orders[0].orderNumber`.
    - several → SAY-GET `user_choice`: "Hi {orders_result.customer.firstName}! Here are your recent orders:", then up to 5 lines: "{n}. Order {orderNumber} / Date: {createdAt as locale date} / Status: {overallStatus or 'Processing'} / Total: ${total.amount}". Then "To see details for a specific order, {verb} the order number (e.g., '1' for the first order)…".
 4. `check_single_order` — `go_to_details = !!order_number`.
-5. `handle_selection` (CASE) — `go_to_details` → continue. `1`–`5` → `order_number = orders_result.orders[n-1]?.orderNumber || ''`. Otherwise → FLOW `no-action-needed` (`reboot`), which forwards the answer to the host.
+5. `handle_selection` (CASE) — `go_to_details` → continue. `1`–`5` → `order_number = orders_result.orders[n-1]?.orderNumber || ''`. Otherwise → **`DISPATCH`** (1.1.0): the answer goes to intent detection, else to the host.
 6. `get_specific_order` (CASE):
    - `order_number` → CALL-TOOL [`shopify-get-order-status`](#shopify-get-order-status) `{orderNumber: order_number, identifier: shopify_identifier, container: cargo, validateIdentifier: validate_identifier}` into `order_detail`. `onFail` → SAY "I couldn't retrieve details for that order. Please try again."
    - otherwise → FLOW `contact-support` (`reboot`).
@@ -230,7 +230,7 @@ graph TD
     show_orders --> handle_selection
     handle_selection -->|already have order| get_specific_order{order_number?}
     handle_selection -->|1-5| pick[SET: order_number] --> get_specific_order
-    handle_selection -->|other| finished[FLOW reboot: no-action-needed]
+    handle_selection -->|other| finished[DISPATCH]
     get_specific_order -->|yes| fetch_order_status[TOOL: shopify-get-order-status]
     get_specific_order -->|no| unexpected_no_order[FLOW reboot: contact-support]
     fetch_order_status --> has_tracking{tracking number?}

@@ -411,7 +411,7 @@
   {
     "id": "get-cell-or-email",
     "name": "GetCellOrEmail",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Prompt user to provide either their cell phone number or email address for account lookup",
     "parameters": [
       {
@@ -581,10 +581,9 @@
             "variable": "cell_number",
             "value": "cargo.callerId"
           },
-          "condition: cell_or_email.trim().split(/\\s+/).length >= 3 && !/[0-9@]/.test(cell_or_email)": {
+          "condition: !cell_number && !email && cell_or_email.trim().split(/\\s+/).length >= 3 && !/[0-9@]/.test(cell_or_email)": {
             "id": "off_topic_handoff",
-            "type": "RETURN",
-            "value": "''",
+            "type": "DISPATCH",
             "outcome": "unresolved",
             "reason": "auth_prompt_off_topic"
           },

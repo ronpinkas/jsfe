@@ -38,10 +38,10 @@ Everything below is read from the JSON. Where a flow's `description` text and it
 - `reboot` — clear every active flow and start the target as the only flow, with fresh variables (the global variables, the target's declared defaults, then the `parameters`). SAY output accumulated before the reboot is kept and delivered with the target's output.
 
 **Ending a flow.**
-- `RETURN` terminates **all** flows and makes its value the response. `RETURN ''` (used by `no-action-needed` and by `get-cell-or-email`'s off-topic branch) produces an empty response, so the host handles the user's message itself.
+- `RETURN` terminates **all** flows and makes its value the response. `RETURN ''` (used by `no-action-needed`) produces an empty response, so the host handles the user's message itself.
 - `END` returns from the current flow only, resuming its caller.
 - `DISPATCH` terminates **all** flows (queued SAYs included) and routes the turn's input through intent detection; with no match the response is empty and the host answers. The ended flows' declared outcome is kept only on a no-match. Used by `generic-retry-with-options` for an unrecognised answer.
-- A terminal step may declare `outcome` / `reason`. Two system steps declare `outcome: "unresolved"`: `contact-support`'s SAY (`contact_support_fallback`) and `get-cell-or-email`'s off-topic RETURN (`auth_prompt_off_topic`). The engine fails that flow's transaction and reports it once in `sessionContext.lastFlowOutcome`.
+- A terminal step may declare `outcome` / `reason`. Two system steps declare `outcome: "unresolved"`: `contact-support`'s SAY (`contact_support_fallback`) and `get-cell-or-email`'s off-topic DISPATCH (`auth_prompt_off_topic` — kept only when no flow matches). The engine fails that flow's transaction and reports it once in `sessionContext.lastFlowOutcome`.
 
 **`onFail` on a CALL-TOOL.** A `FLOW` `onFail` runs with its `callType` (default `replace`): `replace` / `reboot` leave the failed flow, `call` runs the handler and then resumes the failed flow at its next step. A non-FLOW `onFail` (SAY / SET / RETURN) runs **immediately** after the failed tool step; a SAY or SET then lets the flow continue with its remaining steps, a RETURN ends it. Before the onFail runs, the CALL-TOOL `variable` holds the error text (a truthy string with no `.success`), so a SET `onFail` that writes a `{ success: false }`-style value is the safest pattern, and a SAY `onFail` is followed by the flow's remaining steps, which may contradict it. (jsfe ≤ 0.9.88 ran a non-FLOW onFail only after the remaining steps, and never ran a FLOW `call` onFail; fixed in 0.9.89.)
 
@@ -250,7 +250,7 @@ graph TD
    6. `cargo.callerId` and digits that are not a valid phone → `cell_number = cargo.callerId`.
    7. digits that are not a valid phone (no caller ID) → FLOW `generic-retry-with-options` (`replace`): "Sorry, the phone number you provided isn't valid.", with `retry_flow`, `cancel_flow` and the cell/email `capture_patterns`.
    8. `cargo.callerId` (anything else) → `cell_number = cargo.callerId`.
-   9. three or more words containing no digit and no `@` → **`RETURN ''`** with **`outcome: "unresolved"`, `reason: "auth_prompt_off_topic"`**. This terminates all flows and hands the turn to the host.
+   9. the question was asked (`!cell_number && !email`) and the answer is three or more words containing no digit and no `@` → **`DISPATCH`** with **`outcome: "unresolved"`, `reason: "auth_prompt_off_topic"`** (1.1.0). The answer goes to intent detection: a matching flow starts at once (the outcome is dropped); otherwise the host answers with the outcome.
    10. default → FLOW `generic-retry-with-options` (`replace`): "Sorry, I do need the the phone or email associated with your account to proceed.", same parameters.
 
    Because branch 8 comes before branch 9, a caller with caller ID who says something off-topic is authenticated against the caller ID, not handed off.
@@ -278,7 +278,7 @@ graph TD
     branch -->|callerId + invalid digits| fallback_invalid[SET: cell_number = callerId]
     branch -->|invalid digits| invalid_phone[FLOW replace: generic-retry-with-options]
     branch -->|callerId| fallback_unrecognized[SET: cell_number = callerId]
-    branch -->|3+ words, no digit or @| off_topic["RETURN '' — outcome: unresolved"]
+    branch -->|asked, 3+ words, no digit or @| off_topic["DISPATCH — outcome: unresolved"]
     branch -->|default| retry[FLOW replace: generic-retry-with-options]
     valid_phone --> stop((Return to caller))
     valid_email --> stop
