@@ -66,7 +66,7 @@ Everything below is read from the JSON. The flows call the system flows (`no-act
     - `success && !found` → `RETURN` "Sorry, this product is not currently available for in-store pickup at any location. You can order it online for delivery."
     - otherwise → `RETURN` "I couldn't check store availability. Please try again later."
 
-Voice lists 3 products, but the store prompt still offers "1-5", so a caller can pick a product that was not read aloud. The `onFail` RETURN in step 10 is a non-FLOW onFail, so it is queued behind step 11 (see Conventions). Step 11's default `RETURN` runs first and terminates the flow, so on a tool failure the user hears "I couldn't check store availability. Please try again later."
+Voice lists 3 products, but the store prompt still offers "1-5", so a caller can pick a product that was not read aloud. On a store-availability failure the step-10 `onFail` RETURN ends the flow with its own message. (Under jsfe ≤ 0.9.88 it ran only after step 11, whose default `RETURN` won, so the caller heard "I couldn't check store availability. Please try again later.")
 
 ### Ends
 Always by `RETURN` (all flows end), or by a `reboot` into `no-action-needed`, which hands the turn to the host.
@@ -207,7 +207,7 @@ Reached by `replace` from `shopify-track-order`, so it keeps that flow's variabl
      The Spanish text maps `tracking_detail.status` codes (AC, IT, DE, EX, AT, NY, SP, UN) to Spanish labels and uses `lastEventEs`.
    - otherwise → SAY "Sorry, I couldn't find that order. Anything else I can help with?"
 
-Both onFail handlers in steps 6 and 7 are non-FLOW, so they are queued behind the flow's remaining steps (see Conventions). On a `shopify-get-order-status` failure the user therefore hears "Sorry, I couldn't find that order…" (step 8) first, then "I couldn't retrieve details for that order…". Likewise the step 7 `onFail` SET runs only after step 8 has rendered.
+Both onFail handlers in steps 6 and 7 are non-FLOW, so they run immediately after the failed tool and the flow then continues (see Conventions). On a `shopify-get-order-status` failure the user hears the step-6 SAY ("I couldn't retrieve details…") and then step 8's "Sorry, I couldn't find that order…", since `order_detail` still holds the error text. (Under jsfe ≤ 0.9.88 the order was reversed.)
 
 ### Ends
 By completion after the order detail (the SAYs carry `variable: continue_choice`, which is not read). Otherwise by `reboot` into `contact-support` / `no-action-needed` / `generic-retry-with-options`, or `replace` into `shipstation-track-by-number-verified`.

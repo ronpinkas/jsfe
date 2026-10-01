@@ -4065,8 +4065,15 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
 
         // New behavior - call onFail as sub-flow (preserves current flow)
         if (onFailStep.type === "FLOW") {
-          // Push onFail flow as sub-flow
-          const onFailFlow = flowsMenu?.find(f => f.name === onFailStep.name);
+          // Push onFail flow as sub-flow. A FLOW step names its target in `value` (id or name), exactly
+          // as the reboot path and handleFlowStep resolve it. This looked up `onFailStep.name` — a field
+          // a FLOW step does not carry — so the handler was never found, nothing was logged, and the
+          // flow simply continued past the failed tool.
+          const target = onFailStep.value ?? onFailStep.name;
+          const onFailFlow = flowsMenu?.find(f => f.id === target || f.name === target);
+          if (!onFailFlow) {
+            logger.error(`onFail flow ${target} (callType call) for tool ${step.tool} not found in flows menu`);
+          }
           if (onFailFlow) {
             const transaction = TransactionManager.create(onFailFlow.name, 'onFail-recovery', currentFlowFrame.userId);
 
@@ -4089,14 +4096,17 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
             return `Tool ${step.tool} failed, calling recovery flow ${onFailFlow.name}`;
           }
         } else {
-          // Handle non-FLOW onFail steps as immediate execution
-          currentFlowFrame.flowStepsStack.unshift(onFailStep);
+          // Non-FLOW onFail runs NEXT. flowStepsStack is read with pop(), so the next step is pushed
+          // (as a CASE branch and a tool retry are). This was unshift(), which put the onFail step at
+          // the BOTTOM: it ran after every remaining step — a SAY arrived a turn late or never, and a
+          // SET left the CALL-TOOL variable holding the error text while later steps read it.
+          currentFlowFrame.flowStepsStack.push(onFailStep);
           return `Tool ${step.tool} failed, executing onFail step`;
         }
       } else {
         logger.info(`Adding non FLOW onFail step: ${onFailStep.id || onFailStep.name} to current flow stack for tool ${step.tool}`);
-        // Handle non-FLOW onFail steps as immediate execution
-        currentFlowFrame.flowStepsStack.unshift(onFailStep);
+        // Non-FLOW onFail runs NEXT — push, not unshift (see the call-mode branch above).
+        currentFlowFrame.flowStepsStack.push(onFailStep);
         return `Tool ${step.tool} failed, executing onFail step`;
       }
     }
