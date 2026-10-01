@@ -4517,7 +4517,7 @@ fields; the host does.
 - **Tool calls stay recorded**: a tool attempted earlier in the turn remains in `lastTurnToolCalls`.
 - **Reported to the host**: `engineSessionContext.lastTurnDispatch = { fromFlow, matchedFlow }` (`matchedFlow` is `null` when nothing matched), one-shot like `lastFlowOutcome`.
 
-**One routing per turn.** A flow that intent detection can start must ask the user (`SAY-GET`) before any `DISPATCH` it can reach, through `call`, `replace` and `reboot` sub-flows and `onFail` handlers included. `validateFlow` reports a violation as an error. At runtime such a flow is not routed a second time: the engine logs an error and the host answers that turn.
+**One routing per turn — any number of turns.** A turn's input is routed once: if the flow it starts reaches a `DISPATCH` before asking anything (it would only re-route the words that just started it), the engine does not route again — it logs an error and the host answers that turn. Once a flow asks (`SAY-GET`), the answer is a new turn, so flows can follow one another freely: *"Anything else?"* → a new request starts another flow, which may end with *"Anything else?"* too.
 
 **DISPATCH vs RETURN vs END:**
 - `DISPATCH` — end all flows and let intent detection decide what this input means.

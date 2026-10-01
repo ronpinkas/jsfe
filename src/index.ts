@@ -6825,10 +6825,11 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
           logger.info(`Initial flow response: ${response}`);
           return response;
         } else {
-          // An activated flow reached DISPATCH before any SAY-GET. The validator rejects such a
-          // flow, so this is an invalid flow in production. The input is routed only once per
-          // turn: everything is already reset, so the host answers this turn.
-          logger.error(`DISPATCH in '${engine.pendingDispatchFrom}' was reached before any SAY-GET after '${activatedFlow.name}' was activated — invalid flow (see validateFlows); no second routing, the host answers this turn`);
+          // A flow started by THIS turn's input reached DISPATCH before asking anything — it would
+          // only re-route the words that just started it. The input is routed once per turn:
+          // everything is already reset, so the host answers this turn. (Across turns there is no
+          // limit: once a flow asks, the answer arrives as a new turn and may start another flow.)
+          logger.error(`DISPATCH in '${engine.pendingDispatchFrom}' was reached before any SAY-GET after '${activatedFlow.name}' was activated by this same input — no second routing, the host answers this turn`);
           engine.pendingDispatchFrom = null;
           return null;
         }
@@ -7678,17 +7679,6 @@ export class WorkflowEngine implements Engine {
     try {
       this._validateFlowRecursive(flowName, validationState, opts);
 
-      // A flow intent detection can start must ask the user (SAY-GET) before any reachable
-      // DISPATCH — the input is routed once per turn, so a DISPATCH before that would end
-      // the turn with no flow. Applies to the flows detect_flow chooses from.
-      const flowDef = this.flowsMenu.find((f: any) => f.id === flowName || f.name === flowName);
-      const hasPrimaryFlows = this.flowsMenu.some((f: any) => f.primary === true);
-      if (flowDef && (!hasPrimaryFlows || flowDef.primary === true)) {
-        this._checkDispatchBeforeSayGet(flowDef, validationState);
-      } else {
-        // not a flow intent detection starts — nothing to check
-      }
-
       // Check for circular references if enabled
       if (opts.checkCircularRefs) {
         this._checkCircularReferences(validationState);
@@ -7710,76 +7700,6 @@ export class WorkflowEngine implements Engine {
         visitedFlows: []
       };
     }
-  }
-
-  /**
-   * Errors when a DISPATCH step is reachable from the start of `entryFlow` with no SAY-GET on the
-   * way. Follows call/replace/reboot FLOW steps (all run in the same turn) and onFail handlers;
-   * CASE/SWITCH branches are alternatives. A RETURN ends the turn; END returns to the caller.
-   */
-  private _checkDispatchBeforeSayGet(entryFlow: any, state: any): void {
-    const reported = new Set<string>();
-    // 'open' = a path can leave these steps with no SAY-GET yet; 'closed' = every path stopped
-    const walk = (steps: any[], flowDef: any, visiting: Set<string>): 'open' | 'closed' => {
-      for (const step of steps || []) {
-        if (!step || typeof step !== 'object') {
-          continue;
-        } else if (step.type === 'SAY-GET' || step.type === 'RETURN') {
-          return 'closed';
-        } else if (step.type === 'END') {
-          return 'open';
-        } else if (step.type === 'DISPATCH') {
-          const key = `${flowDef.name}:${step.id}`;
-          if (!reported.has(key)) {
-            reported.add(key);
-            state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" can run before any SAY-GET when "${entryFlow.name}" is started by intent detection - a flow intent detection starts must ask the user (SAY-GET) before any reachable DISPATCH`);
-          } else {
-            // already reported for this entry flow
-          }
-          return 'closed';
-        } else if (step.type === 'FLOW') {
-          const target = String(step.value ?? step.name ?? '');
-          const sub = this.flowsMenu.find((f: any) => f.id === target || f.name === target);
-          if (sub && !visiting.has(sub.id || sub.name)) {
-            const result = walk(sub.steps, sub, new Set([...visiting, sub.id || sub.name]));
-            if (step.callType === 'reboot' || step.callType === 'replace') {
-              return result; // the calling flow does not continue past a reboot/replace
-            } else if (result === 'closed') {
-              return 'closed';
-            } else {
-              // the sub-flow can return without asking — the caller continues
-            }
-          } else {
-            // dynamic ({{…}}) or unknown target, or a cycle: nothing more to follow here
-          }
-        } else if (step.type === 'CASE' || step.type === 'SWITCH') {
-          const branches = step.branches || step.cases || {};
-          let anyOpen = !('default' in branches);
-          for (const branch of Object.values(branches)) {
-            const list = Array.isArray(branch) ? branch : [branch];
-            if (walk(list, flowDef, visiting) === 'open') {
-              anyOpen = true;
-            } else {
-              // this branch stops the path
-            }
-          }
-          if (!anyOpen) {
-            return 'closed';
-          } else {
-            // some path continues to the next step
-          }
-        } else {
-          // SAY, SET, CALL-TOOL: the path continues
-        }
-        if (step.onFail) {
-          walk(Array.isArray(step.onFail) ? step.onFail : [step.onFail], flowDef, visiting);
-        } else {
-          // no onFail path
-        }
-      }
-      return 'open';
-    };
-    walk(entryFlow.steps, entryFlow, new Set([entryFlow.id || entryFlow.name]));
   }
 
   /**

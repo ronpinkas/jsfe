@@ -12,8 +12,9 @@
 //   `outcome`/`reason` on the DISPATCH step itself (interpolated). No match: that outcome reaches
 //   the host. A match: it is swallowed — the user is being served.
 // - The input routed is the one the turn started with, never a flow variable a step rewrote.
-// - The input is routed once per turn: a started flow reaching DISPATCH before any SAY-GET is an
-//   invalid flow (the validator rejects it); at runtime the host answers that turn.
+// - The input is routed once per turn: a started flow reaching DISPATCH before any SAY-GET (with no
+//   question in between) is not routed again — the host answers that turn. Across turns there is no
+//   limit: each answer to a question may start another flow.
 //
 // Hermetic: aiCallback is null, so intent detection matches a flow by its exact name or id.
 import assert from 'node:assert/strict';
@@ -205,34 +206,32 @@ const declaring = (outcome, reason) => flow('Menu', [
   eq(errs.filter((m) => /DISPATCH/.test(m)), [], 'DISPATCH after a SAY-GET is valid');
 }
 {
+  // The design-time "DISPATCH before any SAY-GET" check was removed (2026-10-01): it reads structure,
+  // not conditions, and flagged paths that cannot happen. The runtime rule (one routing per turn,
+  // above) is what keeps a turn from re-routing itself.
   const bad = flow('Bad', [{ id: 'early', type: 'DISPATCH' }]);
   const e = new WorkflowEngine(quiet, null, [bad], tools, APPROVED_FUNCTIONS, {}, false, 'en');
-  ok(e.validateFlow('Bad').errors.some((m) => /"early".*before any SAY-GET/.test(m)), 'DISPATCH before any SAY-GET in a primary flow is an error');
+  eq(e.validateFlow('Bad').errors.filter((m) => /SAY-GET/.test(m)), [], 'the validator does not judge where a DISPATCH sits');
 }
+
+// ── Flows in a row: each answer to "anything else?" starts the next flow ─────────────────────────
 {
-  const inner = flow('Inner', [{ id: 'deep', type: 'DISPATCH' }], { primary: false });
-  for (const callType of ['call', 'replace', 'reboot']) {
-    const outer = flow('Outer', [{ id: 'go', type: 'FLOW', value: 'Inner', callType }]);
-    const e = new WorkflowEngine(quiet, null, [outer, inner], tools, APPROVED_FUNCTIONS, {}, false, 'en');
-    ok(e.validateFlow('Outer').errors.some((m) => /"deep" in flow "Inner".*"Outer"/.test(m)), `a DISPATCH reached through a ${callType} before any SAY-GET is an error`);
-  }
-}
-{
-  const inner = flow('Inner', [{ id: 'deep', type: 'DISPATCH' }], { primary: false });
-  const e = new WorkflowEngine(quiet, null, [inner], tools, APPROVED_FUNCTIONS, {}, false, 'en');
-  const outer = flow('Outer', [{ id: 'go', type: 'FLOW', value: 'Inner', callType: 'call' }]);
-  e.flowsMenu.push(outer);
-  ok(e.validateFlow('Inner').errors.every((m) => !/before any SAY-GET/.test(m)), 'a non-primary flow is not itself an entry point');
-}
-{
-  const branchy = flow('Branchy', [
-    { id: 'c', type: 'CASE', branches: {
-      'condition: cargo.x': { id: 'ask', type: 'SAY-GET', variable: 'y', value: '[ask]' },
-      default: { id: 'say', type: 'SAY', value: '[say]' } } },
-    { id: 'late', type: 'DISPATCH' },
+  const chained = (id) => flow(id, [
+    { id: 'work', type: 'SAY', value: `[${id} done]` },
+    { id: 'more', type: 'SAY-GET', variable: 'answer', value: '[anything else?]' },
+    { id: 'route', type: 'CASE', branches: {
+      "condition: answer === 'no'": { id: 'bye', type: 'RETURN', value: "'[bye]'" },
+      default: { id: 'next', type: 'DISPATCH' } } },
   ]);
-  const e = new WorkflowEngine(quiet, null, [branchy], tools, APPROVED_FUNCTIONS, {}, false, 'en');
-  ok(e.validateFlow('Branchy').errors.some((m) => /"late"/.test(m)), 'a branch that skips the SAY-GET reaches DISPATCH: error');
+  const t = await session([chained('A'), chained('B'), chained('C')]);
+  await t.say('A');
+  eq(markers(t.s.response), ['[A done]', '[anything else?]'], 'flow A runs and asks');
+  await t.say('B');
+  eq([markers(t.s.response), t.s.lastTurnDispatch], [['[B done]', '[anything else?]'], { fromFlow: 'A', matchedFlow: 'B' }], 'its answer starts B, which runs and asks');
+  await t.say('C');
+  eq([markers(t.s.response), t.s.lastTurnDispatch], [['[C done]', '[anything else?]'], { fromFlow: 'B', matchedFlow: 'C' }], 'and B\'s answer starts C — no limit across turns');
+  await t.say('no');
+  eq(markers(t.s.response), ['[bye]'], 'until the user is done');
 }
 {
   const withOutcome = flow('WithOutcome', [
