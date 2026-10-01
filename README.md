@@ -619,6 +619,8 @@ The method returns an updated `EngineSessionContext` containing:
   [Host Responsibilities](#host-responsibilities-tool-calls-cancellation-and-concurrency))
 - **`lastFlowOutcome`**: the declared outcome of a flow that terminated during this call, if any
   (see [Declared flow outcomes](#declared-flow-outcomes-lastflowoutcome))
+- **`lastTurnDispatch`**: `{ fromFlow, matchedFlow }` when a `DISPATCH` step re-routed this call's
+  input (`matchedFlow` is `null` when no flow matched and the response is `null`); one-shot
 
 ### Integration Pattern
 
@@ -1022,6 +1024,7 @@ their original workflow seamlessly.
 - ✅ **SWITCH** - Conditional branching based on single value matching
 - ✅ **RETURN** - Terminate all flows and return evaluated expression value (an EXIT/abort)
 - ✅ **END** - Return from the current flow only, resuming the parent flow — a functional `return` (no value; variables are shared with the parent)
+- ✅ **DISPATCH** - End all flows and route this turn's input through intent detection, as if no flow had been active (a matched flow starts in the same turn; no match → no response, the host answers). Resets everything, declares no outcome, takes only `id`. See the user guide's *DISPATCH Steps*
 
 A terminal step (`RETURN`, `END` or a final `SAY`) may also carry `outcome` / `reason`; see
 [Declared flow outcomes](#declared-flow-outcomes-lastflowoutcome).

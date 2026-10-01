@@ -4493,6 +4493,37 @@ fields; the host does.
 - `END` — return from the **current** flow to its parent (functional `return`). No value.
 - `RETURN` — terminate **all** flows and emit the evaluated value as the final response (an `EXIT`/abort).
 
+### DISPATCH Steps - Hand the Input Back to Intent Detection
+
+**Purpose**: End **every** flow and route the user's input for **this turn** through intent detection, exactly as if no flow had been active when they spoke. Use it where a flow asks a closed question and the answer is really a new request — the `default` branch of a menu that matched none of its choices.
+
+```javascript
+{
+  id: "handle_choice",
+  type: "CASE",
+  branches: {
+    "condition: matchesChoice(user_choice, ['yes', 'si']) || user_choice === '1'": { id: "retry", type: "FLOW", value: "{{retry_flow}}", callType: "reboot" },
+    "default": { id: "dispatch_unrecognised", type: "DISPATCH" }
+  }
+}
+```
+
+**Behaviour:**
+- **A flow matches**: it starts in the same turn, and its output is the whole reply — identical to starting it directly.
+- **No flow matches**: the engine returns no response (`null`) and leaves no flow active, so the host answers the turn (as on any turn with no active flow).
+- **Everything is reset**: every flow stack, the queued SAY messages and the tentative `flow_init`. Nothing the ended flows said is delivered.
+- **The input is the turn's own**: the message the turn started with, never a flow variable a step rewrote (e.g. a normalised `user_choice`).
+- **No outcome, no attributes**: `DISPATCH` takes only `id`. It declares no `outcome` and clears any outcome stamped earlier in the turn; the turn's result is whatever the re-routing produces.
+- **Tool calls stay recorded**: a tool attempted earlier in the turn remains in `lastTurnToolCalls`.
+- **Reported to the host**: `engineSessionContext.lastTurnDispatch = { fromFlow, matchedFlow }` (`matchedFlow` is `null` when nothing matched), one-shot like `lastFlowOutcome`.
+
+**One routing per turn.** A flow that intent detection can start must ask the user (`SAY-GET`) before any `DISPATCH` it can reach, through `call`, `replace` and `reboot` sub-flows and `onFail` handlers included. `validateFlow` reports a violation as an error. At runtime such a flow is not routed a second time: the engine logs an error and the host answers that turn.
+
+**DISPATCH vs RETURN vs END:**
+- `DISPATCH` — end all flows and let intent detection decide what this input means.
+- `RETURN` — end all flows and emit a value as the response (`RETURN ''` hands the turn to the host *without* intent detection).
+- `END` — return from the current flow to its parent.
+
 ### Declaring How a Flow Ended: `outcome` and `reason`
 
 A flow that ends has not necessarily succeeded. A deliberate give-up, such as "Sorry I couldn't help,

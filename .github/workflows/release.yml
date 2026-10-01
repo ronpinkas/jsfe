@@ -19,6 +19,8 @@ jobs:
       - run: npm install -g npm@latest
       - run: npm ci
       - run: npm run build
+      # The hermetic suites (tests/*.test.mjs: no network, no keys). A failure stops the publish.
+      - run: npm test
       # No NODE_AUTH_TOKEN: auth is via OIDC against the npm "trusted publisher"
       # registered for this package (repo + this workflow). Provenance is implied.
       - run: npm publish --provenance --access public

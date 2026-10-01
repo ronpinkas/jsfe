@@ -431,7 +431,7 @@ export function getFlowPrompt(engine: Engine, flowName: string): string {
 }
 
 // === TYPE DEFINITIONS ===
-export type StepType = 'SAY' | 'SAY-GET' | 'SET' | 'CALL-TOOL' | 'FLOW' | 'SWITCH' | 'CASE' | 'RETURN' | 'END';
+export type StepType = 'SAY' | 'SAY-GET' | 'SET' | 'CALL-TOOL' | 'FLOW' | 'SWITCH' | 'CASE' | 'RETURN' | 'END' | 'DISPATCH';
 
 // Enhanced context tracking with role information
 export interface ContextEntry {
@@ -492,6 +492,7 @@ export type AiCallbackRequest = DetectFlowRequest;
  * @property {TransactionData[]} [completedTransactions] - Completed transactions for host access
  * @property {Record<string, unknown> | undefined} cargo - Additional session data for host use
  * @property {FlowOutcome} [lastFlowOutcome] - Declared outcome of a flow that TERMINATED this turn (one-shot, cleared at the start of each updateActivity)
+ * @property {DispatchRecord} [lastTurnDispatch] - Set when a DISPATCH step re-routed this turn's input (one-shot, cleared at the start of each updateActivity)
  */
 export interface EngineSessionContext {
   sessionId: string;
@@ -509,6 +510,17 @@ export interface EngineSessionContext {
   hasTentativeFlowInit?: boolean; // Flag to track if tentative flow_init message should be dropped by SAY-GET
   lastFlowOutcome?: FlowOutcome; // Declared outcome of a flow that terminated THIS turn (one-shot)
   lastTurnToolCalls?: ToolCallRecord[]; // Tool calls ATTEMPTED during the most recent updateActivity (one-shot)
+  lastTurnDispatch?: DispatchRecord; // Set when a DISPATCH step re-routed THIS turn's input (one-shot)
+}
+
+/**
+ * Host-facing record of a DISPATCH: the flow whose DISPATCH step ended every flow, and the flow
+ * intent detection then started with the same input — or null when none matched, in which case
+ * the engine returned no response and the host answers the turn itself.
+ */
+export interface DispatchRecord {
+  fromFlow: string;
+  matchedFlow: string | null;
 }
 
 /**
@@ -3015,6 +3027,12 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
         return result;
       }
 
+      // DISPATCH ended every flow; processActivity routes this turn's input (see handleDispatchStep)
+      if (step.type === 'DISPATCH') {
+        logger.info(`DISPATCH step executed, all flows ended; handing this turn's input back to intent detection`);
+        return result;
+      }
+
       // For SAY, CALL-TOOL, FLOW, and SET steps, continue processing automatically (non-blocking)
       continue;
 
@@ -3106,6 +3124,8 @@ async function playStep(currentFlowFrame: FlowFrame, engine: Engine): Promise<st
         return handleReturnStep(currentFlowFrame, engine);
       case 'END':
         return handleEndStep(currentFlowFrame);
+      case 'DISPATCH':
+        return handleDispatchStep(currentFlowFrame, engine);
       default:
         throw new Error(`Unknown step type: ${step.type}`);
     }
@@ -4584,6 +4604,34 @@ function handleReturnStep(currentFlowFrame: FlowFrame, engine: Engine): string {
 
   // Return the evaluated value as string
   return String(returnValue);
+}
+
+function handleDispatchStep(currentFlowFrame: FlowFrame, engine: Engine): string {
+  // DISPATCH = forget every flow and treat THIS turn's input as if no flow had been active:
+  // processActivity runs intent detection on the input the turn started with (never a flow
+  // variable a step may have rewritten). It resets ALL engine flow state — every stack, the
+  // queued messages and the tentative flow_init flag — so nothing said by the ended flows is
+  // delivered. It declares no outcome and clears any outcome stamped earlier this turn: the
+  // turn's result is now whatever the re-routing produces. Tool calls already attempted this
+  // turn stay recorded (lastTurnToolCalls) — the host must still see them.
+  currentFlowFrame.flowStepsStack.pop(); // This handler pops its own step
+  const fromFlow = currentFlowFrame.flowName;
+
+  const exitedFlows: string[] = [];
+  for (const stack of engine.flowStacks) {
+    for (const flow of stack) {
+      TransactionManager.fail(flow.transaction, `Dispatched: flow ended by DISPATCH in ${fromFlow}`);
+      exitedFlows.push(flow.flowName);
+      auditLogger.logFlowExit(flow.flowName, currentFlowFrame.userId, flow.transaction.id, 'dispatch_step');
+    }
+  }
+
+  engine.resetFlowState();
+  engine.clearFlowOutcome();
+  engine.pendingDispatchFrom = fromFlow;
+
+  logger.info(`DISPATCH step in '${fromFlow}': ended flows [${exitedFlows.join(', ')}]; this turn's input goes to intent detection.`);
+  return '';
 }
 
 function handleEndStep(currentFlowFrame: FlowFrame): string {
@@ -6627,6 +6675,9 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
     logger.info(`processActivity received input: ${JSON.stringify(input)}, sanitized: ${JSON.stringify(sanitizedInput)}`);
     logger.debug(`Current stack length: ${getCurrentStackLength(engine)}`);
 
+    // A DISPATCH is consumed within the call that raised it; never carry one into another turn.
+    engine.pendingDispatchFrom = null;
+
     // Check if we're already in a flow (using new stack-of-stacks)
     if (getCurrentStackLength(engine) > 0) {
       logger.info(`\n=== [${new Date().toISOString()}] Flow Handling query: ${input} ===`);
@@ -6682,8 +6733,14 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
 
       try {
         const response = await playFlowFrame(engine);
-        logger.info(`Flow response: ${response}`);
-        return response;
+        if (engine.pendingDispatchFrom === null) {
+          logger.info(`Flow response: ${response}`);
+          return response;
+        } else {
+          // DISPATCH ended every flow: fall through to the no-active-flow routing below with
+          // this same input, exactly as if no flow had been active when the user spoke.
+          logger.info(`DISPATCH from '${engine.pendingDispatchFrom}': routing ${JSON.stringify(sanitizedInput)} through intent detection`);
+        }
       } catch (error: any) {
         logger.error(`Flow execution error: ${error.message}`);
         logger.info(`Stack trace: ${error.stack}`);
@@ -6700,8 +6757,20 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
 
     // Check if input should activate a new flow
     logger.debug(`No active flow, checking if input should activate new flow...`);
+
+    // Set when we arrived here from a DISPATCH in the active-flow branch above.
+    const dispatchedFrom = engine.pendingDispatchFrom;
+    engine.pendingDispatchFrom = null;
+
     try {
       const activatedFlow = await isFlowActivated(String(sanitizedInput), engine, userId);
+
+      if (dispatchedFrom !== null) {
+        engine.recordDispatch({ fromFlow: dispatchedFrom, matchedFlow: activatedFlow ? activatedFlow.name : null });
+        logger.info(`DISPATCH from '${dispatchedFrom}': intent detection ${activatedFlow ? `started '${activatedFlow.name}'` : 'matched no flow; the host answers this turn'}`);
+      } else {
+        // ordinary turn with no active flow — nothing to record
+      }
 
       if (activatedFlow) {
         logger.info(`Flow activated: ${activatedFlow.name}`);
@@ -6716,8 +6785,17 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         logger.debug(`Cleared lastChatTurn - now using flow context for AI operations`);
 
         const response = await playFlowFrame(engine);
-        logger.info(`Initial flow response: ${response}`);
-        return response;
+        if (engine.pendingDispatchFrom === null) {
+          logger.info(`Initial flow response: ${response}`);
+          return response;
+        } else {
+          // An activated flow reached DISPATCH before any SAY-GET. The validator rejects such a
+          // flow, so this is an invalid flow in production. The input is routed only once per
+          // turn: everything is already reset, so the host answers this turn.
+          logger.error(`DISPATCH in '${engine.pendingDispatchFrom}' was reached before any SAY-GET after '${activatedFlow.name}' was activated — invalid flow (see validateFlows); no second routing, the host answers this turn`);
+          engine.pendingDispatchFrom = null;
+          return null;
+        }
       }
     } catch (error: any) {
       logger.error(`Flow activation error: ${error.message}`);
@@ -6760,6 +6838,11 @@ export class WorkflowEngine implements Engine {
    * warning on a mismatch. Diagnostic only — a result is never altered or withheld because of it.
    */
   public validateToolReturns: boolean = false;
+  /**
+   * Set by a DISPATCH step to the name of the flow that dispatched; processActivity consumes it
+   * within the same call and routes the turn's input to intent detection. Never persisted.
+   */
+  public pendingDispatchFrom: string | null = null;
 
   // Command management for different application types (chat vs voice vs automation)
   private enabledCommands: Set<string>;
@@ -6945,6 +7028,9 @@ export class WorkflowEngine implements Engine {
       // host deciding whether this turn's session may be discarded is not misled by a tool
       // that ran on an earlier turn. See recordToolCall and "Host Responsibilities".
       this.sessionContext.lastTurnToolCalls = [];
+
+      // Same one-shot semantics for a DISPATCH record (see recordDispatch).
+      delete this.sessionContext.lastTurnDispatch;
 
       // DIAGNOSTIC: Log flowStepsStack state from loaded session (before any processing)
       if (engineSessionContext.flowStacks) {
@@ -7357,6 +7443,37 @@ export class WorkflowEngine implements Engine {
     }
   }
 
+  // Start from scratch: every stack, the queued messages AND the tentative flow_init flag.
+  // The flag must go with the queue: left set over an empty queue, handleSayGetStep would take
+  // the next flow's first SAY for the "Processing…" placeholder and drop it.
+  resetFlowState(): void {
+    if (this.sessionContext) {
+      this.sessionContext.flowStacks = [[]];
+      this.sessionContext.globalAccumulatedMessages = [];
+      this.sessionContext.hasTentativeFlowInit = false;
+    } else {
+      logger.warn('No session context available for resetFlowState');
+    }
+  }
+
+  // Drop an outcome stamped earlier this turn (DISPATCH: the turn's result is the re-routing's).
+  clearFlowOutcome(): void {
+    if (this.sessionContext) {
+      delete this.sessionContext.lastFlowOutcome;
+    } else {
+      logger.warn('No session context available for clearFlowOutcome');
+    }
+  }
+
+  // Record this turn's DISPATCH for the host (one-shot, see EngineSessionContext.lastTurnDispatch).
+  recordDispatch(record: DispatchRecord): void {
+    if (this.sessionContext) {
+      this.sessionContext.lastTurnDispatch = record;
+    } else {
+      logger.warn(`recordDispatch: no sessionContext for DISPATCH from ${record.fromFlow}`);
+    }
+  }
+
   getCurrentStack(): FlowFrame[] {
     return getCurrentStack(this);
   }
@@ -7525,6 +7642,17 @@ export class WorkflowEngine implements Engine {
     try {
       this._validateFlowRecursive(flowName, validationState, opts);
 
+      // A flow intent detection can start must ask the user (SAY-GET) before any reachable
+      // DISPATCH — the input is routed once per turn, so a DISPATCH before that would end
+      // the turn with no flow. Applies to the flows detect_flow chooses from.
+      const flowDef = this.flowsMenu.find((f: any) => f.id === flowName || f.name === flowName);
+      const hasPrimaryFlows = this.flowsMenu.some((f: any) => f.primary === true);
+      if (flowDef && (!hasPrimaryFlows || flowDef.primary === true)) {
+        this._checkDispatchBeforeSayGet(flowDef, validationState);
+      } else {
+        // not a flow intent detection starts — nothing to check
+      }
+
       // Check for circular references if enabled
       if (opts.checkCircularRefs) {
         this._checkCircularReferences(validationState);
@@ -7546,6 +7674,76 @@ export class WorkflowEngine implements Engine {
         visitedFlows: []
       };
     }
+  }
+
+  /**
+   * Errors when a DISPATCH step is reachable from the start of `entryFlow` with no SAY-GET on the
+   * way. Follows call/replace/reboot FLOW steps (all run in the same turn) and onFail handlers;
+   * CASE/SWITCH branches are alternatives. A RETURN ends the turn; END returns to the caller.
+   */
+  private _checkDispatchBeforeSayGet(entryFlow: any, state: any): void {
+    const reported = new Set<string>();
+    // 'open' = a path can leave these steps with no SAY-GET yet; 'closed' = every path stopped
+    const walk = (steps: any[], flowDef: any, visiting: Set<string>): 'open' | 'closed' => {
+      for (const step of steps || []) {
+        if (!step || typeof step !== 'object') {
+          continue;
+        } else if (step.type === 'SAY-GET' || step.type === 'RETURN') {
+          return 'closed';
+        } else if (step.type === 'END') {
+          return 'open';
+        } else if (step.type === 'DISPATCH') {
+          const key = `${flowDef.name}:${step.id}`;
+          if (!reported.has(key)) {
+            reported.add(key);
+            state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" can run before any SAY-GET when "${entryFlow.name}" is started by intent detection - a flow intent detection starts must ask the user (SAY-GET) before any reachable DISPATCH`);
+          } else {
+            // already reported for this entry flow
+          }
+          return 'closed';
+        } else if (step.type === 'FLOW') {
+          const target = String(step.value ?? step.name ?? '');
+          const sub = this.flowsMenu.find((f: any) => f.id === target || f.name === target);
+          if (sub && !visiting.has(sub.id || sub.name)) {
+            const result = walk(sub.steps, sub, new Set([...visiting, sub.id || sub.name]));
+            if (step.callType === 'reboot' || step.callType === 'replace') {
+              return result; // the calling flow does not continue past a reboot/replace
+            } else if (result === 'closed') {
+              return 'closed';
+            } else {
+              // the sub-flow can return without asking — the caller continues
+            }
+          } else {
+            // dynamic ({{…}}) or unknown target, or a cycle: nothing more to follow here
+          }
+        } else if (step.type === 'CASE' || step.type === 'SWITCH') {
+          const branches = step.branches || step.cases || {};
+          let anyOpen = !('default' in branches);
+          for (const branch of Object.values(branches)) {
+            const list = Array.isArray(branch) ? branch : [branch];
+            if (walk(list, flowDef, visiting) === 'open') {
+              anyOpen = true;
+            } else {
+              // this branch stops the path
+            }
+          }
+          if (!anyOpen) {
+            return 'closed';
+          } else {
+            // some path continues to the next step
+          }
+        } else {
+          // SAY, SET, CALL-TOOL: the path continues
+        }
+        if (step.onFail) {
+          walk(Array.isArray(step.onFail) ? step.onFail : [step.onFail], flowDef, visiting);
+        } else {
+          // no onFail path
+        }
+      }
+      return 'open';
+    };
+    walk(entryFlow.steps, entryFlow, new Set([entryFlow.id || entryFlow.name]));
   }
 
   /**
@@ -7746,7 +7944,7 @@ export class WorkflowEngine implements Engine {
     }
 
     // Validate step type
-    const validStepTypes = ['SAY', 'SAY-GET', 'SET', 'SWITCH', 'CASE', 'CALL-TOOL', 'FLOW', 'RETURN', 'END'];
+    const validStepTypes = ['SAY', 'SAY-GET', 'SET', 'SWITCH', 'CASE', 'CALL-TOOL', 'FLOW', 'RETURN', 'END', 'DISPATCH'];
     if (!validStepTypes.includes(step.type)) {
       state.errors.push(`Step "${step.id}" in flow "${flowDef.name}" has invalid type: ${step.type}`);
       return;
@@ -7776,6 +7974,16 @@ export class WorkflowEngine implements Engine {
       case 'FLOW':
         this._validateSubFlowStep(step, flowDef, state, opts, currentScope);
         break;
+      case 'DISPATCH': {
+        // DISPATCH takes nothing: it always routes the turn's own input, and never declares an outcome
+        const extra = Object.keys(step).filter(k => k !== 'id' && k !== 'type');
+        if (extra.length > 0) {
+          state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" has invalid attribute(s) ${extra.map(k => `"${k}"`).join(', ')} - DISPATCH takes only "id"`);
+        } else {
+          // well-formed
+        }
+        break;
+      }
     }
 
     // Update scope with variables created by this step
