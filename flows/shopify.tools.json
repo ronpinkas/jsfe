@@ -1455,19 +1455,31 @@
                 "description": "upstream occurred_at (may be undefined)"
               },
               "description": {
-                "type": "string",
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "upstream (may be undefined)"
               },
               "city": {
-                "type": "string",
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "upstream city_locality (may be undefined)"
               },
               "state": {
-                "type": "string",
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "upstream state_province (may be undefined)"
               },
               "eventCode": {
-                "type": "string",
+                "type": [
+                  "string",
+                  "null"
+                ],
                 "description": "upstream event_code (may be undefined)"
               }
             }
