@@ -6038,7 +6038,12 @@ function getEngineSessionVariables(engine: Engine, contextStack: ContextEntry[])
     sessionVars.sessionId = engine.sessionId;
     sessionVars.userId = currentFlowFrame.userId;
     sessionVars.flowName = currentFlowFrame.flowName;
-    sessionVars.language = engine.language;
+    // The SESSION language first: a step's value_<lang> text is chosen by it (getSessionLanguage), and
+    // `language` in an expression must agree with it. engine.language is shared by every session the
+    // engine serves and is never restored from a saved session, so on a later turn it held the
+    // tenant default (or another session's language): Spanish prompts, then an English RETURN built
+    // with `language === 'es'` (prod 2026-09-24, a receipt reply).
+    sessionVars.language = engine.getSessionLanguage() || engine.language;
 
     // Special function-like variables
     sessionVars['currentTime()'] = new Date().toISOString();
