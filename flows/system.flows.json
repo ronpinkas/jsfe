@@ -698,7 +698,8 @@
       },
       "whatsapp_invite_sent": {
         "type": "boolean",
-        "description": "True only if an invite text was actually sent — gates whether we mention it"
+        "description": "True only if an invite text was actually sent — gates whether we mention it",
+        "value": false
       }
     },
     "steps": [
