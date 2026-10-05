@@ -214,6 +214,54 @@
         }
       },
       {
+        "id": "ask_city_again_if_not_a_place",
+        "type": "CASE",
+        "branches": {
+          "condition: store_availability && store_availability.success === false && /could not geocode/i.test(String(store_availability.error || ''))": {
+            "id": "ask_city_again",
+            "type": "SAY-GET",
+            "variable": "user_city_retry",
+            "value": "I couldn't find \"{{user_city}}\" as a city. What city or ZIP code are you near?",
+            "value_es": "No encontré «{{user_city}}» como ciudad. ¿En qué ciudad o código postal estás?"
+          },
+          "default": {
+            "id": "noop_city_found",
+            "type": "SET",
+            "variable": "noop_city_found",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "lookup_again_with_new_city",
+        "type": "CASE",
+        "branches": {
+          "condition: store_availability && store_availability.success === false && /could not geocode/i.test(String(store_availability.error || '')) && typeof user_city_retry !== 'undefined' && String(user_city_retry || '').trim()": {
+            "id": "lookup_store_availability_retry",
+            "type": "CALL-TOOL",
+            "tool": "shopify-store-availability",
+            "variable": "store_availability",
+            "args": {
+              "variantId": "{{variant_gid}}",
+              "city": "{{user_city_retry}}",
+              "storeLocations": "{{global_store_locations}}",
+              "maxStores": 3
+            },
+            "onFail": {
+              "id": "availability_failed",
+              "type": "RETURN",
+              "value": "language == 'es' ? 'Lo siento, no pude verificar la disponibilidad en tiendas en este momento.' : 'Sorry, I couldn\\'t check store availability at this time.'"
+            }
+          },
+          "default": {
+            "id": "noop_no_retry",
+            "type": "SET",
+            "variable": "noop_no_retry",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "display_availability",
         "type": "CASE",
         "branches": {
@@ -226,6 +274,11 @@
             "id": "no_stock",
             "type": "RETURN",
             "value": "language == 'es' ? 'Lo siento, este producto no está disponible para recoger en ninguna tienda en este momento. Puedes ordenarlo en línea para entrega.' : 'Sorry, this product is not currently available for in-store pickup at any location. You can order it online for delivery.'"
+          },
+          "condition: store_availability && store_availability.success === false && /could not geocode/i.test(String(store_availability.error || ''))": {
+            "id": "still_not_a_place",
+            "type": "RETURN",
+            "value": "language == 'es' ? 'No encontré esa ubicación. Puede ver todas nuestras tiendas en icuracao.com, o decirme el nombre de su ciudad cuando quiera.' : 'I couldn\\'t find that location. You can see all our stores at icuracao.com, or tell me your city any time.'"
           },
           "default": {
             "id": "availability_error",
