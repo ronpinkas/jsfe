@@ -2769,7 +2769,8 @@ async function detectLanguage(input: string, engine: Engine): Promise<string> {
     logger.info(`detectLanguage: detected "${language}" from input: "${input.substring(0, 50)}"`);
     return language;
   } catch (error: unknown) {
-    logger.error("Error detecting language:", error instanceof Error ? error.message : String(error));
+    // Absorbed (no language detected), so warn — and the only line, since fetchAiTask logs at debug.
+    logger.warn("Error detecting language:", error instanceof Error ? error.message : String(error));
     return '';
   }
 }
@@ -3219,8 +3220,10 @@ async function fetchAiResponse(systemInstruction: string, userMessage: string, a
     return aiResponse.trim();
 
   } catch (error: any) {
-    logger.warn(`fetchAiResponse error: ${error.message}`);
-    logger.warn(error.stack);
+    // Debug: re-thrown with the cause in the message, and every caller reports the outcome once —
+    // voice cleanup and the AI argument generator absorb it (warn), intent detection reaches the host.
+    logger.debug(`fetchAiResponse error: ${error.message}`);
+    logger.debug(error.stack);
     throw new Error(`AI communication failed: ${error.message}`);
   }
 }
@@ -3320,7 +3323,8 @@ async function fetchAiTask(
     return aiResponse;
 
   } catch (error: any) {
-    logger.error(`fetchAiTask error: ${error.message}`);
+    // Debug, for the same reason as fetchAiResponse: the caller reports it (one event, one line).
+    logger.debug(`fetchAiTask error: ${error.message}`);
     throw new Error(`AI task processing failed: ${error.message}`);
   }
 }
@@ -3502,8 +3506,9 @@ export async function detectFlowWithParameters(input: string, engine: Engine): P
 
     return null;
   } catch (error: any) {
-    logger.warn(`Error in detectFlowWithParameters: ${error.message}`);
-    logger.info(`Stack trace: ${error.stack}`);
+    // Debug: re-thrown, and the host reports it (see "Flow activation error" below).
+    logger.debug(`Error in detectFlowWithParameters: ${error.message}`);
+    logger.debug(`Stack trace: ${error.stack}`);
     throw error;
   }
 }
@@ -6840,8 +6845,10 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         }
       }
     } catch (error: any) {
-      logger.error(`Flow activation error: ${error.message}`);
-      logger.info(`Stack trace: ${error.stack}`);
+      // Debug: re-thrown, and the host reports it (README, Host Responsibilities). At error here, with
+      // processActivity's and updateActivity's lines, one AI timeout was four ERROR lines.
+      logger.debug(`Flow activation error: ${error.message}`);
+      logger.debug(`Stack trace: ${error.stack}`);
 
       // Let intent detection errors (AI timeout, communication failures) propagate to the host
       throw error;
@@ -6852,8 +6859,9 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
     return null; // No flow activated - let the calling system handle this
 
   } catch (error: any) {
-    logger.error(`Error processing activity for user ${userId}: ${error.message}`);
-    logger.info(`Stack trace: ${error.stack}`);
+    // Debug: re-thrown to updateActivity and on to the host, which reports it.
+    logger.debug(`Error processing activity for user ${userId}: ${error.message}`);
+    logger.debug(`Stack trace: ${error.stack}`);
 
     // Re-throw as-is — let the host distinguish JSFEExecutionError from intent detection errors
     throw error;
@@ -7256,8 +7264,11 @@ export class WorkflowEngine implements Engine {
         throw new Error(`Unsupported role '${contextEntry.role}' in updateActivity. Only 'user' and 'assistant' roles are supported.`);
       }
     } catch (error: any) {
-      if (logger && logger.error) {
-        logger.error(`Error in updateActivity: ${error.message}`);
+      // Debug: the host receives this error and reports it, once, at the level its outcome deserves.
+      if (logger && logger.debug) {
+        logger.debug(`Error in updateActivity: ${error.message}`);
+      } else {
+        // no logger: the host still receives the error
       }
       // Let errors propagate to the host — the host distinguishes
       // JSFEExecutionError (user-facing) from other errors (intent detection failures)
