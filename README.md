@@ -701,6 +701,13 @@ session was persisted. For actions that must never repeat, such as payments, pas
 key to the external service (for example a transaction id the flow generates once and stores in a
 variable) so a repeat is rejected at the source.
 
+**5. Log what `updateActivity` throws — the engine does not.** An engine AI call that fails
+(an `aiTimeOut`, a vendor error) reaches the host as `AI task processing failed: AI communication
+failed: <cause>`, and every layer it passes through traces it at `debug` only, so one failure is
+one line — the host's, at the level its outcome deserves (a fallback answer: warn; a
+`JSFEExecutionError` the user hears: error). Since 0.9.94; before it, one timeout wrote six
+warn/error lines inside the engine. `tests/ai-failure-logging.test.mjs` pins it.
+
 #### `lastTurnToolCalls`
 
 ```typescript
