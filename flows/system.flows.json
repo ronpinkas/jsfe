@@ -510,7 +510,7 @@
         "id": "normalize_prospective_email",
         "type": "SET",
         "variable": "prospective_email",
-        "value": "prospective_email ? prospective_email : (prospective_email2 ? prospective_email2.replace(/\\s+/g, '') : '')"
+        "value": "prospective_email ? prospective_email : (prospective_email2 ? String(prospective_email2).replace(/\\s+/g, '') : '')"
       },
       {
         "id": "normalize_cell_or_email",

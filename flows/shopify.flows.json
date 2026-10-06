@@ -113,7 +113,7 @@
         "id": "check_global_store_locations",
         "type": "CASE",
         "branches": {
-          "condition: global_store_locations && Array.isArray(global_store_locations) && global_store_locations.length > 0": {
+          "condition: typeof global_store_locations !== 'undefined' && Array.isArray(global_store_locations) && global_store_locations.length > 0": {
             "id": "ask_store_check",
             "type": "SAY-GET",
             "variable": "product_choice",
