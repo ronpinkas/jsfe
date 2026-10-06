@@ -305,6 +305,12 @@
         }
       },
       {
+        "id": "reset_resend_count",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.otpResends = 0"
+      },
+      {
         "id": "send_otp_based_on_contact",
         "type": "CASE",
         "branches": {
@@ -636,6 +642,14 @@
         "type": "string",
         "description": "User choice input",
         "value": ""
+      },
+      "otp_where": {
+        "type": "string",
+        "description": "Where the code is, for the prompt (English)"
+      },
+      "otp_where_es": {
+        "type": "string",
+        "description": "Where the code is, for the prompt (Spanish)"
       }
     },
     "steps": [
@@ -652,11 +666,23 @@
         "value": "cargo.otp_cell_number ? ((language == 'es' ? 'celular que termina con ' : 'cell ending with ') + cargo.otp_cell_number.slice(-4).split('').join(', ')) : (language == 'es' ? 'correo electrónico: ' : 'email: ') + cargo.otp_email"
       },
       {
+        "id": "set_otp_where",
+        "type": "SET",
+        "variable": "otp_where",
+        "value": "cargo.otpSentOn === 'whatsapp' ? 'I just sent you here in this chat' : ('you received at ' + formatted_otp_destination)"
+      },
+      {
+        "id": "set_otp_where_es",
+        "type": "SET",
+        "variable": "otp_where_es",
+        "value": "cargo.otpSentOn === 'whatsapp' ? 'que le acabo de enviar aquí en este chat' : ('que recibió en ' + formatted_otp_destination)"
+      },
+      {
         "id": "get_otp_from_user",
         "type": "SAY-GET",
         "variable": "otp_code",
-        "value": "Please {{cargo.verb}} {{cargo.voice ? 'or enter ' : ''}}the 6-digit verification code you received at {{formatted_otp_destination}}. You can also {{cargo.voice ? 'Press * or ' : ''}}{{cargo.verb}} EXIT to cancel.",
-        "value_es": "Por favor {{cargo.verb_es}} {{cargo.voice ? 'o ingrese ' : ''}}el código de verificación de 6 dígitos que recibió en {{formatted_otp_destination}}. También puedes {{cargo.voice ? 'Presionar * o ' : ''}}{{cargo.verb_es}} SALIR para cancelar.",
+        "value": "Please {{cargo.verb}} {{cargo.voice ? 'or enter ' : ''}}the 6-digit verification code {{otp_where}}. You can also {{cargo.voice ? 'Press * or ' : ''}}{{cargo.verb}} EXIT to cancel.",
+        "value_es": "Por favor {{cargo.verb_es}} {{cargo.voice ? 'o ingrese ' : ''}}el código de verificación de 6 dígitos {{otp_where_es}}. También puedes {{cargo.voice ? 'Presionar * o ' : ''}}{{cargo.verb_es}} SALIR para cancelar.",
         "digits": {
           "min": 6,
           "max": 6
@@ -743,9 +769,12 @@
           },
           "condition: matchesChoice(user_choice, ['resend', 'send again', 'send it again', 'not received', 'never received', 'did not receive', 'didn t receive', 'didn t get', 'haven t received', 'nothing came', 'no code', 'no text', 'no llegó', 'no llego', 'no llega', 'no ha llegado', 'no me llegó', 'no me llego', 'no le llegó', 'no le llego', 'no me ha llegado', 'no recibí', 'no recibi', 'no lo recibí', 'no lo recibi', 'no tengo el código', 'no tengo el codigo', 'no lo tengo', 'no alcancé', 'no alcance', 'mándame el código', 'mandame el codigo', 'envíame el código', 'enviame el codigo', 'reenviar', 'reenvíe', 'reenvie'])": {
             "id": "code_not_arrived",
-            "type": "SAY",
-            "value": "The code was sent and may take longer to arrive. Take your time.",
-            "value_es": "El código ya fue enviado y puede tardar un poco en llegar. Tómate tu tiempo."
+            "type": "FLOW",
+            "value": "resend-otp-code",
+            "callType": "call",
+            "parameters": {
+              "resend_reason": "requested"
+            }
           },
           "condition: matchesChoice(user_choice, ['driving', 'i am driving', 'i m busy', 'im busy', 'not now', 'later', 'call me later', 'call back', 'cant right now', 'can t right now', 'can t now', 'cannot right now', 'manejando', 'conduciendo', 'estoy manejando', 'voy manejando', 'ahora no', 'ahora no puedo', 'no puedo ahora', 'más tarde', 'mas tarde', 'estoy ocupado', 'estoy ocupada'])": {
             "id": "cannot_do_it_now",
@@ -795,6 +824,24 @@
             "variable": "otp_validated",
             "value": "true"
           },
+          "condition: cargo.otpFailure === 'expired'": {
+            "id": "otp_expired_fresh_code",
+            "type": "FLOW",
+            "value": "resend-otp-code",
+            "callType": "call",
+            "parameters": {
+              "resend_reason": "expired"
+            }
+          },
+          "condition: cargo.otpFailure === 'missing'": {
+            "id": "otp_missing_fresh_code",
+            "type": "FLOW",
+            "value": "resend-otp-code",
+            "callType": "call",
+            "parameters": {
+              "resend_reason": "missing"
+            }
+          },
           "default": {
             "id": "otp_wrong_code_retry",
             "type": "SAY",
@@ -813,7 +860,7 @@
         "id": "invite_if_wrong_code",
         "type": "CASE",
         "branches": {
-          "condition: cargo.otpVerified": {
+          "condition: cargo.otpVerified || cargo.otpFailure !== 'mismatch'": {
             "id": "no_invite_needed",
             "type": "SET",
             "variable": "skip",
@@ -874,6 +921,148 @@
             "type": "FLOW",
             "value": "get-and-validate-otp-code",
             "callType": "replace"
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "resend-otp-code",
+    "name": "ResendOtpCode",
+    "version": "1.0.0",
+    "description": "Send a FRESH one-time code to the destination authenticate-user already used (cargo.otp_cell_number or cargo.otp_email) and say why: the last one expired, none is pending, or the customer asked. Capped at 2 fresh codes per authentication (cargo.otpResends, reset by authenticate-user's first send), then the retry/agent/exit choice. Added 2026-10-05: an expired code used to be answered 'didn't match' and re-asked forever.",
+    "parameters": [
+      {
+        "name": "resend_reason",
+        "type": "string",
+        "description": "'expired' | 'missing' | 'requested'"
+      }
+    ],
+    "variables": {
+      "resend_reason": {
+        "type": "string",
+        "description": "Why a fresh code is being sent",
+        "value": "requested"
+      },
+      "resend_result": {
+        "type": "string",
+        "description": "Result of the send tool"
+      }
+    },
+    "steps": [
+      {
+        "id": "check_resend_cap",
+        "type": "CASE",
+        "branches": {
+          "condition: (cargo.otpResends || 0) >= 2": {
+            "id": "resend_cap_reached",
+            "type": "FLOW",
+            "value": "retry-authenticate-generic",
+            "callType": "replace",
+            "parameters": {
+              "error_message": "I've already sent you new codes and still couldn't verify you. To reach a person, {{cargo.verb}} AGENT.",
+              "error_message_es": "Ya le envié códigos nuevos y aún no pude verificarlo. Para hablar con una persona, {{cargo.verb_es}} AGENTE.",
+              "allow_otp_entry": true
+            }
+          },
+          "default": {
+            "id": "resend_allowed",
+            "type": "SET",
+            "variable": "proceed",
+            "value": true
+          }
+        }
+      },
+      {
+        "id": "count_resend",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.otpResends = (cargo.otpResends || 0) + 1"
+      },
+      {
+        "id": "send_fresh_code",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.otp_cell_number": {
+            "id": "resend_sms_otp",
+            "type": "CALL-TOOL",
+            "tool": "send-sms-otp",
+            "variable": "resend_result",
+            "args": {
+              "accountSid": null,
+              "from": "{{cargo.twilioNumber}}",
+              "to": "{{cargo.otp_cell_number}}",
+              "container": "{{cargo}}",
+              "language": "{{language}}"
+            },
+            "onFail": {
+              "id": "resend_sms_failed",
+              "type": "FLOW",
+              "value": "retry-authenticate-generic",
+              "callType": "replace",
+              "parameters": {
+                "error_message": "Sorry, text message delivery failed.",
+                "error_message_es": "Lo siento, la entrega del mensaje de texto falló.",
+                "allow_otp_entry": false
+              }
+            }
+          },
+          "condition: cargo.otp_email": {
+            "id": "resend_email_otp",
+            "type": "CALL-TOOL",
+            "tool": "send-email-otp",
+            "variable": "resend_result",
+            "args": {
+              "to": "{{cargo.otp_email}}",
+              "container": "{{cargo}}",
+              "language": "{{language}}"
+            },
+            "onFail": {
+              "id": "resend_email_failed",
+              "type": "FLOW",
+              "value": "retry-authenticate-generic",
+              "callType": "replace",
+              "parameters": {
+                "error_message": "Sorry, email delivery failed.",
+                "error_message_es": "Lo siento, la entrega del correo electrónico falló.",
+                "allow_otp_entry": false
+              }
+            }
+          },
+          "default": {
+            "id": "resend_no_destination",
+            "type": "FLOW",
+            "value": "retry-authenticate-generic",
+            "callType": "replace",
+            "parameters": {
+              "error_message": "Sorry, there was an unexpected error.",
+              "error_message_es": "Lo siento, hubo un error inesperado.",
+              "allow_otp_entry": false
+            }
+          }
+        }
+      },
+      {
+        "id": "say_why_fresh_code",
+        "type": "CASE",
+        "branches": {
+          "condition: resend_reason === 'expired'": {
+            "id": "say_code_expired",
+            "type": "SAY",
+            "value": "Your code expired, so I've sent you a new one.",
+            "value_es": "Su código expiró, así que le envié uno nuevo."
+          },
+          "condition: resend_reason === 'missing'": {
+            "id": "say_no_active_code",
+            "type": "SAY",
+            "value": "I don't have an active code for you, so I've sent you a new one.",
+            "value_es": "No tengo un código activo para usted, así que le envié uno nuevo."
+          },
+          "default": {
+            "id": "say_new_code_sent",
+            "type": "SAY",
+            "value": "I've sent you a new code.",
+            "value_es": "Le envié un código nuevo."
           }
         }
       }
@@ -1113,7 +1302,7 @@
             "type": "FLOW",
             "value": "authenticate-user",
             "callType": "replace",
-            "parameters": { 
+            "parameters": {
               "cell_number": "{{user_choice.replace(/[^0-9]/g, '')}}"
             }
           },
@@ -1122,7 +1311,7 @@
             "type": "FLOW",
             "value": "authenticate-user",
             "callType": "replace",
-            "parameters": { 
+            "parameters": {
               "email": "{{user_choice}}"
             }
           },
