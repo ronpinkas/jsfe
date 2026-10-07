@@ -857,6 +857,17 @@
                 ],
                 "description": "displayFinancialStatus, upstream enum e.g. PAID, PENDING, REFUNDED, PARTIALLY_REFUNDED, VOIDED; nullable"
               },
+              "fulfillmentStatus": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "displayFulfillmentStatus, upstream enum e.g. UNFULFILLED, FULFILLED, PARTIALLY_FULFILLED, IN_PROGRESS, ON_HOLD, SCHEDULED; nullable"
+              },
+              "cancelled": {
+                "type": "boolean",
+                "description": "true when the order was cancelled (cancelledAt set)"
+              },
               "overallStatus": {
                 "type": "string",
                 "description": "computed (2167-2176): displayFulfillmentStatus (e.g. UNFULFILLED, FULFILLED, PARTIALLY_FULFILLED) or 'CANCELLED' / 'CANCELLED:<cancelReason>' (reason omitted when OTHER), then ' <displayFinancialStatus>' appended when non-null, e.g. 'FULFILLED PAID'"
