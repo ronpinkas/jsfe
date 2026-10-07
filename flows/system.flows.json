@@ -97,6 +97,42 @@
         }
       },
       {
+        "id": "check_can_text",
+        "type": "CASE",
+        "branches": {
+          "condition: !cargo.callerId": {
+            "id": "say_cannot_text",
+            "type": "SAY",
+            "value": "I can't send a text message to the number you're calling from.",
+            "value_es": "No puedo enviar un mensaje de texto al número desde el que llama."
+          },
+          "default": {
+            "id": "can_text",
+            "type": "SET",
+            "variable": "can_text",
+            "value": true
+          }
+        }
+      },
+      {
+        "id": "route_cannot_text",
+        "type": "CASE",
+        "branches": {
+          "condition: !cargo.callerId": {
+            "id": "cannot_text_contact_support",
+            "type": "FLOW",
+            "value": "contact-support",
+            "callType": "reboot"
+          },
+          "default": {
+            "id": "proceed_to_send",
+            "type": "SET",
+            "variable": "can_text",
+            "value": true
+          }
+        }
+      },
+      {
         "id": "set_welcome_message",
         "type": "SET",
         "variable": "welcome_message",
@@ -1123,8 +1159,8 @@
         "id": "say_error_and_prompt",
         "type": "SAY-GET",
         "variable": "user_choice",
-        "value": "{{error_message}} Would you like to try again? To retry {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. {{cargo.voice ? 'To switch to text press 9 or ' + cargo.verb + ' TEXT. ' : ''}}To abort {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
-        "value_es": "{{error_message_es}} ¿Le gustaría intentar nuevamente? Para reintentar {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ. {{cargo.voice ? 'Para cambiar a texto presione 9 o ' + cargo.verb_es + ' TEXTO. ' : ''}}Para salir {{cargo.voice ? 'presione la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
+        "value": "{{error_message}} Would you like to try again? To retry {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. {{cargo.voice && cargo.callerId ? 'To switch to text press 9 or ' + cargo.verb + ' TEXT. ' : ''}}To abort {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
+        "value_es": "{{error_message_es}} ¿Le gustaría intentar nuevamente? Para reintentar {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ. {{cargo.voice && cargo.callerId ? 'Para cambiar a texto presione 9 o ' + cargo.verb_es + ' TEXTO. ' : ''}}Para salir {{cargo.voice ? 'presione la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
         "digits": {
           "min": 1,
           "max": 1
@@ -1249,8 +1285,8 @@
       {
         "id": "retry_msg",
         "type": "SAY-GET",
-        "value": "{{error_message}} Would you like to try again to get access to your account? To retry {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. {{cargo.voice ? 'To switch to text press 9 or ' + cargo.verb + ' TEXT. ' : ''}}To abort {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
-        "value_es": "{{error_message_es}} ¿Le gustaría intentar nuevamente obtener acceso a su cuenta? Para reintentar {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ. {{cargo.voice ? 'Para cambiar a texto presione 9 o ' + cargo.verb_es + ' TEXTO. ' : ''}}Para salir {{cargo.voice ? 'presione la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
+        "value": "{{error_message}} Would you like to try again to get access to your account? To retry {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. {{cargo.voice && cargo.callerId ? 'To switch to text press 9 or ' + cargo.verb + ' TEXT. ' : ''}}To abort {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
+        "value_es": "{{error_message_es}} ¿Le gustaría intentar nuevamente obtener acceso a su cuenta? Para reintentar {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ. {{cargo.voice && cargo.callerId ? 'Para cambiar a texto presione 9 o ' + cargo.verb_es + ' TEXTO. ' : ''}}Para salir {{cargo.voice ? 'presione la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
         "variable": "user_choice",
         "digits": {
           "min": 1,
