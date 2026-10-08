@@ -60,8 +60,8 @@
         "type": "SAY",
         "value": "Sorry I couldn't help! {{cargo.support_context ? 'For assistance with your ' + cargo.support_context + ', ' : ''}}{{contact_info}}.{{typeof closing_prompt !== 'undefined' && closing_prompt ? ' ' + closing_prompt : ''}}",
         "value_es": "¡Lo siento, no pude ayudar! {{cargo.support_context ? 'Para asistencia con tu ' + (cargo.support_context_es || cargo.support_context) + ', ' : ''}}{{contact_info_es}}.{{typeof closing_prompt_es !== 'undefined' && closing_prompt_es ? ' ' + closing_prompt_es : ''}}",
-        "outcome": "unresolved",
-        "reason": "contact_support_fallback"
+        "outcome": "{{typeof support_outcome !== 'undefined' && support_outcome ? support_outcome : 'unresolved'}}",
+        "reason": "{{typeof support_reason !== 'undefined' && support_reason ? support_reason : 'contact_support_fallback'}}"
       }
     ]
   },
@@ -1446,7 +1446,9 @@
             "callType": "reboot",
             "parameters": {
               "closing_prompt": "What else can I assist you with?",
-              "closing_prompt_es": "¿En qué más puedo ayudarle?"
+              "closing_prompt_es": "¿En qué más puedo ayudarle?",
+              "support_outcome": "resolved",
+              "support_reason": "agent_unavailable"
             }
           },
           "default": {
@@ -1494,7 +1496,9 @@
                 "callType": "reboot",
                 "parameters": {
                   "closing_prompt": "What else can I assist you with?",
-                  "closing_prompt_es": "¿En qué más puedo ayudarle?"
+                  "closing_prompt_es": "¿En qué más puedo ayudarle?",
+                  "support_outcome": "resolved",
+                  "support_reason": "agent_unavailable"
                 }
               }
             }
