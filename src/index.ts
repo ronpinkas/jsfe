@@ -6175,8 +6175,17 @@ async function setUserInputVariable(
 ): Promise<void> {
   let processedValue = value;
 
-  // Apply AI-powered voice cleanup if voice input is detected and AI is available
-  if (sanitize && typeof value === 'string' && engine.cargo?.voice && questionContext) {
+  // A digit step (SAY-GET `digits`) answered with digits only is taken as heard: the digits, with the
+  // separators the transcriber put between groups removed. It never goes to the AI cleaner, whose
+  // "remove duplication" rule dropped digits from 11 of 40 card numbers spoken in pairs
+  // ("41 34 18 73 33 57 41 80" → 14 digits) — a valid card then failed its checksum (prod 2026-10-09).
+  // It also keeps card numbers, codes and account numbers away from the AI vendor.
+  const digitsOnly = typeof value === 'string' && /\d/.test(value) && /^[\d\s.,\-()]+$/.test(value.trim());
+  if (sanitize && engine.cargo?.voice && engine.cargo?.digits && digitsOnly) {
+    processedValue = (value as string).replace(/\D/g, '');
+    logger.info(`Voice digits taken as heard (no AI cleanup): ${(processedValue as string).length} digits`);
+  } else if (sanitize && typeof value === 'string' && engine.cargo?.voice && questionContext) {
+    // Apply AI-powered voice cleanup if voice input is detected and AI is available
     try {
       processedValue = await cleanVoiceInput(value, questionContext, engine);
       logger.info(`Voice input processed: "${value}" → "${processedValue}"`);
