@@ -2366,6 +2366,17 @@ function checkRateLimit(engine: Engine, userId: string, toolId: string) {
  * @param engine - Engine instance for AI callback access
  * @returns Promise<string> - Cleaned up input suitable for processing
  */
+/** The digit range a SAY-GET step declares (`digits: { min, max }`), or null when it declares none. */
+function expectedDigits(digits: unknown): { min: number; max: number } | null {
+  const d = digits as { min?: unknown; max?: unknown } | null | undefined;
+  const min = Number(d?.min), max = Number(d?.max);
+  if (Number.isInteger(min) && Number.isInteger(max) && min >= 1 && max >= min) {
+    return { min, max };
+  } else {
+    return null;
+  }
+}
+
 async function cleanVoiceInput(input: string, questionContext: string, engine: Engine): Promise<string> {
   if (!engine.aiCallback) {
     logger.warn('AI callback not available for voice input cleanup, using raw input');
@@ -6175,14 +6186,17 @@ async function setUserInputVariable(
 ): Promise<void> {
   let processedValue = value;
 
-  // A digit step (SAY-GET `digits`) answered with digits only is taken as heard: the digits, with the
-  // separators the transcriber put between groups removed. It never goes to the AI cleaner, whose
-  // "remove duplication" rule dropped digits from 11 of 40 card numbers spoken in pairs
-  // ("41 34 18 73 33 57 41 80" → 14 digits) — a valid card then failed its checksum (prod 2026-10-09).
+  // A digit step (SAY-GET `digits: { min, max }`) whose answer carries a digit count within that range
+  // is taken as heard: its digits, in order, whatever words surround them ("es 41 34 …", "mi código es
+  // 1 2 3 4 5 6"). The AI cleaner never rewrites them: gpt-4o-mini dropped or swapped a pair in about a
+  // third of 16-digit card numbers spoken in groups, and no instruction or context line fixed that
+  // (measured 2026-10-09; prod refused a valid card in ~34 calls in 7 days). An answer whose digit
+  // count does not fit — a number said twice, a word, a number in words — still goes to the cleaner.
   // It also keeps card numbers, codes and account numbers away from the AI vendor.
-  const digitsOnly = typeof value === 'string' && /\d/.test(value) && /^[\d\s.,\-()]+$/.test(value.trim());
-  if (sanitize && engine.cargo?.voice && engine.cargo?.digits && digitsOnly) {
-    processedValue = (value as string).replace(/\D/g, '');
+  const range = expectedDigits(engine.cargo?.digits);
+  const digits = typeof value === 'string' ? value.replace(/\D/g, '') : '';
+  if (sanitize && engine.cargo?.voice && range && digits.length >= range.min && digits.length <= range.max) {
+    processedValue = digits;
     logger.info(`Voice digits taken as heard (no AI cleanup): ${(processedValue as string).length} digits`);
   } else if (sanitize && typeof value === 'string' && engine.cargo?.voice && questionContext) {
     // Apply AI-powered voice cleanup if voice input is detected and AI is available
