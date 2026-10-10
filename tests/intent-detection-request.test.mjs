@@ -106,6 +106,25 @@ async function run(reply, input = 'I want to cancel my order') {
   const { frame } = await run({ flowName: 'CreateServiceCase', parameters: { ticket_type: ['Fraud'] } });
   ok(!('ticket_type' in frame.variables) || frame.variables.ticket_type === undefined, 'a non-string value for an enum is dropped');
 }
+// Declared types (prod 2026-10-10: a truthy non-string `email` sent a valid phone to the email validator).
+const absent = (frame, name) => !(name in frame.variables) || frame.variables[name] === undefined;
+for (const bad of [{}, true, null, ['x']]) {
+  const { frame } = await run({ flowName: 'CreateServiceCase', parameters: { ticket_detail: bad, ticket_type: 'Fraud' } });
+  ok(absent(frame, 'ticket_detail'), `an untyped (string) parameter given ${JSON.stringify(bad)} is dropped, so the flow asks`);
+  eq(frame.variables.ticket_type, 'Fraud', 'and the valid parameters stay');
+}
+{
+  const { frame } = await run({ flowName: 'CreateServiceCase', parameters: { ticket_detail: 6197539705 } });
+  eq(frame.variables.ticket_detail, '6197539705', 'a number for a string parameter becomes its string');
+}
+{
+  const { frame } = await run({ flowName: 'CreateServiceCase', parameters: { send_link: 'true' } });
+  eq(frame.variables.send_link, true, '"true" for a boolean becomes true');
+}
+{
+  const { frame } = await run({ flowName: 'CreateServiceCase', parameters: { send_link: 'yes' } });
+  ok(absent(frame, 'send_link'), 'any other non-boolean for a boolean is dropped');
+}
 
 // ── 4. Backward compatible: a three-argument callback is unaffected ─────────────────────────
 {

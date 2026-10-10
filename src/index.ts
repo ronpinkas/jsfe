@@ -3378,6 +3378,45 @@ function enforceParameterEnums(flow: FlowDefinition, parameters: Record<string, 
   return result;
 }
 
+/**
+ * Enforces each declared parameter TYPE on the parameters intent detection returned. The detection
+ * schema only says `parameters: object`, so a model can answer a `string` parameter with an object, a
+ * boolean or a number, and the flow then runs on it: prod 2026-10-10, a customer typed their phone
+ * "619 7539705", `email` arrived as a truthy non-string, the flow's email validator ran, its tool
+ * refused `/email must be string`, and the customer was told their (valid) number could not be
+ * verified. A number for a string, "true"/"false" for a boolean, or a numeric string for a number is
+ * converted; any other mismatch is DROPPED (with a warning), so the flow asks for it. A parameter with
+ * no declared type is a string (as describeParameterType tells the model); other types pass through.
+ */
+function enforceParameterTypes(flow: FlowDefinition, parameters: Record<string, any>): Record<string, any> {
+  const result: Record<string, any> = { ...parameters };
+  for (const p of flow.parameters || []) {
+    if (!(p.name in result)) {
+      continue; // not extracted - the flow asks
+    }
+    const type = p.type || 'string';
+    const value = result[p.name];
+    let converted: any;
+    if (type === 'string') {
+      converted = typeof value === 'string' ? value : (typeof value === 'number' && Number.isFinite(value) ? String(value) : undefined);
+    } else if (type === 'boolean') {
+      converted = typeof value === 'boolean' ? value : (value === 'true' ? true : (value === 'false' ? false : undefined));
+    } else if (type === 'number' || type === 'integer') {
+      const n = typeof value === 'number' ? value : (typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN);
+      converted = Number.isFinite(n) && (type === 'number' || Number.isInteger(n)) ? n : undefined;
+    } else {
+      converted = value; // object, array or another declared type - not checked here
+    }
+    if (converted !== undefined) {
+      result[p.name] = converted;
+    } else {
+      logger.warn(`detectFlowWithParameters: dropped parameter "${p.name}" of flow "${flow.name}" - ${JSON.stringify(value)} is not a ${type}`);
+      delete result[p.name];
+    }
+  }
+  return result;
+}
+
 /** The structured form of the intent-detection call, passed to aiCallback as its 4th argument. */
 function buildDetectFlowRequest(input: string, lastChatTurn: { user?: ContextEntry; assistant?: ContextEntry } | undefined, flows: FlowDefinition[]): DetectFlowRequest {
   const conversation: DetectFlowRequest['conversation'] = [];
@@ -3505,7 +3544,7 @@ export async function detectFlowWithParameters(input: string, engine: Engine): P
             logger.warn(`detectFlowWithParameters: stripped ${entries.length - filtered.length} empty-key parameter(s) from AI response for flow "${flow.name}"`);
             parameters = Object.fromEntries(filtered);
           }
-          parameters = enforceParameterEnums(flow, parameters);
+          parameters = enforceParameterEnums(flow, enforceParameterTypes(flow, parameters));
         }
         return { flow, parameters };
       } else {
