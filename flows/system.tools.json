@@ -341,5 +341,39 @@
       "type": "string",
       "description": "The `status` field of the Twilio Message resource returned by twilioClient.messages.create() for the LAST part sent (reply is split by splitSmsParts; parts are sent sequentially). Value comes from the Twilio API, not from code literals — typically 'queued' (or 'accepted' when sending via a Messaging Service). Not enumerated because the code sets it only from the upstream response."
     }
+  },
+  {
+    "id": "get-live-connect-link",
+    "name": "Get Live Connect Link",
+    "description": "Return the tenant's Live Connect guest link when Live Connect is enabled and an agent is online or reachable; '' otherwise. Never throws.",
+    "parameters": {
+      "container": {
+        "type": "object",
+        "description": "Session cargo; annotated with liveConnectOffered when a link is returned."
+      }
+    },
+    "required": [],
+    "additionalProperties": false,
+    "implementation": {
+      "type": "local",
+      "function": "getLiveConnectLink",
+      "args": [
+        "container"
+      ],
+      "timeout": 5000
+    },
+    "security": {
+      "requiresAuth": false,
+      "auditLevel": "low",
+      "dataClassification": "public",
+      "rateLimit": {
+        "requests": 10,
+        "window": 300000
+      }
+    },
+    "returns": {
+      "type": "string",
+      "description": "The guest link ({url}/?ref=<dbPrefix>), or '' when Live Connect is off, no agent is reachable, or the presence check fails."
+    }
   }
 ]

@@ -1405,18 +1405,68 @@
   {
     "id": "live-agent-requested",
     "name": "LiveAgentRequested",
-    "version": "1.1.0",
-    "description": "Interception flow when user requests live agent - explains AI capabilities and gives option to continue or transfer. When no agent is available, speaks the optional global_live_agents_comment / global_live_agents_comment_es global variables (e.g. agent hours) before the contact info.",
+    "version": "1.2.0",
+    "description": "Customer's primary intent is to reach a human: live agent, representative, 'customer service', 'servicio al cliente', 'I need to talk to someone', 'speak to a person', 'comunicarme con alguien', 'hablar con una persona'. On the phone it offers the transfer when an agent is scheduled (cargo.agentPhoneNumber); on every other channel it sends the Live Connect link when the tenant runs Live Connect and an agent is reachable. Otherwise it shares the tenant's Live Support information. When no agent is available, speaks the optional global_live_agents_comment / global_live_agents_comment_es global variables (e.g. agent hours) before the contact info.",
     "prompt": "live agent confirmation",
     "prompt_es": "confirmación de agente en vivo",
-    "primary": false,
+    "primary": true,
     "variables": {
       "user_choice": {
         "type": "string",
         "description": "User choice to continue with AI or transfer to live agent"
+      },
+      "live_connect_link": {
+        "type": "string",
+        "description": "Live Connect guest link on non-phone channels; '' when not available"
       }
     },
     "steps": [
+      {
+        "id": "get_live_connect",
+        "type": "CASE",
+        "branches": {
+          "condition: !cargo.voice": {
+            "id": "fetch_live_connect_link",
+            "type": "CALL-TOOL",
+            "tool": "get-live-connect-link",
+            "variable": "live_connect_link",
+            "args": {
+              "container": "{{cargo}}"
+            },
+            "onFail": {
+              "id": "live_connect_unavailable",
+              "type": "SET",
+              "variable": "live_connect_link",
+              "value": "''"
+            }
+          },
+          "default": {
+            "id": "phone_channel",
+            "type": "SET",
+            "variable": "live_connect_link",
+            "value": "''"
+          }
+        }
+      },
+      {
+        "id": "offer_live_connect",
+        "type": "CASE",
+        "branches": {
+          "condition: !cargo.voice && live_connect_link": {
+            "id": "say_live_connect",
+            "type": "RETURN",
+            "value": "(language == 'es' ? 'Puede hablar ahora con un agente en vivo, por audio o video, aquí: ' : 'You can talk to a live agent now, by audio or video, here: ') + live_connect_link",
+            "outcome": "resolved",
+            "reason": "live_connect_link"
+          },
+          "default": {
+            "id": "no_live_connect",
+            "type": "SET",
+            "variable": "user_choice",
+            "value": "''"
+          }
+        }
+      },
       {
         "id": "check_agent_available",
         "type": "CASE",
