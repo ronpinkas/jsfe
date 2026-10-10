@@ -126,6 +126,29 @@ for (const bad of [{}, true, null, ['x']]) {
   ok(absent(frame, 'send_link'), 'any other non-boolean for a boolean is dropped');
 }
 
+// The schema is typed from the offered flows; null means "not provided" (strict structured output).
+{
+  const { calls } = await run({ flowName: 'None', parameters: {} });
+  const wrapper = JSON.parse(calls[1][2]);
+  const schema = wrapper.json_schema.schema;
+  eq(wrapper.json_schema.strict, true, 'strict structured output');
+  eq(schema.properties.flowName.enum, ['CreateServiceCase', 'None'], 'flowName is one of the offered flows or None');
+  eq(schema.properties.parameters.properties, {
+    ticket_type: { type: ['string', 'null'], enum: ['Fraud', 'Cancellation', 'Account Issue', null] },
+    send_link: { type: ['boolean', 'null'] },
+    ticket_detail: { type: ['string', 'null'] },
+  }, 'each parameter typed, nullable, enum kept');
+  eq(schema.properties.parameters.required, ['ticket_type', 'send_link', 'ticket_detail'], 'every parameter required (null when absent)');
+  eq(schema.additionalProperties, false, 'closed at the top');
+  eq(schema.properties.parameters.additionalProperties, false, 'and in parameters');
+}
+{
+  const { frame } = await run({ flowName: 'CreateServiceCase', parameters: { ticket_type: null, send_link: null, ticket_detail: 'order 9', other_flows_param: 'x' } });
+  ok(absent(frame, 'ticket_type') && absent(frame, 'send_link'), 'null parameters are not provided, so the flow asks');
+  eq(frame.variables.ticket_detail, 'order 9', 'a provided value stays');
+  ok(absent(frame, 'other_flows_param'), "another flow's parameter never reaches this flow");
+}
+
 // ── 4. Backward compatible: a three-argument callback is unaffected ─────────────────────────
 {
   let seen;

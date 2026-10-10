@@ -3379,6 +3379,62 @@ function enforceParameterEnums(flow: FlowDefinition, parameters: Record<string, 
 }
 
 /**
+ * The detect_flow response schema, typed from the offered flows (strict structured output). flowName is
+ * one of their names or "None"; `parameters` carries every parameter any offered flow declares, each
+ * typed `[type, "null"]` and required — null is how the model says "not provided". A name two flows
+ * declare with different types accepts either; an enum survives only when every declaration has one.
+ * Every object is closed (additionalProperties: false), which strict mode and Bedrock both require.
+ */
+function detectFlowSchema(flows: FlowDefinition[]): Record<string, any> {
+  const params = new Map<string, { types: Set<string>; enum: Set<string> | null }>();
+  for (const flow of flows) {
+    for (const p of flow.parameters || []) {
+      const type = p.type === 'integer' ? 'integer' : (['string', 'boolean', 'number'].includes(p.type || 'string') ? (p.type || 'string') : null);
+      if (!type) {
+        continue; // object / array parameters are not offered to the model as typed values
+      }
+      const entry = params.get(p.name) || { types: new Set<string>(), enum: params.has(p.name) ? null : new Set<string>() };
+      entry.types.add(type);
+      if (entry.enum && Array.isArray(p.enum) && p.enum.length > 0) {
+        p.enum.forEach(v => entry.enum!.add(v));
+      } else {
+        entry.enum = null; // a declaration without an enum: the name takes any value of its type
+      }
+      params.set(p.name, entry);
+    }
+  }
+  const properties: Record<string, any> = {};
+  for (const [name, entry] of params) {
+    const schema: Record<string, any> = { type: [...entry.types, 'null'] };
+    if (entry.enum && entry.enum.size > 0 && entry.types.size === 1 && entry.types.has('string')) {
+      schema.enum = [...entry.enum, null];
+    } else {
+      // no enum, or one the types cannot share - jsfe enforces each flow's own enum on the reply
+    }
+    properties[name] = schema;
+  }
+  return {
+    type: 'object',
+    properties: {
+      flowName: { type: 'string', enum: [...flows.map(f => f.name), 'None'] },
+      parameters: { type: 'object', properties, required: Object.keys(properties), additionalProperties: false },
+    },
+    required: ['flowName', 'parameters'],
+    additionalProperties: false,
+  };
+}
+
+/**
+ * Keeps only the parameters the chosen flow declares, with a value. The typed schema makes the model
+ * answer every offered flow's parameters, null when absent, so a null — or another flow's parameter —
+ * is the schema's shape, not a model mistake: removed silently.
+ */
+function ownParametersOnly(flow: FlowDefinition, parameters: Record<string, any>): Record<string, any> {
+  const declared = new Set((flow.parameters || []).map(p => p.name));
+  return Object.fromEntries(Object.entries(parameters).filter(([k, v]) => declared.has(k) && v !== null && v !== undefined));
+}
+
+/**
  * Enforces each declared parameter TYPE on the parameters intent detection returned. The detection
  * schema only says `parameters: object`, so a model can answer a `string` parameter with an object, a
  * boolean or a number, and the flow then runs on it: prod 2026-10-10, a customer typed their phone
@@ -3498,22 +3554,15 @@ export async function detectFlowWithParameters(input: string, engine: Engine): P
 - Consider user intent and the chat context
 - Prioritize the most relevant flow considering all available flows
 - Flows should only be triggered in response to explicit user intent. A user prompt asking about available credit should trigger balance flows when available, but not payment flows. Complaints about a charge must not trigger a payment flow. Imagine the frustration of a user asking any question other than "Can I make a payment?" and being forwarded to a payment flow instead of receiving a direct answer.
-- The "parameters" object is always required in the response. Extract parameter values from the user input when explicitly present. Return an empty object {} when no parameters are found.
+- The "parameters" object is always required in the response. Extract parameter values from the user input when explicitly present. Use null for every parameter that is not explicitly present, or that belongs to a flow other than the one you return.
 `;
 
     const jsonSchema = JSON.stringify({
       type: "json_schema",
       json_schema: {
         name: "detect_flow",
-        strict: false,
-        schema: {
-          type: "object",
-          properties: {
-            flowName: { type: "string" },
-            parameters: { type: "object" }
-          },
-          required: ["flowName", "parameters"]
-        }
+        strict: true,
+        schema: detectFlowSchema(flowsForIntentDetection)
       }
     });
 
@@ -3544,7 +3593,7 @@ export async function detectFlowWithParameters(input: string, engine: Engine): P
             logger.warn(`detectFlowWithParameters: stripped ${entries.length - filtered.length} empty-key parameter(s) from AI response for flow "${flow.name}"`);
             parameters = Object.fromEntries(filtered);
           }
-          parameters = enforceParameterEnums(flow, enforceParameterTypes(flow, parameters));
+          parameters = enforceParameterEnums(flow, enforceParameterTypes(flow, ownParametersOnly(flow, parameters)));
         }
         return { flow, parameters };
       } else {
