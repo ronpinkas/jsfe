@@ -56,10 +56,22 @@
         "value": "cargo.voice ? textWithUrlToSpeech(cargo.contact_info || 'por favor contacte a Servicio al Cliente', language) : (cargo.contact_info || 'por favor contacte a Servicio al Cliente')"
       },
       {
+        "id": "set_support_message",
+        "type": "SET",
+        "variable": "support_message",
+        "value": "(cargo.sessionResolved ? \"Thank you for contacting us! \" : \"Sorry I couldn't help! \") + (cargo.support_context ? \"For assistance with your \" + cargo.support_context + \", \" : \"\") + contact_info + \".\" + (typeof closing_prompt !== \"undefined\" && closing_prompt ? \" \" + closing_prompt : \"\")"
+      },
+      {
+        "id": "set_support_message_es",
+        "type": "SET",
+        "variable": "support_message_es",
+        "value": "(cargo.sessionResolved ? \"¡Gracias por comunicarte con nosotros! \" : \"¡Lo siento, no pude ayudar! \") + (cargo.support_context ? \"Para asistencia con tu \" + (cargo.support_context_es || cargo.support_context) + \", \" : \"\") + contact_info_es + \".\" + (typeof closing_prompt_es !== \"undefined\" && closing_prompt_es ? \" \" + closing_prompt_es : \"\")"
+      },
+      {
         "id": "say_support_message",
         "type": "SAY",
-        "value": "Sorry I couldn't help! {{cargo.support_context ? 'For assistance with your ' + cargo.support_context + ', ' : ''}}{{contact_info}}.{{typeof closing_prompt !== 'undefined' && closing_prompt ? ' ' + closing_prompt : ''}}",
-        "value_es": "¡Lo siento, no pude ayudar! {{cargo.support_context ? 'Para asistencia con tu ' + (cargo.support_context_es || cargo.support_context) + ', ' : ''}}{{contact_info_es}}.{{typeof closing_prompt_es !== 'undefined' && closing_prompt_es ? ' ' + closing_prompt_es : ''}}",
+        "value": "{{support_message}}",
+        "value_es": "{{support_message_es}}",
         "outcome": "{{typeof support_outcome !== 'undefined' && support_outcome ? support_outcome : 'unresolved'}}",
         "reason": "{{typeof support_reason !== 'undefined' && support_reason ? support_reason : 'contact_support_fallback'}}"
       }
@@ -68,7 +80,7 @@
   {
     "id": "switch-to-text",
     "name": "SwitchToText",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "prompt": "Switch to text",
     "prompt_es": "Cambiar a texto",
     "description": "This flow can be used when the user asks to switch the chat to text/SMS. It should never ever be used when the user asks to speak to a live agent, human, manager, etc. The user must explictly ask to switch the chat to text or to SMS. It will forward their chat context to SMS and send them a welcome message.",
@@ -136,7 +148,13 @@
         "id": "set_welcome_message",
         "type": "SET",
         "variable": "welcome_message",
-        "value": "language !== 'es' ? 'Hi, I remember our phone conversation and can continue to help you here via text. You can also continue on WhatsApp: https://wa.me/18184162641?text=Hi' : 'Hola, recuerdo nuestra conversación telefónica y puedo seguir ayudándote aquí por mensaje de texto. También puedes continuar en WhatsApp: https://wa.me/18184162641?text=Hola'"
+        "value": "(language !== 'es' ? 'Hi, I remember our phone conversation and can continue to help you here via text. You can also continue on WhatsApp: https://wa.me/18184162641?text=Hi' : 'Hola, recuerdo nuestra conversación telefónica y puedo seguir ayudándote aquí por mensaje de texto. También puedes continuar en WhatsApp: https://wa.me/18184162641?text=Hola') + (language !== 'es' ? (typeof text_starter !== 'undefined' && text_starter ? '\\n\\n' + text_starter : '') : (typeof text_starter_es !== 'undefined' && text_starter_es ? '\\n\\n' + text_starter_es : (typeof text_starter !== 'undefined' && text_starter ? '\\n\\n' + text_starter : '')))"
+      },
+      {
+        "id": "set_switch_user_turn",
+        "type": "SET",
+        "variable": "switch_user_turn",
+        "value": "language !== 'es' ? 'Switch to text' : 'Cambiar a texto'"
       },
       {
         "id": "send_welcome_sms",
@@ -148,7 +166,8 @@
           "threadId": "{{sessionId}}",
           "from": "{{cargo.twilioNumber}}",
           "to": "{{cargo.callerId}}",
-          "message": "{{welcome_message}}"
+          "message": "{{welcome_message}}",
+          "userTurn": "{{switch_user_turn}}"
         },
         "onFail": {
           "id": "sms_failed_flow",
@@ -168,7 +187,7 @@
   {
     "id": "authenticate-user",
     "name": "AuthenticateUser",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Generic flow to authenticate user via OTP sent to cell or email",
     "parameters": [
       {
@@ -345,6 +364,12 @@
         "type": "SET",
         "variable": "assignment_side_effect",
         "value": "cargo.otpResends = 0"
+      },
+      {
+        "id": "reset_mismatch_count",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.otpMismatches = 0"
       },
       {
         "id": "send_otp_based_on_contact",
@@ -747,8 +772,8 @@
   {
     "id": "validate-otp-code",
     "name": "ValidateOtpCode",
-    "version": "1.0.0",
-    "description": "Validate OTP code entered by user - sets cargo.otpVerified on success",
+    "version": "1.1.0",
+    "description": "Validate OTP code entered by user - sets cargo.otpVerified on success. Capped at 3 wrong codes per authentication (cargo.otpMismatches, reset by authenticate-user): the code is withdrawn and the retry/agent/exit choice follows, where retry sends a fresh code. Added 2026-10-12: a caller entered 13 wrong codes in 3.5 minutes.",
     "variables": {
       "otp_validation_result": {
         "type": "boolean",
@@ -851,6 +876,30 @@
         }
       },
       {
+        "id": "count_wrong_code",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.otpMismatches = (cargo.otpMismatches || 0) + (!cargo.otpVerified && cargo.otpFailure === 'mismatch' ? 1 : 0)"
+      },
+      {
+        "id": "withdraw_code_at_cap",
+        "type": "CASE",
+        "branches": {
+          "condition: !cargo.otpVerified && cargo.otpFailure === 'mismatch' && (cargo.otpMismatches || 0) >= 3": {
+            "id": "withdraw_code",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "cargo.otpHash = null"
+          },
+          "default": {
+            "id": "code_still_open",
+            "type": "SET",
+            "variable": "skip",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "check_validation_result",
         "type": "CASE",
         "branches": {
@@ -876,6 +925,17 @@
             "callType": "call",
             "parameters": {
               "resend_reason": "missing"
+            }
+          },
+          "condition: !cargo.otpVerified && cargo.otpFailure === 'mismatch' && (cargo.otpMismatches || 0) >= 3": {
+            "id": "wrong_code_cap_reached",
+            "type": "FLOW",
+            "value": "retry-authenticate-generic",
+            "callType": "replace",
+            "parameters": {
+              "error_message": "That code didn't match three times, so I can't accept another try with it. To reach a person, {{cargo.verb}} AGENT.",
+              "error_message_es": "Ese código no coincidió tres veces, así que no puedo aceptar otro intento con él. Para hablar con una persona, {{cargo.verb_es}} AGENTE.",
+              "allow_otp_entry": false
             }
           },
           "default": {
@@ -1107,7 +1167,7 @@
   {
     "id": "generic-retry-with-options",
     "name": "GenericRetryWithOptions",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "description": "Generic flow to offer retry, switch to text, or contact support",
     "parameters": [
       {
@@ -1164,6 +1224,29 @@
         "digits": {
           "min": 1,
           "max": 1
+        }
+      },
+      {
+        "id": "reprompt_on_unknown_key",
+        "type": "CASE",
+        "branches": {
+          "condition: /^\\s*[02-8]\\s*$/.test(user_choice)": {
+            "id": "say_not_an_option",
+            "type": "SAY-GET",
+            "variable": "user_choice",
+            "value": "Sorry, that is not an option. To retry {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. {{cargo.voice && cargo.callerId ? 'To switch to text press 9 or ' + cargo.verb + ' TEXT. ' : ''}}To abort {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
+            "value_es": "Lo siento, esa no es una opción. Para reintentar {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ. {{cargo.voice && cargo.callerId ? 'Para cambiar a texto presione 9 o ' + cargo.verb_es + ' TEXTO. ' : ''}}Para salir {{cargo.voice ? 'presione la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
+            "digits": {
+              "min": 1,
+              "max": 1
+            }
+          },
+          "default": {
+            "id": "choice_is_known_or_spoken",
+            "type": "SET",
+            "variable": "proceed",
+            "value": true
+          }
         }
       },
       {
@@ -1405,8 +1488,8 @@
   {
     "id": "live-agent-requested",
     "name": "LiveAgentRequested",
-    "version": "1.2.0",
-    "description": "Customer's primary intent is to reach a human: live agent, representative, 'customer service', 'servicio al cliente', 'I need to talk to someone', 'speak to a person', 'comunicarme con alguien', 'hablar con una persona'. On the phone it offers the transfer when an agent is scheduled (cargo.agentPhoneNumber); on every other channel it sends the Live Connect link when the tenant runs Live Connect and an agent is reachable. Otherwise it shares the tenant's Live Support information. When no agent is available, speaks the optional global_live_agents_comment / global_live_agents_comment_es global variables (e.g. agent hours) before the contact info.",
+    "version": "1.3.0",
+    "description": "Customer's primary intent is to reach a human: live agent, representative, 'customer service', 'servicio al cliente', 'I need to talk to someone', 'speak to a person', 'comunicarme con alguien', 'hablar con una persona'. On the phone it offers the transfer when an agent is scheduled (cargo.agentPhoneNumber); on every other channel it sends the Live Connect link when the tenant runs Live Connect and an agent is reachable. When no agent is available it says so, states the agent hours (on the phone built from the number's schedule, cargo.agentHours / agentHours_es; otherwise the optional global_live_agents_comment / global_live_agents_comment_es) and offers to help, in the number's own words (cargo.agentUnavailableMessage, a voice setting) or a generic default; the flow ends 'unresolved' (agent_unavailable). Contact information is given when the customer asks for it.",
     "prompt": "live agent confirmation",
     "prompt_es": "confirmación de agente en vivo",
     "primary": true,
@@ -1472,37 +1555,14 @@
         "type": "CASE",
         "branches": {
           "condition: !cargo.agentPhoneNumber": {
-            "id": "no_agent_msg",
-            "type": "SAY",
-            "value": "Our live agent team isn't available right now. {{typeof global_live_agents_comment !== 'undefined' && global_live_agents_comment ? global_live_agents_comment + ' ' : ''}}Let me share our contact information so we can still help you.",
-            "value_es": "Nuestro equipo de agentes no está disponible en este momento. {{typeof global_live_agents_comment_es !== 'undefined' && global_live_agents_comment_es ? global_live_agents_comment_es + ' ' : ''}}Permítame compartir nuestra información de contacto para que aún podamos ayudarle."
+            "id": "no_agent_available",
+            "type": "RETURN",
+            "value": "[language == 'es' ? 'Nuestro equipo de agentes no está disponible en este momento.' : \"Our live agent team isn't available right now.\", language == 'es' ? (cargo.agentHours_es || (typeof global_live_agents_comment_es !== 'undefined' && global_live_agents_comment_es ? global_live_agents_comment_es : '')) : (cargo.agentHours || (typeof global_live_agents_comment !== 'undefined' && global_live_agents_comment ? global_live_agents_comment : '')), cargo.agentUnavailableMessage || (language == 'es' ? (cargo.voice ? 'Aún puedo ayudarle con muchas preguntas. Solo dígame qué necesita.' : 'Aún puedo ayudarle con muchas preguntas. Solo escríbame qué necesita.') : 'I can still help with many questions. Just tell me what you need.')].filter(Boolean).join(' ')",
+            "outcome": "unresolved",
+            "reason": "agent_unavailable"
           },
           "default": {
             "id": "agent_available",
-            "type": "SET",
-            "variable": "user_choice",
-            "value": "''"
-          }
-        }
-      },
-      {
-        "id": "route_if_unavailable",
-        "type": "CASE",
-        "branches": {
-          "condition: !cargo.agentPhoneNumber": {
-            "id": "fallback_to_contact",
-            "type": "FLOW",
-            "value": "contact-support",
-            "callType": "reboot",
-            "parameters": {
-              "closing_prompt": "What else can I assist you with?",
-              "closing_prompt_es": "¿En qué más puedo ayudarle?",
-              "support_outcome": "resolved",
-              "support_reason": "agent_unavailable"
-            }
-          },
-          "default": {
-            "id": "proceed_to_prompt",
             "type": "SET",
             "variable": "user_choice",
             "value": "''"
@@ -1541,15 +1601,10 @@
               },
               "default": {
                 "id": "no_agents_available",
-                "type": "FLOW",
-                "value": "contact-support",
-                "callType": "reboot",
-                "parameters": {
-                  "closing_prompt": "What else can I assist you with?",
-                  "closing_prompt_es": "¿En qué más puedo ayudarle?",
-                  "support_outcome": "resolved",
-                  "support_reason": "agent_unavailable"
-                }
+                "type": "RETURN",
+                "value": "[language == 'es' ? 'Nuestro equipo de agentes no está disponible en este momento.' : \"Our live agent team isn't available right now.\", language == 'es' ? (cargo.agentHours_es || (typeof global_live_agents_comment_es !== 'undefined' && global_live_agents_comment_es ? global_live_agents_comment_es : '')) : (cargo.agentHours || (typeof global_live_agents_comment !== 'undefined' && global_live_agents_comment ? global_live_agents_comment : '')), cargo.agentUnavailableMessage || (language == 'es' ? (cargo.voice ? 'Aún puedo ayudarle con muchas preguntas. Solo dígame qué necesita.' : 'Aún puedo ayudarle con muchas preguntas. Solo escríbame qué necesita.') : 'I can still help with many questions. Just tell me what you need.')].filter(Boolean).join(' ')",
+                "outcome": "unresolved",
+                "reason": "agent_unavailable"
               }
             }
           },

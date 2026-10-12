@@ -245,6 +245,10 @@
       "message": {
         "type": "string",
         "description": "SMS message content"
+      },
+      "userTurn": {
+        "type": "string",
+        "description": "The user side of the switch as the text thread records it ('Switch to text' / 'Cambiar a texto'); written with the message as one history pair."
       }
     },
     "required": [
@@ -263,7 +267,8 @@
         "threadId",
         "from",
         "to",
-        "message"
+        "message",
+        "userTurn"
       ],
       "timeout": 10000
     },
