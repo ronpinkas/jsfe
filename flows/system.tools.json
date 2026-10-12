@@ -222,6 +222,44 @@
     }
   },
   {
+    "id": "set-user-name",
+    "name": "Set User Name",
+    "description": "Name the person in the conversation, e.g. the account holder's first name once a lookup found the account. From the next reply on, every message addresses them by it (greetings, apologies, the guru), on every channel, and the name is returned to the caller in context.display_name; a name a flow set outranks whatever the channel re-sends. An empty name clears it: the person is then addressed without one.",
+    "parameters": {
+      "name": {
+        "type": "string",
+        "description": "The name to address the person by (a first name), or empty for none"
+      },
+      "container": {
+        "type": "object",
+        "description": "Session cargo container"
+      }
+    },
+    "required": [
+      "name",
+      "container"
+    ],
+    "additionalProperties": false,
+    "implementation": {
+      "type": "local",
+      "function": "setUserName",
+      "args": [
+        "name",
+        "container"
+      ],
+      "timeout": 5000
+    },
+    "security": {
+      "requiresAuth": false,
+      "auditLevel": "low",
+      "dataClassification": "personal"
+    },
+    "returns": {
+      "type": "string",
+      "description": "The name as stored, trimmed; '' when none. Also sets container.displayName and container.displayNameSetBy = 'flow'."
+    }
+  },
+  {
     "id": "switch-to-sms",
     "name": "Switch to SMS",
     "description": "Switch communication to SMS and send confirmation message",
