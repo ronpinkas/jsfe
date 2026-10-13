@@ -28,9 +28,19 @@
   {
     "id": "contact-support",
     "name": "ContactSupport",
-    "version": "1.1.0",
-    "description": "Provide customer service contact information. Optional closing_prompt / closing_prompt_es parameters are spoken after the contact info.",
+    "version": "1.2.0",
+    "description": "Provide customer service contact information. Optional support_context / support_context_es name what the caller needed help with (else cargo.support_context); optional closing_prompt / closing_prompt_es are spoken after the contact info.",
     "parameters": [
+      {
+        "name": "support_context",
+        "type": "string",
+        "description": "What the caller needed help with (English), e.g. 'payment'"
+      },
+      {
+        "name": "support_context_es",
+        "type": "string",
+        "description": "The same in Spanish, e.g. 'pago'"
+      },
       {
         "name": "closing_prompt",
         "type": "string",
@@ -43,6 +53,12 @@
       }
     ],
     "steps": [
+      {
+        "id": "take_context_parameters",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "typeof support_context !== 'undefined' && support_context ? (cargo.support_context = support_context, cargo.support_context_es = typeof support_context_es !== 'undefined' && support_context_es ? support_context_es : support_context, true) : true"
+      },
       {
         "id": "set_contact_info",
         "type": "SET",
@@ -187,7 +203,7 @@
   {
     "id": "authenticate-user",
     "name": "AuthenticateUser",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "description": "Generic flow to authenticate user via OTP sent to cell or email",
     "parameters": [
       {
@@ -372,6 +388,24 @@
         "value": "cargo.otpMismatches = 0"
       },
       {
+        "id": "skip_line_that_cannot_text",
+        "type": "CASE",
+        "branches": {
+          "condition: cell_number && cargo.otpUndeliverableTo && String(cell_number).replace(/[^0-9]/g, '').slice(-10) === cargo.otpUndeliverableTo": {
+            "id": "cell_cannot_text",
+            "type": "FLOW",
+            "value": "otp-text-undeliverable",
+            "callType": "replace"
+          },
+          "default": {
+            "id": "cell_may_text",
+            "type": "SET",
+            "variable": "proceed",
+            "value": true
+          }
+        }
+      },
+      {
         "id": "send_otp_based_on_contact",
         "type": "CASE",
         "branches": {
@@ -389,13 +423,8 @@
             "onFail": {
               "id": "sms_failed",
               "type": "FLOW",
-              "value": "retry-authenticate-generic",
-              "callType": "replace",
-              "parameters": {
-                "error_message": "Sorry, text message delivery failed.",
-                "error_message_es": "Lo siento, la entrega del mensaje de texto falló.",
-                "allow_otp_entry": false
-              }
+              "value": "otp-sms-failed",
+              "callType": "replace"
             }
           },
           "condition: email": {
@@ -684,7 +713,7 @@
   {
     "id": "get-and-validate-otp-code",
     "name": "GetAndValidateOtpCode",
-    "version": "1.0.0",
+    "version": "1.0.2",
     "description": "Get and validate OTP code from user",
     "variables": {
       "otp_code": {
@@ -724,7 +753,7 @@
         "id": "formatted_otp_destination",
         "type": "SET",
         "variable": "formatted_otp_destination",
-        "value": "cargo.otp_cell_number ? ((language == 'es' ? 'celular que termina con ' : 'cell ending with ') + cargo.otp_cell_number.slice(-4).split('').join(', ')) : (language == 'es' ? 'correo electrónico: ' : 'email: ') + cargo.otp_email"
+        "value": "cargo.otp_cell_number ? ((language == 'es' ? 'celular que termina con ' : 'cell ending with ') + (cargo.voice ? cargo.otp_cell_number.slice(-4).split('').join(', ') : cargo.otp_cell_number.slice(-4))) : (language == 'es' ? 'correo electrónico: ' : 'email: ') + cargo.otp_email"
       },
       {
         "id": "set_otp_where",
@@ -742,8 +771,8 @@
         "id": "get_otp_from_user",
         "type": "SAY-GET",
         "variable": "otp_code",
-        "value": "Please {{cargo.verb}} {{cargo.voice ? 'or enter ' : ''}}the 6-digit verification code {{otp_where}}. You can also {{cargo.voice ? 'Press * or ' : ''}}{{cargo.verb}} EXIT to cancel.",
-        "value_es": "Por favor {{cargo.verb_es}} {{cargo.voice ? 'o ingrese ' : ''}}el código de verificación de 6 dígitos {{otp_where_es}}. También puedes {{cargo.voice ? 'Presionar * o ' : ''}}{{cargo.verb_es}} SALIR para cancelar.",
+        "value": "Please {{cargo.verb}} {{cargo.voice ? 'or enter ' : ''}}the 6-digit verification code {{otp_where}}. You can also {{cargo.voice ? 'press * or ' : ''}}{{cargo.verb}} EXIT to cancel.",
+        "value_es": "Por favor {{cargo.verb_es}} {{cargo.voice ? 'o ingrese ' : ''}}el código de verificación de 6 dígitos {{otp_where_es}}. También puede {{cargo.voice ? 'presionar * o decir' : 'escribir'}} SALIR para cancelar.",
         "digits": {
           "min": 6,
           "max": 6
@@ -772,7 +801,7 @@
   {
     "id": "validate-otp-code",
     "name": "ValidateOtpCode",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "description": "Validate OTP code entered by user - sets cargo.otpVerified on success. Capped at 3 wrong codes per authentication (cargo.otpMismatches, reset by authenticate-user): the code is withdrawn and the retry/agent/exit choice follows, where retry sends a fresh code. Added 2026-10-12: a caller entered 13 wrong codes in 3.5 minutes.",
     "variables": {
       "otp_validation_result": {
@@ -846,8 +875,8 @@
           "condition: normalized_otp_code.length > 0": {
             "id": "invalid_otp_format",
             "type": "SAY",
-            "value": "I was expecting a 6-digit code. Let's try again. You can also {{cargo.voice ? 'Press * or ' : ''}}{{cargo.verb}} EXIT to cancel.",
-            "value_es": "Esperaba un código de 6 dígitos. Intentemos de nuevo. También puedes {{cargo.voice ? 'Presionar * o ' : ''}}{{cargo.verb_es}} SALIR para cancelar."
+            "value": "I was expecting a 6-digit code. Let's try again. You can also {{cargo.voice ? 'press * or ' : ''}}{{cargo.verb}} EXIT to cancel.",
+            "value_es": "Esperaba un código de 6 dígitos. Intentemos de nuevo. También puede {{cargo.voice ? 'presionar * o decir' : 'escribir'}} SALIR para cancelar."
           },
           "default": {
             "id": "no_digits_explain",
@@ -1323,6 +1352,150 @@
     ]
   },
   {
+    "id": "otp-sms-failed",
+    "name": "OtpSmsFailed",
+    "version": "1.0.0",
+    "description": "Worker for authenticate-user: a code text failed. A line that cannot receive texts (cargo.otpUndeliverableTo, set by the host) goes to otp-text-undeliverable; any other failure offers the usual retry.",
+    "steps": [
+      {
+        "id": "branch_on_failure",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.otpUndeliverableTo": {
+            "id": "line_cannot_text",
+            "type": "FLOW",
+            "value": "otp-text-undeliverable",
+            "callType": "replace"
+          },
+          "default": {
+            "id": "send_failed_retry",
+            "type": "FLOW",
+            "value": "retry-authenticate-generic",
+            "callType": "replace",
+            "parameters": {
+              "error_message": "Sorry, text message delivery failed.",
+              "error_message_es": "Lo siento, la entrega del mensaje de texto falló.",
+              "allow_otp_entry": false
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "otp-text-undeliverable",
+    "name": "OtpTextUndeliverable",
+    "version": "1.0.0",
+    "description": "Worker for authenticate-user: the number for the code cannot receive texts (landline, toll-free, invalid). Says so and asks for the account's email or a mobile number; never offers to text the same number again.",
+    "variables": {
+      "user_choice": {
+        "type": "string",
+        "description": "What the caller answered"
+      },
+      "undeliverable_last4": {
+        "type": "string",
+        "description": "Last four digits of the number that cannot receive texts, spaced on voice"
+      },
+      "choice_digits": {
+        "type": "string",
+        "description": "Digits in the answer"
+      },
+      "choice_email": {
+        "type": "string",
+        "description": "Email address in the answer, if any"
+      }
+    },
+    "steps": [
+      {
+        "id": "describe_number",
+        "type": "SET",
+        "variable": "undeliverable_last4",
+        "value": "cargo.voice ? String(cargo.otpUndeliverableTo || '').slice(-4).split('').join(', ') : String(cargo.otpUndeliverableTo || '').slice(-4)"
+      },
+      {
+        "id": "ask_other_contact",
+        "type": "SAY-GET",
+        "variable": "user_choice",
+        "value": "The number ending with {{undeliverable_last4}} can't receive text messages, so I can't text it a code. Please {{cargo.verb}} the email address on your account, or {{cargo.voice ? 'say or enter' : cargo.verb}} a mobile number that can receive texts. To talk to an agent {{cargo.voice ? 'press 0 or ' : ''}}{{cargo.verb}} AGENT. To exit {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
+        "value_es": "El número que termina con {{undeliverable_last4}} no puede recibir mensajes de texto, así que no puedo enviarle un código. Por favor {{cargo.verb_es}} el correo electrónico de su cuenta, o {{cargo.voice ? 'diga o ingrese' : cargo.verb_es}} un número de celular que pueda recibir textos. Para hablar con un agente {{cargo.voice ? 'presione 0 o ' : ''}}{{cargo.verb_es}} AGENTE. Para salir {{cargo.voice ? 'presione la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
+        "digits": {
+          "min": 1,
+          "max": 12,
+          "autoSubmitChars": [
+            "0"
+          ],
+          "autoSubmitMs": 2500
+        }
+      },
+      {
+        "id": "read_digits",
+        "type": "SET",
+        "variable": "choice_digits",
+        "value": "String(user_choice || '').replace(/[^0-9]/g, '')"
+      },
+      {
+        "id": "read_email",
+        "type": "SET",
+        "variable": "choice_email",
+        "value": "String(String(user_choice || '').match(/[a-zA-Z0-9._%+\\s-]+@[a-zA-Z0-9.\\s-]+\\s*\\.\\s*[a-zA-Z]{2,}/)?.[0] || '').replace(/\\s+/g, '')"
+      },
+      {
+        "id": "clear_cell",
+        "type": "SET",
+        "variable": "cell_number",
+        "value": "''"
+      },
+      {
+        "id": "clear_email",
+        "type": "SET",
+        "variable": "email",
+        "value": "''"
+      },
+      {
+        "id": "handle_choice",
+        "type": "CASE",
+        "branches": {
+          "condition: choice_email && validateEmail(choice_email)": {
+            "id": "try_email",
+            "type": "FLOW",
+            "value": "authenticate-user",
+            "callType": "replace",
+            "parameters": {
+              "email": "{{choice_email}}"
+            }
+          },
+          "condition: validatePhone(choice_digits)": {
+            "id": "try_other_cell",
+            "type": "FLOW",
+            "value": "authenticate-user",
+            "callType": "replace",
+            "parameters": {
+              "cell_number": "{{choice_digits}}"
+            }
+          },
+          "condition: matchesChoice(user_choice, ['live', 'agent', 'manager', 'support', 'customer service', 'representative', 'human', 'operator', 'someone', 'somebody', 'real person', 'agente', 'gente', 'gerente', 'servicio', 'al cliente', 'representante', 'alguien', 'persona', 'humano', 'operador', 'operadora', 'recepcionista', 'recepcion', 'recepción']) || choice_digits === '0'": {
+            "id": "goto_live_agent",
+            "type": "FLOW",
+            "value": "live-agent-requested",
+            "callType": "reboot"
+          },
+          "condition: matchesChoice(user_choice, ['abort', 'exit', 'quit', 'cancel', 'salir', 'cancelar']) || String(user_choice || '').trim() === '*'": {
+            "id": "abort_process",
+            "type": "FLOW",
+            "value": "contact-support",
+            "callType": "reboot"
+          },
+          "default": {
+            "id": "ask_contact_again",
+            "type": "FLOW",
+            "value": "authenticate-user",
+            "callType": "replace"
+          }
+        }
+      }
+    ]
+  },
+  {
     "id": "retry-authenticate-generic",
     "name": "RetryAuthenticateGeneric",
     "version": "1.0.0",
@@ -1488,8 +1661,8 @@
   {
     "id": "live-agent-requested",
     "name": "LiveAgentRequested",
-    "version": "1.3.0",
-    "description": "Customer's primary intent is to reach a human: live agent, representative, 'customer service', 'servicio al cliente', 'I need to talk to someone', 'speak to a person', 'comunicarme con alguien', 'hablar con una persona'. On the phone it offers the transfer when an agent is scheduled (cargo.agentPhoneNumber); on every other channel it sends the Live Connect link when the tenant runs Live Connect and an agent is reachable. When no agent is available it says so, states the agent hours (on the phone built from the number's schedule, cargo.agentHours / agentHours_es; otherwise the optional global_live_agents_comment / global_live_agents_comment_es) and offers to help, in the number's own words (cargo.agentUnavailableMessage, a voice setting) or a generic default; the flow ends 'unresolved' (agent_unavailable). Contact information is given when the customer asks for it.",
+    "version": "1.6.0",
+    "description": "Customer's primary intent is to reach a human: live agent, representative, 'customer service', 'servicio al cliente', 'I need to talk to someone', 'speak to a person', 'comunicarme con alguien', 'hablar con una persona'. On the phone it offers the transfer when an agent is scheduled (cargo.agentPhoneNumber); on every other channel it sends the Live Connect link when the tenant runs Live Connect and an agent is reachable. On the phone after hours (no agent number this turn, the number has a schedule) it says so, states the agent hours (on the phone built from the number's schedule, cargo.agentHours / agentHours_es; otherwise the optional global_live_agents_comment / global_live_agents_comment_es) and offers to help, in the number's own words (cargo.agentUnavailableMessage, a voice setting) or a generic default; the flow ends 'unresolved' (agent_unavailable). Contact information is given when the customer asks for it. Otherwise (any non-phone channel without a Live Connect link, or a phone number with no agents at all) it says it cannot connect the customer with a live agent and gives the tenant's contact information (cargo.contact_info), ending 'resolved' (no_agent_reachable).",
     "prompt": "live agent confirmation",
     "prompt_es": "confirmación de agente en vivo",
     "primary": true,
@@ -1544,6 +1717,25 @@
           },
           "default": {
             "id": "no_live_connect",
+            "type": "SET",
+            "variable": "user_choice",
+            "value": "''"
+          }
+        }
+      },
+      {
+        "id": "cannot_connect",
+        "type": "CASE",
+        "branches": {
+          "condition: !cargo.voice || (!cargo.agentPhoneNumber && !cargo.agentHours)": {
+            "id": "say_cannot_connect",
+            "type": "RETURN",
+            "value": "[language == 'es' ? 'No puedo comunicarle con un agente en vivo por aquí.' : \"I can't connect you with a live agent here.\", !cargo.voice ? (language == 'es' ? (typeof global_live_agents_comment_es !== 'undefined' && global_live_agents_comment_es ? global_live_agents_comment_es : '') : (typeof global_live_agents_comment !== 'undefined' && global_live_agents_comment ? global_live_agents_comment : '')) : '', cargo.contact_info ? ((language == 'es' ? 'Así puede comunicarse con Servicio al Cliente: ' : 'Here is how to reach Customer Support: ') + (cargo.voice ? textWithUrlToSpeech(cargo.contact_info, language) : cargo.contact_info) + '.') : (language == 'es' ? 'Por favor contacte a Servicio al Cliente.' : 'Please contact Customer Support.')].filter(Boolean).join(' ')",
+            "outcome": "resolved",
+            "reason": "no_agent_reachable"
+          },
+          "default": {
+            "id": "phone_with_agents",
             "type": "SET",
             "variable": "user_choice",
             "value": "''"
