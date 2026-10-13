@@ -865,6 +865,7 @@ their original workflow seamlessly.
        responseMapping?: MappingConfig;             // Response transformation config
        timeout?: number;                            // Request timeout
        retries?: number;                            // Retry attempts
+       acceptStatus?: number[];                     // Non-2xx statuses whose JSON body is the result (e.g. [400, 404])
      };
      
      security?: {                                   // Security controls

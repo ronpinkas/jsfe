@@ -827,6 +827,9 @@ export interface ToolDefinition {
     responseMapping?: MappingConfig;
     timeout?: number;
     retries?: number;
+    // HTTP statuses (e.g. [400, 404]) whose reply is an ANSWER, not a failure: its body is parsed and mapped like a
+    // 2xx and the step continues, so a flow can read why (an error_code). Any other non-2xx still fails the step.
+    acceptStatus?: number[];
     authentication?: AuthConfig;
   };
   security?: {
@@ -5742,7 +5745,13 @@ async function callHttpTool(tool: any, args: any, userId: string = 'anonymous', 
         logger.info(`HTTP ${method} ${finalUrl} completed with status ${response.status}`);
 
         // === RESPONSE HANDLING ===
-        if (!response.ok) {
+        const accepted = !response.ok && Array.isArray(implementation.acceptStatus) && implementation.acceptStatus.includes(response.status);
+        if (accepted) {
+          logger.info(`HTTP ${response.status} from ${tool.name} is in acceptStatus: read as the tool's result`);
+        } else {
+          // a 2xx, or a failure handled below
+        }
+        if (!response.ok && !accepted) {
           const errorText = await response.text();
           const error = new Error(`HTTP ${response.status} ${response.statusText}: ${errorText}`) as any;
           error.status = response.status;
