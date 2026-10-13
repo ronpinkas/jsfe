@@ -783,7 +783,7 @@
   {
     "id": "shipstation-track-by-number-verified",
     "name": "ShipStationTrackByNumberVerified",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "Collect a tracking number and read back real-time ShipStation tracking for verified customer",
     "variables": {
       "tracking_number": {
@@ -921,7 +921,7 @@
               "capture_patterns": [
                 {
                   "variable": "tracking_number",
-                  "regex": "[A-Za-z0-9]{8,40}"
+                  "regex": "\\b(?=[A-Za-z0-9]*[0-9])[A-Za-z0-9]{8,40}\\b"
                 }
               ]
             }

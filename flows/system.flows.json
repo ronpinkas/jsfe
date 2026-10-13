@@ -1198,7 +1198,7 @@
   {
     "id": "generic-retry-with-options",
     "name": "GenericRetryWithOptions",
-    "version": "1.3.0",
+    "version": "1.3.1",
     "description": "Worker: says what failed and offers retry (YES / 1), switch to text (TEXT / 9, voice with caller ID), an agent (AGENT / 0) or exit (EXIT / *). A contact in the answer retries with it; with allow_code_entry a 6-digit code is checked on the spot; anything else goes back to intent detection.",
     "parameters": [
       {
@@ -1387,24 +1387,7 @@
             "variable": "auth_result",
             "value": "true"
           },
-          "condition: normalized_otp_code": {
-            "id": "typed_code_wrong",
-            "type": "FLOW",
-            "value": "generic-retry-with-options",
-            "callType": "replace",
-            "parameters": {
-              "error_message": "Sorry, the code you entered was invalid or expired.",
-              "error_message_es": "Lo siento, el código que ingresó era inválido o había expirado.",
-              "retry_flow": "{{retry_flow}}",
-              "retry_call_type": "{{retry_call_type}}",
-              "cancel_flow": "{{cancel_flow}}",
-              "allow_code_entry": true,
-              "capture_patterns": "{{capture_patterns}}",
-              "question": "{{question}}",
-              "question_es": "{{question_es}}"
-            }
-          },
-          "condition: isAnswer(user_choice, 'yes', ['phone', 'email', 'cell', 'mobile', 'teléfono', 'telefono', 'celular', 'móvil', 'movil', 'correo electrónico', 'correo']) || user_choice === '1' && typeof retry_call_type !== 'undefined' && retry_call_type === 'replace'": {
+          "condition: (isAnswer(user_choice, 'yes', ['phone', 'email', 'cell', 'mobile', 'teléfono', 'telefono', 'celular', 'móvil', 'movil', 'correo electrónico', 'correo']) || user_choice === '1') && typeof retry_call_type !== 'undefined' && retry_call_type === 'replace'": {
             "id": "retry_in_place",
             "type": "FLOW",
             "value": "{{retry_flow}}",
