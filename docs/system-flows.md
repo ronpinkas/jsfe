@@ -17,7 +17,10 @@ Everything below is read from the JSON. Where a flow's `description` text and it
   - [ValidateOtpCode](#validateotpcode)
   - [ResendOtpCode](#resendotpcode)
   - [GenericRetryWithOptions](#genericretrywithoptions)
-  - [OtpSmsFailed](#otpsmsfailed)
+  - [OtpSendFailed](#otpsendfailed)
+  - [TextDestination](#textdestination)
+  - [SendText](#sendtext)
+  - [SendOtpCode](#sendotpcode)
   - [OtpTextUndeliverable](#otptextundeliverable)
   - [RetryAuthenticateGeneric](#retryauthenticategeneric)
   - [LiveAgentRequested](#liveagentrequested)
@@ -65,8 +68,8 @@ Everything below is read from the JSON. Where a flow's `description` text and it
 |---|---|---|
 | `cargo.voice` | most flows | truthy on a voice call. Adds keypad wording ("press 1", "the asterisk key") to prompts, and turns on the engine's AI voice-input cleanup for SAY-GET answers |
 | `cargo.verb` / `cargo.verb_es` | most prompts | the verb inserted into prompts ("Please {{cargo.verb}} …") |
-| `cargo.callerId` | get-cell-or-email, switch-to-text, generic-retry-with-options, retry-authenticate-generic | the caller's number, offered as the contact. Without it `switch-to-text` cannot text, and the retry menus do not offer TEXT |
-| `cargo.twilioNumber` | authenticate-user, resend-otp-code, switch-to-text, validate-otp-code | the `from` number for SMS |
+| `cargo.callerId` | get-cell-or-email, switch-to-text, generic-retry-with-options, retry-authenticate-generic, text-destination | the caller's number, offered as the contact. Without it `switch-to-text` cannot text, and the retry menus do not offer TEXT |
+| `cargo.twilioNumber` | send-otp-code, switch-to-text, validate-otp-code, text-destination, send-text | the `from` number for SMS. text-destination sets no destination without it |
 | `cargo.agentPhoneNumber` | live-agent-requested | a transfer number for this turn; absent when no agent can take a transfer now |
 | `cargo.agentHours` / `cargo.agentHours_es` | live-agent-requested | the agent hours of the phone number's schedule, as a sentence (in or out of hours). Empty when the number has no agent schedule; absent on every non-phone channel |
 | `cargo.agentUnavailableMessage` | live-agent-requested | the phone number's own "no agent available" wording (a voice setting); empty = the flow's default |
@@ -74,13 +77,16 @@ Everything below is read from the JSON. Where a flow's `description` text and it
 | `cargo.support_context` / `_es` | contact-support | topic phrase, e.g. set to `orders` / `pedidos` by `shopify-track-order`, or written by contact-support from its `support_context` / `support_context_es` parameters |
 | `cargo.sessionResolved` | contact-support | truthy when something was resolved earlier in the session; contact-support then thanks instead of apologizing. The reference host sets it when a flow declares outcome `resolved` |
 | `cargo.otpVerified` | authenticate-user, validate-otp-code, retry-authenticate-generic | written by the `validate-otp` tool on success |
-| `cargo.otp_cell_number` / `cargo.otp_email` | written by authenticate-user; read by get-and-validate-otp-code, validate-otp-code, resend-otp-code | where the OTP was sent |
+| `cargo.otp_cell_number` / `cargo.otp_email` | written by authenticate-user; read by send-otp-code, get-and-validate-otp-code, validate-otp-code, text-destination | where the OTP is sent |
+| `cargo.otpSendFailure` | written by send-otp-code; read by authenticate-user, resend-otp-code, otp-send-failed | why the last send did not go out: `''` (sent), `undeliverable` (the line cannot receive texts), `sms`, `email` (that send failed) or `none` (no destination). Cleared at the start of every send |
 | `cargo.otpSentOn` | get-and-validate-otp-code | how the code went out (`sms`, `email`, `whatsapp`), written by the host's send functions. `whatsapp` = the code was sent in this WhatsApp chat |
 | `cargo.otpFailure` | validate-otp-code | why `validate-otp` refused a code: `missing`, `expired` or `mismatch`. Written by the host's `validate-otp`; cleared by a successful check and by every new send |
 | `cargo.otpMismatches` | authenticate-user (reset to 0), validate-otp-code (counts, caps at 3) | wrong codes in this authentication |
 | `cargo.otpResends` | authenticate-user (reset to 0), resend-otp-code (counts, caps at 2) | fresh codes sent in this authentication |
 | `cargo.otpHash` | validate-otp-code | the pending code's hash (written by the send tools). validate-otp-code sets it to `null` at the wrong-code cap, which withdraws the code |
-| `cargo.otpUndeliverableTo` | authenticate-user, otp-sms-failed, otp-text-undeliverable | the last 10 digits of a number that cannot receive texts (landline, toll-free, invalid). Written by the host's `send-sms-otp` when the destination refuses the text, and cleared by its next send |
+| `cargo.otpUndeliverableTo` | send-otp-code, otp-text-undeliverable, text-destination | the last 10 digits of a number that cannot receive texts (landline, toll-free, invalid). Written by the host's `send-sms-otp` when the destination refuses the text, and cleared by its next send |
+| `cargo.textTo` / `cargo.textTo4` | written by text-destination; read by send-text and its callers | where a text to the customer can go: 10 digits, `''` when none; and its last four, comma-spaced on voice |
+| `cargo.textSent` | written by send-text; read by its callers | true when `send-twilio-sms` returned a status for the text; false when there was no destination or the send failed |
 
 **Global variables** (tenant-level, optional): `global_whatsapp_invite` / `global_whatsapp_invite_es` (validate-otp-code; empty or absent = the WhatsApp invite is off), `global_live_agents_comment` / `global_live_agents_comment_es` (live-agent-requested: on non-phone channels, and on the phone when the number's schedule gives no hours).
 
@@ -201,10 +207,10 @@ graph TD
 ---
 
 ## AuthenticateUser
-**ID**: `authenticate-user` · **Version**: 1.2.0 · **Sub-flow**  
+**ID**: `authenticate-user` · **Version**: 1.3.0 · **Sub-flow**  
 **Description**: Generic flow to authenticate user via OTP sent to cell or email.
 
-The gatekeeper. It collects a phone or email (via `get-cell-or-email`), optionally lets a tenant-supplied validator flow approve the contact, sends an OTP by SMS or email, and hands off to `get-and-validate-otp-code`. On success it sets `auth_result = true` and returns to its caller, with `cargo.otpVerified` set by the `validate-otp` tool.
+The gatekeeper. It collects a phone or email (via `get-cell-or-email`), optionally lets a tenant-supplied validator flow approve the contact, records the destination in `cargo.otp_cell_number` / `cargo.otp_email`, sends the code through [`send-otp-code`](#sendotpcode), hands any send failure to [`otp-send-failed`](#otpsendfailed), and hands off to `get-and-validate-otp-code`. On success it sets `auth_result = true` and returns to its caller, with `cargo.otpVerified` set by the `validate-otp` tool.
 
 ### Parameters
 *   `retry_flow` (string): Flow to reboot if the user wants to retry. The description says "default: authenticate-user", but **no step applies that default**. The value is forwarded as-is, so callers should pass it.
@@ -225,17 +231,14 @@ The gatekeeper. It collects a phone or email (via `get-cell-or-email`), optional
 5. `describe_unverified_contact` / `_es` (SET) - builds the phrase used below.
 6. `gate_otp_on_contact_valid` (CASE) - `!contact_valid` → FLOW `generic-retry-with-options` (`replace`) with "Sorry, I could not verify {{unverified_contact}}.", `retry_flow`, `cancel_flow`, and `capture_patterns` for `cell_number` (`[0-9\-\(\)\.\s]{10,}`, normalizer `[^0-9]`) and `email`.
 7. `reset_resend_count` / `reset_mismatch_count` (SET, side effect) - `cargo.otpResends = 0`, `cargo.otpMismatches = 0`.
-8. `skip_line_that_cannot_text` (CASE) - `cell_number` whose last 10 digits equal `cargo.otpUndeliverableTo` → FLOW [`otp-text-undeliverable`](#otptextundeliverable) (`replace`). A number already refused for texts is never texted again in the same session; the caller is asked for another contact instead. Otherwise continue.
-9. `send_otp_based_on_contact` (CASE):
-   - `cell_number` → CALL-TOOL [`send-sms-otp`](#send-sms-otp) `{accountSid: null, from: cargo.twilioNumber, to: cell_number, container: cargo, language}`. `onFail` → FLOW [`otp-sms-failed`](#otpsmsfailed) (`replace`).
-   - `email` → CALL-TOOL [`send-email-otp`](#send-email-otp) `{to: email, container: cargo, language}`. `onFail` → `retry-authenticate-generic` (`replace`, "Sorry, email delivery failed.", `allow_otp_entry: false`).
-   - default → `retry-authenticate-generic` (`replace`, "Sorry, there was an unexpected error.", `allow_otp_entry: false`).
-10. `set_cell_number_to_cargo` / `set_email_to_cargo` (SET, side effect) - `cargo.otp_cell_number = cell_number || ''`, `cargo.otp_email = email || ''`.
+8. `set_cell_number_to_cargo` / `set_email_to_cargo` (SET, side effect) - `cargo.otp_cell_number = cell_number || ''`, `cargo.otp_email = email || ''`. This is the destination `send-otp-code` reads.
+9. `send_code` (FLOW [`send-otp-code`](#sendotpcode), `call`) - sends the code by SMS to `cargo.otp_cell_number` or by email to `cargo.otp_email`, and records `cargo.otpSendFailure` (`''` when the code went out). A number already refused for texts (`cargo.otpUndeliverableTo`) is not texted again.
+10. `auth_check_sent` (CASE) - `cargo.otpSendFailure` → FLOW [`otp-send-failed`](#otpsendfailed) (`replace`). Otherwise continue.
 11. `get_and_validate_otp_code` (FLOW `get-and-validate-otp-code`, `call`).
 12. `check_validation_result` (CASE) - `cargo.otpVerified` → SET `auth_result = true`. Otherwise → `retry-authenticate-generic` (`replace`, "Sorry, the code you entered was invalid or expired.", `allow_otp_entry: true`).
 
 ### Ends
-Success returns to the caller (by completion) with `auth_result = true` and `cargo.otpVerified` set. Already verified → `END`. Failures leave through `generic-retry-with-options`, `otp-sms-failed`, `otp-text-undeliverable` or `retry-authenticate-generic`, or through `get-cell-or-email`'s own exits (cancel, live agent, off-topic hand-off). The two OTP workers keep this frame's variables (`retry_flow`, `cancel_flow`, the validators) because they are reached by `replace`, and they return here by `replace`.
+Success returns to the caller (by completion) with `auth_result = true` and `cargo.otpVerified` set. Already verified → `END`. Failures leave through `generic-retry-with-options`, `otp-send-failed` (which goes on to `otp-text-undeliverable` or `retry-authenticate-generic`) or `retry-authenticate-generic`, or through `get-cell-or-email`'s own exits (cancel, live agent, off-topic hand-off). `otp-send-failed` and the flow it replaces itself with keep this frame's variables (`retry_flow`, `cancel_flow`, the validators) because they are reached by `replace`, and `otp-text-undeliverable` returns here by `replace`.
 
 ### Flowchart
 ```mermaid
@@ -253,17 +256,11 @@ graph TD
     describe --> gate{contact_valid?}
     gate -->|no| contact_not_verified[FLOW replace: generic-retry-with-options]
     gate -->|yes| reset_counts[SET: cargo.otpResends = 0, cargo.otpMismatches = 0]
-    reset_counts --> skip_line{cell_number = cargo.otpUndeliverableTo?}
-    skip_line -->|yes| cell_cannot_text[FLOW replace: otp-text-undeliverable]
-    skip_line -->|no| send_otp{cell_number / email?}
-    send_otp -->|cell_number| send_sms_otp[TOOL: send-sms-otp]
-    send_otp -->|email| send_email_otp[TOOL: send-email-otp]
-    send_otp -->|neither| no_contact_error[FLOW replace: retry-authenticate-generic]
-    send_sms_otp -.->|onFail| sms_failed[FLOW replace: otp-sms-failed]
-    send_email_otp -.->|onFail| email_failed[FLOW replace: retry-authenticate-generic]
-    send_sms_otp --> set_cargo[SET: cargo.otp_cell_number, cargo.otp_email]
-    send_email_otp --> set_cargo
-    set_cargo --> get_and_validate[FLOW call: get-and-validate-otp-code]
+    reset_counts --> set_cargo[SET: cargo.otp_cell_number, cargo.otp_email]
+    set_cargo --> send_code[FLOW call: send-otp-code]
+    send_code --> auth_check_sent{cargo.otpSendFailure?}
+    auth_check_sent -->|set| auth_send_failed[FLOW replace: otp-send-failed]
+    auth_check_sent -->|empty| get_and_validate[FLOW call: get-and-validate-otp-code]
     get_and_validate --> check_result{cargo.otpVerified?}
     check_result -->|yes| auth_success[SET: auth_result = true]
     check_result -->|no| auth_failed[FLOW replace: retry-authenticate-generic]
@@ -271,6 +268,7 @@ graph TD
     already_verified --> stop
 ```
 
+---
 ---
 
 ## GetCellOrEmail
@@ -451,8 +449,8 @@ graph TD
 ---
 
 ## ResendOtpCode
-**ID**: `resend-otp-code` · **Version**: 1.0.0 · **Sub-flow**  
-**Description**: Send a fresh one-time code to the destination authenticate-user already used (`cargo.otp_cell_number` or `cargo.otp_email`) and say why: the last one expired, none is pending, or the customer asked. Capped at 2 fresh codes per authentication (`cargo.otpResends`, reset by authenticate-user), then the retry/agent/exit choice.
+**ID**: `resend-otp-code` · **Version**: 1.1.0 · **Sub-flow**  
+**Description**: Worker: sends a fresh code to the destination authenticate-user used (`cargo.otp_cell_number` / `cargo.otp_email`) and says why (`expired`, `missing` or `requested`). At most 2 per authentication (`cargo.otpResends`), then the retry menu.
 
 Called by `validate-otp-code` with `callType: "call"`.
 
@@ -460,19 +458,17 @@ Called by `validate-otp-code` with `callType: "call"`.
 *   `resend_reason` (string): `expired`, `missing` or `requested`. Also declared as a variable with the default `"requested"`.
 
 ### Variables
-`resend_reason`, `resend_result` (the send tool's result).
+`resend_reason`.
 
 ### Steps
 1. `check_resend_cap` (CASE) - `cargo.otpResends >= 2` → FLOW `retry-authenticate-generic` (`replace`): "I've already sent you new codes and still couldn't verify you. To reach a person, {verb} AGENT.", `allow_otp_entry: true`.
 2. `count_resend` (SET, side effect) - `cargo.otpResends` + 1.
-3. `send_fresh_code` (CASE):
-   - `cargo.otp_cell_number` → CALL-TOOL [`send-sms-otp`](#send-sms-otp) `{accountSid: null, from: cargo.twilioNumber, to: cargo.otp_cell_number, container: cargo, language}` into `resend_result`. `onFail` → `retry-authenticate-generic` (`replace`, "Sorry, text message delivery failed.", `allow_otp_entry: false`).
-   - `cargo.otp_email` → CALL-TOOL [`send-email-otp`](#send-email-otp) `{to: cargo.otp_email, container: cargo, language}`. `onFail` → `retry-authenticate-generic` (`replace`, "Sorry, email delivery failed.", `allow_otp_entry: false`).
-   - default → `retry-authenticate-generic` (`replace`, "Sorry, there was an unexpected error.", `allow_otp_entry: false`).
-4. `say_why_fresh_code` (CASE) - `expired` → SAY "Your code expired, so I've sent you a new one." `missing` → SAY "I don't have an active code for you, so I've sent you a new one." Otherwise → SAY "I've sent you a new code."
+3. `send_fresh_code` (FLOW [`send-otp-code`](#sendotpcode), `call`) - sends to `cargo.otp_cell_number` or `cargo.otp_email` and records `cargo.otpSendFailure`.
+4. `resend_check_sent` (CASE) - `cargo.otpSendFailure` → FLOW [`otp-send-failed`](#otpsendfailed) (`replace`). Otherwise continue.
+5. `say_why_fresh_code` (CASE) - `expired` → SAY "Your code expired, so I've sent you a new one." `missing` → SAY "I don't have an active code for you, so I've sent you a new one." Otherwise → SAY "I've sent you a new code."
 
 ### Ends
-By completion, returning to `validate-otp-code`, which loops back to the code prompt. At the cap or on a failed send, by `replace` into `retry-authenticate-generic`.
+By completion, returning to `validate-otp-code`, which loops back to the code prompt. At the cap, by `replace` into `retry-authenticate-generic`; on a failed send, by `replace` into `otp-send-failed`.
 
 ### Flowchart
 ```mermaid
@@ -480,14 +476,10 @@ graph TD
     start((Start)) --> check_resend_cap{cargo.otpResends >= 2?}
     check_resend_cap -->|yes| resend_cap_reached[FLOW replace: retry-authenticate-generic]
     check_resend_cap -->|no| count_resend[SET: cargo.otpResends + 1]
-    count_resend --> send_fresh_code{destination}
-    send_fresh_code -->|otp_cell_number| resend_sms_otp[TOOL: send-sms-otp]
-    send_fresh_code -->|otp_email| resend_email_otp[TOOL: send-email-otp]
-    send_fresh_code -->|neither| resend_no_destination[FLOW replace: retry-authenticate-generic]
-    resend_sms_otp -.->|onFail| resend_sms_failed[FLOW replace: retry-authenticate-generic]
-    resend_email_otp -.->|onFail| resend_email_failed[FLOW replace: retry-authenticate-generic]
-    resend_sms_otp --> say_why{resend_reason}
-    resend_email_otp --> say_why
+    count_resend --> send_fresh_code[FLOW call: send-otp-code]
+    send_fresh_code --> resend_check_sent{cargo.otpSendFailure?}
+    resend_check_sent -->|set| resend_send_failed[FLOW replace: otp-send-failed]
+    resend_check_sent -->|empty| say_why{resend_reason}
     say_why -->|expired| say_code_expired[SAY: your code expired]
     say_why -->|missing| say_no_active_code[SAY: no active code]
     say_why -->|requested| say_new_code_sent[SAY: sent a new code]
@@ -496,6 +488,7 @@ graph TD
     say_new_code_sent --> stop
 ```
 
+---
 ---
 
 ## GenericRetryWithOptions
@@ -547,16 +540,18 @@ graph TD
 
 ---
 
-## OtpSmsFailed
-**ID**: `otp-sms-failed` · **Version**: 1.0.0 · **Sub-flow**  
-**Description**: Worker for authenticate-user: a code text failed. A line that cannot receive texts (`cargo.otpUndeliverableTo`, set by the host) goes to otp-text-undeliverable; any other failure offers the usual retry.
+## OtpSendFailed
+**ID**: `otp-send-failed` · **Version**: 1.0.0 · **Sub-flow**  
+**Description**: Worker: a code could not be sent (`cargo.otpSendFailure`). A line that cannot receive texts goes to otp-text-undeliverable; any other failure offers the retry.
 
-Reached only as `authenticate-user`'s `send-sms-otp` `onFail`, with `callType: "replace"`. `send-sms-otp` clears `cargo.otpUndeliverableTo` at the start of every send, so a value here describes this failure.
+Reached by `replace` from `authenticate-user` (`auth_check_sent`) and from `resend-otp-code` (`resend_check_sent`) when [`send-otp-code`](#sendotpcode) recorded a failure, so it keeps the replaced frame's variables.
 
 ### Steps
 1. `branch_on_failure` (CASE):
-   - `cargo.otpUndeliverableTo` → FLOW [`otp-text-undeliverable`](#otptextundeliverable) (`replace`).
-   - default → FLOW `retry-authenticate-generic` (`replace`): "Sorry, text message delivery failed.", `allow_otp_entry: false`.
+   - `cargo.otpSendFailure === 'undeliverable'` → FLOW [`otp-text-undeliverable`](#otptextundeliverable) (`replace`).
+   - `'sms'` → FLOW `retry-authenticate-generic` (`replace`): "Sorry, text message delivery failed.", `allow_otp_entry: false`.
+   - `'email'` → FLOW `retry-authenticate-generic` (`replace`): "Sorry, email delivery failed.", `allow_otp_entry: false`.
+   - default (`'none'`) → FLOW `retry-authenticate-generic` (`replace`): "Sorry, there was an unexpected error.", `allow_otp_entry: false`.
 
 ### Ends
 Always by `replace` into one of the two flows.
@@ -564,18 +559,128 @@ Always by `replace` into one of the two flows.
 ### Flowchart
 ```mermaid
 graph TD
-    start((Start)) --> branch_on_failure{cargo.otpUndeliverableTo?}
-    branch_on_failure -->|set| line_cannot_text[FLOW replace: otp-text-undeliverable]
-    branch_on_failure -->|not set| send_failed_retry[FLOW replace: retry-authenticate-generic]
+    start((Start)) --> branch_on_failure{cargo.otpSendFailure}
+    branch_on_failure -->|undeliverable| line_cannot_text[FLOW replace: otp-text-undeliverable]
+    branch_on_failure -->|sms| sms_retry[FLOW replace: retry-authenticate-generic, text failed]
+    branch_on_failure -->|email| email_retry[FLOW replace: retry-authenticate-generic, email failed]
+    branch_on_failure -->|other| unexpected_retry[FLOW replace: retry-authenticate-generic, unexpected error]
 ```
 
+---
+
+## TextDestination
+**ID**: `text-destination` · **Version**: 1.0.0 · **Sub-flow**  
+**Description**: Worker: where a text to the customer can go. Sets `cargo.textTo` (10 digits: the verified cell, else the caller's phone on a call; `''` when there is none, no sender, or the line cannot receive texts) and `cargo.textTo4` (its last four, spaced on voice).
+
+No flow in this library calls it. A caller runs it (`call`) before [`send-text`](#sendtext), and can use `cargo.textTo4` to tell the customer where the text went.
+
+The "verified cell" of the description is `cargo.otp_cell_number`, the number `authenticate-user` sent the code to. The step does not check `cargo.otpVerified`.
+
+### Steps
+1. `pick_destination` (SET, side effect) - `cargo.textTo` = the last 10 digits of `cargo.otp_cell_number`, or, when that is empty and `cargo.voice`, of `cargo.callerId`. It is `''` when there is no `cargo.twilioNumber`, when the result is not 10 digits, or when it equals `cargo.otpUndeliverableTo`. A set `cargo.otp_cell_number` is used even when it is the refused number; the caller ID is then not tried.
+2. `say_last_four` (SET, side effect) - `cargo.textTo4` = the last four digits of `cargo.textTo`, comma-spaced on voice ("1, 2, 3, 4"); `''` when `cargo.textTo` is empty.
+
+### Ends
+By completion.
+
+### Flowchart
+```mermaid
+graph TD
+    start((Start)) --> pick_destination["SET: cargo.textTo = otp_cell_number, else callerId on voice; '' if no sender, not 10 digits or undeliverable"]
+    pick_destination --> say_last_four[SET: cargo.textTo4]
+    say_last_four --> stop((Return to caller))
+```
+
+---
+
+## SendText
+**ID**: `send-text` · **Version**: 1.0.0 · **Sub-flow**  
+**Description**: Worker: texts `message` to `cargo.textTo` (call text-destination first). Sets `cargo.textSent`.
+
+No flow in this library calls it.
+
+### Parameters
+*   `message` (string): The text to send.
+
+### Variables
+`text_result` (string): what the send tool returned; `''` when it failed.
+
+### Steps
+1. `text_not_sent_yet` (SET, side effect) - `cargo.textSent = false`.
+2. `send_when_possible` (CASE):
+   - `cargo.textTo` → CALL-TOOL [`send-twilio-sms`](#send-twilio-sms) `{from: cargo.twilioNumber, to: "+1" + cargo.textTo, message}` into `text_result`. `accountSid` is not passed, so the function receives it as `undefined`. `onFail` → SET `text_result = ''`.
+   - default → SET `text_result = ''`.
+3. `record_sent` (SET, side effect) - `cargo.textSent = !!(cargo.textTo && text_result)`.
+
+### Ends
+By completion. It never leaves the flow stack; the caller reads `cargo.textSent`.
+
+### Flowchart
+```mermaid
+graph TD
+    start((Start)) --> text_not_sent_yet[SET: cargo.textSent = false]
+    text_not_sent_yet --> send_when_possible{cargo.textTo?}
+    send_when_possible -->|set| send_sms[TOOL: send-twilio-sms]
+    send_when_possible -->|empty| no_destination["SET: text_result = ''"]
+    send_sms -.->|onFail| send_failed["SET: text_result = ''"]
+    send_sms --> record_sent[SET: cargo.textSent]
+    send_failed --> record_sent
+    no_destination --> record_sent
+    record_sent --> stop((Return to caller))
+```
+
+---
+
+## SendOtpCode
+**ID**: `send-otp-code` · **Version**: 1.0.0 · **Sub-flow**  
+**Description**: Worker: sends a one-time code to `cargo.otp_cell_number` (SMS) or `cargo.otp_email`. Never texts a number that cannot receive texts (`cargo.otpUndeliverableTo`). Sets `cargo.otpSendFailure` (`''`, `'undeliverable'`, `'sms'`, `'email'` or `'none'`); the caller hands a failure to otp-send-failed.
+
+Called with `callType: "call"` by `authenticate-user` (`send_code`) and `resend-otp-code` (`send_fresh_code`). Each caller checks `cargo.otpSendFailure` in its next step and, when set, replaces itself with [`otp-send-failed`](#otpsendfailed).
+
+**Why the worker records the failure instead of handing it off itself.** An `onFail` FLOW with `callType: "replace"` replaces only the frame that holds the failed CALL-TOOL. Inside a called worker that frame is the worker, so the replacement would run in its place and, when it finished, the caller would continue to its next step (the code prompt) as if the code had been sent (jsfe `src/index.ts`, CALL-TOOL `onFail` handling). Recording the failure and letting the caller branch on it leaves the caller's own frame, the one that should end.
+
+### Steps
+1. `clear_send_failure` (SET, side effect) - `cargo.otpSendFailure = ''`.
+2. `skip_line_that_cannot_text` (CASE) - `cargo.otp_cell_number` whose last 10 digits equal `cargo.otpUndeliverableTo` → `cargo.otpSendFailure = 'undeliverable'`. A number already refused for texts is never texted again in the same session. Otherwise continue.
+3. `send_code` (CASE, first match wins):
+   - no failure and `cargo.otp_cell_number` → CALL-TOOL [`send-sms-otp`](#send-sms-otp) `{accountSid: null, from: cargo.twilioNumber, to: cargo.otp_cell_number, container: cargo, language}`. `onFail` → SET `cargo.otpSendFailure = cargo.otpUndeliverableTo ? 'undeliverable' : 'sms'` (the host's `send-sms-otp` sets `cargo.otpUndeliverableTo` when the line refuses the text, and clears it at the start of every send, so a value here describes this failure).
+   - no failure and `cargo.otp_email` → CALL-TOOL [`send-email-otp`](#send-email-otp) `{to: cargo.otp_email, container: cargo, language}`. `onFail` → SET `cargo.otpSendFailure = 'email'`.
+   - no failure (no destination) → `cargo.otpSendFailure = 'none'`.
+   - default (already `'undeliverable'`) → nothing is sent.
+
+### Ends
+By completion, always. The outcome is in `cargo.otpSendFailure`.
+
+### Flowchart
+```mermaid
+graph TD
+    start((Start)) --> clear_send_failure["SET: cargo.otpSendFailure = ''"]
+    clear_send_failure --> skip_line{otp_cell_number = cargo.otpUndeliverableTo?}
+    skip_line -->|yes| cell_cannot_text["SET: cargo.otpSendFailure = 'undeliverable'"]
+    skip_line -->|no| send_code{destination}
+    cell_cannot_text --> send_code
+    send_code -->|otp_cell_number| send_sms_otp[TOOL: send-sms-otp]
+    send_code -->|otp_email| send_email_otp[TOOL: send-email-otp]
+    send_code -->|neither| no_destination["SET: cargo.otpSendFailure = 'none'"]
+    send_code -->|already undeliverable| not_sent[nothing sent]
+    send_sms_otp -.->|onFail| sms_failed["SET: cargo.otpSendFailure = 'undeliverable' or 'sms'"]
+    send_email_otp -.->|onFail| email_failed["SET: cargo.otpSendFailure = 'email'"]
+    send_sms_otp --> stop((Return to caller))
+    send_email_otp --> stop
+    sms_failed --> stop
+    email_failed --> stop
+    no_destination --> stop
+    not_sent --> stop
+```
+
+---
 ---
 
 ## OtpTextUndeliverable
 **ID**: `otp-text-undeliverable` · **Version**: 1.0.1 · **Sub-flow**  
 **Description**: Worker for authenticate-user: the number for the code cannot receive texts (landline, toll-free, invalid). Says so and asks for the account's email or a mobile number; never offers to text the same number again.
 
-Reached by `replace` from `authenticate-user` (`skip_line_that_cannot_text`) and from `otp-sms-failed`, so it keeps `authenticate-user`'s variables (`retry_flow`, `cancel_flow`, the validators) and returns to it by `replace`.
+Reached by `replace` from [`otp-send-failed`](#otpsendfailed) when `cargo.otpSendFailure` is `undeliverable`, so it keeps `authenticate-user`'s variables (`retry_flow`, `cancel_flow`, the validators) and returns to it by `replace`.
 
 ### Variables
 `user_choice` (the answer), `undeliverable_last4` (last four digits of the refused number; comma-spaced on voice), `choice_digits` (digits in the answer), `choice_email` (an email address in the answer, if any).
@@ -593,7 +698,7 @@ Reached by `replace` from `authenticate-user` (`skip_line_that_cannot_text`) and
    - `isAnswer(…, 'exit')` (EXIT words or `*`) in an answer of at most two words → FLOW `contact-support` (`reboot`).
    - default → FLOW `authenticate-user` (`replace`) with no contact, so `get-cell-or-email` asks again.
 
-If the caller gives the same number again (or accepts the caller ID that is that number), `authenticate-user`'s `skip_line_that_cannot_text` sends it back here without texting it.
+If the caller gives the same number again (or accepts the caller ID that is that number), `send-otp-code`'s `skip_line_that_cannot_text` records `undeliverable` without texting it, and `otp-send-failed` brings the caller back here.
 
 ### Ends
 By `replace` into `authenticate-user`, or `reboot` into `live-agent-requested` or `contact-support`.
@@ -827,7 +932,7 @@ Reference host: a refusal also sets `container.otpFailure` to `missing`, `expire
 **Returns** always the literal `true`. The chat context is re-saved under `<toNumber>-<dbPrefix>` with a fresh engine session carrying the old cargo, and the SMS is sent. Every failure (loading or saving the context, initializing the session, sending the SMS) is thrown, so `onFail` runs.
 
 ### send-twilio-sms
-**Name**: Send Twilio SMS - send an SMS via Twilio. No flow in this library calls it.  
+**Name**: Send Twilio SMS - send an SMS via Twilio. Called by [`send-text`](#sendtext), with `from`, `to` and `message` only.  
 **Implementation**: local `sendTwilioSMS(accountSid, from, to, message, messageSid)`, timeout 10000 ms. Rate limit: 10 per 60 s.
 
 | Parameter | Type | Required | Notes |
