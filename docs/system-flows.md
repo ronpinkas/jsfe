@@ -84,7 +84,12 @@ Everything below is read from the JSON. Where a flow's `description` text and it
 
 **Global variables** (tenant-level, optional): `global_whatsapp_invite` / `global_whatsapp_invite_es` (validate-otp-code; empty or absent = the WhatsApp invite is off), `global_live_agents_comment` / `global_live_agents_comment_es` (live-agent-requested: on non-phone channels, and on the phone when the number's schedule gives no hours).
 
-**Host functions called in expressions.** The flows call `matchesChoice`, `validatePhone`, `validateEmail`, `normalizeAndFindCapture` and `textWithUrlToSpeech` inside conditions and SET values. The engine does not provide them: the host must register them in `APPROVED_FUNCTIONS`. `demos/make-payment.js` has reference implementations (its `matchesChoice` is exact word / word-sequence membership, not substring matching).
+**Host functions called in expressions.** The flows call `isAnswer`, `isAgentRequest`, `matchesChoice`, `validatePhone`, `validateEmail`, `normalizeAndFindCapture` and `textWithUrlToSpeech` inside conditions and SET values. The engine does not provide them: the host must register them in `APPROVED_FUNCTIONS`. `demos/make-payment.js` has reference implementations of `matchesChoice` (exact word / word-sequence membership, not substring matching), `validatePhone`, `validateEmail`, `normalizeAndFindCapture` and `textWithUrlToSpeech`.
+
+**Answer vocabulary.** The YES / NO / AGENT / EXIT / TEXT words are not in the flows. They live in the host's answer module (in the reference host, hy-rag, `foundation/text/answer.js`), one list per kind shared by every flow set. Words match whole words or word runs, never substrings.
+- `isAnswer(input, kind, extra?)` returns whether the answer is a `kind` answer, `kind` being one of `yes`, `no`, `agent`, `exit`, `text`, with the caller's `extra` words added to that kind's list. `0` is AGENT and `*` is EXIT. A negated answer ("not sure", "I don't want an agent") never matches YES, AGENT or TEXT.
+- `isAgentRequest(input)` returns whether the whole answer asks for a person ("agent", "I want to talk to a representative", "hablar con una persona") or is `0`. A negated answer never does. Used at free-text prompts, where an AGENT word inside a longer answer is not a request.
+- `pickChoice(answer, choices, acceptOther)` is the ask-choice matcher of the ai-ar flow set: it returns the key of the choice the answer picks, `__agent`, `__exit`, or `''` for no choice.
 
 **`digits`** on a SAY-GET (`{ min, max, autoSubmitChars?, autoSubmitMs? }`) is copied by the engine to `cargo.digits` while the answer is awaited, for the host's keypad handling (e.g. Twilio ConversationRelay). The engine removes it once the input is collected.
 
@@ -269,7 +274,7 @@ graph TD
 ---
 
 ## GetCellOrEmail
-**ID**: `get-cell-or-email` · **Version**: 1.1.0 · **Sub-flow**  
+**ID**: `get-cell-or-email` · **Version**: 1.1.1 · **Sub-flow**  
 **Description**: Prompt user to provide either their cell phone number or email address for account lookup.
 
 ### Parameters
@@ -287,9 +292,9 @@ graph TD
 4. `branch_on_cell_or_email` (CASE, first match wins):
    1. `validatePhone(prospective_cell_number)` → `cell_number` = those digits.
    2. `validateEmail(prospective_email)` → `email` = it.
-   3. `cargo.callerId` and the answer is exactly one of `1, yes, please, sure, thanks, thank you, ok, okay, si, sí, por favor, gracias`, or `matchesChoice` phone words (`phone, cell, caller id, number, numero, teléfono, celular, identificador de llamadas`…) → `cell_number = cargo.callerId`.
-   4. EXIT words (`abort, exit, quit, cancel, salir, cancelar`) in an answer of at most two words, or `*` → FLOW `{{cancel_flow}}` (`reboot`).
-   5. live-agent words (`live, agent, manager, support, customer service, representative, human, operator, someone, real person, agente, persona, humano, operador(a), recepcionista`…) or `0` → FLOW `live-agent-requested` (`reboot`).
+   3. `cargo.callerId` and the answer is `1`, or `isAnswer(…, 'yes', ['thanks', 'thank you', 'gracias'])` with no digit and no `@`, or `matchesChoice` phone words (`phone, cell, caller id, number, numero, teléfono, celular, identificador de llamadas`…) → `cell_number = cargo.callerId`.
+   4. `isAnswer(…, 'exit')` (EXIT words or `*`) in an answer of at most two words → FLOW `{{cancel_flow}}` (`reboot`).
+   5. `isAgentRequest` (the whole answer asks for a person, or is `0`) → FLOW `live-agent-requested` (`reboot`).
    6. `cargo.callerId` and digits that are not a valid phone → `cell_number = cargo.callerId`.
    7. digits that are not a valid phone (no caller ID) → FLOW `generic-retry-with-options` (`replace`): "Sorry, the phone number you provided isn't valid.", with `retry_flow`, `cancel_flow` and the cell/email `capture_patterns`.
    8. `cargo.callerId` (anything else) → `cell_number = cargo.callerId`.
@@ -316,8 +321,8 @@ graph TD
     branch -->|valid phone| valid_phone[SET: cell_number]
     branch -->|valid email| valid_email[SET: email]
     branch -->|callerId + yes / phone words| use_caller_id[SET: cell_number = callerId]
-    branch -->|EXIT or *| abort_process["FLOW reboot: {{cancel_flow}}"]
-    branch -->|agent words or 0| goto_live_agent[FLOW reboot: live-agent-requested]
+    branch -->|EXIT or *, at most 2 words| abort_process["FLOW reboot: {{cancel_flow}}"]
+    branch -->|agent request or 0| goto_live_agent[FLOW reboot: live-agent-requested]
     branch -->|callerId + invalid digits| fallback_invalid[SET: cell_number = callerId]
     branch -->|invalid digits| invalid_phone[FLOW replace: generic-retry-with-options]
     branch -->|callerId| fallback_unrecognized[SET: cell_number = callerId]
@@ -367,7 +372,7 @@ graph TD
 ---
 
 ## ValidateOtpCode
-**ID**: `validate-otp-code` · **Version**: 1.1.1 · **Sub-flow**  
+**ID**: `validate-otp-code` · **Version**: 1.1.2 · **Sub-flow**  
 **Description**: Validate OTP code entered by user; sets `cargo.otpVerified` on success. Capped at 3 wrong codes per authentication (`cargo.otpMismatches`, reset by authenticate-user): the code is withdrawn and the retry/agent/exit choice follows, where retry sends a fresh code.
 
 Reads `normalized_otp_code` and `user_choice` from `get-and-validate-otp-code`. An expired or missing code is answered with a fresh one (via `resend-otp-code`), not with "didn't match".
@@ -378,9 +383,9 @@ Reads `normalized_otp_code` and `user_choice` from `get-and-validate-otp-code`. 
 ### Steps
 1. `validate_otp_and_lookup` (CASE, first match wins):
    - `normalized_otp_code.length === 6` → CALL-TOOL [`validate-otp`](#validate-otp) `{otp: normalized_otp_code, container: cargo}` into `otp_validation_result`. `onFail` → FLOW `get-and-validate-otp-code` (`replace`).
-   - EXIT words or `*` → FLOW `contact-support` (`reboot`).
-   - live-agent words or `0` → FLOW `live-agent-requested` (`reboot`).
-   - text words (`text, texto, sms, message, mensaje, text me, by text, por texto, mensaje de texto, whatsapp, escríbeme`…) → FLOW `switch-to-text` (`reboot`).
+   - `isAnswer(…, 'exit')` (EXIT words or `*`) → FLOW `contact-support` (`reboot`).
+   - `isAnswer(…, 'agent')` (an AGENT word anywhere in the answer, or `0`) → FLOW `live-agent-requested` (`reboot`).
+   - `isAnswer(…, 'text')` (TEXT words) → FLOW `switch-to-text` (`reboot`).
    - "didn't receive / resend" phrases (`resend, send again, not received, didn t get, no code, no llegó, no recibí, reenviar`…) → FLOW [`resend-otp-code`](#resendotpcode) (`call`) with `resend_reason: "requested"`.
    - "I'm driving / busy / later" phrases → SAY "No problem. Say TEXT and I'll continue with you by message so you can do this when you are free, or {verb} the code whenever you are ready."
    - some digits, but not 6 → SAY "I was expecting a 6-digit code. Let's try again. You can also [press * or ]{verb} EXIT to cancel." (Spanish exit sentence as in GetAndValidateOtpCode.)
@@ -408,8 +413,8 @@ graph TD
     start((Start)) --> route{input}
     route -->|6 digits| validate_otp[TOOL: validate-otp]
     route -->|EXIT or *| abort_process[FLOW reboot: contact-support]
-    route -->|agent words or 0| goto_live_agent[FLOW reboot: live-agent-requested]
-    route -->|text words| goto_text[FLOW reboot: switch-to-text]
+    route -->|AGENT words or 0| goto_live_agent[FLOW reboot: live-agent-requested]
+    route -->|TEXT words| goto_text[FLOW reboot: switch-to-text]
     route -->|not received / resend| code_not_arrived[FLOW call: resend-otp-code, requested]
     route -->|busy / driving| cannot_now[SAY: say TEXT or send code later]
     route -->|other digits| invalid_format[SAY: expecting 6 digits]
@@ -494,7 +499,7 @@ graph TD
 ---
 
 ## GenericRetryWithOptions
-**ID**: `generic-retry-with-options` · **Version**: 1.2.0 · **Sub-flow**  
+**ID**: `generic-retry-with-options` · **Version**: 1.2.1 · **Sub-flow**  
 **Description**: Generic flow to offer retry, switch to text, or contact support.
 
 ### Parameters
@@ -512,9 +517,9 @@ graph TD
 4. `handle_smart_capture` (CASE) - a capture → FLOW `{{retry_flow}}` (`reboot`) with parameters `{ [captured variable]: captured value, retry_flow, cancel_flow }`. So a user who answers the retry question with a corrected phone or email goes straight back in with that value.
 5. `normalize_choice` - trim, lower-case, strip punctuation.
 6. `handle_choice` (CASE):
-   - yes words (`yes, sure, please, ok, okay, thanks, si, sí, seguro, por favor, gracias`) or contact words (`phone, email, cell, mobile, teléfono, celular, móvil, correo`…) or `1` → FLOW `{{retry_flow}}` (`reboot`).
-   - `text` / `texto` or `9` → FLOW `switch-to-text` (`reboot`).
-   - EXIT words or `*` → FLOW `{{cancel_flow || 'contact-support'}}` (`reboot`).
+   - `isAnswer(…, 'yes', [thanks, gracias and contact words: phone, email, cell, mobile, teléfono, celular, móvil, correo…])` or `1` → FLOW `{{retry_flow}}` (`reboot`).
+   - `isAnswer(…, 'text')` (TEXT words) or `9` → FLOW `switch-to-text` (`reboot`).
+   - `isAnswer(…, 'exit')` (EXIT words or `*`) → FLOW `{{cancel_flow || 'contact-support'}}` (`reboot`).
    - empty input or a lone digit (no intent to detect) → the same cancel target (`reboot`).
    - default → `DISPATCH` (outcome/reason = `caller_outcome`/`caller_reason`): the answer is routed through intent detection. A matching flow starts in the same turn, otherwise the host answers.
 
@@ -533,8 +538,8 @@ graph TD
     handle_smart_capture -->|yes| reboot_with_captured_value["FLOW reboot: {{retry_flow}} + captured value"]
     handle_smart_capture -->|no| normalize_choice[SET: normalize]
     normalize_choice --> handle_choice{choice}
-    handle_choice -->|yes / contact words / 1| do_retry["FLOW reboot: {{retry_flow}}"]
-    handle_choice -->|text / 9| do_switch_text[FLOW reboot: switch-to-text]
+    handle_choice -->|YES / contact words / 1| do_retry["FLOW reboot: {{retry_flow}}"]
+    handle_choice -->|TEXT / 9| do_switch_text[FLOW reboot: switch-to-text]
     handle_choice -->|EXIT / *| do_abort["FLOW reboot: cancel_flow or contact-support"]
     handle_choice -->|empty / lone digit| do_cancel_no_intent["FLOW reboot: cancel_flow or contact-support"]
     handle_choice -->|default| dispatch_unrecognised["DISPATCH: intent detection, else host"]
@@ -567,7 +572,7 @@ graph TD
 ---
 
 ## OtpTextUndeliverable
-**ID**: `otp-text-undeliverable` · **Version**: 1.0.0 · **Sub-flow**  
+**ID**: `otp-text-undeliverable` · **Version**: 1.0.1 · **Sub-flow**  
 **Description**: Worker for authenticate-user: the number for the code cannot receive texts (landline, toll-free, invalid). Says so and asks for the account's email or a mobile number; never offers to text the same number again.
 
 Reached by `replace` from `authenticate-user` (`skip_line_that_cannot_text`) and from `otp-sms-failed`, so it keeps `authenticate-user`'s variables (`retry_flow`, `cancel_flow`, the validators) and returns to it by `replace`.
@@ -584,8 +589,8 @@ Reached by `replace` from `authenticate-user` (`skip_line_that_cannot_text`) and
 6. `handle_choice` (CASE, first match wins):
    - `choice_email` and `validateEmail(choice_email)` → FLOW `authenticate-user` (`replace`) with `email: {{choice_email}}`.
    - `validatePhone(choice_digits)` → FLOW `authenticate-user` (`replace`) with `cell_number: {{choice_digits}}`.
-   - live-agent words or `0` → FLOW `live-agent-requested` (`reboot`).
-   - EXIT words or `*` → FLOW `contact-support` (`reboot`).
+   - `isAgentRequest` (the whole answer asks for a person, or is `0`) → FLOW `live-agent-requested` (`reboot`).
+   - `isAnswer(…, 'exit')` (EXIT words or `*`) in an answer of at most two words → FLOW `contact-support` (`reboot`).
    - default → FLOW `authenticate-user` (`replace`) with no contact, so `get-cell-or-email` asks again.
 
 If the caller gives the same number again (or accepts the caller ID that is that number), `authenticate-user`'s `skip_line_that_cannot_text` sends it back here without texting it.
@@ -603,15 +608,15 @@ graph TD
     clear --> handle_choice{answer}
     handle_choice -->|valid email| try_email[FLOW replace: authenticate-user + email]
     handle_choice -->|valid phone| try_other_cell[FLOW replace: authenticate-user + cell_number]
-    handle_choice -->|agent words or 0| goto_live_agent[FLOW reboot: live-agent-requested]
-    handle_choice -->|EXIT or *| abort_process[FLOW reboot: contact-support]
+    handle_choice -->|agent request or 0| goto_live_agent[FLOW reboot: live-agent-requested]
+    handle_choice -->|EXIT or *, at most 2 words| abort_process[FLOW reboot: contact-support]
     handle_choice -->|default| ask_contact_again[FLOW replace: authenticate-user]
 ```
 
 ---
 
 ## RetryAuthenticateGeneric
-**ID**: `retry-authenticate-generic` · **Version**: 1.0.0 · **Sub-flow**  
+**ID**: `retry-authenticate-generic` · **Version**: 1.0.1 · **Sub-flow**  
 **Description**: Generic retry authentication flow.
 
 Offers to retry authentication. It also accepts a 6-digit code typed straight into the retry prompt (when `allow_otp_entry`), or a new phone number or email.
@@ -625,10 +630,10 @@ Declared as `variables` with defaults: `error_message` (default "Sorry, there wa
 3. `normalize_user_choice` - trim, lower-case, strip punctuation.
 4. `handle_choice` (CASE, first match wins):
    - `allow_otp_entry` and the answer has exactly 6 digits → SET `normalized_otp_code` (continues to step 5).
-   - yes / phone / email words or `1` → FLOW `authenticate-user` (`replace`).
-   - `text` / `texto` or `9` → FLOW `switch-to-text` (`reboot`).
-   - EXIT words or `*` → FLOW `contact-support` (`reboot`).
-   - live-agent words or `0` → FLOW `live-agent-requested` (`reboot`).
+   - `isAnswer(…, 'yes', [thanks, gracias, phone, email, teléfono, telefono, correo electrónico, correo])` or `1` → FLOW `authenticate-user` (`replace`).
+   - `isAnswer(…, 'text')` (TEXT words) or `9` → FLOW `switch-to-text` (`reboot`).
+   - `isAnswer(…, 'exit')` (EXIT words or `*`) → FLOW `contact-support` (`reboot`).
+   - `isAnswer(…, 'agent')` (an AGENT word anywhere in the answer, or `0`) → FLOW `live-agent-requested` (`reboot`).
    - `validatePhone(digits)` → FLOW `authenticate-user` (`replace`) with `cell_number`.
    - `validateEmail(user_choice)` → FLOW `authenticate-user` (`replace`) with `email`.
    - default → FLOW `contact-support` (`reboot`).
@@ -648,10 +653,10 @@ graph TD
     retry_msg --> normalize_user_choice[SET: normalize]
     normalize_user_choice --> handle_choice{choice}
     handle_choice -->|allow_otp_entry + 6 digits| treat_as_otp_entry[SET: normalized_otp_code]
-    handle_choice -->|yes / 1| retry_authenticate[FLOW replace: authenticate-user]
-    handle_choice -->|text / 9| switch_to_text[FLOW reboot: switch-to-text]
+    handle_choice -->|YES / contact words / 1| retry_authenticate[FLOW replace: authenticate-user]
+    handle_choice -->|TEXT / 9| switch_to_text[FLOW reboot: switch-to-text]
     handle_choice -->|EXIT / *| abort_process[FLOW reboot: contact-support]
-    handle_choice -->|agent / 0| goto_live_agent[FLOW reboot: live-agent-requested]
+    handle_choice -->|AGENT / 0| goto_live_agent[FLOW reboot: live-agent-requested]
     handle_choice -->|valid phone| phone_retry[FLOW replace: authenticate-user + cell_number]
     handle_choice -->|valid email| email_retry[FLOW replace: authenticate-user + email]
     handle_choice -->|default| provide_contact_info_default[FLOW reboot: contact-support]
@@ -667,7 +672,7 @@ graph TD
 ---
 
 ## LiveAgentRequested
-**ID**: `live-agent-requested` · **Version**: 1.6.0 · **Primary** (prompt "live agent confirmation" / "confirmación de agente en vivo")  
+**ID**: `live-agent-requested` · **Version**: 1.6.1 · **Primary** (prompt "live agent confirmation" / "confirmación de agente en vivo")  
 **Description**: The customer's primary intent is to reach a human: live agent, representative, "customer service", "servicio al cliente", "I need to talk to someone", "speak to a person", "comunicarme con alguien", "hablar con una persona". On the phone it offers the transfer when an agent is scheduled (`cargo.agentPhoneNumber`); on every other channel it sends the Live Connect link when the tenant runs Live Connect and an agent is reachable. On the phone after hours (no agent number this turn, the number has a schedule) it says so, states the agent hours and offers to help, ending `unresolved` (`agent_unavailable`). Otherwise (any non-phone channel without a Live Connect link, or a phone number with no agents at all) it says it cannot connect the customer with a live agent and gives the tenant's contact information, ending `resolved` (`no_agent_reachable`).
 
 The description also says "Contact information is given when the customer asks for it". No step of the after-hours path gives it; a later request reaches the host or another flow.
@@ -690,8 +695,8 @@ The description also says "Contact information is given when the customer asks f
 5. `ask_user_choice` (SAY-GET `user_choice`, `digits: {min 1, max 1}`) - the deflection pitch ("Before I try to transfer you, I want you to know that I can help you faster with many inquiries…"), then "To have me help you now [Press 1 or] {verb} YES. For a live agent [Press 0 or] {verb} LIVE AGENT."
 6. `normalize_choice` - trim, lower-case, strip punctuation.
 7. `handle_choice` (CASE):
-   - **anything that is not** a yes word (`yes, continue, sure, please, ok, okay, thanks, si, sí, seguro, por favor, gracias`) and not `1` → nested CASE: `cargo.agentPhoneNumber` → **`RETURN`** "Understood. Let me transfer you to a live agent." (Spanish: "Entendido. Te transfiero a un agente en vivo."). Otherwise (the agent number is gone when the answer arrives) → **`RETURN`** the same "not available" text as step 4, `outcome: "unresolved"`, `reason: "agent_unavailable"`.
-   - yes / `1` → SAY "Great! I'm glad to help. What would you like assistance with today?"
+   - **anything that is not** `isAnswer(…, 'yes', ['continue', 'thanks', 'gracias'])` and not `1` (so a negated answer such as "not sure" transfers) → nested CASE: `cargo.agentPhoneNumber` → **`RETURN`** "Understood. Let me transfer you to a live agent." (Spanish: "Entendido. Te transfiero a un agente en vivo."). Otherwise (the agent number is gone when the answer arrives) → **`RETURN`** the same "not available" text as step 4, `outcome: "unresolved"`, `reason: "agent_unavailable"`.
+   - YES / `1` → SAY "Great! I'm glad to help. What would you like assistance with today?"
 
 The flow only returns the transfer sentence. **Performing the transfer is the host's job**; no tool is called.
 
@@ -715,7 +720,7 @@ graph TD
     check_agent_available -->|missing| no_agent_available["RETURN: not available + hours + offer to help<br/>outcome: unresolved"]
     check_agent_available -->|set| ask_user_choice[SAY-GET: 1 = stay with AI, 0 = agent]
     ask_user_choice --> normalize_choice[SET: normalize]
-    normalize_choice --> handle_choice{yes or 1?}
+    normalize_choice --> handle_choice{YES or 1?}
     handle_choice -->|yes| continue_with_ai[SAY: Great, what can I help with]
     handle_choice -->|anything else| transfer{cargo.agentPhoneNumber?}
     transfer -->|set| confirm_transfer[RETURN: transferring you]

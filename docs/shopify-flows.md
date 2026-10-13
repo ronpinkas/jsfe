@@ -2,7 +2,7 @@
 
 This document details the e-commerce flows in `flows/shopify.flows.json` and the tools in `flows/shopify.tools.json`. These flows provide integration with Shopify (and ShipStation for carrier tracking) for product search, local store availability, order tracking and store policy questions.
 
-Everything below is read from the JSON. The flows call the system flows (`no-action-needed`, `cancel-process`, `contact-support`, `live-agent-requested`, `authenticate-user`, `generic-retry-with-options`). Call types, `onFail` behaviour, cargo fields and the host-supplied expression helpers (`matchesChoice`…) work as described in [System Flows → Conventions](system-flows.md#conventions-used-by-these-flows).
+Everything below is read from the JSON. The flows call the system flows (`no-action-needed`, `cancel-process`, `contact-support`, `live-agent-requested`, `authenticate-user`, `generic-retry-with-options`). Call types, `onFail` behaviour, cargo fields and the host-supplied expression helpers (`isAnswer`, `isAgentRequest`, `matchesChoice`…) and the shared answer vocabulary work as described in [System Flows → Conventions](system-flows.md#conventions-used-by-these-flows).
 
 ## Table of Contents
 - [Flows](#flows)
@@ -117,14 +117,14 @@ graph TD
 ---
 
 ## GetSearchQuery
-**ID**: `get-search-query` · **Version**: 1.0.0 · **Sub-flow**  
+**ID**: `get-search-query` · **Version**: 1.0.1 · **Sub-flow**  
 **Description**: Get a search query string from the user for product search.
 
 ### Steps
 1. `ask_what_looking_for` (SAY-GET `search_query`) - "Please describe the product you are looking for, using natural language. You can also mention brand names or features." Then `normalize_search` trims the answer.
 2. `check_for_exit` (CASE):
-   - the whole answer, lower-cased, is one of `*`, `abort`, `exit`, `quit`, `salir` → FLOW `cancel-process` (`reboot`).
-   - the answer **contains** any of `live, agent, customer service, agente, gente, gerente, al cliente, representante` (substring match, not `matchesChoice`), or is `0` → FLOW `live-agent-requested` (`reboot`).
+   - `isAnswer(…, 'exit')` (EXIT words or `*`) in a one-word answer → FLOW `cancel-process` (`reboot`).
+   - `isAgentRequest` (the whole answer asks for a person, or is `0`) → FLOW `live-agent-requested` (`reboot`). A product that contains an AGENT word ("customer service headset") is searched.
    - default → SET `proceed = true`.
 
 ### Ends
@@ -136,8 +136,8 @@ graph TD
     start((Start)) --> ask_what_looking_for[SAY-GET: describe the product]
     ask_what_looking_for --> normalize_search[SET: trim]
     normalize_search --> check_for_exit{input}
-    check_for_exit -->|exit words or *| abort_search[FLOW reboot: cancel-process]
-    check_for_exit -->|contains agent words, or 0| goto_live_agent[FLOW reboot: live-agent-requested]
+    check_for_exit -->|one word: EXIT or *| abort_search[FLOW reboot: cancel-process]
+    check_for_exit -->|agent request or 0| goto_live_agent[FLOW reboot: live-agent-requested]
     check_for_exit -->|default| proceed_with_search[SET: proceed = true]
     proceed_with_search --> stop((Return to caller))
 ```
@@ -259,7 +259,7 @@ graph TD
 ---
 
 ## ShipStationTrackByNumberVerified
-**ID**: `shipstation-track-by-number-verified` · **Version**: 1.0.0 · **Sub-flow**  
+**ID**: `shipstation-track-by-number-verified` · **Version**: 1.0.1 · **Sub-flow**  
 **Description**: Collect a tracking number and read back real-time ShipStation tracking for verified customer.
 
 Reached by `replace` from `shopify-get-orders-verified` when the verified customer has no Shopify orders. It retries into itself via `generic-retry-with-options`.
@@ -273,8 +273,8 @@ Reached by `replace` from `shopify-get-orders-verified` when the verified custom
 3. `ask_if_missing` (CASE) - `tn_clean` is 8–40 characters → `tn_input = tracking_number` (no prompt). Otherwise → SAY-GET `tn_input` (`digits: {min 8, max 34}`): "[{intro_message} ]Please {verb} [or enter] your tracking number[, followed by the pound key if entered using the dial pad]. To exit anytime … EXIT."
 4. `normalize_input` - `tn_clean` = `tn_input`, alphanumerics only, upper-cased.
 5. `route_input` (CASE):
-   - EXIT words in at most two words, or `*` → FLOW `no-action-needed` (`reboot`).
-   - live-agent words or `0` → FLOW `live-agent-requested` (`reboot`).
+   - `isAnswer(…, 'exit')` (EXIT words or `*`) in an answer of at most two words → FLOW `no-action-needed` (`reboot`).
+   - `isAgentRequest` (the whole answer asks for a person, or is `0`) → FLOW `live-agent-requested` (`reboot`).
    - `tn_clean` is 8–40 characters and contains a digit → CALL-TOOL [`shipstation-get-tracking`](#shipstation-get-tracking) `{trackingNumber: tn_clean, container: cargo}` into `tracking_detail`. `onFail` → FLOW `generic-retry-with-options` (`reboot`): "I had trouble looking up that tracking number.", `retry_flow: "shipstation-track-by-number-verified"`, `cancel_flow: "contact-support"`.
    - default → FLOW `generic-retry-with-options` (`replace`): "That doesn't look like a valid tracking number. Tracking numbers are at least 8 letters and digits.", same retry/cancel flows, `capture_patterns: [{variable: "tracking_number", regex: "[A-Za-z0-9]{8,40}"}]`.
 6. `show_result` (CASE):
@@ -297,7 +297,7 @@ graph TD
     ask_tracking_number --> normalize_input
     normalize_input --> route_input{input}
     route_input -->|EXIT or *| abort_tracking[FLOW reboot: no-action-needed]
-    route_input -->|agent words or 0| goto_live_agent[FLOW reboot: live-agent-requested]
+    route_input -->|agent request or 0| goto_live_agent[FLOW reboot: live-agent-requested]
     route_input -->|8-40 chars with a digit| call_shipstation[TOOL: shipstation-get-tracking]
     route_input -->|default| invalid_tracking_number[FLOW replace: generic-retry-with-options + capture]
     call_shipstation -.->|onFail| lookup_failed[FLOW reboot: generic-retry-with-options]
