@@ -22,7 +22,6 @@ Everything below is read from the JSON. Where a flow's `description` text and it
   - [SendText](#sendtext)
   - [SendOtpCode](#sendotpcode)
   - [OtpTextUndeliverable](#otptextundeliverable)
-  - [RetryAuthenticateGeneric](#retryauthenticategeneric)
   - [LiveAgentRequested](#liveagentrequested)
 - [Tools](#tools)
   - [send-sms-otp](#send-sms-otp)
@@ -38,7 +37,7 @@ Everything below is read from the JSON. Where a flow's `description` text and it
 
 ## Conventions Used by These Flows
 
-**Primary vs. sub-flow.** Two system flows are `primary: true`, so intent detection can start them: `switch-to-text` and `live-agent-requested`. The others omit `primary` and are reached from a `FLOW` step or an `onFail`. Both primary flows are also reached that way (the retry menus reboot into `switch-to-text`, and every "agent" answer reboots into `live-agent-requested`).
+**Primary vs. sub-flow.** Two system flows are `primary: true`, so intent detection can start them: `switch-to-text` and `live-agent-requested`. The others omit `primary` and are reached from a `FLOW` step or an `onFail`. Both primary flows are also reached that way (the retry menu reboots into `switch-to-text`, and every "agent" answer reboots into `live-agent-requested`).
 
 **Call types** (as used here):
 - `call`: run the sub-flow, then resume the caller. The sub-flow works on the caller's variables (the same object), so what it sets (`cell_number`, `email`, `contact_valid`, `auth_result`…) is visible to the caller. Any `value` the sub-flow's `variables` block declares is written into that shared object when it starts.
@@ -68,7 +67,7 @@ Everything below is read from the JSON. Where a flow's `description` text and it
 |---|---|---|
 | `cargo.voice` | most flows | truthy on a voice call. Adds keypad wording ("press 1", "the asterisk key") to prompts, and turns on the engine's AI voice-input cleanup for SAY-GET answers |
 | `cargo.verb` / `cargo.verb_es` | most prompts | the verb inserted into prompts ("Please {{cargo.verb}} …") |
-| `cargo.callerId` | get-cell-or-email, switch-to-text, generic-retry-with-options, retry-authenticate-generic, text-destination | the caller's number, offered as the contact. Without it `switch-to-text` cannot text, and the retry menus do not offer TEXT |
+| `cargo.callerId` | get-cell-or-email, switch-to-text, generic-retry-with-options, text-destination | the caller's number, offered as the contact. Without it `switch-to-text` cannot text, and the retry menu does not offer TEXT |
 | `cargo.twilioNumber` | send-otp-code, switch-to-text, validate-otp-code, text-destination, send-text | the `from` number for SMS. text-destination sets no destination without it |
 | `cargo.agentPhoneNumber` | live-agent-requested | a transfer number for this turn; absent when no agent can take a transfer now |
 | `cargo.agentHours` / `cargo.agentHours_es` | live-agent-requested | the agent hours of the phone number's schedule, as a sentence (in or out of hours). Empty when the number has no agent schedule; absent on every non-phone channel |
@@ -76,7 +75,9 @@ Everything below is read from the JSON. Where a flow's `description` text and it
 | `cargo.contact_info` | contact-support, live-agent-requested | the support contact text (one value for both languages) |
 | `cargo.support_context` / `_es` | contact-support | topic phrase, e.g. set to `orders` / `pedidos` by `shopify-track-order`, or written by contact-support from its `support_context` / `support_context_es` parameters |
 | `cargo.sessionResolved` | contact-support | truthy when something was resolved earlier in the session; contact-support then thanks instead of apologizing. The reference host sets it when a flow declares outcome `resolved` |
-| `cargo.otpVerified` | authenticate-user, validate-otp-code, retry-authenticate-generic | written by the `validate-otp` tool on success |
+| `cargo.otpVerified` | authenticate-user, validate-otp-code, generic-retry-with-options | written by the `validate-otp` tool on success |
+| `cargo.authOptions` | written by authenticate-user; read by authenticate-user when `retrying` | `{ retry_flow, cancel_flow, email_validator, cell_validator }` of the authentication in progress, written at its start. A retry from the menu (`retrying: true`) restores all four from it |
+| `cargo.authCancelFlow` | written by authenticate-user; read by validate-otp-code, otp-text-undeliverable and the code-failure menus (`cancel_flow` of the [authentication retry parameters](#genericretrywithoptions)) | the authentication's `cancel_flow` (default `contact-support`), so EXIT goes to the same flow at every step. Readers fall back to `contact-support` when it is empty |
 | `cargo.otp_cell_number` / `cargo.otp_email` | written by authenticate-user; read by send-otp-code, get-and-validate-otp-code, validate-otp-code, text-destination | where the OTP is sent |
 | `cargo.otpSendFailure` | written by send-otp-code; read by authenticate-user, resend-otp-code, otp-send-failed | why the last send did not go out: `''` (sent), `undeliverable` (the line cannot receive texts), `sms`, `email` (that send failed) or `none` (no destination). Cleared at the start of every send |
 | `cargo.otpSentOn` | get-and-validate-otp-code | how the code went out (`sms`, `email`, `whatsapp`), written by the host's send functions. `whatsapp` = the code was sent in this WhatsApp chat |
@@ -90,9 +91,11 @@ Everything below is read from the JSON. Where a flow's `description` text and it
 
 **Global variables** (tenant-level, optional): `global_whatsapp_invite` / `global_whatsapp_invite_es` (validate-otp-code; empty or absent = the WhatsApp invite is off), `global_live_agents_comment` / `global_live_agents_comment_es` (live-agent-requested: on non-phone channels, and on the phone when the number's schedule gives no hours).
 
-**Host functions called in expressions.** The flows call `isAnswer`, `isAgentRequest`, `matchesChoice`, `validatePhone`, `validateEmail`, `normalizeAndFindCapture` and `textWithUrlToSpeech` inside conditions and SET values. The engine does not provide them: the host must register them in `APPROVED_FUNCTIONS`. `demos/make-payment.js` has reference implementations of `matchesChoice` (exact word / word-sequence membership, not substring matching), `validatePhone`, `validateEmail`, `normalizeAndFindCapture` and `textWithUrlToSpeech`.
+**Host functions called in expressions.** The flows call `isAnswer`, `isAgentRequest`, `matchesChoice`, `validatePhone`, `validateEmail`, `normalizeAndFindCapture` and `textWithUrlToSpeech` inside conditions and SET values. The engine does not provide them: the host must register them in `APPROVED_FUNCTIONS`. `demos/make-payment.js` has reference implementations of `matchesChoice` (exact word / word-sequence membership, not substring matching), `validatePhone`, `validateEmail` and `textWithUrlToSpeech`.
 
-**Answer vocabulary.** The YES / NO / AGENT / EXIT / TEXT words are not in the flows. They live in the host's answer module (in the reference host, hy-rag, `foundation/text/answer.js`), one list per kind shared by every flow set. Words match whole words or word runs, never substrings.
+`normalizeAndFindCapture(answer, patterns)` is the retry menu's smart capture (in the reference host, hy-rag-lambdas, `foundation/text/capture.js`). `patterns` is `[{ variable, regex, normalizer? }]`. For each pattern in order, the `normalizer` regex (global) is removed from the answer first, then `regex` is run on the result; the first pattern that matches returns `{ variable, value }`, where `value` is **the matched part only**, trimmed ("my email is a@b.com" captures `a@b.com`). No match, or `patterns` not an array, returns `null`. A pattern whose regex is invalid is skipped with a warning. The copy in `demos/make-payment.js` returns the whole normalized answer instead of the matched part.
+
+**Answer vocabulary.** The YES / NO / AGENT / EXIT / TEXT words are not in the flows. They live in the host's answer module (in the reference host, hy-rag-lambdas, `foundation/text/answer.js`), one list per kind shared by every flow set. Words match whole words or word runs, never substrings.
 - `isAnswer(input, kind, extra?)` returns whether the answer is a `kind` answer, `kind` being one of `yes`, `no`, `agent`, `exit`, `text`, with the caller's `extra` words added to that kind's list. `0` is AGENT and `*` is EXIT. A negated answer ("not sure", "I don't want an agent") never matches YES, AGENT or TEXT.
 - `isAgentRequest(input)` returns whether the whole answer asks for a person ("agent", "I want to talk to a representative", "hablar con una persona") or is `0`. A negated answer never does. Used at free-text prompts, where an AGENT word inside a longer answer is not a request.
 - `pickChoice(answer, choices, acceptOther)` is the ask-choice matcher of the ai-ar flow set: it returns the key of the choice the answer picks, `__agent`, `__exit`, or `''` for no choice.
@@ -185,7 +188,7 @@ The welcome text also reads `text_starter` / `text_starter_es` when a caller pas
 7. `confirm_sms_sent` (SAY) - "I've sent you a text message. Please check your phone and reply via text. Goodbye and take care!"
 
 ### Ends
-By completion after the confirmation, `END` when not on voice, or `reboot` into `contact-support` when there is no caller ID or the send fails. Besides intent detection, other flows reach it with `callType: "reboot"` (keypad 9 / "TEXT" in the retry menus, text words in validate-otp-code).
+By completion after the confirmation, `END` when not on voice, or `reboot` into `contact-support` when there is no caller ID or the send fails. Besides intent detection, other flows reach it with `callType: "reboot"` (keypad 9 / "TEXT" in the retry menu, text words in validate-otp-code).
 
 ### Flowchart
 ```mermaid
@@ -207,45 +210,51 @@ graph TD
 ---
 
 ## AuthenticateUser
-**ID**: `authenticate-user` · **Version**: 1.3.0 · **Sub-flow**  
+**ID**: `authenticate-user` · **Version**: 1.4.0 · **Sub-flow**  
 **Description**: Generic flow to authenticate user via OTP sent to cell or email.
 
-The gatekeeper. It collects a phone or email (via `get-cell-or-email`), optionally lets a tenant-supplied validator flow approve the contact, records the destination in `cargo.otp_cell_number` / `cargo.otp_email`, sends the code through [`send-otp-code`](#sendotpcode), hands any send failure to [`otp-send-failed`](#otpsendfailed), and hands off to `get-and-validate-otp-code`. On success it sets `auth_result = true` and returns to its caller, with `cargo.otpVerified` set by the `validate-otp` tool.
+The gatekeeper. It records its options in `cargo.authOptions` / `cargo.authCancelFlow`, collects a phone or email (via `get-cell-or-email`), optionally lets a tenant-supplied validator flow approve the contact, records the destination in `cargo.otp_cell_number` / `cargo.otp_email`, sends the code through [`send-otp-code`](#sendotpcode), hands any send failure to [`otp-send-failed`](#otpsendfailed), and hands off to `get-and-validate-otp-code`. On success it sets `auth_result = true` and returns to its caller, with `cargo.otpVerified` set by the `validate-otp` tool.
 
 ### Parameters
-*   `retry_flow` (string): Flow to reboot if the user wants to retry. The description says "default: authenticate-user", but **no step applies that default**. The value is forwarded as-is, so callers should pass it.
-*   `cancel_flow` (string): Flow to reboot if the user cancels. The description says "default: cancel-process", but no step here applies it. `generic-retry-with-options` falls back to `contact-support`, and `get-cell-or-email` has no fallback.
+*   `retry_flow` (string): Flow a failed contact step retries. Defaults to `authenticate-user` (step `default_retry_flow`). It is passed to `get-cell-or-email` and to the menu for a contact the validator rejected. The code-failure menus always retry `authenticate-user` itself.
+*   `cancel_flow` (string): Flow EXIT goes to anywhere in this authentication. Defaults to `contact-support` (step `default_cancel_flow`), and is kept in `cargo.authCancelFlow` for the flows that do not receive it as a variable.
 *   `cell_number` (string): Phone already supplied by the caller. Forwarded so `get-cell-or-email` skips the contact prompt.
 *   `email` (string): Email already supplied by the caller. Forwarded the same way.
 *   `email_validator` (string, optional flow name): When supplied, it is called with `{email}` before an email OTP is sent, and it MUST set `contact_valid = true` to allow the send. **Fail-closed.** The validator must end by completion, because a `RETURN` in it terminates all flows.
 *   `cell_validator` (string, optional flow name): Same contract, called with `{cell_number}` before an SMS OTP.
+*   `retrying` (boolean): Set by the retry menu. When true and `cargo.authOptions` exists, `retry_flow`, `cancel_flow`, `email_validator` and `cell_validator` are restored from `cargo.authOptions` and the values passed with the retry are ignored, so a retry keeps the options of the authentication being retried.
 
 ### Variables
 `cell_or_email`, `cell_number`, `email`, `contact_valid` (true when no validator applies), `unverified_contact` / `unverified_contact_es` (the rejected contact phrased for the retry message: "the number 555…" / "the email a@b.c").
 
 ### Steps
 1. `check_already_verified` (CASE) - `cargo.otpVerified` → **END** (return to the caller at once). Otherwise continue.
-2. `get_contact_info` (FLOW `get-cell-or-email`, `call`) - passes `retry_flow`, `cancel_flow`, `cell_number`, `email`. Sets `cell_number` or `email`, or leaves the flow stack via one of its own exits.
-3. `init_contact_valid` (SET) - `contact_valid` = false when a validator applies to the collected contact (`cell_validator` with a `cell_number`, or `email_validator` with an `email`); true otherwise.
-4. `validate_contact` (CASE) - runs `{{cell_validator}}` with `{cell_number}` or `{{email_validator}}` with `{email}` (`call`). The cell validator is checked first.
-5. `describe_unverified_contact` / `_es` (SET) - builds the phrase used below.
-6. `gate_otp_on_contact_valid` (CASE) - `!contact_valid` → FLOW `generic-retry-with-options` (`replace`) with "Sorry, I could not verify {{unverified_contact}}.", `retry_flow`, `cancel_flow`, and `capture_patterns` for `cell_number` (`[0-9\-\(\)\.\s]{10,}`, normalizer `[^0-9]`) and `email`.
-7. `reset_resend_count` / `reset_mismatch_count` (SET, side effect) - `cargo.otpResends = 0`, `cargo.otpMismatches = 0`.
-8. `set_cell_number_to_cargo` / `set_email_to_cargo` (SET, side effect) - `cargo.otp_cell_number = cell_number || ''`, `cargo.otp_email = email || ''`. This is the destination `send-otp-code` reads.
-9. `send_code` (FLOW [`send-otp-code`](#sendotpcode), `call`) - sends the code by SMS to `cargo.otp_cell_number` or by email to `cargo.otp_email`, and records `cargo.otpSendFailure` (`''` when the code went out). A number already refused for texts (`cargo.otpUndeliverableTo`) is not texted again.
-10. `auth_check_sent` (CASE) - `cargo.otpSendFailure` → FLOW [`otp-send-failed`](#otpsendfailed) (`replace`). Otherwise continue.
-11. `get_and_validate_otp_code` (FLOW `get-and-validate-otp-code`, `call`).
-12. `check_validation_result` (CASE) - `cargo.otpVerified` → SET `auth_result = true`. Otherwise → `retry-authenticate-generic` (`replace`, "Sorry, the code you entered was invalid or expired.", `allow_otp_entry: true`).
+2. `remember_or_restore_retry_flow` / `_cancel_flow` / `_email_validator` / `_cell_validator` (SET) - with `retrying` and a `cargo.authOptions`: each option = its value in `cargo.authOptions` (`''` when absent there). Otherwise: each option = the passed value, `''` when undefined or empty.
+3. `default_retry_flow` / `default_cancel_flow` (SET) - `retry_flow ||= 'authenticate-user'`, `cancel_flow ||= 'contact-support'`.
+4. `remember_options` (SET, side effect) - `cargo.authOptions = { retry_flow, cancel_flow, email_validator, cell_validator }` and `cargo.authCancelFlow = cancel_flow`.
+5. `get_contact_info` (FLOW `get-cell-or-email`, `call`) - passes `retry_flow`, `cancel_flow`, `cell_number`, `email`. Sets `cell_number` or `email`, or leaves the flow stack via one of its own exits.
+6. `init_contact_valid` (SET) - `contact_valid` = false when a validator applies to the collected contact (`cell_validator` with a `cell_number`, or `email_validator` with an `email`); true otherwise.
+7. `validate_contact` (CASE) - runs `{{cell_validator}}` with `{cell_number}` or `{{email_validator}}` with `{email}` (`call`). The cell validator is checked first.
+8. `describe_unverified_contact` / `_es` (SET) - builds the phrase used below.
+9. `gate_otp_on_contact_valid` (CASE) - `!contact_valid` → FLOW [`generic-retry-with-options`](#genericretrywithoptions) (`replace`) with "Sorry, I could not verify {{unverified_contact}}.", `retry_flow`, `cancel_flow`, and `capture_patterns` for `cell_number` (`[0-9\-\(\)\.\s]{10,}`, normalizer `[^0-9]`) and `email` (`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`). No `retry_call_type`, `allow_code_entry` or `question`.
+10. `reset_resend_count` / `reset_mismatch_count` (SET, side effect) - `cargo.otpResends = 0`, `cargo.otpMismatches = 0`.
+11. `set_cell_number_to_cargo` / `set_email_to_cargo` (SET, side effect) - `cargo.otp_cell_number = cell_number || ''`, `cargo.otp_email = email || ''`. This is the destination `send-otp-code` reads.
+12. `send_code` (FLOW [`send-otp-code`](#sendotpcode), `call`) - sends the code by SMS to `cargo.otp_cell_number` or by email to `cargo.otp_email`, and records `cargo.otpSendFailure` (`''` when the code went out). A number already refused for texts (`cargo.otpUndeliverableTo`) is not texted again.
+13. `auth_check_sent` (CASE) - `cargo.otpSendFailure` → FLOW [`otp-send-failed`](#otpsendfailed) (`replace`). Otherwise continue.
+14. `get_and_validate_otp_code` (FLOW `get-and-validate-otp-code`, `call`).
+15. `check_validation_result` (CASE) - `cargo.otpVerified` → SET `auth_result = true`. Otherwise → FLOW `generic-retry-with-options` (`replace`), "Sorry, the code you entered was invalid or expired.", with the [authentication retry parameters](#genericretrywithoptions) and `allow_code_entry: true`.
 
 ### Ends
-Success returns to the caller (by completion) with `auth_result = true` and `cargo.otpVerified` set. Already verified → `END`. Failures leave through `generic-retry-with-options`, `otp-send-failed` (which goes on to `otp-text-undeliverable` or `retry-authenticate-generic`) or `retry-authenticate-generic`, or through `get-cell-or-email`'s own exits (cancel, live agent, off-topic hand-off). `otp-send-failed` and the flow it replaces itself with keep this frame's variables (`retry_flow`, `cancel_flow`, the validators) because they are reached by `replace`, and `otp-text-undeliverable` returns here by `replace`.
+Success returns to the caller (by completion) with `auth_result = true` and `cargo.otpVerified` set. Already verified → `END`. Failures leave through `generic-retry-with-options`, `otp-send-failed` (which goes on to `otp-text-undeliverable` or `generic-retry-with-options`), or through `get-cell-or-email`'s own exits (cancel, live agent, off-topic hand-off). `otp-send-failed` and the flow it replaces itself with keep this frame's variables (`retry_flow`, `cancel_flow`, the validators) because they are reached by `replace`, and `otp-text-undeliverable` returns here by `replace`. EXIT at any step goes to the authentication's `cancel_flow`: `get-cell-or-email` and the contact menu receive it as a variable, the other steps read `cargo.authCancelFlow`.
 
 ### Flowchart
 ```mermaid
 graph TD
     start((Start)) --> check_already_verified{cargo.otpVerified?}
     check_already_verified -->|yes| already_verified[END]
-    check_already_verified -->|no| get_contact_info[FLOW call: get-cell-or-email]
+    check_already_verified -->|no| options["SET: options from cargo.authOptions when retrying, else the parameters; defaults authenticate-user / contact-support"]
+    options --> remember_options[SET: cargo.authOptions, cargo.authCancelFlow]
+    remember_options --> get_contact_info[FLOW call: get-cell-or-email]
     get_contact_info --> init_contact_valid[SET: contact_valid]
     init_contact_valid --> validate_contact{validator for this contact?}
     validate_contact -->|cell_validator + cell_number| run_cell_validator["FLOW call: {{cell_validator}}"]
@@ -263,7 +272,7 @@ graph TD
     auth_check_sent -->|empty| get_and_validate[FLOW call: get-and-validate-otp-code]
     get_and_validate --> check_result{cargo.otpVerified?}
     check_result -->|yes| auth_success[SET: auth_result = true]
-    check_result -->|no| auth_failed[FLOW replace: retry-authenticate-generic]
+    check_result -->|no| auth_failed["FLOW replace: generic-retry-with-options, code entry allowed"]
     auth_success --> stop((Return to caller))
     already_verified --> stop
 ```
@@ -272,12 +281,12 @@ graph TD
 ---
 
 ## GetCellOrEmail
-**ID**: `get-cell-or-email` · **Version**: 1.1.1 · **Sub-flow**  
+**ID**: `get-cell-or-email` · **Version**: 1.1.2 · **Sub-flow**  
 **Description**: Prompt user to provide either their cell phone number or email address for account lookup.
 
 ### Parameters
 *   `retry_flow` (string): Flow to reboot if the user wants to retry.
-*   `cancel_flow` (string): Flow to reboot if the user cancels.
+*   `cancel_flow` (string): Flow to reboot if the user cancels. Empty falls back to `contact-support`.
 *   Also reads `cell_number` / `email` when the caller passes them (`authenticate-user` does). These are not declared as parameters here.
 
 ### Steps
@@ -291,10 +300,10 @@ graph TD
    1. `validatePhone(prospective_cell_number)` → `cell_number` = those digits.
    2. `validateEmail(prospective_email)` → `email` = it.
    3. `cargo.callerId` and the answer is `1`, or `isAnswer(…, 'yes', ['thanks', 'thank you', 'gracias'])` with no digit and no `@`, or `matchesChoice` phone words (`phone, cell, caller id, number, numero, teléfono, celular, identificador de llamadas`…) → `cell_number = cargo.callerId`.
-   4. `isAnswer(…, 'exit')` (EXIT words or `*`) in an answer of at most two words → FLOW `{{cancel_flow}}` (`reboot`).
+   4. `isAnswer(…, 'exit')` (EXIT words or `*`) in an answer of at most two words → FLOW `{{cancel_flow || 'contact-support'}}` (`reboot`).
    5. `isAgentRequest` (the whole answer asks for a person, or is `0`) → FLOW `live-agent-requested` (`reboot`).
    6. `cargo.callerId` and digits that are not a valid phone → `cell_number = cargo.callerId`.
-   7. digits that are not a valid phone (no caller ID) → FLOW `generic-retry-with-options` (`replace`): "Sorry, the phone number you provided isn't valid.", with `retry_flow`, `cancel_flow` and the cell/email `capture_patterns`.
+   7. digits that are not a valid phone (no caller ID) → FLOW `generic-retry-with-options` (`replace`): "Sorry, the phone number you provided isn't valid.", with `retry_flow`, `cancel_flow` and the cell/email `capture_patterns` (no `retry_call_type`, so a retry by `1` reboots).
    8. `cargo.callerId` (anything else) → `cell_number = cargo.callerId`.
    9. the question was asked (`!cell_number && !email`) and the answer is three or more words containing no digit and no `@` → **`DISPATCH`** with **`outcome: "unresolved"`, `reason: "auth_prompt_off_topic"`**. The answer goes to intent detection: a matching flow starts at once (the outcome is dropped); otherwise the host answers with the outcome.
    10. default → FLOW `generic-retry-with-options` (`replace`): "Sorry, I do need the the phone or email associated with your account to proceed.", same parameters.
@@ -319,7 +328,7 @@ graph TD
     branch -->|valid phone| valid_phone[SET: cell_number]
     branch -->|valid email| valid_email[SET: email]
     branch -->|callerId + yes / phone words| use_caller_id[SET: cell_number = callerId]
-    branch -->|EXIT or *, at most 2 words| abort_process["FLOW reboot: {{cancel_flow}}"]
+    branch -->|EXIT or *, at most 2 words| abort_process["FLOW reboot: cancel_flow or contact-support"]
     branch -->|agent request or 0| goto_live_agent[FLOW reboot: live-agent-requested]
     branch -->|callerId + invalid digits| fallback_invalid[SET: cell_number = callerId]
     branch -->|invalid digits| invalid_phone[FLOW replace: generic-retry-with-options]
@@ -370,7 +379,7 @@ graph TD
 ---
 
 ## ValidateOtpCode
-**ID**: `validate-otp-code` · **Version**: 1.1.2 · **Sub-flow**  
+**ID**: `validate-otp-code` · **Version**: 1.1.3 · **Sub-flow**  
 **Description**: Validate OTP code entered by user; sets `cargo.otpVerified` on success. Capped at 3 wrong codes per authentication (`cargo.otpMismatches`, reset by authenticate-user): the code is withdrawn and the retry/agent/exit choice follows, where retry sends a fresh code.
 
 Reads `normalized_otp_code` and `user_choice` from `get-and-validate-otp-code`. An expired or missing code is answered with a fresh one (via `resend-otp-code`), not with "didn't match".
@@ -381,7 +390,7 @@ Reads `normalized_otp_code` and `user_choice` from `get-and-validate-otp-code`. 
 ### Steps
 1. `validate_otp_and_lookup` (CASE, first match wins):
    - `normalized_otp_code.length === 6` → CALL-TOOL [`validate-otp`](#validate-otp) `{otp: normalized_otp_code, container: cargo}` into `otp_validation_result`. `onFail` → FLOW `get-and-validate-otp-code` (`replace`).
-   - `isAnswer(…, 'exit')` (EXIT words or `*`) → FLOW `contact-support` (`reboot`).
+   - `isAnswer(…, 'exit')` (EXIT words or `*`) → FLOW `{{cargo.authCancelFlow || 'contact-support'}}` (`reboot`).
    - `isAnswer(…, 'agent')` (an AGENT word anywhere in the answer, or `0`) → FLOW `live-agent-requested` (`reboot`).
    - `isAnswer(…, 'text')` (TEXT words) → FLOW `switch-to-text` (`reboot`).
    - "didn't receive / resend" phrases (`resend, send again, not received, didn t get, no code, no llegó, no recibí, reenviar`…) → FLOW [`resend-otp-code`](#resendotpcode) (`call`) with `resend_reason: "requested"`.
@@ -395,7 +404,7 @@ Reads `normalized_otp_code` and `user_choice` from `get-and-validate-otp-code`. 
    - `cargo.otpVerified` → SET `otp_validated = true`.
    - `cargo.otpFailure === 'expired'` → FLOW `resend-otp-code` (`call`), `resend_reason: "expired"`.
    - `cargo.otpFailure === 'missing'` → FLOW `resend-otp-code` (`call`), `resend_reason: "missing"`.
-   - a mismatch at the cap → FLOW `retry-authenticate-generic` (`replace`): "That code didn't match three times, so I can't accept another try with it. To reach a person, {verb} AGENT.", `allow_otp_entry: false`.
+   - a mismatch at the cap → FLOW `generic-retry-with-options` (`replace`): "That code didn't match three times, so I can't accept another try with it. To reach a person, {verb} AGENT.", with the [authentication retry parameters](#genericretrywithoptions) and `allow_code_entry: false`.
    - default → SAY "That code didn't match. Let's try again."
 6. `set_invite_text` - `global_whatsapp_invite_es` (Spanish) or `global_whatsapp_invite`, `''` when undefined.
 7. `invite_if_wrong_code` (CASE) - verified, or `cargo.otpFailure` is not `mismatch` → no invite. Otherwise → CALL-TOOL [`send-whatsapp-invite`](#send-whatsapp-invite) `{accountSid: null, from: cargo.twilioNumber, to: cargo.otp_cell_number, inviteText, language, container: cargo}` into `whatsapp_invite_sent`. `onFail` → SET `whatsapp_invite_sent = false`. Per the tool's contract it returns `false` when `inviteText` is empty, when it already invited on this call, or when `to` is missing. `to` is `''` when the code went by email.
@@ -403,14 +412,14 @@ Reads `normalized_otp_code` and `user_choice` from `get-and-validate-otp-code`. 
 9. `retry_if_wrong_code` (CASE) - not verified → FLOW `get-and-validate-otp-code` (`replace`).
 
 ### Ends
-Verified → completion (the caller chain returns to `authenticate-user` or `retry-authenticate-generic`). A wrong code loops back to the prompt until the third mismatch, which leaves through `retry-authenticate-generic`. An expired or missing code gets a fresh one and loops back, until `resend-otp-code`'s own cap. The exits in step 1 leave at any time.
+Verified → completion (the caller chain returns to `authenticate-user` or `generic-retry-with-options`). A wrong code loops back to the prompt until the third mismatch, which leaves through `generic-retry-with-options`. An expired or missing code gets a fresh one and loops back, until `resend-otp-code`'s own cap. The exits in step 1 leave at any time.
 
 ### Flowchart
 ```mermaid
 graph TD
     start((Start)) --> route{input}
     route -->|6 digits| validate_otp[TOOL: validate-otp]
-    route -->|EXIT or *| abort_process[FLOW reboot: contact-support]
+    route -->|EXIT or *| abort_process[FLOW reboot: cargo.authCancelFlow or contact-support]
     route -->|AGENT words or 0| goto_live_agent[FLOW reboot: live-agent-requested]
     route -->|TEXT words| goto_text[FLOW reboot: switch-to-text]
     route -->|not received / resend| code_not_arrived[FLOW call: resend-otp-code, requested]
@@ -429,7 +438,7 @@ graph TD
     check -->|verified| otp_success[SET: otp_validated]
     check -->|expired| expired_fresh[FLOW call: resend-otp-code, expired]
     check -->|missing| missing_fresh[FLOW call: resend-otp-code, missing]
-    check -->|3rd mismatch| cap_reached[FLOW replace: retry-authenticate-generic]
+    check -->|3rd mismatch| cap_reached[FLOW replace: generic-retry-with-options]
     check -->|mismatch| wrong_code[SAY: code didn't match]
     otp_success --> invite_text[SET: invite_text]
     expired_fresh --> invite_text
@@ -449,7 +458,7 @@ graph TD
 ---
 
 ## ResendOtpCode
-**ID**: `resend-otp-code` · **Version**: 1.1.0 · **Sub-flow**  
+**ID**: `resend-otp-code` · **Version**: 1.1.1 · **Sub-flow**  
 **Description**: Worker: sends a fresh code to the destination authenticate-user used (`cargo.otp_cell_number` / `cargo.otp_email`) and says why (`expired`, `missing` or `requested`). At most 2 per authentication (`cargo.otpResends`), then the retry menu.
 
 Called by `validate-otp-code` with `callType: "call"`.
@@ -461,20 +470,20 @@ Called by `validate-otp-code` with `callType: "call"`.
 `resend_reason`.
 
 ### Steps
-1. `check_resend_cap` (CASE) - `cargo.otpResends >= 2` → FLOW `retry-authenticate-generic` (`replace`): "I've already sent you new codes and still couldn't verify you. To reach a person, {verb} AGENT.", `allow_otp_entry: true`.
+1. `check_resend_cap` (CASE) - `cargo.otpResends >= 2` → FLOW `generic-retry-with-options` (`replace`): "I've already sent you new codes and still couldn't verify you. To reach a person, {verb} AGENT.", with the [authentication retry parameters](#genericretrywithoptions) and `allow_code_entry: true`.
 2. `count_resend` (SET, side effect) - `cargo.otpResends` + 1.
 3. `send_fresh_code` (FLOW [`send-otp-code`](#sendotpcode), `call`) - sends to `cargo.otp_cell_number` or `cargo.otp_email` and records `cargo.otpSendFailure`.
 4. `resend_check_sent` (CASE) - `cargo.otpSendFailure` → FLOW [`otp-send-failed`](#otpsendfailed) (`replace`). Otherwise continue.
 5. `say_why_fresh_code` (CASE) - `expired` → SAY "Your code expired, so I've sent you a new one." `missing` → SAY "I don't have an active code for you, so I've sent you a new one." Otherwise → SAY "I've sent you a new code."
 
 ### Ends
-By completion, returning to `validate-otp-code`, which loops back to the code prompt. At the cap, by `replace` into `retry-authenticate-generic`; on a failed send, by `replace` into `otp-send-failed`.
+By completion, returning to `validate-otp-code`, which loops back to the code prompt. At the cap, by `replace` into `generic-retry-with-options`; on a failed send, by `replace` into `otp-send-failed`.
 
 ### Flowchart
 ```mermaid
 graph TD
     start((Start)) --> check_resend_cap{cargo.otpResends >= 2?}
-    check_resend_cap -->|yes| resend_cap_reached[FLOW replace: retry-authenticate-generic]
+    check_resend_cap -->|yes| resend_cap_reached[FLOW replace: generic-retry-with-options]
     check_resend_cap -->|no| count_resend[SET: cargo.otpResends + 1]
     count_resend --> send_fresh_code[FLOW call: send-otp-code]
     send_fresh_code --> resend_check_sent{cargo.otpSendFailure?}
@@ -492,56 +501,97 @@ graph TD
 ---
 
 ## GenericRetryWithOptions
-**ID**: `generic-retry-with-options` · **Version**: 1.2.1 · **Sub-flow**  
-**Description**: Generic flow to offer retry, switch to text, or contact support.
+**ID**: `generic-retry-with-options` · **Version**: 1.3.0 · **Sub-flow**  
+**Description**: Worker: says what failed and offers retry (YES / 1), switch to text (TEXT / 9, voice with caller ID), an agent (AGENT / 0) or exit (EXIT / *). A contact in the answer retries with it; with allow_code_entry a 6-digit code is checked on the spot; anything else goes back to intent detection.
+
+The library's only retry menu: the authentication flows and the Shopify lookups offer their retry through it.
 
 ### Parameters
-*   `error_message` (string): Error message to display.
-*   `error_message_es` (string): Error message in Spanish.
-*   `retry_flow` (string): Flow to reboot if the user wants to retry.
-*   `cancel_flow` (string): Flow to reboot if the user cancels. The description says "default: cancel-process", but the steps fall back to `contact-support` when it is empty.
-*   `capture_patterns` (array): Optional `[{variable, regex, normalizer?}]` to capture from the user's answer. Most callers omit it; the SET step guards the reference, so absence means no smart capture rather than an evaluation failure.
+*   `error_message` / `error_message_es` (string): What failed, spoken first.
+*   `question` / `question_es` (string): The question after the error. Empty or absent = "Would you like to try again?" / "¿Le gustaría intentar nuevamente?".
+*   `retry_flow` (string): Flow to run again on YES / `1` or a captured contact.
+*   `retry_call_type` (string): `'reboot'` (the default: start `retry_flow` afresh, alone) or `'replace'` (re-enter it in this frame, e.g. `authenticate-user` inside its caller).
+*   `cancel_flow` (string): Flow to reboot on EXIT. Empty or absent = `contact-support`.
+*   `capture_patterns` (array): Optional `[{variable, regex, normalizer?}]` for [`normalizeAndFindCapture`](#conventions-used-by-these-flows). Absent = no smart capture.
+*   `allow_code_entry` (boolean): A 6-digit answer is a verification code, checked with `validate-otp-code`.
 *   `caller_outcome`, `caller_reason` (string): Optional. The caller's declared outcome (usually `unresolved`) and reason for the failure that led here. The `DISPATCH` of an unrecognised answer declares them, so they reach the host only when intent detection matches no flow. Omitted = no outcome.
 
+**Authentication retry parameters.** `authenticate-user` (wrong code), `validate-otp-code` (wrong-code cap), `resend-otp-code` (resend cap) and `otp-send-failed` (failed send) all pass the same set besides their own message and `allow_code_entry`:
+
+| Parameter | Value |
+|---|---|
+| `retry_flow` | `authenticate-user` |
+| `retry_call_type` | `replace` |
+| `cancel_flow` | `{{cargo.authCancelFlow}}` |
+| `capture_patterns` | `cell_number`: `[0-9\-\(\)\.\s]{10,}`, normalizer `[^0-9]`; `email`: `[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}` |
+| `question` / `question_es` | "Would you like to try again to get access to your account?" / "¿Le gustaría intentar nuevamente obtener acceso a su cuenta?" |
+
+`allow_code_entry` is `true` after a wrong code (authenticate-user) and at the resend cap, `false` at the wrong-code cap (the code was withdrawn) and after a failed send. `authenticate-user`'s rejected-contact menu and `get-cell-or-email`'s menus pass only `retry_flow`, `cancel_flow` and the cell/email `capture_patterns`.
+
+### Variables
+`user_choice`, `smart_capture_result`, `normalized_otp_code` (a 6-digit code typed at the menu, when `allow_code_entry`).
+
 ### Steps
-1. `say_error_and_prompt` (SAY-GET `user_choice`, `digits: {min 1, max 1}`) - "{error_message} Would you like to try again? To retry [Press 1 or] {verb} YES. [To switch to text press 9 or {verb} TEXT.] To abort [press the asterisk key or] {verb} EXIT." The keypad wording appears on voice only, and the TEXT option only on voice with a `cargo.callerId`.
-2. `reprompt_on_unknown_key` (CASE) - a single key `0` or `2` to `8` → SAY-GET `user_choice` again: "Sorry, that is not an option. To retry …" (same options, same `digits`). One re-prompt only; its answer goes on to step 3.
-3. `check_smart_capture` - `smart_capture_result = normalizeAndFindCapture(user_choice, capture_patterns)` when patterns were passed, else `null`.
-4. `handle_smart_capture` (CASE) - a capture → FLOW `{{retry_flow}}` (`reboot`) with parameters `{ [captured variable]: captured value, retry_flow, cancel_flow }`. So a user who answers the retry question with a corrected phone or email goes straight back in with that value.
-5. `normalize_choice` - trim, lower-case, strip punctuation.
-6. `handle_choice` (CASE):
-   - `isAnswer(…, 'yes', [thanks, gracias and contact words: phone, email, cell, mobile, teléfono, celular, móvil, correo…])` or `1` → FLOW `{{retry_flow}}` (`reboot`).
+1. `say_error_and_prompt` (SAY-GET `user_choice`, `digits: {min 1, max 1}`) - "{error_message} {question} To retry [Press 1 or ]{verb} YES. [To switch to text press 9 or {verb} TEXT. ]To abort [press the asterisk key or ]{verb} EXIT." The keypad wording appears on voice only, and the TEXT option only on voice with a `cargo.callerId`. This prompt does not name the AGENT option; the error messages of the two cap menus do.
+2. `reprompt_on_unknown_key` (CASE) - a single key `2` to `8` → SAY-GET `user_choice` again: "Sorry, that is not an option. To retry … [For an agent press 0. ]To abort …" (the agent sentence on voice only; same `digits`). One re-prompt only; its answer goes on to step 3.
+3. `check_smart_capture` (SET) - `smart_capture_result = normalizeAndFindCapture(user_choice, capture_patterns)` when patterns were passed, else `null`.
+4. `handle_smart_capture` (CASE, first match wins):
+   - a capture and `retry_call_type === 'replace'` → FLOW `{{retry_flow}}` (`replace`) with `cell_number: ''`, `email: ''`, `[captured variable]: captured value`, `retry_flow`, `cancel_flow`, `retrying: true`.
+   - a capture → FLOW `{{retry_flow}}` (`reboot`) with `[captured variable]: captured value`, `retry_flow`, `cancel_flow`.
+
+   So an answer that contains a phone or email goes straight back in with that value (the matched part of the answer).
+5. `read_typed_code` (SET) - with `allow_code_entry`, `normalized_otp_code` = the answer's digits when there are exactly 6; else `''`.
+6. `check_typed_code` (CASE) - `normalized_otp_code` → FLOW [`validate-otp-code`](#validateotpcode) (`call`).
+7. `normalize_choice` (SET) - trim, lower-case, strip punctuation.
+8. `handle_choice` (CASE, first match wins):
+   - `normalized_otp_code` and `cargo.otpVerified` → SET `auth_result = true` (the flow then ends by completion).
+   - `normalized_otp_code` → FLOW `generic-retry-with-options` (`replace`): "Sorry, the code you entered was invalid or expired.", passing on `retry_flow`, `retry_call_type`, `cancel_flow`, `capture_patterns`, `question`, `question_es`, with `allow_code_entry: true`. By the steps of `validate-otp-code`, it returns only once the code is verified (a wrong code loops to its own code prompt), so this branch is a guard.
+   - `isAnswer(…, 'yes', [phone, email, cell, mobile, teléfono, telefono, celular, móvil, movil, correo electrónico, correo]) || user_choice === '1' && retry_call_type === 'replace'` (`retry_in_place`) → FLOW `{{retry_flow}}` (`replace`) with `retrying: true`, `cell_number: ''`, `email: ''`. **`&&` binds before `||`**, so a YES or contact word takes this branch whatever `retry_call_type` is; only the keypad `1` checks for `'replace'`.
+   - the same YES test, or `1` (`retry_from_start`) → FLOW `{{retry_flow}}` (`reboot`) with `retrying: true`. Reached only by `1` without `retry_call_type: 'replace'`.
    - `isAnswer(…, 'text')` (TEXT words) or `9` → FLOW `switch-to-text` (`reboot`).
-   - `isAnswer(…, 'exit')` (EXIT words or `*`) → FLOW `{{cancel_flow || 'contact-support'}}` (`reboot`).
+   - `isAnswer(…, 'agent')` (an AGENT word anywhere in the answer, or `0`) → FLOW `live-agent-requested` (`reboot`).
+   - `isAnswer(…, 'exit')` (EXIT words or `*`) → FLOW `cancel_flow`, else `contact-support` (`reboot`).
    - empty input or a lone digit (no intent to detect) → the same cancel target (`reboot`).
    - default → `DISPATCH` (outcome/reason = `caller_outcome`/`caller_reason`): the answer is routed through intent detection. A matching flow starts in the same turn, otherwise the host answers.
 
+`retrying: true` makes an `authenticate-user` that the retry reaches restore the options of the authentication being retried from `cargo.authOptions` (see [AuthenticateUser](#authenticateuser)).
+
 ### Ends
-By a `reboot` into another flow, or by `DISPATCH` (default branch).
+By completion after a typed code was verified (with `auth_result = true`, returning to whichever flow called the frame this menu replaced), by a `replace` / `reboot` into another flow, or by `DISPATCH` (default branch).
 
 ### Flowchart
 ```mermaid
 graph TD
-    start((Start)) --> say_error_and_prompt[SAY-GET: error + retry / text / exit]
-    say_error_and_prompt --> reprompt{key 0 or 2-8?}
-    reprompt -->|yes| say_not_an_option[SAY-GET: not an option, same choices]
+    start((Start)) --> say_error_and_prompt[SAY-GET: error + question + retry / text / exit]
+    say_error_and_prompt --> reprompt{key 2-8?}
+    reprompt -->|yes| say_not_an_option[SAY-GET: not an option, same choices + agent on voice]
     reprompt -->|no| check_smart_capture[SET: normalizeAndFindCapture]
     say_not_an_option --> check_smart_capture
     check_smart_capture --> handle_smart_capture{captured?}
+    handle_smart_capture -->|yes, retry_call_type replace| replace_with_captured_value["FLOW replace: {{retry_flow}} + captured value, retrying"]
     handle_smart_capture -->|yes| reboot_with_captured_value["FLOW reboot: {{retry_flow}} + captured value"]
-    handle_smart_capture -->|no| normalize_choice[SET: normalize]
+    handle_smart_capture -->|no| read_typed_code[SET: normalized_otp_code when allow_code_entry]
+    read_typed_code --> check_typed_code{6-digit code?}
+    check_typed_code -->|yes| validate_typed_code[FLOW call: validate-otp-code]
+    check_typed_code -->|no| normalize_choice[SET: normalize]
+    validate_typed_code --> normalize_choice
     normalize_choice --> handle_choice{choice}
-    handle_choice -->|YES / contact words / 1| do_retry["FLOW reboot: {{retry_flow}}"]
+    handle_choice -->|code verified| typed_code_verified[SET: auth_result = true]
+    handle_choice -->|code not verified| typed_code_wrong[FLOW replace: generic-retry-with-options]
+    handle_choice -->|YES / contact words, or 1 with replace| retry_in_place["FLOW replace: {{retry_flow}}, retrying"]
+    handle_choice -->|1| retry_from_start["FLOW reboot: {{retry_flow}}, retrying"]
     handle_choice -->|TEXT / 9| do_switch_text[FLOW reboot: switch-to-text]
+    handle_choice -->|AGENT / 0| do_agent[FLOW reboot: live-agent-requested]
     handle_choice -->|EXIT / *| do_abort["FLOW reboot: cancel_flow or contact-support"]
     handle_choice -->|empty / lone digit| do_cancel_no_intent["FLOW reboot: cancel_flow or contact-support"]
     handle_choice -->|default| dispatch_unrecognised["DISPATCH: intent detection, else host"]
+    typed_code_verified --> stop((Return to caller))
 ```
 
 ---
 
 ## OtpSendFailed
-**ID**: `otp-send-failed` · **Version**: 1.0.0 · **Sub-flow**  
+**ID**: `otp-send-failed` · **Version**: 1.0.1 · **Sub-flow**  
 **Description**: Worker: a code could not be sent (`cargo.otpSendFailure`). A line that cannot receive texts goes to otp-text-undeliverable; any other failure offers the retry.
 
 Reached by `replace` from `authenticate-user` (`auth_check_sent`) and from `resend-otp-code` (`resend_check_sent`) when [`send-otp-code`](#sendotpcode) recorded a failure, so it keeps the replaced frame's variables.
@@ -549,9 +599,10 @@ Reached by `replace` from `authenticate-user` (`auth_check_sent`) and from `rese
 ### Steps
 1. `branch_on_failure` (CASE):
    - `cargo.otpSendFailure === 'undeliverable'` → FLOW [`otp-text-undeliverable`](#otptextundeliverable) (`replace`).
-   - `'sms'` → FLOW `retry-authenticate-generic` (`replace`): "Sorry, text message delivery failed.", `allow_otp_entry: false`.
-   - `'email'` → FLOW `retry-authenticate-generic` (`replace`): "Sorry, email delivery failed.", `allow_otp_entry: false`.
-   - default (`'none'`) → FLOW `retry-authenticate-generic` (`replace`): "Sorry, there was an unexpected error.", `allow_otp_entry: false`.
+   Each retry branch passes the [authentication retry parameters](#genericretrywithoptions) with `allow_code_entry: false`.
+   - `'sms'` → FLOW `generic-retry-with-options` (`replace`): "Sorry, text message delivery failed."
+   - `'email'` → FLOW `generic-retry-with-options` (`replace`): "Sorry, email delivery failed."
+   - default (`'none'`) → FLOW `generic-retry-with-options` (`replace`): "Sorry, there was an unexpected error."
 
 ### Ends
 Always by `replace` into one of the two flows.
@@ -561,9 +612,9 @@ Always by `replace` into one of the two flows.
 graph TD
     start((Start)) --> branch_on_failure{cargo.otpSendFailure}
     branch_on_failure -->|undeliverable| line_cannot_text[FLOW replace: otp-text-undeliverable]
-    branch_on_failure -->|sms| sms_retry[FLOW replace: retry-authenticate-generic, text failed]
-    branch_on_failure -->|email| email_retry[FLOW replace: retry-authenticate-generic, email failed]
-    branch_on_failure -->|other| unexpected_retry[FLOW replace: retry-authenticate-generic, unexpected error]
+    branch_on_failure -->|sms| sms_retry[FLOW replace: generic-retry-with-options, text failed]
+    branch_on_failure -->|email| email_retry[FLOW replace: generic-retry-with-options, email failed]
+    branch_on_failure -->|other| unexpected_retry[FLOW replace: generic-retry-with-options, unexpected error]
 ```
 
 ---
@@ -677,7 +728,7 @@ graph TD
 ---
 
 ## OtpTextUndeliverable
-**ID**: `otp-text-undeliverable` · **Version**: 1.0.1 · **Sub-flow**  
+**ID**: `otp-text-undeliverable` · **Version**: 1.0.3 · **Sub-flow**  
 **Description**: Worker for authenticate-user: the number for the code cannot receive texts (landline, toll-free, invalid). Says so and asks for the account's email or a mobile number; never offers to text the same number again.
 
 Reached by `replace` from [`otp-send-failed`](#otpsendfailed) when `cargo.otpSendFailure` is `undeliverable`, so it keeps `authenticate-user`'s variables (`retry_flow`, `cancel_flow`, the validators) and returns to it by `replace`.
@@ -689,19 +740,19 @@ Reached by `replace` from [`otp-send-failed`](#otpsendfailed) when `cargo.otpSen
 1. `describe_number` (SET) - `undeliverable_last4` from `cargo.otpUndeliverableTo`: "1, 2, 3, 4" on voice, "1234" otherwise.
 2. `ask_other_contact` (SAY-GET `user_choice`, `digits: {min 1, max 12, autoSubmitChars ["0"], autoSubmitMs 2500}`) - "The number ending with {undeliverable_last4} can't receive text messages, so I can't text it a code. Please {verb} the email address on your account, or {voice ? 'say or enter' : verb} a mobile number that can receive texts. To talk to an agent [press 0 or ]{verb} AGENT. To exit [press the asterisk key or ]{verb} EXIT."
 3. `read_digits` (SET) - `choice_digits` = the answer's digits.
-4. `read_email` (SET) - `choice_email` = the first email-shaped match in the answer (spaces allowed, then removed), else `''`.
+4. `read_email` (SET) - `choice_email` = the first email address in the answer (`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`); failing that, the first match that allows spaces, with the spaces removed; else `''`.
 5. `clear_cell` / `clear_email` (SET) - `cell_number = ''`, `email = ''`.
 6. `handle_choice` (CASE, first match wins):
    - `choice_email` and `validateEmail(choice_email)` → FLOW `authenticate-user` (`replace`) with `email: {{choice_email}}`.
    - `validatePhone(choice_digits)` → FLOW `authenticate-user` (`replace`) with `cell_number: {{choice_digits}}`.
    - `isAgentRequest` (the whole answer asks for a person, or is `0`) → FLOW `live-agent-requested` (`reboot`).
-   - `isAnswer(…, 'exit')` (EXIT words or `*`) in an answer of at most two words → FLOW `contact-support` (`reboot`).
+   - `isAnswer(…, 'exit')` (EXIT words or `*`) in an answer of at most two words → FLOW `{{cargo.authCancelFlow || 'contact-support'}}` (`reboot`).
    - default → FLOW `authenticate-user` (`replace`) with no contact, so `get-cell-or-email` asks again.
 
 If the caller gives the same number again (or accepts the caller ID that is that number), `send-otp-code`'s `skip_line_that_cannot_text` records `undeliverable` without texting it, and `otp-send-failed` brings the caller back here.
 
 ### Ends
-By `replace` into `authenticate-user`, or `reboot` into `live-agent-requested` or `contact-support`.
+By `replace` into `authenticate-user`, or `reboot` into `live-agent-requested` or the authentication's cancel flow (`cargo.authCancelFlow`, else `contact-support`).
 
 ### Flowchart
 ```mermaid
@@ -714,64 +765,8 @@ graph TD
     handle_choice -->|valid email| try_email[FLOW replace: authenticate-user + email]
     handle_choice -->|valid phone| try_other_cell[FLOW replace: authenticate-user + cell_number]
     handle_choice -->|agent request or 0| goto_live_agent[FLOW reboot: live-agent-requested]
-    handle_choice -->|EXIT or *, at most 2 words| abort_process[FLOW reboot: contact-support]
+    handle_choice -->|EXIT or *, at most 2 words| abort_process[FLOW reboot: cargo.authCancelFlow or contact-support]
     handle_choice -->|default| ask_contact_again[FLOW replace: authenticate-user]
-```
-
----
-
-## RetryAuthenticateGeneric
-**ID**: `retry-authenticate-generic` · **Version**: 1.0.1 · **Sub-flow**  
-**Description**: Generic retry authentication flow.
-
-Offers to retry authentication. It also accepts a 6-digit code typed straight into the retry prompt (when `allow_otp_entry`), or a new phone number or email.
-
-### Variables / parameters
-Declared as `variables` with defaults: `error_message` (default "Sorry, there was an unexpected error."), `error_message_es`, `allow_otp_entry` (declared default `"false"`), `user_choice`, `normalized_otp_code`. Every caller in the library reaches this flow with `callType: "replace"`, which does not apply declared defaults, and passes `error_message`, `error_message_es` and a boolean `allow_otp_entry` as parameters.
-
-### Steps
-1. `clear_cell` / `clear_email` - `cell_number = ''`, `email = ''`.
-2. `retry_msg` (SAY-GET `user_choice`, `digits: {min 1, max 1}`) - "{error_message} Would you like to try again to get access to your account? To retry [Press 1 or] {verb} YES. [To switch to text press 9 or {verb} TEXT.] To abort … EXIT." The TEXT option appears only on voice with a `cargo.callerId`.
-3. `normalize_user_choice` - trim, lower-case, strip punctuation.
-4. `handle_choice` (CASE, first match wins):
-   - `allow_otp_entry` and the answer has exactly 6 digits → SET `normalized_otp_code` (continues to step 5).
-   - `isAnswer(…, 'yes', [thanks, gracias, phone, email, teléfono, telefono, correo electrónico, correo])` or `1` → FLOW `authenticate-user` (`replace`).
-   - `isAnswer(…, 'text')` (TEXT words) or `9` → FLOW `switch-to-text` (`reboot`).
-   - `isAnswer(…, 'exit')` (EXIT words or `*`) → FLOW `contact-support` (`reboot`).
-   - `isAnswer(…, 'agent')` (an AGENT word anywhere in the answer, or `0`) → FLOW `live-agent-requested` (`reboot`).
-   - `validatePhone(digits)` → FLOW `authenticate-user` (`replace`) with `cell_number`.
-   - `validateEmail(user_choice)` → FLOW `authenticate-user` (`replace`) with `email`.
-   - default → FLOW `contact-support` (`reboot`).
-5. `check_and_validate_otp` (CASE) - `normalized_otp_code` → FLOW `validate-otp-code` (`call`); else `contact-support` (`reboot`).
-6. `check_validation_result` (CASE) - `cargo.otpVerified` → SET `auth_result = true`; else FLOW `retry-authenticate-generic` (`replace`), "Sorry, the code you entered was invalid or expired.", `allow_otp_entry: true`.
-
-This flow does not receive `retry_flow` / `cancel_flow` from its callers. Its retry restarts `authenticate-user` in the same frame (by `replace`, so whatever `retry_flow` / `cancel_flow` the frame already holds are kept), and its cancel is always `contact-support`.
-
-### Ends
-Success by completion with `auth_result = true`. Otherwise by `replace` / `reboot` into another flow.
-
-### Flowchart
-```mermaid
-graph TD
-    start((Start)) --> clear_variables[SET: cell_number = '', email = '']
-    clear_variables --> retry_msg[SAY-GET: retry / text / exit]
-    retry_msg --> normalize_user_choice[SET: normalize]
-    normalize_user_choice --> handle_choice{choice}
-    handle_choice -->|allow_otp_entry + 6 digits| treat_as_otp_entry[SET: normalized_otp_code]
-    handle_choice -->|YES / contact words / 1| retry_authenticate[FLOW replace: authenticate-user]
-    handle_choice -->|TEXT / 9| switch_to_text[FLOW reboot: switch-to-text]
-    handle_choice -->|EXIT / *| abort_process[FLOW reboot: contact-support]
-    handle_choice -->|AGENT / 0| goto_live_agent[FLOW reboot: live-agent-requested]
-    handle_choice -->|valid phone| phone_retry[FLOW replace: authenticate-user + cell_number]
-    handle_choice -->|valid email| email_retry[FLOW replace: authenticate-user + email]
-    handle_choice -->|default| provide_contact_info_default[FLOW reboot: contact-support]
-    treat_as_otp_entry --> check_and_validate_otp{normalized_otp_code?}
-    check_and_validate_otp -->|yes| validate_otp[FLOW call: validate-otp-code]
-    check_and_validate_otp -->|no| provide_contact_info_default
-    validate_otp --> check_validation_result{cargo.otpVerified?}
-    check_validation_result -->|yes| auth_success[SET: auth_result = true]
-    check_validation_result -->|no| auth_failed_again[FLOW replace: retry-authenticate-generic]
-    auth_success --> stop((Return to caller))
 ```
 
 ---
