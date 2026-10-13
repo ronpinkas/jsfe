@@ -391,6 +391,7 @@ const flowsMenu = [
     detection with a classifier instead of a text model (see the `request` argument of `aiCallback`).
   - Validation also requires `parameters` to be an array, every parameter to have a non-empty
     `name`, and names to be unique within the flow.
+- **`scope`** (optional): `"isolated"` makes the flow a self-contained worker: a call (or replace) starts it with only its declared `variables` and the `parameters` actually passed — an omitted parameter is undefined, never the caller's or a previous call's value — and its variables never reach the caller (return results through `cargo`). Default `"shared"`: the caller's variables, by reference.
 - **`steps`** (required): Array of workflow steps to execute
 - **`variables`** (optional): Flow-specific variable definitions with types and descriptions
 - **`version`** (optional): Flow version for compatibility tracking (defaults to "1.0")

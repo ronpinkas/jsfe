@@ -764,6 +764,7 @@ export interface FlowFrame {
   accumulatedMessages?: string[];
   parentTransaction?: string;
   justResumed?: boolean; // Flag to indicate this flow frame was just resumed
+  isolatedScope?: boolean; // This frame owns its variables (FlowDefinition.scope 'isolated'); flows it calls share them
 }
 
 // Engine is now just an alias for WorkflowEngine since we only have one implementation
@@ -783,6 +784,10 @@ export interface FlowDefinition {
   version: string;
   primary?: boolean; // Whether this flow is a primary entry point for users (default: false)
   interruptable?: boolean; // Whether this flow can be interrupted by AI intent detection (default: false)
+  // 'isolated': a call (or replace) starts the flow with ONLY its declared variables and the parameters actually
+  // passed — an omitted parameter is undefined, never the caller's or a previous call's value — and its variables never
+  // reach the caller. Default 'shared': the caller's variables, by reference (the original contract).
+  scope?: 'shared' | 'isolated';
   parameters?: FlowParameterDefinition[];
   steps: FlowStep[];
   variables?: Record<string, {
@@ -4896,11 +4901,16 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
       addToContextStack(currentFlowFrame.contextStack, 'user', input);
       currentFlowFrame.inputStack.push(input);
 
-      // Inject parameters into current variables
-      if (Object.keys(flowParameters).length > 0) {
+      // Inject parameters into current variables — or, for an isolated flow, start this frame's own scope
+      if (subFlow.scope === 'isolated') {
+         currentFlowFrame.variables = Object.assign(getInitialVariables(engine, subFlow), flowParameters);
+         currentFlowFrame.isolatedScope = true;
+      } else if (Object.keys(flowParameters).length > 0) {
          logger.info(`Injecting parameters into variables for flow ${subFlow.name}`, flowParameters);
          Object.assign(currentFlowFrame.variables, flowParameters);
          logger.info(`Variables after injection:`, currentFlowFrame.variables);
+      } else {
+         // no parameters, shared scope: the frame keeps its variables
       }
 
       // Update transaction
@@ -4915,10 +4925,11 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
       // Normal sub-flow call - create new transaction for sub-flow
       const subTransaction = TransactionManager.create(subFlow.name, 'sub-flow', currentFlowFrame.userId);
 
-      const variables = getInitialVariables(engine, subFlow, currentFlowFrame.variables);
+      const isolated = subFlow.scope === 'isolated';
+      const variables = isolated ? getInitialVariables(engine, subFlow) : getInitialVariables(engine, subFlow, currentFlowFrame.variables);
       Object.assign(variables, flowParameters); // Inject parameters
 
-      // Push sub-flow onto stack - INHERIT parent's variables for unified scope
+      // Push sub-flow onto stack - INHERIT parent's variables for unified scope, unless the flow is isolated
       pushToCurrentStack(engine, {
         flowName: subFlow.name,
         flowId: subFlow.id,
@@ -4926,7 +4937,8 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
         flowStepsStack: [...subFlow.steps].reverse(),
         contextStack: [{ role: 'user', content: input, timestamp: Date.now() }],
         inputStack: [input],
-        variables, // Inherit + merge flow definition variables
+        variables, // Inherit + merge flow definition variables (isolated: its own)
+        ...(isolated ? { isolatedScope: true } : {}),
         transaction: subTransaction,
         userId: currentFlowFrame.userId,
         startTime: Date.now(),
@@ -7584,8 +7596,8 @@ export class WorkflowEngine implements Engine {
         const flowFrame = stack[flowIndex];
         if (!flowFrame) continue;
 
-        if (flowIndex === 0) {
-          // First flow sets the shared variables
+        if (flowIndex === 0 || flowFrame.isolatedScope) {
+          // The first flow — and every isolated flow — starts a scope the flows above it share
           sharedVariables = flowFrame.variables || {};
           flowFrame.variables = sharedVariables;
         } else {
