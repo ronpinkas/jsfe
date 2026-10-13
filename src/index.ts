@@ -6075,7 +6075,11 @@ function evaluateExpression(
     const context = createSimplifiedEvaluationContext(variables, contextStack, engine);
 
     // Check if the entire expression is a single interpolation
-    let singleExpressionMatch = expression.startsWith('{{') && expression.endsWith('}}') ? expression.slice(2, -2).trim() : null;
+    // A single interpolation only when nothing inside reopens a template: '{{a}} text {{b}}' starts with '{{' and ends
+    // with '}}' but is two expressions and text (it used to be evaluated as the one expression "a}} text {{b" — an
+    // error). An IIFE may contain '}}'; it never contains '{{'.
+    const inner = expression.startsWith('{{') && expression.endsWith('}}') ? expression.slice(2, -2) : null;
+    let singleExpressionMatch = inner !== null && !inner.includes('{{') ? inner.trim() : null;
     if (singleExpressionMatch || !expression.includes('{{')) {
 
       // If no brackets (e.g. CASE condition:) then the whole expression is a single expression - as-if it was {{expression}}
