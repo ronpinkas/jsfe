@@ -303,7 +303,7 @@ graph TD
    4. `isAnswer(…, 'exit')` (EXIT words or `*`) in an answer of at most two words → FLOW `{{cancel_flow || 'contact-support'}}` (`reboot`).
    5. `isAgentRequest` (the whole answer asks for a person, or is `0`) → FLOW `live-agent-requested` (`reboot`).
    6. `cargo.callerId` and digits that are not a valid phone → `cell_number = cargo.callerId`.
-   7. digits that are not a valid phone (no caller ID) → FLOW `generic-retry-with-options` (`replace`): "Sorry, the phone number you provided isn't valid.", with `retry_flow`, `cancel_flow` and the cell/email `capture_patterns` (no `retry_call_type`, so a retry by `1` reboots).
+   7. digits that are not a valid phone (no caller ID) → FLOW `generic-retry-with-options` (`replace`): "Sorry, the phone number you provided isn't valid.", with `retry_flow`, `cancel_flow` and the cell/email `capture_patterns` (no `retry_call_type`, so a retry by YES or `1` reboots).
    8. `cargo.callerId` (anything else) → `cell_number = cargo.callerId`.
    9. the question was asked (`!cell_number && !email`) and the answer is three or more words containing no digit and no `@` → **`DISPATCH`** with **`outcome: "unresolved"`, `reason: "auth_prompt_off_topic"`**. The answer goes to intent detection: a matching flow starts at once (the outcome is dropped); otherwise the host answers with the outcome.
    10. default → FLOW `generic-retry-with-options` (`replace`): "Sorry, I do need the the phone or email associated with your account to proceed.", same parameters.
@@ -501,7 +501,7 @@ graph TD
 ---
 
 ## GenericRetryWithOptions
-**ID**: `generic-retry-with-options` · **Version**: 1.3.0 · **Sub-flow**  
+**ID**: `generic-retry-with-options` · **Version**: 1.3.1 · **Sub-flow**  
 **Description**: Worker: says what failed and offers retry (YES / 1), switch to text (TEXT / 9, voice with caller ID), an agent (AGENT / 0) or exit (EXIT / *). A contact in the answer retries with it; with allow_code_entry a 6-digit code is checked on the spot; anything else goes back to intent detection.
 
 The library's only retry menu: the authentication flows and the Shopify lookups offer their retry through it.
@@ -545,9 +545,8 @@ The library's only retry menu: the authentication flows and the Shopify lookups 
 7. `normalize_choice` (SET) - trim, lower-case, strip punctuation.
 8. `handle_choice` (CASE, first match wins):
    - `normalized_otp_code` and `cargo.otpVerified` → SET `auth_result = true` (the flow then ends by completion).
-   - `normalized_otp_code` → FLOW `generic-retry-with-options` (`replace`): "Sorry, the code you entered was invalid or expired.", passing on `retry_flow`, `retry_call_type`, `cancel_flow`, `capture_patterns`, `question`, `question_es`, with `allow_code_entry: true`. By the steps of `validate-otp-code`, it returns only once the code is verified (a wrong code loops to its own code prompt), so this branch is a guard.
-   - `isAnswer(…, 'yes', [phone, email, cell, mobile, teléfono, telefono, celular, móvil, movil, correo electrónico, correo]) || user_choice === '1' && retry_call_type === 'replace'` (`retry_in_place`) → FLOW `{{retry_flow}}` (`replace`) with `retrying: true`, `cell_number: ''`, `email: ''`. **`&&` binds before `||`**, so a YES or contact word takes this branch whatever `retry_call_type` is; only the keypad `1` checks for `'replace'`.
-   - the same YES test, or `1` (`retry_from_start`) → FLOW `{{retry_flow}}` (`reboot`) with `retrying: true`. Reached only by `1` without `retry_call_type: 'replace'`.
+   - `(isAnswer(…, 'yes', [phone, email, cell, mobile, teléfono, telefono, celular, móvil, movil, correo electrónico, correo]) || user_choice === '1') && retry_call_type === 'replace'` (`retry_in_place`) → FLOW `{{retry_flow}}` (`replace`) with `retrying: true`, `cell_number: ''`, `email: ''`.
+   - the same YES test, or `1`, without `retry_call_type: 'replace'` (`retry_from_start`) → FLOW `{{retry_flow}}` (`reboot`) with `retrying: true`.
    - `isAnswer(…, 'text')` (TEXT words) or `9` → FLOW `switch-to-text` (`reboot`).
    - `isAnswer(…, 'agent')` (an AGENT word anywhere in the answer, or `0`) → FLOW `live-agent-requested` (`reboot`).
    - `isAnswer(…, 'exit')` (EXIT words or `*`) → FLOW `cancel_flow`, else `contact-support` (`reboot`).
@@ -577,9 +576,8 @@ graph TD
     validate_typed_code --> normalize_choice
     normalize_choice --> handle_choice{choice}
     handle_choice -->|code verified| typed_code_verified[SET: auth_result = true]
-    handle_choice -->|code not verified| typed_code_wrong[FLOW replace: generic-retry-with-options]
-    handle_choice -->|YES / contact words, or 1 with replace| retry_in_place["FLOW replace: {{retry_flow}}, retrying"]
-    handle_choice -->|1| retry_from_start["FLOW reboot: {{retry_flow}}, retrying"]
+    handle_choice -->|YES / contact words / 1, with replace| retry_in_place["FLOW replace: {{retry_flow}}, retrying"]
+    handle_choice -->|YES / contact words / 1| retry_from_start["FLOW reboot: {{retry_flow}}, retrying"]
     handle_choice -->|TEXT / 9| do_switch_text[FLOW reboot: switch-to-text]
     handle_choice -->|AGENT / 0| do_agent[FLOW reboot: live-agent-requested]
     handle_choice -->|EXIT / *| do_abort["FLOW reboot: cancel_flow or contact-support"]
