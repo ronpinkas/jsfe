@@ -6980,6 +6980,55 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
 }
 
 // === WORKFLOW ENGINE CLASS ===
+// Words an expression may use that are not flow variables: JavaScript keywords, literals and the built-ins the
+// evaluation context provides (createSimplifiedEvaluationContext adds Object, Date, Math, String, Number, Boolean,
+// Array and JSON; the global functions are the language's own).
+const TEMPLATE_NON_VARIABLES = new Set([
+  'true', 'false', 'null', 'undefined', 'NaN', 'Infinity', 'this', 'arguments',
+  'typeof', 'instanceof', 'in', 'of', 'new', 'void', 'delete', 'return', 'function', 'var', 'let', 'const',
+  'if', 'else', 'for', 'while', 'do', 'break', 'continue', 'switch', 'case', 'default', 'try', 'catch', 'finally', 'throw',
+  'Object', 'Date', 'Math', 'String', 'Number', 'Boolean', 'Array', 'JSON', 'RegExp',
+  'parseInt', 'parseFloat', 'isNaN', 'isFinite', 'encodeURIComponent', 'decodeURIComponent', 'encodeURI', 'decodeURI'
+]);
+
+/**
+ * The root names a template expression reads — `{{ ... }}` without the braces — for the validator's
+ * undefined-variable check. String literals are removed first; a name after `.` is a property, a name before a
+ * `:` that follows `{` or `,` is an object key, and names the expression declares itself (function parameters,
+ * var/let/const) are local. What is left are the variables and functions the expression needs from its scope.
+ * Exported for tests.
+ */
+export function templateExpressionNames(expression: string): string[] {
+  const code = String(expression || '')
+    .replace(/'(?:[^'\\\n]|\\.)*'|"(?:[^"\\\n]|\\.)*"|`(?:[^`\\]|\\.)*`/g, '""')   // string literals
+    .replace(/\/(?![*\/])(?:[^\/\\\n]|\\.)+\/[gimsuy]*/g, (m, offset, all) => {             // regex literals
+      const before = all.slice(0, offset).trimEnd();
+      return /(^|[=(,:!&|?{};]|return|typeof)$/.test(before) ? '""' : m;
+    });
+  const declared = new Set<string>();
+  for (const m of code.matchAll(/function\s*[A-Za-z_$]*\s*\(([^)]*)\)/g)) {
+    for (const p of m[1].split(',')) { const n = p.trim().split(/[\s=]/)[0]; if (n) declared.add(n); }
+  }
+  for (const m of code.matchAll(/\b(?:var|let|const)\s+([A-Za-z_$][\w$]*)/g)) declared.add(m[1]);
+  for (const m of code.matchAll(/\(?\s*([A-Za-z_$][\w$]*(?:\s*,\s*[A-Za-z_$][\w$]*)*)\s*\)?\s*=>/g)) {
+    for (const n of m[1].split(',')) declared.add(n.trim());
+  }
+  const names: string[] = [];
+  const re = /[A-Za-z_$][\w$]*/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(code)) !== null) {
+    const name = m[0];
+    const before = code.slice(0, m.index);
+    const after = code.slice(m.index + name.length);
+    if (/\.\s*$/.test(before) && !/\.\.\.\s*$/.test(before)) continue;           // a property: x.name
+    if (/^\s*:/.test(after) && /[{,]\s*$/.test(before)) continue;                  // an object key: { name: … }
+    if (/[\w$]$/.test(before)) continue;                                              // inside a longer token
+    if (TEMPLATE_NON_VARIABLES.has(name) || declared.has(name)) continue;
+    if (!names.includes(name)) names.push(name);
+  }
+  return names;
+}
+
 export class WorkflowEngine implements Engine {
   public cargo: Record<string, unknown> | undefined;
   public flowsMenu: FlowDefinition[];
@@ -8516,11 +8565,22 @@ export class WorkflowEngine implements Engine {
       }
     }
 
+    // Add the flow's declared parameters: a caller's value arrives as a variable of that name. Optional ones may be
+    // absent at runtime, which is why templates read them as `typeof p !== 'undefined' && p` — but they are declared.
+    const declaredParams = Array.isArray(flowDef.parameters)
+      ? flowDef.parameters.map((p: any) => (typeof p === 'string' ? p : p?.name))
+      : (flowDef.parameters && typeof flowDef.parameters === 'object' ? Object.keys(flowDef.parameters.properties || flowDef.parameters) : []);
+    for (const paramName of declaredParams) {
+      if (paramName) scope.add(paramName);
+    }
+
     // Add common runtime variables available during template interpolation
     // These are resolved by resolveEngineSessionVariable() during execution
     const runtimeVariables = [
       'userInput', 'lastUserInput', 'sessionId', 'userId', 'flowName',
-      'current_time', 'session_id', 'user_id', 'flow_start_time', 'cargo'
+      'current_time', 'session_id', 'user_id', 'flow_start_time', 'cargo',
+      // also provided to every expression (getEngineSessionVariables / createSimplifiedEvaluationContext)
+      'language', '$args', 'currentContext'
     ];
     for (const runtimeVar of runtimeVariables) {
       scope.add(runtimeVar);
@@ -8657,58 +8717,11 @@ export class WorkflowEngine implements Engine {
         for (const ref of variableRefs) {
           const varPath = ref.slice(2, -2).trim(); // Remove {{ }}
 
-          // Handle expressions with operators (like || for fallbacks)
-          if (varPath.includes('||')) {
-            const parts = varPath.split('||').map(p => p.trim());
-            for (const part of parts) {
-              // Skip literal values (strings in quotes, numbers)
-              if (part.startsWith("'") || part.startsWith('"') || /^\d+(\.\d+)?$/.test(part)) {
-                continue;
-              }
-              const rootVar = part.split('.')[0].trim();
-              if (rootVar && !currentScope.has(rootVar)) {
-                state.errors.push(`${context} in step "${step.id}" references undefined variable: ${rootVar} (full path: ${varPath})`);
-              }
-            }
-          } else {
-            // Extract variable names from JavaScript expressions
-            const extractVariableNames = (expression: string): string[] => {
-              // Remove whitespace and split on various operators and delimiters
-              const cleaned = expression.replace(/\s+/g, ' ').trim();
-
-              // Split on operators while preserving variable names
-              const parts = cleaned.split(/[+\-*/%&|!<>=()[\]{},;:?\\]+/)
-                .map(p => p.trim())
-                .filter(p => p.length > 0);
-
-              const variableNames: string[] = [];
-              for (const part of parts) {
-                // Skip literals: numbers, strings, booleans, Math functions
-                if (/^(\d+(\.\d*)?|\.\d+)$/.test(part) || // numbers
-                  /^['"`].*['"`]$/.test(part) || // strings
-                  /^(true|false|null|undefined)$/.test(part) || // literals
-                  /^Math\.|^JSON\.|^Date\.|^Object\./.test(part)) { // built-in objects
-                  continue;
-                }
-
-                // Extract the root variable/function name (before any dot notation)
-                const rootVar = part.split('.')[0];
-                if (rootVar && /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(rootVar)) {
-                  variableNames.push(rootVar);
-                }
-              }
-              return [...new Set(variableNames)]; // Remove duplicates
-            };
-
-            const variableNames = extractVariableNames(varPath);
-            for (const rootVar of variableNames) {
-              // Check if it's a registered function first (global scope)
-              const isApprovedFunction = this.APPROVED_FUNCTIONS && this.APPROVED_FUNCTIONS[rootVar];
-
-              // If not an approved function, check if it's in current scope as a variable
-              if (!isApprovedFunction && !currentScope.has(rootVar)) {
-                state.errors.push(`${context} in step "${step.id}" references undefined variable: ${rootVar} (full path: ${varPath})`);
-              }
+          for (const rootVar of templateExpressionNames(varPath)) {
+            // A registered function is global; anything else must be a variable in scope.
+            const isApprovedFunction = this.APPROVED_FUNCTIONS && this.APPROVED_FUNCTIONS[rootVar];
+            if (!isApprovedFunction && !currentScope.has(rootVar)) {
+              state.errors.push(`${context} in step "${step.id}" references undefined variable: ${rootVar} (full path: ${varPath})`);
             }
           }
         }
