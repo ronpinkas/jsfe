@@ -203,7 +203,7 @@
   {
     "id": "authenticate-user",
     "name": "AuthenticateUser",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "description": "Generic flow to authenticate user via OTP sent to cell or email",
     "parameters": [
       {
@@ -388,80 +388,6 @@
         "value": "cargo.otpMismatches = 0"
       },
       {
-        "id": "skip_line_that_cannot_text",
-        "type": "CASE",
-        "branches": {
-          "condition: cell_number && cargo.otpUndeliverableTo && String(cell_number).replace(/[^0-9]/g, '').slice(-10) === cargo.otpUndeliverableTo": {
-            "id": "cell_cannot_text",
-            "type": "FLOW",
-            "value": "otp-text-undeliverable",
-            "callType": "replace"
-          },
-          "default": {
-            "id": "cell_may_text",
-            "type": "SET",
-            "variable": "proceed",
-            "value": true
-          }
-        }
-      },
-      {
-        "id": "send_otp_based_on_contact",
-        "type": "CASE",
-        "branches": {
-          "condition: cell_number": {
-            "id": "send_sms_otp",
-            "type": "CALL-TOOL",
-            "tool": "send-sms-otp",
-            "args": {
-              "accountSid": null,
-              "from": "{{cargo.twilioNumber}}",
-              "to": "{{cell_number}}",
-              "container": "{{cargo}}",
-              "language": "{{language}}"
-            },
-            "onFail": {
-              "id": "sms_failed",
-              "type": "FLOW",
-              "value": "otp-sms-failed",
-              "callType": "replace"
-            }
-          },
-          "condition: email": {
-            "id": "send_email_otp",
-            "type": "CALL-TOOL",
-            "tool": "send-email-otp",
-            "args": {
-              "to": "{{email}}",
-              "container": "{{cargo}}",
-              "language": "{{language}}"
-            },
-            "onFail": {
-              "id": "email_failed",
-              "type": "FLOW",
-              "value": "retry-authenticate-generic",
-              "callType": "replace",
-              "parameters": {
-                "error_message": "Sorry, email delivery failed.",
-                "error_message_es": "Lo siento, la entrega del correo electrónico falló.",
-                "allow_otp_entry": false
-              }
-            }
-          },
-          "default": {
-            "id": "no_contact_error",
-            "type": "FLOW",
-            "value": "retry-authenticate-generic",
-            "callType": "replace",
-            "parameters": {
-              "error_message": "Sorry, there was an unexpected error.",
-              "error_message_es": "Lo siento, hubo un error inesperado.",
-              "allow_otp_entry": false
-            }
-          }
-        }
-      },
-      {
         "id": "set_cell_number_to_cargo",
         "type": "SET",
         "variable": "assignment_side_effect",
@@ -472,6 +398,30 @@
         "type": "SET",
         "variable": "assignment_side_effect",
         "value": "cargo.otp_email = email || ''"
+      },
+      {
+        "id": "send_code",
+        "type": "FLOW",
+        "value": "send-otp-code",
+        "callType": "call"
+      },
+      {
+        "id": "auth_check_sent",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.otpSendFailure": {
+            "id": "auth_send_failed",
+            "type": "FLOW",
+            "value": "otp-send-failed",
+            "callType": "replace"
+          },
+          "default": {
+            "id": "auth_code_sent",
+            "type": "SET",
+            "variable": "proceed",
+            "value": true
+          }
+        }
       },
       {
         "id": "get_and_validate_otp_code",
@@ -1054,8 +1004,8 @@
   {
     "id": "resend-otp-code",
     "name": "ResendOtpCode",
-    "version": "1.0.0",
-    "description": "Send a FRESH one-time code to the destination authenticate-user already used (cargo.otp_cell_number or cargo.otp_email) and say why: the last one expired, none is pending, or the customer asked. Capped at 2 fresh codes per authentication (cargo.otpResends, reset by authenticate-user's first send), then the retry/agent/exit choice. Added 2026-10-05: an expired code used to be answered 'didn't match' and re-asked forever.",
+    "version": "1.1.0",
+    "description": "Worker: sends a FRESH code to the destination authenticate-user used (cargo.otp_cell_number / cargo.otp_email) and says why ('expired' | 'missing' | 'requested'). At most 2 per authentication (cargo.otpResends), then the retry menu.",
     "parameters": [
       {
         "name": "resend_reason",
@@ -1068,10 +1018,6 @@
         "type": "string",
         "description": "Why a fresh code is being sent",
         "value": "requested"
-      },
-      "resend_result": {
-        "type": "string",
-        "description": "Result of the send tool"
       }
     },
     "steps": [
@@ -1106,64 +1052,25 @@
       },
       {
         "id": "send_fresh_code",
+        "type": "FLOW",
+        "value": "send-otp-code",
+        "callType": "call"
+      },
+      {
+        "id": "resend_check_sent",
         "type": "CASE",
         "branches": {
-          "condition: cargo.otp_cell_number": {
-            "id": "resend_sms_otp",
-            "type": "CALL-TOOL",
-            "tool": "send-sms-otp",
-            "variable": "resend_result",
-            "args": {
-              "accountSid": null,
-              "from": "{{cargo.twilioNumber}}",
-              "to": "{{cargo.otp_cell_number}}",
-              "container": "{{cargo}}",
-              "language": "{{language}}"
-            },
-            "onFail": {
-              "id": "resend_sms_failed",
-              "type": "FLOW",
-              "value": "retry-authenticate-generic",
-              "callType": "replace",
-              "parameters": {
-                "error_message": "Sorry, text message delivery failed.",
-                "error_message_es": "Lo siento, la entrega del mensaje de texto falló.",
-                "allow_otp_entry": false
-              }
-            }
-          },
-          "condition: cargo.otp_email": {
-            "id": "resend_email_otp",
-            "type": "CALL-TOOL",
-            "tool": "send-email-otp",
-            "variable": "resend_result",
-            "args": {
-              "to": "{{cargo.otp_email}}",
-              "container": "{{cargo}}",
-              "language": "{{language}}"
-            },
-            "onFail": {
-              "id": "resend_email_failed",
-              "type": "FLOW",
-              "value": "retry-authenticate-generic",
-              "callType": "replace",
-              "parameters": {
-                "error_message": "Sorry, email delivery failed.",
-                "error_message_es": "Lo siento, la entrega del correo electrónico falló.",
-                "allow_otp_entry": false
-              }
-            }
+          "condition: cargo.otpSendFailure": {
+            "id": "resend_send_failed",
+            "type": "FLOW",
+            "value": "otp-send-failed",
+            "callType": "replace"
           },
           "default": {
-            "id": "resend_no_destination",
-            "type": "FLOW",
-            "value": "retry-authenticate-generic",
-            "callType": "replace",
-            "parameters": {
-              "error_message": "Sorry, there was an unexpected error.",
-              "error_message_es": "Lo siento, hubo un error inesperado.",
-              "allow_otp_entry": false
-            }
+            "id": "resend_code_sent",
+            "type": "SET",
+            "variable": "proceed",
+            "value": true
           }
         }
       },
@@ -1352,23 +1259,23 @@
     ]
   },
   {
-    "id": "otp-sms-failed",
-    "name": "OtpSmsFailed",
+    "id": "otp-send-failed",
+    "name": "OtpSendFailed",
     "version": "1.0.0",
-    "description": "Worker for authenticate-user: a code text failed. A line that cannot receive texts (cargo.otpUndeliverableTo, set by the host) goes to otp-text-undeliverable; any other failure offers the usual retry.",
+    "description": "Worker: a code could not be sent (cargo.otpSendFailure). A line that cannot receive texts goes to otp-text-undeliverable; any other failure offers the retry.",
     "steps": [
       {
         "id": "branch_on_failure",
         "type": "CASE",
         "branches": {
-          "condition: cargo.otpUndeliverableTo": {
+          "condition: cargo.otpSendFailure === 'undeliverable'": {
             "id": "line_cannot_text",
             "type": "FLOW",
             "value": "otp-text-undeliverable",
             "callType": "replace"
           },
-          "default": {
-            "id": "send_failed_retry",
+          "condition: cargo.otpSendFailure === 'sms'": {
+            "id": "sms_retry",
             "type": "FLOW",
             "value": "retry-authenticate-generic",
             "callType": "replace",
@@ -1377,6 +1284,194 @@
               "error_message_es": "Lo siento, la entrega del mensaje de texto falló.",
               "allow_otp_entry": false
             }
+          },
+          "condition: cargo.otpSendFailure === 'email'": {
+            "id": "email_retry",
+            "type": "FLOW",
+            "value": "retry-authenticate-generic",
+            "callType": "replace",
+            "parameters": {
+              "error_message": "Sorry, email delivery failed.",
+              "error_message_es": "Lo siento, la entrega del correo electrónico falló.",
+              "allow_otp_entry": false
+            }
+          },
+          "default": {
+            "id": "unexpected_retry",
+            "type": "FLOW",
+            "value": "retry-authenticate-generic",
+            "callType": "replace",
+            "parameters": {
+              "error_message": "Sorry, there was an unexpected error.",
+              "error_message_es": "Lo siento, hubo un error inesperado.",
+              "allow_otp_entry": false
+            }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "text-destination",
+    "name": "TextDestination",
+    "version": "1.0.0",
+    "description": "Worker: where a text to the customer can go. Sets cargo.textTo (10 digits: the verified cell, else the caller's phone on a call; '' when there is none, no sender, or the line cannot receive texts) and cargo.textTo4 (its last four, spaced on voice).",
+    "steps": [
+      {
+        "id": "pick_destination",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.textTo = (function() { var n = String(cargo.otp_cell_number || (cargo.voice ? cargo.callerId : '') || '').replace(/[^0-9]/g, '').slice(-10); return cargo.twilioNumber && n.length === 10 && n !== cargo.otpUndeliverableTo ? n : ''; })()"
+      },
+      {
+        "id": "say_last_four",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.textTo4 = cargo.textTo ? (cargo.voice ? cargo.textTo.slice(-4).split('').join(', ') : cargo.textTo.slice(-4)) : ''"
+      }
+    ]
+  },
+  {
+    "id": "send-text",
+    "name": "SendText",
+    "version": "1.0.0",
+    "description": "Worker: texts `message` to cargo.textTo (call text-destination first). Sets cargo.textSent.",
+    "parameters": [
+      {
+        "name": "message",
+        "type": "string",
+        "description": "The text to send"
+      }
+    ],
+    "variables": {
+      "text_result": {
+        "type": "string",
+        "description": "What the send tool returned; '' when it failed"
+      }
+    },
+    "steps": [
+      {
+        "id": "text_not_sent_yet",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.textSent = false"
+      },
+      {
+        "id": "send_when_possible",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.textTo": {
+            "id": "send_sms",
+            "type": "CALL-TOOL",
+            "tool": "send-twilio-sms",
+            "variable": "text_result",
+            "args": {
+              "from": "{{cargo.twilioNumber}}",
+              "to": "+1{{cargo.textTo}}",
+              "message": "{{message}}"
+            },
+            "onFail": {
+              "id": "send_failed",
+              "type": "SET",
+              "variable": "text_result",
+              "value": "''"
+            }
+          },
+          "default": {
+            "id": "no_destination",
+            "type": "SET",
+            "variable": "text_result",
+            "value": "''"
+          }
+        }
+      },
+      {
+        "id": "record_sent",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.textSent = !!(cargo.textTo && text_result)"
+      }
+    ]
+  },
+  {
+    "id": "send-otp-code",
+    "name": "SendOtpCode",
+    "version": "1.0.0",
+    "description": "Worker: sends a one-time code to cargo.otp_cell_number (SMS) or cargo.otp_email. Never texts a number that cannot receive texts (cargo.otpUndeliverableTo). Sets cargo.otpSendFailure ('' | 'undeliverable' | 'sms' | 'email' | 'none'); the caller hands a failure to otp-send-failed.",
+    "steps": [
+      {
+        "id": "clear_send_failure",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.otpSendFailure = ''"
+      },
+      {
+        "id": "skip_line_that_cannot_text",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.otp_cell_number && cargo.otpUndeliverableTo && String(cargo.otp_cell_number).replace(/[^0-9]/g, '').slice(-10) === cargo.otpUndeliverableTo": {
+            "id": "cell_cannot_text",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "cargo.otpSendFailure = 'undeliverable'"
+          },
+          "default": {
+            "id": "cell_may_text",
+            "type": "SET",
+            "variable": "proceed",
+            "value": true
+          }
+        }
+      },
+      {
+        "id": "send_code",
+        "type": "CASE",
+        "branches": {
+          "condition: !cargo.otpSendFailure && cargo.otp_cell_number": {
+            "id": "send_sms_otp",
+            "type": "CALL-TOOL",
+            "tool": "send-sms-otp",
+            "args": {
+              "accountSid": null,
+              "from": "{{cargo.twilioNumber}}",
+              "to": "{{cargo.otp_cell_number}}",
+              "container": "{{cargo}}",
+              "language": "{{language}}"
+            },
+            "onFail": {
+              "id": "sms_failed",
+              "type": "SET",
+              "variable": "assignment_side_effect",
+              "value": "cargo.otpSendFailure = cargo.otpUndeliverableTo ? 'undeliverable' : 'sms'"
+            }
+          },
+          "condition: !cargo.otpSendFailure && cargo.otp_email": {
+            "id": "send_email_otp",
+            "type": "CALL-TOOL",
+            "tool": "send-email-otp",
+            "args": {
+              "to": "{{cargo.otp_email}}",
+              "container": "{{cargo}}",
+              "language": "{{language}}"
+            },
+            "onFail": {
+              "id": "email_failed",
+              "type": "SET",
+              "variable": "assignment_side_effect",
+              "value": "cargo.otpSendFailure = 'email'"
+            }
+          },
+          "condition: !cargo.otpSendFailure": {
+            "id": "no_destination",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "cargo.otpSendFailure = 'none'"
+          },
+          "default": {
+            "id": "not_sent",
+            "type": "SET",
+            "variable": "proceed",
+            "value": true
           }
         }
       }
