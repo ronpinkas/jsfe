@@ -302,7 +302,7 @@
   {
     "id": "get-search-query",
     "name": "GetSearchQuery",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Get a search query string from the user for product search",
     "steps": [
       {
@@ -322,13 +322,13 @@
         "id": "check_for_exit",
         "type": "CASE",
         "branches": {
-          "condition: ['*', 'abort', 'exit', 'quit', 'salir'].includes(search_query.toLowerCase())": {
+          "condition: isAnswer(search_query, 'exit') && search_query.trim().split(/\\s+/).length === 1": {
             "id": "abort_search",
             "type": "FLOW",
             "value": "cancel-process",
             "callType": "reboot"
           },
-          "condition: ['live', 'agent', 'customer service', 'agente', 'gente', 'gerente', 'al cliente', 'representante'].some(choice => search_query.toLowerCase().includes(choice)) || search_query == '0'": {
+          "condition: isAgentRequest(search_query)": {
             "id": "goto_live_agent",
             "type": "FLOW",
             "value": "live-agent-requested",
@@ -783,7 +783,7 @@
   {
     "id": "shipstation-track-by-number-verified",
     "name": "ShipStationTrackByNumberVerified",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Collect a tracking number and read back real-time ShipStation tracking for verified customer",
     "variables": {
       "tracking_number": {
@@ -874,13 +874,13 @@
         "id": "route_input",
         "type": "CASE",
         "branches": {
-          "condition: (matchesChoice(tn_input, ['abort', 'exit', 'quit', 'cancel', 'salir', 'cancelar']) && tn_input.trim().split(/\\s+/).length <= 2) || tn_input.trim() === '*'": {
+          "condition: isAnswer(tn_input, 'exit') && tn_input.trim().split(/\\s+/).length <= 2": {
             "id": "abort_tracking",
             "type": "FLOW",
             "value": "no-action-needed",
             "callType": "reboot"
           },
-          "condition: matchesChoice(tn_input, ['live', 'agent', 'manager', 'support', 'customer service', 'representative', 'agente', 'gente', 'gerente', 'servicio', 'al cliente', 'representante']) || tn_input.trim() == '0'": {
+          "condition: isAgentRequest(tn_input)": {
             "id": "goto_live_agent",
             "type": "FLOW",
             "value": "live-agent-requested",

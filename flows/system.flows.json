@@ -507,7 +507,7 @@
   {
     "id": "get-cell-or-email",
     "name": "GetCellOrEmail",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "description": "Prompt user to provide either their cell phone number or email address for account lookup",
     "parameters": [
       {
@@ -624,19 +624,19 @@
             "variable": "email",
             "value": "prospective_email"
           },
-          "condition: cargo.callerId && (['1', 'yes', 'please', 'sure', 'thanks', 'thank you', 'ok', 'okay', 'si', 'sí', 'por favor', 'gracias'].includes(cell_or_email) || matchesChoice(cell_or_email, ['phone', 'cell', 'caller id', 'number', 'numero', 'número', 'telefono', 'teléfono', 'celular', 'identificador de llamadas']))": {
+          "condition: cargo.callerId && (cell_or_email === '1' || (isAnswer(cell_or_email, 'yes', ['thanks', 'thank you', 'gracias']) && !/[0-9@]/.test(cell_or_email)) || matchesChoice(cell_or_email, ['phone', 'cell', 'caller id', 'number', 'numero', 'número', 'telefono', 'teléfono', 'celular', 'identificador de llamadas']))": {
             "id": "use_caller_id",
             "type": "SET",
             "variable": "cell_number",
             "value": "cargo.callerId"
           },
-          "condition: (matchesChoice(cell_or_email, ['abort', 'exit', 'quit', 'cancel', 'salir', 'cancelar']) && cell_or_email.trim().split(/\\s+/).length <= 2) || cell_or_email === '*'": {
+          "condition: isAnswer(cell_or_email, 'exit') && cell_or_email.trim().split(/\\s+/).length <= 2": {
             "id": "abort_process",
             "type": "FLOW",
             "value": "{{cancel_flow}}",
             "callType": "reboot"
           },
-          "condition: matchesChoice(cell_or_email, ['live', 'agent', 'manager', 'support', 'customer service', 'representative', 'human', 'operator', 'someone', 'somebody', 'real person', 'agente', 'gente', 'gerente', 'servicio', 'al cliente', 'representante', 'alguien', 'persona', 'humano', 'operador', 'operadora', 'recepcionista', 'recepcion', 'recepción']) || cell_or_email == '0'": {
+          "condition: isAgentRequest(cell_or_email)": {
             "id": "goto_live_agent",
             "type": "FLOW",
             "value": "live-agent-requested",
@@ -801,7 +801,7 @@
   {
     "id": "validate-otp-code",
     "name": "ValidateOtpCode",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "description": "Validate OTP code entered by user - sets cargo.otpVerified on success. Capped at 3 wrong codes per authentication (cargo.otpMismatches, reset by authenticate-user): the code is withdrawn and the retry/agent/exit choice follows, where retry sends a fresh code. Added 2026-10-12: a caller entered 13 wrong codes in 3.5 minutes.",
     "variables": {
       "otp_validation_result": {
@@ -839,19 +839,19 @@
               "callType": "replace"
             }
           },
-          "condition: matchesChoice(user_choice, ['abort', 'exit', 'quit', 'cancel', 'salir', 'cancelar']) || user_choice === '*'": {
+          "condition: isAnswer(user_choice, 'exit')": {
             "id": "abort_process",
             "type": "FLOW",
             "value": "contact-support",
             "callType": "reboot"
           },
-          "condition: matchesChoice(user_choice, ['live', 'agent', 'manager', 'support', 'customer service', 'representative', 'human', 'operator', 'someone', 'somebody', 'real person', 'agente', 'gente', 'gerente', 'servicio', 'al cliente', 'representante', 'alguien', 'persona', 'humano', 'operador', 'operadora', 'recepcionista', 'recepcion', 'recepción']) || user_choice === '0'": {
+          "condition: isAnswer(user_choice, 'agent')": {
             "id": "goto_live_agent",
             "type": "FLOW",
             "value": "live-agent-requested",
             "callType": "reboot"
           },
-          "condition: matchesChoice(user_choice, ['text', 'texto', 'sms', 'message', 'mensaje', 'text me', 'by text', 'por texto', 'mensaje de texto', 'whatsapp', 'escríbeme', 'escribeme'])": {
+          "condition: isAnswer(user_choice, 'text')": {
             "id": "goto_switch_to_text",
             "type": "FLOW",
             "value": "switch-to-text",
@@ -1196,7 +1196,7 @@
   {
     "id": "generic-retry-with-options",
     "name": "GenericRetryWithOptions",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "description": "Generic flow to offer retry, switch to text, or contact support",
     "parameters": [
       {
@@ -1317,19 +1317,19 @@
         "id": "handle_choice",
         "type": "CASE",
         "branches": {
-          "condition: matchesChoice(user_choice, ['yes', 'sure', 'please', 'ok', 'okay', 'thanks', 'si', 'sí', 'seguro', 'por favor', 'gracias', 'phone', 'email', 'cell', 'mobile', 'teléfono', 'telefono', 'celular', 'móvil', 'movil', 'correo electrónico', 'correo']) || user_choice === '1'": {
+          "condition: isAnswer(user_choice, 'yes', ['thanks', 'gracias', 'phone', 'email', 'cell', 'mobile', 'teléfono', 'telefono', 'celular', 'móvil', 'movil', 'correo electrónico', 'correo']) || user_choice === '1'": {
             "id": "do_retry",
             "type": "FLOW",
             "value": "{{retry_flow}}",
             "callType": "reboot"
           },
-          "condition: matchesChoice(user_choice, ['text', 'texto']) || user_choice === '9'": {
+          "condition: isAnswer(user_choice, 'text') || user_choice === '9'": {
             "id": "do_switch_text",
             "type": "FLOW",
             "value": "switch-to-text",
             "callType": "reboot"
           },
-          "condition: matchesChoice(user_choice, ['abort', 'exit', 'quit', 'cancel', 'salir', 'cancelar']) || user_choice === '*'": {
+          "condition: isAnswer(user_choice, 'exit')": {
             "id": "do_abort",
             "type": "FLOW",
             "value": "{{cancel_flow || 'contact-support'}}",
@@ -1385,7 +1385,7 @@
   {
     "id": "otp-text-undeliverable",
     "name": "OtpTextUndeliverable",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Worker for authenticate-user: the number for the code cannot receive texts (landline, toll-free, invalid). Says so and asks for the account's email or a mobile number; never offers to text the same number again.",
     "variables": {
       "user_choice": {
@@ -1473,13 +1473,13 @@
               "cell_number": "{{choice_digits}}"
             }
           },
-          "condition: matchesChoice(user_choice, ['live', 'agent', 'manager', 'support', 'customer service', 'representative', 'human', 'operator', 'someone', 'somebody', 'real person', 'agente', 'gente', 'gerente', 'servicio', 'al cliente', 'representante', 'alguien', 'persona', 'humano', 'operador', 'operadora', 'recepcionista', 'recepcion', 'recepción']) || choice_digits === '0'": {
+          "condition: isAgentRequest(user_choice)": {
             "id": "goto_live_agent",
             "type": "FLOW",
             "value": "live-agent-requested",
             "callType": "reboot"
           },
-          "condition: matchesChoice(user_choice, ['abort', 'exit', 'quit', 'cancel', 'salir', 'cancelar']) || String(user_choice || '').trim() === '*'": {
+          "condition: isAnswer(user_choice, 'exit') && String(user_choice || '').trim().split(/\\s+/).length <= 2": {
             "id": "abort_process",
             "type": "FLOW",
             "value": "contact-support",
@@ -1498,7 +1498,7 @@
   {
     "id": "retry-authenticate-generic",
     "name": "RetryAuthenticateGeneric",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Generic retry authentication flow",
     "variables": {
       "user_choice": {
@@ -1565,25 +1565,25 @@
             "variable": "normalized_otp_code",
             "value": "user_choice.replace(/[^0-9]/g, '')"
           },
-          "condition: matchesChoice(user_choice, ['yes', 'sure', 'please', 'ok', 'okay', 'thanks', 'phone', 'email', 'si', 'sí', 'seguro', 'por favor', 'gracias', 'teléfono', 'telefono', 'correo electrónico', 'correo']) || user_choice === '1'": {
+          "condition: isAnswer(user_choice, 'yes', ['thanks', 'gracias', 'phone', 'email', 'teléfono', 'telefono', 'correo electrónico', 'correo']) || user_choice === '1'": {
             "id": "retry_authenticate",
             "type": "FLOW",
             "value": "authenticate-user",
             "callType": "replace"
           },
-          "condition: matchesChoice(user_choice, ['text', 'texto']) || user_choice === '9'": {
+          "condition: isAnswer(user_choice, 'text') || user_choice === '9'": {
             "id": "switch_to_text",
             "type": "FLOW",
             "value": "switch-to-text",
             "callType": "reboot"
           },
-          "condition: matchesChoice(user_choice, ['abort', 'exit', 'quit', 'cancel', 'salir', 'cancelar']) || user_choice === '*'": {
+          "condition: isAnswer(user_choice, 'exit')": {
             "id": "abort_process",
             "type": "FLOW",
             "value": "contact-support",
             "callType": "reboot"
           },
-          "condition: matchesChoice(user_choice, ['live', 'agent', 'manager', 'support', 'customer service', 'representative', 'human', 'operator', 'someone', 'somebody', 'real person', 'agente', 'gente', 'gerente', 'servicio', 'al cliente', 'representante', 'alguien', 'persona', 'humano', 'operador', 'operadora', 'recepcionista', 'recepcion', 'recepción']) || user_choice == '0'": {
+          "condition: isAnswer(user_choice, 'agent')": {
             "id": "goto_live_agent",
             "type": "FLOW",
             "value": "live-agent-requested",
@@ -1661,7 +1661,7 @@
   {
     "id": "live-agent-requested",
     "name": "LiveAgentRequested",
-    "version": "1.6.0",
+    "version": "1.6.1",
     "description": "Customer's primary intent is to reach a human: live agent, representative, 'customer service', 'servicio al cliente', 'I need to talk to someone', 'speak to a person', 'comunicarme con alguien', 'hablar con una persona'. On the phone it offers the transfer when an agent is scheduled (cargo.agentPhoneNumber); on every other channel it sends the Live Connect link when the tenant runs Live Connect and an agent is reachable. On the phone after hours (no agent number this turn, the number has a schedule) it says so, states the agent hours (on the phone built from the number's schedule, cargo.agentHours / agentHours_es; otherwise the optional global_live_agents_comment / global_live_agents_comment_es) and offers to help, in the number's own words (cargo.agentUnavailableMessage, a voice setting) or a generic default; the flow ends 'unresolved' (agent_unavailable). Contact information is given when the customer asks for it. Otherwise (any non-phone channel without a Live Connect link, or a phone number with no agents at all) it says it cannot connect the customer with a live agent and gives the tenant's contact information (cargo.contact_info), ending 'resolved' (no_agent_reachable).",
     "prompt": "live agent confirmation",
     "prompt_es": "confirmación de agente en vivo",
@@ -1782,7 +1782,7 @@
         "id": "handle_choice",
         "type": "CASE",
         "branches": {
-          "condition: ! matchesChoice(user_choice, ['yes', 'continue', 'sure', 'please', 'ok', 'okay', 'thanks', 'si', 'sí', 'seguro', 'por favor', 'gracias']) && user_choice !== '1'": {
+          "condition: !isAnswer(user_choice, 'yes', ['continue', 'thanks', 'gracias']) && user_choice !== '1'": {
             "id": "transfer_to_agent",
             "type": "CASE",
             "branches": {
