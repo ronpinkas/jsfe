@@ -8338,9 +8338,15 @@ export class WorkflowEngine implements Engine {
     const targetFlow = this.flowsMenu.find((f: any) => f.id === step.value || f.name === step.value);
     const targetFlowId = targetFlow ? targetFlow.id : step.value; // Fallback to step.value if not found
 
+    // A templated target ("{{retry_flow}}") is chosen at run time — the engine interpolates it — so the validator
+    // cannot follow it: it is neither a missing flow nor an edge of the call graph.
+    const runtimeTarget = String(step.value).includes('{{');
+
     // Add to call graph - use flow IDs for consistency
     const calledFlows = state.flowCallGraph.get(flowDef.id) || [];
-    if (!calledFlows.includes(targetFlowId)) {
+    if (runtimeTarget) {
+      logger.debug(`FLOW step "${step.id}" targets a flow chosen at run time: ${step.value}`);
+    } else if (!calledFlows.includes(targetFlowId)) {
       calledFlows.push(targetFlowId);
       state.flowCallGraph.set(flowDef.id, calledFlows);
       logger.debug(`📞 Added flow "${targetFlowId}" to call graph for "${flowDef.id}"`);
