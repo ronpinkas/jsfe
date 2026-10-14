@@ -96,7 +96,7 @@
   {
     "id": "switch-to-text",
     "name": "SwitchToText",
-    "version": "1.2.2",
+    "version": "1.2.3",
     "prompt": "Switch to text",
     "prompt_es": "Cambiar a texto",
     "description": "Customer explicitly asks to continue this conversation by text message / SMS ('switch to text', 'text me instead', 'can we continue by text', 'pásame a texto', 'seguimos por mensaje de texto'). Not: asking for a live agent or a person (LiveAgentRequested); asking to have one thing texted, such as a link, an address or a statement, a yes or no, or any answer that does not mention text or SMS (None).",
@@ -150,6 +150,16 @@
         "id": "route_cannot_text",
         "type": "CASE",
         "branches": {
+          "condition: !can_text && callerIsInternational(cargo)": {
+            "id": "international_give_up",
+            "type": "FLOW",
+            "value": "give-up",
+            "callType": "reboot",
+            "parameters": {
+              "context": "texting a number outside the US and Canada",
+              "context_es": "enviar un mensaje de texto a un número fuera de EE. UU. y Canadá"
+            }
+          },
           "condition: !can_text": {
             "id": "cannot_text_give_up",
             "type": "FLOW",
@@ -554,7 +564,7 @@
   {
     "id": "get-cell-or-email",
     "name": "GetCellOrEmail",
-    "version": "1.1.4",
+    "version": "1.1.5",
     "description": "Prompt user to provide either their cell phone number or email address for account lookup",
     "parameters": [
       {
@@ -597,7 +607,7 @@
         "id": "ask_cell_or_email_if_no_param",
         "type": "CASE",
         "branches": {
-          "condition: !cell_number && !email && cargo.callerId": {
+          "condition: !cell_number && !email && cargo.callerId && !callerIsInternational(cargo)": {
             "id": "ask_cell_or_email_with_caller_id",
             "type": "SAY-GET",
             "variable": "cell_or_email",
@@ -665,11 +675,24 @@
             "variable": "email",
             "value": "prospective_email"
           },
-          "condition: cargo.callerId && (cell_or_email === '1' || (isAnswer(cell_or_email, 'yes', ['thanks', 'thank you', 'gracias']) && !/[0-9@]/.test(cell_or_email)) || matchesChoice(cell_or_email, ['phone', 'cell', 'caller id', 'number', 'numero', 'número', 'telefono', 'teléfono', 'celular', 'identificador de llamadas']))": {
+          "condition: cargo.callerId && !callerIsInternational(cargo) && (cell_or_email === '1' || (isAnswer(cell_or_email, 'yes', ['thanks', 'thank you', 'gracias']) && !/[0-9@]/.test(cell_or_email)) || matchesChoice(cell_or_email, ['phone', 'cell', 'caller id', 'number', 'numero', 'número', 'telefono', 'teléfono', 'celular', 'identificador de llamadas']))": {
             "id": "use_caller_id",
             "type": "SET",
             "variable": "cell_number",
             "value": "cargo.callerId"
+          },
+          "condition: readInternationalPhone(cell_or_email)": {
+            "id": "international_number",
+            "type": "FLOW",
+            "value": "generic-retry-with-options",
+            "callType": "replace",
+            "parameters": {
+              "error_message": "I can only text codes to US and Canadian numbers. Please give the email on your account, or a US or Canadian mobile number.",
+              "error_message_es": "Solo puedo enviar códigos por texto a números de EE. UU. y Canadá. Por favor indique el correo de su cuenta, o un celular de EE. UU. o Canadá.",
+              "retry_flow": "{{retry_flow}}",
+              "cancel_flow": "{{cancel_flow}}",
+              "capture_patterns": "{{cargo.authCapture}}"
+            }
           },
           "condition: isAnswer(cell_or_email, 'exit') && cell_or_email.trim().split(/\\s+/).length <= 2": {
             "id": "abort_process",
@@ -683,7 +706,7 @@
             "value": "live-agent-requested",
             "callType": "reboot"
           },
-          "condition: cargo.callerId && prospective_cell_number && ! validatePhone(prospective_cell_number)": {
+          "condition: cargo.callerId && !callerIsInternational(cargo) && prospective_cell_number && ! validatePhone(prospective_cell_number)": {
             "id": "fallback_to_caller_id_invalid_phone",
             "type": "SET",
             "variable": "cell_number",
@@ -702,7 +725,7 @@
               "capture_patterns": "{{cargo.authCapture}}"
             }
           },
-          "condition: cargo.callerId": {
+          "condition: cargo.callerId && !callerIsInternational(cargo)": {
             "id": "fallback_to_caller_id_unrecognized",
             "type": "SET",
             "variable": "cell_number",
@@ -1669,7 +1692,7 @@
   {
     "id": "otp-text-undeliverable",
     "name": "OtpTextUndeliverable",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "description": "Worker for authenticate-user: the number cannot receive texts; ask for an email or a mobile number.",
     "variables": {
       "user_choice": {
@@ -1700,8 +1723,8 @@
         "id": "ask_other_contact",
         "type": "SAY-GET",
         "variable": "user_choice",
-        "value": "The number ending with {{undeliverable_last4}} can't receive text messages, so I can't text it a code. Please {{cargo.verb}} the email address on your account, or {{cargo.voice ? 'say or enter' : cargo.verb}} a mobile number that can receive texts. To talk to an agent {{cargo.voice ? 'press 0 or ' : ''}}{{cargo.verb}} AGENT. To exit {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
-        "value_es": "El número que termina con {{undeliverable_last4}} no puede recibir mensajes de texto, así que no puedo enviarle un código. Por favor {{cargo.verb_es}} el correo electrónico de su cuenta, o {{cargo.voice ? 'diga o ingrese' : cargo.verb_es}} un número de celular que pueda recibir textos. Para hablar con un agente {{cargo.voice ? 'presione 0 o ' : ''}}{{cargo.verb_es}} AGENTE. Para salir {{cargo.voice ? 'presione la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
+        "value": "{{typeof note !== 'undefined' && note === 'international' ? 'I can only text codes to US and Canadian numbers. ' : ''}}The number ending with {{undeliverable_last4}} can't receive text messages, so I can't text it a code. Please {{cargo.verb}} the email address on your account, or {{cargo.voice ? 'say or enter' : cargo.verb}} a mobile number that can receive texts. To talk to an agent {{cargo.voice ? 'press 0 or ' : ''}}{{cargo.verb}} AGENT. To exit {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
+        "value_es": "{{typeof note !== 'undefined' && note === 'international' ? 'Solo puedo enviar códigos por texto a números de EE. UU. y Canadá. ' : ''}}El número que termina con {{undeliverable_last4}} no puede recibir mensajes de texto, así que no puedo enviarle un código. Por favor {{cargo.verb_es}} el correo electrónico de su cuenta, o {{cargo.voice ? 'diga o ingrese' : cargo.verb_es}} un número de celular que pueda recibir textos. Para hablar con un agente {{cargo.voice ? 'presione 0 o ' : ''}}{{cargo.verb_es}} AGENTE. Para salir {{cargo.voice ? 'presione la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
         "digits": {
           "min": 1,
           "max": 12,
@@ -1768,6 +1791,15 @@
             "type": "FLOW",
             "value": "{{cargo.authCancelFlow || 'contact-support'}}",
             "callType": "reboot"
+          },
+          "condition: readInternationalPhone(user_choice)": {
+            "id": "international_number",
+            "type": "FLOW",
+            "value": "otp-text-undeliverable",
+            "callType": "replace",
+            "parameters": {
+              "note": "international"
+            }
           },
           "default": {
             "id": "ask_contact_again",
@@ -2011,8 +2043,8 @@
   {
     "id": "ask-choice",
     "name": "AskChoice",
-    "version": "1.9.1",
-    "description": "Worker: ask one question; sets cargo.choice (the matched key, or 'other' with accept_other) and cargo.choiceText. AGENT / 0 reaches a person, EXIT / * ends, a new request is DISPATCHed. Params: question(_es), choices [{key, words, negative?, neutral?}], retry(_es), accept_other, expect ('number' | 'email' | 'contact'), digits, exit_context(_es).",
+    "version": "1.9.3",
+    "description": "Worker: ask one question; sets cargo.choice (the matched key, or 'other' with accept_other) and cargo.choiceText. AGENT / 0 reaches a person, EXIT / * ends, a new request is DISPATCHed. With amount: an answer naming an amount returns 'amount'. Params: question(_es), choices [{key, words, negative?, neutral?}], retry(_es), accept_other, expect ('number' | 'email' | 'contact'), amount, digits, exit_context(_es).",
     "parameters": [
       {
         "name": "question",
@@ -2072,6 +2104,11 @@
         "name": "expect",
         "type": "string",
         "description": "With accept_other: what the answer should be — 'number', 'email' or 'contact' (either). Three or more words of neither shape are another request and are DISPATCHed"
+      },
+      {
+        "name": "amount",
+        "type": "boolean",
+        "description": "true on a payment question: the answer is kept as spoken (the question's asSpoken) and an answer that names an amount ($1, 1 dollar, 12.50) returns cargo.choice = 'amount' with the text — never a keypad key, never a DISPATCH"
       }
     ],
     "variables": {
@@ -2122,6 +2159,12 @@
         "value": "typeof accept_other !== 'undefined' && (accept_other === true || accept_other === 'true')"
       },
       {
+        "id": "ac_takes_amount",
+        "type": "SET",
+        "variable": "ac_amount",
+        "value": "typeof amount !== 'undefined' && (amount === true || amount === 'true')"
+      },
+      {
         "id": "ac_question_es",
         "type": "SET",
         "variable": "ac_q_es",
@@ -2161,6 +2204,7 @@
         "id": "ac_ask",
         "type": "SAY-GET",
         "variable": "ac_answer",
+        "asSpoken": "ac_amount === true",
         "value": "{{question}}",
         "value_es": "{{ac_q_es}}"
       },
@@ -2169,6 +2213,12 @@
         "type": "SET",
         "variable": "ac_key",
         "value": "pickChoice(ac_answer, choices, ac_other)"
+      },
+      {
+        "id": "ac_amount_check",
+        "type": "SET",
+        "variable": "ac_key",
+        "value": "ac_amount && isAmountAnswer(ac_answer) ? '__amount' : ac_key"
       },
       {
         "id": "ac_keypad_again",
@@ -2184,6 +2234,7 @@
             "id": "ac_reask",
             "type": "SAY-GET",
             "variable": "ac_answer",
+            "asSpoken": "ac_amount === true",
             "value": "{{ac_retry}}",
             "value_es": "{{ac_retry_es}}"
           },
@@ -2200,6 +2251,12 @@
         "type": "SET",
         "variable": "ac_key",
         "value": "ac_key === '' && !ac_other ? pickChoice(ac_answer, choices, ac_other) : ac_key"
+      },
+      {
+        "id": "ac_amount_check_again",
+        "type": "SET",
+        "variable": "ac_key",
+        "value": "ac_amount && isAmountAnswer(ac_answer) ? '__amount' : ac_key"
       },
       {
         "id": "ac_other_request_check",
@@ -2232,6 +2289,12 @@
               "support_context": "{{ac_exit_ctx}}",
               "support_context_es": "{{ac_exit_ctx_es}}"
             }
+          },
+          "condition: ac_key === '__amount'": {
+            "id": "ac_return_amount",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "cargo.choice = 'amount', cargo.choiceText = String(ac_answer || '').replace(/\\\\(['\"\\\\])/g, '$1')"
           },
           "condition: ac_key === '__elsewhere'": {
             "id": "ac_elsewhere",
