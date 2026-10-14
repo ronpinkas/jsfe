@@ -418,5 +418,90 @@
       "type": "string",
       "description": "The guest link ({url}/?ref=<dbPrefix>), or '' when Live Connect is off, no agent is reachable, or the presence check fails."
     }
+  },
+  {
+    "id": "geocode-zip",
+    "name": "Geocode Zip",
+    "description": "Looks up the city and state for a 5-digit US zip code via Google Geocoding, so address collection can skip the city and state prompts.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "components": {
+          "type": "string",
+          "description": "Google component filter, e.g. postal_code:90015|country:US",
+          "default": ""
+        },
+        "address": {
+          "type": "string",
+          "description": "Not used for a zip lookup",
+          "default": ""
+        }
+      },
+      "required": [
+        "components"
+      ],
+      "additionalProperties": false
+    },
+    "implementation": {
+      "type": "local",
+      "function": "geocodeAddress",
+      "args": [
+        "address",
+        "components"
+      ],
+      "timeout": 6000
+    },
+    "security": {
+      "requiresAuth": false,
+      "auditLevel": "low",
+      "dataClassification": "public",
+      "rateLimit": {
+        "requests": 20,
+        "window": 60000
+      }
+    }
+  },
+  {
+    "id": "geocode-street",
+    "name": "Geocode Street",
+    "description": "Looks up a spoken or typed street address inside a known US zip code via Google Geocoding, so address collection can replace what the caller said with Google's normalized street when there is a precise match.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string",
+          "description": "Street address as given by the caller, e.g. 1605 west olimpic blvd",
+          "default": ""
+        },
+        "components": {
+          "type": "string",
+          "description": "Google component filter, e.g. postal_code:90015|country:US",
+          "default": ""
+        }
+      },
+      "required": [
+        "address",
+        "components"
+      ],
+      "additionalProperties": false
+    },
+    "implementation": {
+      "type": "local",
+      "function": "geocodeAddress",
+      "args": [
+        "address",
+        "components"
+      ],
+      "timeout": 6000
+    },
+    "security": {
+      "requiresAuth": false,
+      "auditLevel": "low",
+      "dataClassification": "public",
+      "rateLimit": {
+        "requests": 20,
+        "window": 60000
+      }
+    }
   }
 ]

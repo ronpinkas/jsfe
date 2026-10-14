@@ -203,7 +203,7 @@
   {
     "id": "authenticate-user",
     "name": "AuthenticateUser",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "description": "Generic flow to authenticate user via OTP sent to cell or email",
     "parameters": [
       {
@@ -240,6 +240,11 @@
         "name": "retrying",
         "type": "boolean",
         "description": "Set by the retry menu: keep the options of the authentication being retried"
+      },
+      {
+        "name": "retry_returns",
+        "type": "boolean",
+        "description": "A retry with no contact returns to the caller with cargo.authRetry set, so the caller asks again its own way (default: authenticate-user asks)"
       }
     ],
     "variables": {
@@ -310,6 +315,12 @@
         "value": "typeof retrying !== 'undefined' && retrying && cargo.authOptions ? (cargo.authOptions.cell_validator || '') : (typeof cell_validator !== 'undefined' && cell_validator ? cell_validator : '')"
       },
       {
+        "id": "remember_or_restore_retry_returns",
+        "type": "SET",
+        "variable": "retry_returns",
+        "value": "typeof retrying !== 'undefined' && retrying && cargo.authOptions ? !!cargo.authOptions.retry_returns : (typeof retry_returns !== 'undefined' && !!retry_returns)"
+      },
+      {
         "id": "default_retry_flow",
         "type": "SET",
         "variable": "retry_flow",
@@ -325,7 +336,29 @@
         "id": "remember_options",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "cargo.authOptions = { retry_flow: retry_flow, cancel_flow: cancel_flow, email_validator: email_validator, cell_validator: cell_validator }, cargo.authCancelFlow = cancel_flow"
+        "value": "cargo.authOptions = { retry_flow: retry_flow, cancel_flow: cancel_flow, email_validator: email_validator, cell_validator: cell_validator, retry_returns: retry_returns }, cargo.authCancelFlow = cancel_flow"
+      },
+      {
+        "id": "retry_through_caller",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.authRetry = !!(typeof retrying !== 'undefined' && retrying && !cell_number && !email && retry_returns)"
+      },
+      {
+        "id": "hand_retry_to_caller",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.authRetry": {
+            "id": "caller_asks_again",
+            "type": "END"
+          },
+          "default": {
+            "id": "ask_here",
+            "type": "SET",
+            "variable": "proceed",
+            "value": true
+          }
+        }
       },
       {
         "id": "get_contact_info",
@@ -401,17 +434,7 @@
               "error_message_es": "Lo siento, no pude verificar {{unverified_contact_es}}.",
               "retry_flow": "{{retry_flow}}",
               "cancel_flow": "{{cancel_flow}}",
-              "capture_patterns": [
-                {
-                  "variable": "cell_number",
-                  "regex": "[0-9\\-\\(\\)\\.\\s]{10,}",
-                  "normalizer": "[^0-9]"
-                },
-                {
-                  "variable": "email",
-                  "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
-                }
-              ]
+              "capture_patterns": "{{cargo.authCapture}}"
             }
           },
           "default": {
@@ -498,17 +521,7 @@
               "retry_call_type": "replace",
               "cancel_flow": "{{cargo.authCancelFlow}}",
               "allow_code_entry": true,
-              "capture_patterns": [
-                {
-                  "variable": "cell_number",
-                  "regex": "[0-9\\-\\(\\)\\.\\s]{10,}",
-                  "normalizer": "[^0-9]"
-                },
-                {
-                  "variable": "email",
-                  "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
-                }
-              ],
+              "capture_patterns": "{{cargo.authCapture}}",
               "question": "Would you like to try again to get access to your account?",
               "question_es": "¿Le gustaría intentar nuevamente obtener acceso a su cuenta?"
             }
@@ -520,7 +533,7 @@
   {
     "id": "get-cell-or-email",
     "name": "GetCellOrEmail",
-    "version": "1.1.2",
+    "version": "1.1.3",
     "description": "Prompt user to provide either their cell phone number or email address for account lookup",
     "parameters": [
       {
@@ -541,6 +554,12 @@
       }
     },
     "steps": [
+      {
+        "id": "contact_capture_patterns",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.authCapture = [{ variable: 'cell_number', reader: 'phone' }, { variable: 'email', reader: 'email' }]"
+      },
       {
         "id": "set-cell-number-if-undefined",
         "type": "SET",
@@ -601,19 +620,7 @@
         "id": "treat_as_email_address",
         "type": "SET",
         "variable": "prospective_email",
-        "value": "cell_or_email.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/)?.[0]"
-      },
-      {
-        "id": "treat_as_email_allow_spaces",
-        "type": "SET",
-        "variable": "prospective_email2",
-        "value": "email || cell_or_email.match(/[a-zA-Z0-9._%+\\s-]+@[a-zA-Z0-9.\\s-]+\\s*\\.\\s*[a-zA-Z\\s]{2,}/)?.[0]"
-      },
-      {
-        "id": "normalize_prospective_email",
-        "type": "SET",
-        "variable": "prospective_email",
-        "value": "prospective_email ? prospective_email : (prospective_email2 ? String(prospective_email2).replace(/\\s+/g, '') : '')"
+        "value": "readEmail(cell_or_email)"
       },
       {
         "id": "normalize_cell_or_email",
@@ -671,17 +678,7 @@
               "error_message_es": "El número de teléfono que proporcionó no es válido.",
               "retry_flow": "{{retry_flow}}",
               "cancel_flow": "{{cancel_flow}}",
-              "capture_patterns": [
-                {
-                  "variable": "cell_number",
-                  "regex": "[0-9\\-\\(\\)\\.\\s]{10,}",
-                  "normalizer": "[^0-9]"
-                },
-                {
-                  "variable": "email",
-                  "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
-                }
-              ]
+              "capture_patterns": "{{cargo.authCapture}}"
             }
           },
           "condition: cargo.callerId": {
@@ -706,17 +703,7 @@
               "error_message_es": "Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta para continuar.",
               "retry_flow": "{{retry_flow}}",
               "cancel_flow": "{{cancel_flow}}",
-              "capture_patterns": [
-                {
-                  "variable": "cell_number",
-                  "regex": "[0-9\\-\\(\\)\\.\\s]{10,}",
-                  "normalizer": "[^0-9]"
-                },
-                {
-                  "variable": "email",
-                  "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
-                }
-              ]
+              "capture_patterns": "{{cargo.authCapture}}"
             }
           }
         }
@@ -814,7 +801,7 @@
   {
     "id": "validate-otp-code",
     "name": "ValidateOtpCode",
-    "version": "1.1.3",
+    "version": "1.1.4",
     "description": "Validate OTP code entered by user - sets cargo.otpVerified on success. Capped at 3 wrong codes per authentication (cargo.otpMismatches, reset by authenticate-user): the code is withdrawn and the retry/agent/exit choice follows, where retry sends a fresh code. Added 2026-10-12: a caller entered 13 wrong codes in 3.5 minutes.",
     "variables": {
       "otp_validation_result": {
@@ -981,17 +968,7 @@
               "retry_call_type": "replace",
               "cancel_flow": "{{cargo.authCancelFlow}}",
               "allow_code_entry": false,
-              "capture_patterns": [
-                {
-                  "variable": "cell_number",
-                  "regex": "[0-9\\-\\(\\)\\.\\s]{10,}",
-                  "normalizer": "[^0-9]"
-                },
-                {
-                  "variable": "email",
-                  "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
-                }
-              ],
+              "capture_patterns": "{{cargo.authCapture}}",
               "question": "Would you like to try again to get access to your account?",
               "question_es": "¿Le gustaría intentar nuevamente obtener acceso a su cuenta?"
             }
@@ -1083,7 +1060,7 @@
   {
     "id": "resend-otp-code",
     "name": "ResendOtpCode",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "description": "Worker: sends a FRESH code to the destination authenticate-user used (cargo.otp_cell_number / cargo.otp_email) and says why ('expired' | 'missing' | 'requested'). At most 2 per authentication (cargo.otpResends), then the retry menu.",
     "parameters": [
       {
@@ -1116,17 +1093,7 @@
               "retry_call_type": "replace",
               "cancel_flow": "{{cargo.authCancelFlow}}",
               "allow_code_entry": true,
-              "capture_patterns": [
-                {
-                  "variable": "cell_number",
-                  "regex": "[0-9\\-\\(\\)\\.\\s]{10,}",
-                  "normalizer": "[^0-9]"
-                },
-                {
-                  "variable": "email",
-                  "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
-                }
-              ],
+              "capture_patterns": "{{cargo.authCapture}}",
               "question": "Would you like to try again to get access to your account?",
               "question_es": "¿Le gustaría intentar nuevamente obtener acceso a su cuenta?"
             }
@@ -1444,7 +1411,7 @@
   {
     "id": "otp-send-failed",
     "name": "OtpSendFailed",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "Worker: a code could not be sent (cargo.otpSendFailure). A line that cannot receive texts goes to otp-text-undeliverable; any other failure offers the retry.",
     "steps": [
       {
@@ -1469,17 +1436,7 @@
               "retry_call_type": "replace",
               "cancel_flow": "{{cargo.authCancelFlow}}",
               "allow_code_entry": false,
-              "capture_patterns": [
-                {
-                  "variable": "cell_number",
-                  "regex": "[0-9\\-\\(\\)\\.\\s]{10,}",
-                  "normalizer": "[^0-9]"
-                },
-                {
-                  "variable": "email",
-                  "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
-                }
-              ],
+              "capture_patterns": "{{cargo.authCapture}}",
               "question": "Would you like to try again to get access to your account?",
               "question_es": "¿Le gustaría intentar nuevamente obtener acceso a su cuenta?"
             }
@@ -1496,17 +1453,7 @@
               "retry_call_type": "replace",
               "cancel_flow": "{{cargo.authCancelFlow}}",
               "allow_code_entry": false,
-              "capture_patterns": [
-                {
-                  "variable": "cell_number",
-                  "regex": "[0-9\\-\\(\\)\\.\\s]{10,}",
-                  "normalizer": "[^0-9]"
-                },
-                {
-                  "variable": "email",
-                  "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
-                }
-              ],
+              "capture_patterns": "{{cargo.authCapture}}",
               "question": "Would you like to try again to get access to your account?",
               "question_es": "¿Le gustaría intentar nuevamente obtener acceso a su cuenta?"
             }
@@ -1523,17 +1470,7 @@
               "retry_call_type": "replace",
               "cancel_flow": "{{cargo.authCancelFlow}}",
               "allow_code_entry": false,
-              "capture_patterns": [
-                {
-                  "variable": "cell_number",
-                  "regex": "[0-9\\-\\(\\)\\.\\s]{10,}",
-                  "normalizer": "[^0-9]"
-                },
-                {
-                  "variable": "email",
-                  "regex": "[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}"
-                }
-              ],
+              "capture_patterns": "{{cargo.authCapture}}",
               "question": "Would you like to try again to get access to your account?",
               "question_es": "¿Le gustaría intentar nuevamente obtener acceso a su cuenta?"
             }
@@ -1711,7 +1648,7 @@
   {
     "id": "otp-text-undeliverable",
     "name": "OtpTextUndeliverable",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "description": "Worker for authenticate-user: the number for the code cannot receive texts (landline, toll-free, invalid). Says so and asks for the account's email or a mobile number; never offers to text the same number again.",
     "variables": {
       "user_choice": {
@@ -1757,13 +1694,13 @@
         "id": "read_digits",
         "type": "SET",
         "variable": "choice_digits",
-        "value": "String(user_choice || '').replace(/[^0-9]/g, '')"
+        "value": "readPhone(user_choice)"
       },
       {
         "id": "read_email",
         "type": "SET",
         "variable": "choice_email",
-        "value": "(String(user_choice || '').match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}/) || [])[0] || String(String(user_choice || '').match(/[a-zA-Z0-9._%+\\s-]+@[a-zA-Z0-9.\\s-]+\\s*\\.\\s*[a-zA-Z]{2,}/)?.[0] || '').replace(/\\s+/g, '')"
+        "value": "readEmail(user_choice)"
       },
       {
         "id": "clear_cell",
@@ -1972,5 +1909,1457 @@
         }
       }
     ]
+  },
+  {
+    "id": "ask-choice",
+    "name": "AskChoice",
+    "version": "1.8.0",
+    "description": "Worker: ask one question and return the caller's choice . Parameters: question / question_es, choices [{key, words}] (words include any keypad digit), optional retry / retry_es, accept_other, digits ({min, max} for the keypad), exit_context / exit_context_es. Returns cargo.choice = the matching key, and cargo.choiceText = the answer as given. One re-ask on a miss of fewer than three words (three or more is a new request: DISPATCH); AGENT (or 0) reaches a person and EXIT (or *) ends, the same for every question; anything still unrecognised is another request and is DISPATCHed — unless accept_other, which returns cargo.choice = 'other' with the text for the caller to interpret. Matching: a word after a negation in its clause is negated. A negated match goes to a NO-type choice (key 'no', negative: true, or a word that holds the negation); a choice marked neutral: true still matches (the negation is about the object); any other choice is blocked and a 'no' key answers. A reply led by a bare 'no' answers a plain YES with NO. With accept_other, AGENT only when the whole answer is an agent request; EXIT only when the answer is just exit / salir / cancel / cancelar. A neutral choice is refused when it follows its negation within two words; a refusal or a deferral (later, mañana) answers with the choice keyed no / decline / done / cancel; on a free-text question cancel / cancelar is an answer.",
+    "parameters": [
+      {
+        "name": "question",
+        "type": "string",
+        "description": "The question (English)",
+        "required": true
+      },
+      {
+        "name": "question_es",
+        "type": "string",
+        "description": "The question (Spanish)",
+        "required": false
+      },
+      {
+        "name": "choices",
+        "type": "array",
+        "description": "[{key, words}] in priority order",
+        "required": true
+      },
+      {
+        "name": "retry",
+        "type": "string",
+        "description": "Re-ask wording (English); default \"Sorry, I didn't catch that.\" + the question",
+        "required": false
+      },
+      {
+        "name": "retry_es",
+        "type": "string",
+        "description": "Re-ask wording (Spanish)",
+        "required": false
+      },
+      {
+        "name": "accept_other",
+        "type": "boolean",
+        "description": "Return any other answer as choice \"other\" instead of re-asking",
+        "required": false
+      },
+      {
+        "name": "digits",
+        "type": "object",
+        "description": "Keypad input bounds {min, max} on voice",
+        "required": false
+      },
+      {
+        "name": "exit_context",
+        "type": "string",
+        "description": "What EXIT abandons, for the support message (English)",
+        "required": false
+      },
+      {
+        "name": "exit_context_es",
+        "type": "string",
+        "description": "What EXIT abandons (Spanish)",
+        "required": false
+      }
+    ],
+    "variables": {
+      "ac_answer": {
+        "type": "string",
+        "value": ""
+      },
+      "ac_key": {
+        "type": "string",
+        "value": ""
+      },
+      "ac_other": {
+        "type": "boolean",
+        "value": false
+      },
+      "ac_q_es": {
+        "type": "string",
+        "value": ""
+      },
+      "ac_retry": {
+        "type": "string",
+        "value": ""
+      },
+      "ac_retry_es": {
+        "type": "string",
+        "value": ""
+      },
+      "ac_exit_ctx": {
+        "type": "string",
+        "value": ""
+      },
+      "ac_exit_ctx_es": {
+        "type": "string",
+        "value": ""
+      }
+    },
+    "steps": [
+      {
+        "id": "ac_reset",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.choice = '', cargo.choiceText = ''"
+      },
+      {
+        "id": "ac_accepts_other",
+        "type": "SET",
+        "variable": "ac_other",
+        "value": "typeof accept_other !== 'undefined' && (accept_other === true || accept_other === 'true')"
+      },
+      {
+        "id": "ac_question_es",
+        "type": "SET",
+        "variable": "ac_q_es",
+        "value": "typeof question_es !== 'undefined' && question_es ? question_es : question"
+      },
+      {
+        "id": "ac_retry_en",
+        "type": "SET",
+        "variable": "ac_retry",
+        "value": "typeof retry !== 'undefined' && retry ? retry : \"Sorry, I didn't catch that. \" + question"
+      },
+      {
+        "id": "ac_retry_spanish",
+        "type": "SET",
+        "variable": "ac_retry_es",
+        "value": "typeof retry_es !== 'undefined' && retry_es ? retry_es : 'Disculpe, no le entendí. ' + ac_q_es"
+      },
+      {
+        "id": "ac_exit_context",
+        "type": "SET",
+        "variable": "ac_exit_ctx",
+        "value": "typeof exit_context !== 'undefined' && exit_context ? exit_context : 'your request'"
+      },
+      {
+        "id": "ac_exit_context_es",
+        "type": "SET",
+        "variable": "ac_exit_ctx_es",
+        "value": "typeof exit_context_es !== 'undefined' && exit_context_es ? exit_context_es : 'su solicitud'"
+      },
+      {
+        "id": "ac_keypad",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(cargo.digits = typeof digits !== 'undefined' && digits && typeof digits === 'object' ? digits : undefined, true)"
+      },
+      {
+        "id": "ac_ask",
+        "type": "SAY-GET",
+        "variable": "ac_answer",
+        "value": "{{question}}",
+        "value_es": "{{ac_q_es}}"
+      },
+      {
+        "id": "ac_match",
+        "type": "SET",
+        "variable": "ac_key",
+        "value": "pickChoice(ac_answer, choices, ac_other)"
+      },
+      {
+        "id": "ac_keypad_again",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(cargo.digits = typeof digits !== 'undefined' && digits && typeof digits === 'object' ? digits : undefined, true)"
+      },
+      {
+        "id": "ac_reask_on_miss",
+        "type": "CASE",
+        "branches": {
+          "condition: ac_key === '' && !ac_other && String(ac_answer || '').split(/\\s+/).filter(function(w) { return /[a-záéíóúüñ]/i.test(w); }).length < 3": {
+            "id": "ac_reask",
+            "type": "SAY-GET",
+            "variable": "ac_answer",
+            "value": "{{ac_retry}}",
+            "value_es": "{{ac_retry_es}}"
+          },
+          "default": {
+            "id": "ac_no_reask",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ac_match_again",
+        "type": "SET",
+        "variable": "ac_key",
+        "value": "ac_key === '' && !ac_other ? pickChoice(ac_answer, choices, ac_other) : ac_key"
+      },
+      {
+        "id": "ac_keypad_done",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(cargo.digits = undefined, (ac_key === '__agent' || ac_key === '__exit' || (ac_key === '' && !ac_other)) && Array.isArray(cargo.sensitive) ? cargo.sensitive.forEach(function(p) { var o = cargo, k = String(p).split('.'); for (var i = 0; i < k.length - 1 && o; i++) { o = o[k[i]]; } if (o && typeof o === 'object') { o[k[k.length - 1]] = null; } }) : null, true)"
+      },
+      {
+        "id": "ac_route",
+        "type": "CASE",
+        "branches": {
+          "condition: ac_key === '__agent'": {
+            "id": "ac_agent",
+            "type": "FLOW",
+            "value": "live-agent-requested",
+            "callType": "reboot"
+          },
+          "condition: ac_key === '__exit'": {
+            "id": "ac_exit",
+            "type": "FLOW",
+            "value": "contact-support",
+            "callType": "reboot",
+            "parameters": {
+              "support_context": "{{ac_exit_ctx}}",
+              "support_context_es": "{{ac_exit_ctx_es}}"
+            }
+          },
+          "condition: ac_key === '' && ac_other": {
+            "id": "ac_return_other",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "cargo.choice = 'other', cargo.choiceText = String(ac_answer || '').replace(/\\\\(['\"\\\\])/g, '$1')"
+          },
+          "condition: ac_key === ''": {
+            "id": "ac_other_request",
+            "type": "DISPATCH"
+          },
+          "default": {
+            "id": "ac_return_choice",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "cargo.choice = ac_key, cargo.choiceText = String(ac_answer || '').replace(/\\\\(['\"\\\\])/g, '$1')"
+          }
+        }
+      }
+    ],
+    "scope": "isolated"
+  },
+  {
+    "id": "ask-email",
+    "name": "AskEmail",
+    "version": "1.3.0",
+    "description": "Worker: an email address. With on_file, the question offers it (OK keeps it) and any other address the caller gives replaces it. One re-ask when the answer is not an email. Sets cargo.email ('' when none).",
+    "parameters": [
+      {
+        "name": "question",
+        "type": "string",
+        "description": "The question (English)",
+        "required": true
+      },
+      {
+        "name": "question_es",
+        "type": "string",
+        "description": "The question (Spanish)",
+        "required": false
+      },
+      {
+        "name": "on_file",
+        "type": "string",
+        "description": "The address on file, kept by OK",
+        "required": false
+      },
+      {
+        "name": "attempt",
+        "type": "string",
+        "description": "Internal: the attempt number",
+        "required": false
+      },
+      {
+        "name": "why",
+        "type": "string",
+        "description": "Internal: 'invalid' (not an address) or 'retry' (the read-back was wrong)",
+        "required": false
+      },
+      {
+        "name": "confirm",
+        "type": "string",
+        "description": "'true' when on_file came from the caller, so it is read back too",
+        "required": false
+      }
+    ],
+    "variables": {
+      "ae_n": {
+        "type": "number",
+        "value": 0
+      },
+      "ae_q": {
+        "type": "string",
+        "value": ""
+      },
+      "ae_q_es": {
+        "type": "string",
+        "value": ""
+      },
+      "ae_found": {
+        "type": "string",
+        "value": ""
+      },
+      "ae_next": {
+        "type": "string",
+        "value": ""
+      },
+      "ae_new": {
+        "type": "boolean",
+        "value": false
+      },
+      "ae_why": {
+        "type": "string",
+        "value": "invalid"
+      }
+    },
+    "steps": [
+      {
+        "id": "ae_attempt",
+        "type": "SET",
+        "variable": "ae_n",
+        "value": "parseInt(typeof attempt !== 'undefined' && attempt ? attempt : '0', 10) || 0"
+      },
+      {
+        "id": "ae_question",
+        "type": "SET",
+        "variable": "ae_q",
+        "value": "(ae_n > 0 ? (typeof why !== 'undefined' && why === 'retry' ? \"Okay, let's try again. \" : \"That doesn't look like an email address. \") : '') + question"
+      },
+      {
+        "id": "ae_question_es",
+        "type": "SET",
+        "variable": "ae_q_es",
+        "value": "(ae_n > 0 ? (typeof why !== 'undefined' && why === 'retry' ? 'De acuerdo, intentemos de nuevo. ' : 'Eso no parece un correo electrónico. ') : '') + (typeof question_es !== 'undefined' && question_es ? question_es : question)"
+      },
+      {
+        "id": "ae_ask",
+        "type": "FLOW",
+        "value": "ask-choice",
+        "callType": "call",
+        "parameters": {
+          "question": "{{ae_q}}",
+          "question_es": "{{ae_q_es}}",
+          "choices": [
+            {
+              "key": "ok",
+              "words": [
+                "1",
+                "ok",
+                "okay",
+                "yes",
+                "send",
+                "send it",
+                "si",
+                "sí",
+                "enviar",
+                "envíalo",
+                "correcto"
+              ]
+            }
+          ],
+          "digits": {
+            "min": 1,
+            "max": 1
+          },
+          "exit_context": "email",
+          "exit_context_es": "correo",
+          "accept_other": true
+        }
+      },
+      {
+        "id": "ae_read",
+        "type": "SET",
+        "variable": "ae_found",
+        "value": "readEmail(cargo.choiceText) || (cargo.choice === 'ok' && typeof on_file !== 'undefined' && on_file ? String(on_file) : '')"
+      },
+      {
+        "id": "ae_is_new",
+        "type": "SET",
+        "variable": "ae_new",
+        "value": "!!ae_found && ((typeof confirm !== 'undefined' && confirm === 'true') || !(typeof on_file !== 'undefined' && on_file && String(on_file).toLowerCase() === ae_found))"
+      },
+      {
+        "id": "ae_readback",
+        "type": "SET",
+        "variable": "ae_q",
+        "value": "\"I have \" + (cargo.voice ? ae_found.split('').join(' ').replace(/ @ /, ' at ').replace(/ \\. /g, ' dot ') : ae_found) + '. Is that right? ' + (cargo.voice ? 'Press 1 or say' : 'Type') + ' YES, or ' + (cargo.voice ? 'press 2 or say' : 'type') + ' NO.'"
+      },
+      {
+        "id": "ae_readback_es",
+        "type": "SET",
+        "variable": "ae_q_es",
+        "value": "'Tengo ' + (cargo.voice ? ae_found.split('').join(' ').replace(/ @ /, ' arroba ').replace(/ \\. /g, ' punto ') : ae_found) + '. ¿Es correcto? ' + (cargo.voice ? 'Presione 1 o diga' : 'Escriba') + ' SÍ, o ' + (cargo.voice ? 'presione 2 o diga' : 'escriba') + ' NO.'"
+      },
+      {
+        "id": "ae_confirm_new",
+        "type": "CASE",
+        "branches": {
+          "condition: ae_new": {
+            "id": "ae_ask_right",
+            "type": "FLOW",
+            "value": "ask-choice",
+            "callType": "call",
+            "parameters": {
+              "question": "{{ae_q}}",
+              "question_es": "{{ae_q_es}}",
+              "choices": [
+                {
+                  "key": "no",
+                  "words": [
+                    "2",
+                    "wrong",
+                    "incorrect",
+                    "incorrecto"
+                  ]
+                },
+                {
+                  "key": "yes",
+                  "words": [
+                    "1"
+                  ]
+                }
+              ],
+              "digits": {
+                "min": 1,
+                "max": 1
+              },
+              "exit_context": "email",
+              "exit_context_es": "correo"
+            }
+          },
+          "default": {
+            "id": "ae_not_new",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ae_wrong",
+        "type": "SET",
+        "variable": "ae_why",
+        "value": "ae_new && cargo.choice !== 'yes' ? 'retry' : 'invalid'"
+      },
+      {
+        "id": "ae_drop_wrong",
+        "type": "SET",
+        "variable": "ae_found",
+        "value": "ae_new && cargo.choice !== 'yes' ? '' : ae_found"
+      },
+      {
+        "id": "ae_next_attempt",
+        "type": "SET",
+        "variable": "ae_next",
+        "value": "String(ae_n + 1)"
+      },
+      {
+        "id": "ae_route",
+        "type": "CASE",
+        "branches": {
+          "condition: ae_found": {
+            "id": "ae_record",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.email = ae_found, true)"
+          },
+          "condition: ae_n < 1": {
+            "id": "ae_again",
+            "type": "FLOW",
+            "value": "ask-email",
+            "callType": "replace",
+            "parameters": {
+              "question": "{{question}}",
+              "question_es": "{{question_es}}",
+              "on_file": "{{on_file}}",
+              "attempt": "{{ae_next}}",
+              "why": "{{ae_why}}",
+              "confirm": "{{confirm}}"
+            }
+          },
+          "default": {
+            "id": "ae_none",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.email = '', true)"
+          }
+        }
+      }
+    ],
+    "scope": "isolated"
+  },
+  {
+    "id": "ask-address",
+    "name": "AskAddress",
+    "version": "1.2.0",
+    "description": "Worker: a new mailing address, zip first: the zip (city and state from Google; asked only when Google has none), the street (normalized by Google when it matches exactly inside that zip, otherwise kept as said), the unit, then read back for YES / NO; NO collects it once more. Sets cargo.address = { line, street, said, verified } or null.",
+    "parameters": [
+      {
+        "name": "attempt",
+        "type": "string",
+        "description": "Internal: the attempt number",
+        "required": false
+      }
+    ],
+    "variables": {
+      "ad_n": {
+        "type": "number",
+        "value": 0
+      },
+      "ad_zip": {
+        "type": "string",
+        "value": ""
+      },
+      "ad_components": {
+        "type": "string",
+        "value": ""
+      },
+      "ad_zip_result": {
+        "type": "object",
+        "value": null
+      },
+      "ad_place": {
+        "type": "string",
+        "value": ""
+      },
+      "ad_said": {
+        "type": "string",
+        "value": ""
+      },
+      "ad_street_result": {
+        "type": "object",
+        "value": null
+      },
+      "ad_street": {
+        "type": "string",
+        "value": ""
+      },
+      "ad_norm": {
+        "type": "string",
+        "value": ""
+      },
+      "ad_verified": {
+        "type": "boolean",
+        "value": false
+      },
+      "ad_unit": {
+        "type": "string",
+        "value": ""
+      },
+      "ad_line": {
+        "type": "string",
+        "value": ""
+      },
+      "ad_q": {
+        "type": "string",
+        "value": ""
+      },
+      "ad_q_es": {
+        "type": "string",
+        "value": ""
+      },
+      "ad_next": {
+        "type": "string",
+        "value": ""
+      }
+    },
+    "steps": [
+      {
+        "id": "ad_attempt",
+        "type": "SET",
+        "variable": "ad_n",
+        "value": "parseInt(typeof attempt !== 'undefined' && attempt ? attempt : '0', 10) || 0"
+      },
+      {
+        "id": "ad_start",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(cargo.address = null, true)"
+      },
+      {
+        "id": "ad_next_attempt",
+        "type": "SET",
+        "variable": "ad_next",
+        "value": "String(ad_n + 1)"
+      },
+      {
+        "id": "ad_zip_question",
+        "type": "SET",
+        "variable": "ad_q",
+        "value": "(ad_n > 0 ? \"Let's try again. \" : '') + 'What is the 5-digit zip code of your new address?' + (cargo.voice ? ' When entering on the keypad, press the pound key when you are done.' : '')"
+      },
+      {
+        "id": "ad_zip_question_es",
+        "type": "SET",
+        "variable": "ad_q_es",
+        "value": "(ad_n > 0 ? 'Intentemos de nuevo. ' : '') + '¿Cuál es el código postal de 5 dígitos de su nueva dirección?' + (cargo.voice ? ' Si usa el teclado, presione la tecla de numeral al terminar.' : '')"
+      },
+      {
+        "id": "ad_ask_zip",
+        "type": "FLOW",
+        "value": "ask-choice",
+        "callType": "call",
+        "parameters": {
+          "question": "{{ad_q}}",
+          "question_es": "{{ad_q_es}}",
+          "choices": [],
+          "accept_other": true,
+          "digits": {
+            "min": 5,
+            "max": 5
+          },
+          "exit_context": "address change",
+          "exit_context_es": "cambio de dirección"
+        }
+      },
+      {
+        "id": "ad_read_zip",
+        "type": "SET",
+        "variable": "ad_zip",
+        "value": "(String(cargo.choiceText || '').match(/\\b\\d{5}\\b/) || [''])[0] || (String(cargo.choiceText || '').replace(/[^0-9]/g, '').length === 5 ? String(cargo.choiceText).replace(/[^0-9]/g, '') : '')"
+      },
+      {
+        "id": "ad_bad_zip",
+        "type": "CASE",
+        "branches": {
+          "condition: !ad_zip && ad_n < 1": {
+            "id": "ad_zip_again",
+            "type": "FLOW",
+            "value": "ask-address",
+            "callType": "replace",
+            "parameters": {
+              "attempt": "{{ad_next}}"
+            }
+          },
+          "default": {
+            "id": "ad_zip_read",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ad_give_up_zip",
+        "type": "CASE",
+        "branches": {
+          "condition: !ad_zip": {
+            "id": "ad_no_zip",
+            "type": "END"
+          },
+          "default": {
+            "id": "ad_zip_ok",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ad_filter",
+        "type": "SET",
+        "variable": "ad_components",
+        "value": "'postal_code:' + ad_zip + '|country:US'"
+      },
+      {
+        "id": "ad_lookup_zip",
+        "type": "CALL-TOOL",
+        "tool": "geocode-zip",
+        "variable": "ad_zip_result",
+        "args": {
+          "components": "{{ad_components}}"
+        },
+        "onFail": {
+          "id": "ad_zip_lookup_failed",
+          "type": "SET",
+          "variable": "ad_zip_result",
+          "value": "null"
+        }
+      },
+      {
+        "id": "ad_city_state",
+        "type": "SET",
+        "variable": "ad_place",
+        "value": "(function() { var r = ad_zip_result; var cs = r && r.status === 'OK' && Array.isArray(r.components) ? r.components : []; var pick = function(types) { for (var i = 0; i < types.length; i++) { for (var j = 0; j < cs.length; j++) { if (cs[j] && Array.isArray(cs[j].types) && cs[j].types.indexOf(types[i]) >= 0) { return cs[j]; } } } return null; }; var country = pick(['country']), city = pick(['locality', 'postal_town', 'sublocality_level_1', 'sublocality', 'neighborhood']), state = pick(['administrative_area_level_1']); return country && country.short_name === 'US' && city && state ? city.long_name + ', ' + state.short_name : ''; })()"
+      },
+      {
+        "id": "ad_ask_city",
+        "type": "CASE",
+        "branches": {
+          "condition: !ad_place": {
+            "id": "ad_ask_city_state",
+            "type": "FLOW",
+            "value": "ask-choice",
+            "callType": "call",
+            "parameters": {
+              "question": "What city and state is that in?",
+              "question_es": "¿En qué ciudad y estado está?",
+              "choices": [],
+              "accept_other": true,
+              "exit_context": "address change",
+              "exit_context_es": "cambio de dirección"
+            }
+          },
+          "default": {
+            "id": "ad_place_known",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ad_city_given",
+        "type": "SET",
+        "variable": "ad_place",
+        "value": "ad_place || String(cargo.choiceText || '').trim().replace(/\\s+/g, ' ')"
+      },
+      {
+        "id": "ad_street_question",
+        "type": "SET",
+        "variable": "ad_q",
+        "value": "(ad_place ? 'Got it, ' + ad_place + '. ' : '') + 'What is the street address, with the house number? For example, 123 Main Street.'"
+      },
+      {
+        "id": "ad_street_question_es",
+        "type": "SET",
+        "variable": "ad_q_es",
+        "value": "(ad_place ? 'Entendido, ' + ad_place + '. ' : '') + '¿Cuál es la dirección, con el número de casa? Por ejemplo, 123 Main Street.'"
+      },
+      {
+        "id": "ad_ask_street",
+        "type": "FLOW",
+        "value": "ask-choice",
+        "callType": "call",
+        "parameters": {
+          "question": "{{ad_q}}",
+          "question_es": "{{ad_q_es}}",
+          "choices": [],
+          "accept_other": true,
+          "exit_context": "address change",
+          "exit_context_es": "cambio de dirección"
+        }
+      },
+      {
+        "id": "ad_read_street",
+        "type": "SET",
+        "variable": "ad_said",
+        "value": "String(cargo.choiceText || '').trim().replace(/\\s+/g, ' ').replace(/[.]$/, '')"
+      },
+      {
+        "id": "ad_street_shape",
+        "type": "CASE",
+        "branches": {
+          "condition: !/^\\d{1,6}\\s.*[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,}/.test(ad_said)": {
+            "id": "ad_ask_street_again",
+            "type": "FLOW",
+            "value": "ask-choice",
+            "callType": "call",
+            "parameters": {
+              "question": "Please include the house number and the street name, like 123 Main Street.",
+              "question_es": "Por favor incluya el número de casa y el nombre de la calle, como 123 Main Street.",
+              "choices": [],
+              "accept_other": true,
+              "exit_context": "address change",
+              "exit_context_es": "cambio de dirección"
+            }
+          },
+          "default": {
+            "id": "ad_street_shaped",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ad_read_street_again",
+        "type": "SET",
+        "variable": "ad_said",
+        "value": "/^\\d{1,6}\\s.*[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,}/.test(ad_said) ? ad_said : String(cargo.choiceText || '').trim().replace(/\\s+/g, ' ').replace(/[.]$/, '')"
+      },
+      {
+        "id": "ad_no_street",
+        "type": "CASE",
+        "branches": {
+          "condition: !/^\\d{1,6}\\s.*[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,}/.test(ad_said)": {
+            "id": "ad_no_street_end",
+            "type": "END"
+          },
+          "default": {
+            "id": "ad_street_given",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ad_lookup_street",
+        "type": "CALL-TOOL",
+        "tool": "geocode-street",
+        "variable": "ad_street_result",
+        "args": {
+          "address": "{{ad_said}}",
+          "components": "{{ad_components}}"
+        },
+        "onFail": {
+          "id": "ad_street_lookup_failed",
+          "type": "SET",
+          "variable": "ad_street_result",
+          "value": "null"
+        }
+      },
+      {
+        "id": "ad_street_match",
+        "type": "SET",
+        "variable": "ad_norm",
+        "value": "(function() { var r = ad_street_result; var cs = r && r.status === 'OK' && !r.partial_match && Array.isArray(r.components) ? r.components : []; var get = function(t) { for (var j = 0; j < cs.length; j++) { if (cs[j] && Array.isArray(cs[j].types) && cs[j].types.indexOf(t) >= 0) { return cs[j]; } } return null; }; var num = get('street_number'), route = get('route'), zip = get('postal_code'); return num && route && zip && zip.short_name === ad_zip && num.long_name === (ad_said.match(/^\\d+/) || [''])[0] ? num.long_name + ' ' + route.long_name : ''; })()"
+      },
+      {
+        "id": "ad_street_verified",
+        "type": "SET",
+        "variable": "ad_verified",
+        "value": "!!ad_norm"
+      },
+      {
+        "id": "ad_street_final",
+        "type": "SET",
+        "variable": "ad_street",
+        "value": "ad_norm || ad_said"
+      },
+      {
+        "id": "ad_unit_question",
+        "type": "SET",
+        "variable": "ad_q",
+        "value": "'Is there an apartment or unit number? ' + cargo.verb.charAt(0).toUpperCase() + cargo.verb.slice(1) + ' the number, or NONE.'"
+      },
+      {
+        "id": "ad_unit_question_es",
+        "type": "SET",
+        "variable": "ad_q_es",
+        "value": "'¿Tiene número de apartamento o unidad? ' + cargo.verb_es.charAt(0).toUpperCase() + cargo.verb_es.slice(1) + ' el número, o NINGUNO.'"
+      },
+      {
+        "id": "ad_ask_unit",
+        "type": "FLOW",
+        "value": "ask-choice",
+        "callType": "call",
+        "parameters": {
+          "question": "{{ad_q}}",
+          "question_es": "{{ad_q_es}}",
+          "choices": [
+            {
+              "key": "none",
+              "words": [
+                "none",
+                "no",
+                "skip",
+                "n/a",
+                "no apartment",
+                "no unit",
+                "ninguno",
+                "ninguna",
+                "no tengo",
+                "no aplica",
+                "omitir"
+              ]
+            }
+          ],
+          "accept_other": true,
+          "exit_context": "address change",
+          "exit_context_es": "cambio de dirección"
+        }
+      },
+      {
+        "id": "ad_read_unit",
+        "type": "SET",
+        "variable": "ad_unit",
+        "value": "cargo.choice === 'none' && !/\\d/.test(String(cargo.choiceText || '')) ? '' : (function() { var u = String(cargo.choiceText || '').trim().replace(/[.]$/, ''); return /^[#\\w-]{1,6}$/.test(u) ? 'Apt ' + u.replace(/^#/, '') : u; })()"
+      },
+      {
+        "id": "ad_full_line",
+        "type": "SET",
+        "variable": "ad_line",
+        "value": "ad_street + (ad_unit ? ' ' + ad_unit : '') + ', ' + ad_place + ' ' + ad_zip"
+      },
+      {
+        "id": "ad_readback",
+        "type": "SET",
+        "variable": "ad_q",
+        "value": "'Your new address is ' + ad_line + '. Is that correct? ' + (cargo.voice ? 'Press 1 or ' + cargo.verb : cargo.verb.charAt(0).toUpperCase() + cargo.verb.slice(1)) + ' YES, or ' + (cargo.voice ? 'press 2 or ' : '') + cargo.verb + ' NO.'"
+      },
+      {
+        "id": "ad_readback_es",
+        "type": "SET",
+        "variable": "ad_q_es",
+        "value": "'Su nueva dirección es ' + ad_line + '. ¿Es correcta? ' + (cargo.voice ? 'Presione 1 o ' + cargo.verb_es : cargo.verb_es.charAt(0).toUpperCase() + cargo.verb_es.slice(1)) + ' SÍ, o ' + (cargo.voice ? 'presione 2 o ' : '') + cargo.verb_es + ' NO.'"
+      },
+      {
+        "id": "ad_confirm",
+        "type": "FLOW",
+        "value": "ask-choice",
+        "callType": "call",
+        "parameters": {
+          "question": "{{ad_q}}",
+          "question_es": "{{ad_q_es}}",
+          "choices": [
+            {
+              "key": "yes",
+              "words": [
+                "1",
+                "así es"
+              ]
+            },
+            {
+              "key": "no",
+              "words": [
+                "2",
+                "wrong",
+                "incorrect",
+                "not right",
+                "incorrecto",
+                "no es correcto"
+              ]
+            }
+          ],
+          "digits": {
+            "min": 1,
+            "max": 1
+          },
+          "exit_context": "address change",
+          "exit_context_es": "cambio de dirección"
+        }
+      },
+      {
+        "id": "ad_route",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.choice === 'yes'": {
+            "id": "ad_done",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.address = { line: ad_line, street: ad_street, said: ad_said, verified: ad_verified }, true)"
+          },
+          "condition: ad_n < 1": {
+            "id": "ad_again",
+            "type": "FLOW",
+            "value": "ask-address",
+            "callType": "replace",
+            "parameters": {
+              "attempt": "{{ad_next}}"
+            }
+          },
+          "default": {
+            "id": "ad_given_up",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      }
+    ],
+    "scope": "isolated"
+  },
+  {
+    "id": "ask-field",
+    "name": "AskField",
+    "version": "1.2.0",
+    "description": "Worker: one card field — kind 'card' (13–19 digits, checksum), 'exp' (MMYY, not expired), 'cvv' (3–4 digits) or 'zip' (5 digits). One re-ask with the error; LINK switches to a payment link. Sets cargo.field (the value) and cargo.fieldOutcome ('ok' | 'link' | 'failed'). The answer is erased from cargo.choiceText as soon as it is read.",
+    "parameters": [
+      {
+        "name": "kind",
+        "type": "string",
+        "description": "'card' | 'exp' | 'cvv' | 'zip'",
+        "required": true
+      },
+      {
+        "name": "question",
+        "type": "string",
+        "description": "The question (English)",
+        "required": true
+      },
+      {
+        "name": "question_es",
+        "type": "string",
+        "description": "The question (Spanish)",
+        "required": false
+      },
+      {
+        "name": "error",
+        "type": "string",
+        "description": "Said before the re-ask (English)",
+        "required": false
+      },
+      {
+        "name": "error_es",
+        "type": "string",
+        "description": "Said before the re-ask (Spanish)",
+        "required": false
+      },
+      {
+        "name": "attempt",
+        "type": "string",
+        "description": "Internal: the attempt number",
+        "required": false
+      }
+    ],
+    "variables": {
+      "af_n": {
+        "type": "number",
+        "value": 0
+      },
+      "af_q": {
+        "type": "string",
+        "value": ""
+      },
+      "af_q_es": {
+        "type": "string",
+        "value": ""
+      },
+      "af_digits": {
+        "type": "object",
+        "value": null
+      },
+      "af_value": {
+        "type": "string",
+        "value": ""
+      },
+      "af_next_attempt": {
+        "type": "string",
+        "value": ""
+      }
+    },
+    "steps": [
+      {
+        "id": "af_attempt",
+        "type": "SET",
+        "variable": "af_n",
+        "value": "(cargo.field = '', parseInt(typeof attempt !== 'undefined' && attempt ? attempt : '0', 10) || 0)"
+      },
+      {
+        "id": "af_question",
+        "type": "SET",
+        "variable": "af_q",
+        "value": "(af_n > 0 && typeof error !== 'undefined' && error ? error + ' ' : '') + question + (cargo.voice && kind !== 'exp' ? ' When entering on the keypad, press the pound key when you are done.' : '')"
+      },
+      {
+        "id": "af_question_es",
+        "type": "SET",
+        "variable": "af_q_es",
+        "value": "(af_n > 0 && typeof error_es !== 'undefined' && error_es ? error_es + ' ' : '') + (typeof question_es !== 'undefined' && question_es ? question_es : question) + (cargo.voice && kind !== 'exp' ? ' Si usa el teclado, presione la tecla de numeral al terminar.' : '')"
+      },
+      {
+        "id": "af_keypad",
+        "type": "SET",
+        "variable": "af_digits",
+        "value": "({ card: { min: 13, max: 19 }, exp: { min: 3, max: 6 }, cvv: { min: 3, max: 4 }, zip: { min: 5, max: 5 } })[kind] || null"
+      },
+      {
+        "id": "af_ask",
+        "type": "FLOW",
+        "value": "ask-choice",
+        "callType": "call",
+        "parameters": {
+          "question": "{{af_q}}",
+          "question_es": "{{af_q_es}}",
+          "choices": [
+            {
+              "key": "link",
+              "words": [
+                "link",
+                "enlace",
+                "payment link",
+                "enlace de pago"
+              ]
+            }
+          ],
+          "exit_context": "payment",
+          "exit_context_es": "pago",
+          "accept_other": true,
+          "digits": "{{af_digits}}"
+        }
+      },
+      {
+        "id": "af_read",
+        "type": "SET",
+        "variable": "af_value",
+        "value": "cargo.choice === 'link' ? '' : (function() { var d = String(cargo.choiceText || '').replace(/[^0-9]/g, ''); if (kind === 'card') { return validateCardNumber(d) ? d : ''; } if (kind === 'exp') { if (d.length === 6 && /^(0[1-9]|1[0-2])20\\d\\d$/.test(d)) { d = d.slice(0, 2) + d.slice(4); } else if (d.length === 5 && /^[1-9]20\\d\\d$/.test(d)) { d = '0' + d.charAt(0) + d.slice(3); } var mm = d.length === 3 ? '0' + d.charAt(0) : d.slice(0, 2), yy = d.length === 3 ? d.slice(1) : d.slice(2, 4); return (d.length === 3 || d.length === 4) && parseInt(mm, 10) >= 1 && parseInt(mm, 10) <= 12 && validateExpiration(mm, yy) ? mm + yy : ''; } if (kind === 'cvv') { return /^\\d{3,4}$/.test(d) ? d : ''; } if (kind === 'zip') { return /^\\d{5}$/.test(d) ? d : ''; } return ''; })()"
+      },
+      {
+        "id": "af_forget_answer",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(cargo.choiceText = '', true)"
+      },
+      {
+        "id": "af_next",
+        "type": "SET",
+        "variable": "af_next_attempt",
+        "value": "String(af_n + 1)"
+      },
+      {
+        "id": "af_route",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.choice === 'link'": {
+            "id": "af_link",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.field = '', cargo.fieldOutcome = 'link', true)"
+          },
+          "condition: af_value": {
+            "id": "af_ok",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.field = af_value, cargo.fieldOutcome = 'ok', true)"
+          },
+          "condition: af_n < 1": {
+            "id": "af_again",
+            "type": "FLOW",
+            "value": "ask-field",
+            "callType": "replace",
+            "parameters": {
+              "kind": "{{kind}}",
+              "question": "{{question}}",
+              "question_es": "{{question_es}}",
+              "error": "{{error}}",
+              "error_es": "{{error_es}}",
+              "attempt": "{{af_next_attempt}}"
+            }
+          },
+          "default": {
+            "id": "af_failed",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.field = '', cargo.fieldOutcome = 'failed', true)"
+          }
+        }
+      }
+    ],
+    "scope": "isolated"
+  },
+  {
+    "id": "card-entry",
+    "name": "CardEntry",
+    "version": "1.1.0",
+    "description": "Worker: a new card's number, expiration, security code and billing zip (each through ask-field), and whether to save it. Sets cargo.payMethod = { kind: 'card', card, save, label }, or cargo.payNext 'link' / 'card_failed'.",
+    "variables": {
+      "ce_number_value": {
+        "type": "string",
+        "value": ""
+      },
+      "ce_exp_value": {
+        "type": "string",
+        "value": ""
+      },
+      "ce_cvv_value": {
+        "type": "string",
+        "value": ""
+      },
+      "ce_zip_value": {
+        "type": "string",
+        "value": ""
+      },
+      "ce_q": {
+        "type": "string",
+        "value": ""
+      },
+      "ce_q_es": {
+        "type": "string",
+        "value": ""
+      }
+    },
+    "steps": [
+      {
+        "id": "ce_mark_sensitive",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.sensitive = ['field', 'payMethod.card']"
+      },
+      {
+        "id": "ce_number",
+        "type": "FLOW",
+        "value": "ask-field",
+        "callType": "call",
+        "parameters": {
+          "kind": "card",
+          "question": "Please say or enter the card number.",
+          "question_es": "Por favor diga o ingrese el número de la tarjeta.",
+          "error": "That doesn't look like a valid card number.",
+          "error_es": "Ese número de tarjeta no parece válido."
+        }
+      },
+      {
+        "id": "ce_number_stop",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.fieldOutcome !== 'ok'": {
+            "id": "ce_number_failed",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.payNext = cargo.fieldOutcome === 'link' ? 'link' : 'card_failed', true)"
+          },
+          "default": {
+            "id": "ce_number_stop_not",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ce_number_end",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.fieldOutcome !== 'ok'": {
+            "id": "ce_number_stopped",
+            "type": "END"
+          },
+          "default": {
+            "id": "ce_number_end_not",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ce_number_keep",
+        "type": "SET",
+        "variable": "ce_number_value",
+        "value": "cargo.field"
+      },
+      {
+        "id": "ce_exp",
+        "type": "FLOW",
+        "value": "ask-field",
+        "callType": "call",
+        "parameters": {
+          "kind": "exp",
+          "question": "Please say or enter the expiration month and year, for example 0 4 2 8 for April 2028.",
+          "question_es": "Diga o ingrese el mes y año de vencimiento, por ejemplo 0 4 2 8 para abril de 2028.",
+          "error": "That isn't a valid, unexpired date.",
+          "error_es": "Esa fecha no es válida o ya venció."
+        }
+      },
+      {
+        "id": "ce_exp_stop",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.fieldOutcome !== 'ok'": {
+            "id": "ce_exp_failed",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.payNext = cargo.fieldOutcome === 'link' ? 'link' : 'card_failed', true)"
+          },
+          "default": {
+            "id": "ce_exp_stop_not",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ce_exp_end",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.fieldOutcome !== 'ok'": {
+            "id": "ce_exp_stopped",
+            "type": "END"
+          },
+          "default": {
+            "id": "ce_exp_end_not",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ce_exp_keep",
+        "type": "SET",
+        "variable": "ce_exp_value",
+        "value": "cargo.field"
+      },
+      {
+        "id": "ce_cvv",
+        "type": "FLOW",
+        "value": "ask-field",
+        "callType": "call",
+        "parameters": {
+          "kind": "cvv",
+          "question": "Please say or enter the 3 or 4 digit security code on the card.",
+          "question_es": "Diga o ingrese el código de seguridad de 3 o 4 dígitos de la tarjeta.",
+          "error": "That isn't a valid security code.",
+          "error_es": "Ese código de seguridad no es válido."
+        }
+      },
+      {
+        "id": "ce_cvv_stop",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.fieldOutcome !== 'ok'": {
+            "id": "ce_cvv_failed",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.payNext = cargo.fieldOutcome === 'link' ? 'link' : 'card_failed', true)"
+          },
+          "default": {
+            "id": "ce_cvv_stop_not",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ce_cvv_end",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.fieldOutcome !== 'ok'": {
+            "id": "ce_cvv_stopped",
+            "type": "END"
+          },
+          "default": {
+            "id": "ce_cvv_end_not",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ce_cvv_keep",
+        "type": "SET",
+        "variable": "ce_cvv_value",
+        "value": "cargo.field"
+      },
+      {
+        "id": "ce_zip",
+        "type": "FLOW",
+        "value": "ask-field",
+        "callType": "call",
+        "parameters": {
+          "kind": "zip",
+          "question": "Please say or enter the card's 5 digit billing zip code.",
+          "question_es": "Diga o ingrese el código postal de facturación de 5 dígitos.",
+          "error": "The zip code must be 5 digits.",
+          "error_es": "El código postal debe tener 5 dígitos."
+        }
+      },
+      {
+        "id": "ce_zip_stop",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.fieldOutcome !== 'ok'": {
+            "id": "ce_zip_failed",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.payNext = cargo.fieldOutcome === 'link' ? 'link' : 'card_failed', true)"
+          },
+          "default": {
+            "id": "ce_zip_stop_not",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ce_zip_end",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.fieldOutcome !== 'ok'": {
+            "id": "ce_zip_stopped",
+            "type": "END"
+          },
+          "default": {
+            "id": "ce_zip_end_not",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ce_zip_keep",
+        "type": "SET",
+        "variable": "ce_zip_value",
+        "value": "cargo.field"
+      },
+      {
+        "id": "ce_save_question",
+        "type": "SET",
+        "variable": "ce_q",
+        "value": "'Would you like to save this card for future payments? ' + (cargo.voice ? 'Press 1 or say' : 'Type') + ' YES, or ' + (cargo.voice ? 'press 2 or say' : 'type') + ' NO.'"
+      },
+      {
+        "id": "ce_save_question_es",
+        "type": "SET",
+        "variable": "ce_q_es",
+        "value": "'¿Desea guardar esta tarjeta para pagos futuros? ' + (cargo.voice ? 'Presione 1 o diga' : 'Escriba') + ' SÍ, o ' + (cargo.voice ? 'presione 2 o diga' : 'escriba') + ' NO.'"
+      },
+      {
+        "id": "ce_save",
+        "type": "FLOW",
+        "value": "ask-choice",
+        "callType": "call",
+        "parameters": {
+          "question": "{{ce_q}}",
+          "question_es": "{{ce_q_es}}",
+          "choices": [
+            {
+              "key": "yes",
+              "words": [
+                "1",
+                "save",
+                "guardar"
+              ]
+            },
+            {
+              "key": "no",
+              "words": [
+                "2",
+                "don't",
+                "do not",
+                "rather not",
+                "don't save",
+                "do not save",
+                "no guardar",
+                "no la guarde",
+                "mejor no"
+              ]
+            }
+          ],
+          "exit_context": "payment",
+          "exit_context_es": "pago",
+          "digits": {
+            "min": 1,
+            "max": 1
+          }
+        }
+      },
+      {
+        "id": "ce_method",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(cargo.payMethod = { kind: 'card', card: { cardNumber: ce_number_value, expirationMonth: ce_exp_value.slice(0, 2), expirationYear: ce_exp_value.slice(2), cvv: ce_cvv_value, zip: ce_zip_value }, save: cargo.choice === 'yes', label: 'the card ending in ' + (cargo.voice ? ce_number_value.slice(-4).split('').join(', ') : ce_number_value.slice(-4)), label_es: 'la tarjeta que termina en ' + (cargo.voice ? ce_number_value.slice(-4).split('').join(', ') : ce_number_value.slice(-4)) }, cargo.field = '', true)"
+      },
+      {
+        "id": "ce_forget",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(ce_number_value = '', ce_cvv_value = '', true)"
+      }
+    ],
+    "scope": "isolated"
   }
 ]

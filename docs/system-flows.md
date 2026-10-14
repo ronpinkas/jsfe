@@ -1,6 +1,6 @@
 # System Flows Library
 
-This document details the standard system flows in `flows/system.flows.json` and the tools they call in `flows/system.tools.json`. These flows handle common utility tasks such as authentication, error recovery, live-agent requests and channel switching.
+This document details the standard system flows in `flows/system.flows.json` and the tools they call in `flows/system.tools.json`. These flows handle common utility tasks such as authentication, error recovery, live-agent requests and channel switching, and provide generic workers that ask one question, collect an email address, a mailing address or a payment card.
 
 Everything below is read from the JSON. Where a flow's `description` text and its steps disagree, the steps are what runs, and the difference is called out.
 
@@ -23,6 +23,11 @@ Everything below is read from the JSON. Where a flow's `description` text and it
   - [SendOtpCode](#sendotpcode)
   - [OtpTextUndeliverable](#otptextundeliverable)
   - [LiveAgentRequested](#liveagentrequested)
+  - [AskChoice](#askchoice)
+  - [AskEmail](#askemail)
+  - [AskAddress](#askaddress)
+  - [AskField](#askfield)
+  - [CardEntry](#cardentry)
 - [Tools](#tools)
   - [send-sms-otp](#send-sms-otp)
   - [send-email-otp](#send-email-otp)
@@ -32,6 +37,8 @@ Everything below is read from the JSON. Where a flow's `description` text and it
   - [switch-to-sms](#switch-to-sms)
   - [send-twilio-sms](#send-twilio-sms)
   - [get-live-connect-link](#get-live-connect-link)
+  - [geocode-zip](#geocode-zip)
+  - [geocode-street](#geocode-street)
 
 ---
 
@@ -44,10 +51,12 @@ Everything below is read from the JSON. Where a flow's `description` text and it
 - `replace`: the current frame becomes the target. Its remaining steps are dropped, and its variables are kept with the FLOW step's `parameters` merged in. The target's declared variable defaults are **not** applied.
 - `reboot`: clear every active flow and start the target as the only flow, with fresh variables (the global variables, the target's declared defaults, then the `parameters`). SAY output accumulated before the reboot is kept and delivered with the target's output.
 
+**Variable scope.** The five generic workers (`ask-choice`, `ask-email`, `ask-address`, `ask-field`, `card-entry`) declare `scope: "isolated"`. A `call` or `replace` into an isolated flow starts it with only its declared variables and the parameters actually passed (an omitted parameter is `undefined`, never the caller's value), and its variables never reach the caller. They return their results in `sessionContext.cargo` instead (`cargo.choice`, `cargo.email`, `cargo.address`, `cargo.field`, `cargo.payMethod`…). Every other system flow uses the default `shared` scope described under `call` above. A FLOW parameter that is a single `{{…}}` template (e.g. `"capture_patterns": "{{cargo.authCapture}}"`, `"digits": "{{af_digits}}"`) passes the value itself, array or object included, not its string form.
+
 **Ending a flow.**
 - `RETURN` terminates **all** flows and makes its value the response. `RETURN ''` (used by `no-action-needed`) produces an empty response, so the host handles the user's message itself.
 - `END` returns from the current flow only, resuming its caller.
-- `DISPATCH` terminates **all** flows (queued SAYs included) and routes the turn's input through intent detection; with no match the response is empty and the host answers. The ended flows' declared outcome is kept only on a no-match. Used by `get-cell-or-email` for an off-topic answer and by `generic-retry-with-options` for an unrecognised one.
+- `DISPATCH` terminates **all** flows (queued SAYs included) and routes the turn's input through intent detection; with no match the response is empty and the host answers. The ended flows' declared outcome is kept only on a no-match. Used by `get-cell-or-email` for an off-topic answer, by `generic-retry-with-options` for an unrecognised one, and by `ask-choice` for an answer that picks no choice (it declares no outcome).
 - A terminal step may declare `outcome` / `reason` (both may be `{{…}}` templates; an outcome that interpolates to empty declares nothing). The engine reports a declared outcome once in `sessionContext.lastFlowOutcome`, and `unresolved` also fails that flow's transaction. The system flows declare:
 
 | Flow | Step | `outcome` / `reason` |
@@ -76,7 +85,9 @@ Everything below is read from the JSON. Where a flow's `description` text and it
 | `cargo.support_context` / `_es` | contact-support | topic phrase, e.g. set to `orders` / `pedidos` by `shopify-track-order`, or written by contact-support from its `support_context` / `support_context_es` parameters |
 | `cargo.sessionResolved` | contact-support | truthy when something was resolved earlier in the session; contact-support then thanks instead of apologizing. The reference host sets it when a flow declares outcome `resolved` |
 | `cargo.otpVerified` | authenticate-user, validate-otp-code, generic-retry-with-options | written by the `validate-otp` tool on success |
-| `cargo.authOptions` | written by authenticate-user; read by authenticate-user when `retrying` | `{ retry_flow, cancel_flow, email_validator, cell_validator }` of the authentication in progress, written at its start. A retry from the menu (`retrying: true`) restores all four from it |
+| `cargo.authOptions` | written by authenticate-user; read by authenticate-user when `retrying` | `{ retry_flow, cancel_flow, email_validator, cell_validator, retry_returns }` of the authentication in progress, written at its start. A retry from the menu (`retrying: true`) restores all five from it |
+| `cargo.authRetry` | written by authenticate-user; read by the flow that called it | true when this run of authenticate-user is a retry from the menu with no contact and the authentication was started with `retry_returns: true`; authenticate-user then ends at once so its caller asks for the contact its own way. False on every other run. No system flow reads it |
+| `cargo.authCapture` | written by get-cell-or-email; read by authenticate-user, get-cell-or-email, validate-otp-code, resend-otp-code, otp-send-failed | the contact capture patterns every authentication retry menu passes as `capture_patterns`: `[{ variable: 'cell_number', reader: 'phone' }, { variable: 'email', reader: 'email' }]` (see [`normalizeAndFindCapture`](#conventions-used-by-these-flows)) |
 | `cargo.authCancelFlow` | written by authenticate-user; read by validate-otp-code, otp-text-undeliverable and the code-failure menus (`cancel_flow` of the [authentication retry parameters](#genericretrywithoptions)) | the authentication's `cancel_flow` (default `contact-support`), so EXIT goes to the same flow at every step. Readers fall back to `contact-support` when it is empty |
 | `cargo.otp_cell_number` / `cargo.otp_email` | written by authenticate-user; read by send-otp-code, get-and-validate-otp-code, validate-otp-code, text-destination | where the OTP is sent |
 | `cargo.otpSendFailure` | written by send-otp-code; read by authenticate-user, resend-otp-code, otp-send-failed | why the last send did not go out: `''` (sent), `undeliverable` (the line cannot receive texts), `sms`, `email` (that send failed) or `none` (no destination). Cleared at the start of every send |
@@ -88,19 +99,33 @@ Everything below is read from the JSON. Where a flow's `description` text and it
 | `cargo.otpUndeliverableTo` | send-otp-code, otp-text-undeliverable, text-destination | the last 10 digits of a number that cannot receive texts (landline, toll-free, invalid). Written by the host's `send-sms-otp` when the destination refuses the text, and cleared by its next send |
 | `cargo.textTo` / `cargo.textTo4` | written by text-destination; read by send-text and its callers | where a text to the customer can go: 10 digits, `''` when none; and its last four, comma-spaced on voice |
 | `cargo.textSent` | written by send-text; read by its callers | true when `send-twilio-sms` returned a status for the text; false when there was no destination or the send failed |
+| `cargo.choice` / `cargo.choiceText` | written by ask-choice; read by ask-email, ask-address, ask-field, card-entry and other callers | the key of the choice the answer picked (`'other'` for any other answer when `accept_other`), and the answer as given. Both `''` at the start of every ask-choice. ask-field sets `cargo.choiceText = ''` as soon as it has read it |
+| `cargo.sensitive` | written by card-entry; read by ask-choice | paths inside the cargo (`['field', 'payMethod.card']`) that hold card data. When an ask-choice answer leaves through AGENT, EXIT or `DISPATCH`, each path is set to `null` first. card-entry does not clear the list |
+| `cargo.email` | written by ask-email; read by its callers | the address ask-email collected, `''` when none. Not the OTP destination (`cargo.otp_email`) |
+| `cargo.address` | written by ask-address; read by its callers | `{ line, street, said, verified }` once the caller confirmed the address; `null` otherwise |
+| `cargo.field` / `cargo.fieldOutcome` | written by ask-field; read by card-entry | the validated value (`''` unless ok) and `'ok'`, `'link'` (the caller asked for a payment link) or `'failed'` (invalid twice) |
+| `cargo.payMethod` | written by card-entry; read by its callers | `{ kind: 'card', card: { cardNumber, expirationMonth, expirationYear, cvv, zip }, save, label, label_es }` when all four fields were collected. card-entry does not clear it at the start |
+| `cargo.payNext` | written by card-entry; read by its callers | `'link'` when the caller asked for a payment link at a card field, `'card_failed'` when a field failed twice. Not written when the card was collected, and not cleared at the start |
 
 **Global variables** (tenant-level, optional): `global_whatsapp_invite` / `global_whatsapp_invite_es` (validate-otp-code; empty or absent = the WhatsApp invite is off), `global_live_agents_comment` / `global_live_agents_comment_es` (live-agent-requested: on non-phone channels, and on the phone when the number's schedule gives no hours).
 
-**Host functions called in expressions.** The flows call `isAnswer`, `isAgentRequest`, `matchesChoice`, `validatePhone`, `validateEmail`, `normalizeAndFindCapture` and `textWithUrlToSpeech` inside conditions and SET values. The engine does not provide them: the host must register them in `APPROVED_FUNCTIONS`. `demos/make-payment.js` has reference implementations of `matchesChoice` (exact word / word-sequence membership, not substring matching), `validatePhone`, `validateEmail` and `textWithUrlToSpeech`.
+**Host functions called in expressions.** The flows call `isAnswer`, `isAgentRequest`, `pickChoice`, `matchesChoice`, `readEmail`, `readPhone`, `validatePhone`, `validateEmail`, `validateCardNumber`, `validateExpiration`, `normalizeAndFindCapture` and `textWithUrlToSpeech` inside conditions and SET values. The engine does not provide them: the host must register them in `APPROVED_FUNCTIONS`. `demos/make-payment.js` has reference implementations of `matchesChoice` (exact word / word-sequence membership, not substring matching), `validatePhone`, `validateEmail` and `textWithUrlToSpeech`.
 
-`normalizeAndFindCapture(answer, patterns)` is the retry menu's smart capture (in the reference host, hy-rag-lambdas, `foundation/text/capture.js`). `patterns` is `[{ variable, regex, normalizer? }]`. For each pattern in order, the `normalizer` regex (global) is removed from the answer first, then `regex` is run on the result; the first pattern that matches returns `{ variable, value }`, where `value` is **the matched part only**, trimmed ("my email is a@b.com" captures `a@b.com`). No match, or `patterns` not an array, returns `null`. A pattern whose regex is invalid is skipped with a warning. The copy in `demos/make-payment.js` returns the whole normalized answer instead of the matched part.
+**Contact readers** (in the reference host, hy-rag-lambdas, `foundation/text/contact.js`), one way to read a contact for every flow set:
+- `readEmail(text)` returns the email address in the answer, lower-cased, or `''`. Spelled single letters and digits are joined ("j u a n" → `juan`), and `at` / `arroba` and `dot` / `punto` between words become `@` and `.`, so "juan at gmail dot com" reads as `juan@gmail.com`. Trailing punctuation is dropped; the result must end in a dot and two or more letters.
+- `readPhone(text)` returns the answer's digits when there are exactly 10, or 11 starting with `1` (the `1` dropped); otherwise `''`.
+- `readIdentifier(text, accountPattern)` returns `{ kind: 'account' | 'phone' | 'email', value }` or `null`, the tenant's account-number shape (a regex on the answer's digits) winning first. No system flow calls it.
+
+`normalizeAndFindCapture(answer, patterns)` is the retry menu's smart capture (in the reference host, `foundation/text/capture.js`). Each pattern is either `{ variable, reader }`, where `reader` is `'phone'` or `'email'` and the answer is read with `readPhone` / `readEmail`, or `{ variable, regex, normalizer? }`, where the `normalizer` regex (global) is removed from the answer first and `regex` is run on the result. The first pattern that yields a value returns `{ variable, value }`; for a regex pattern `value` is **the matched part only**, trimmed ("my email is a@b.com" captures `a@b.com`). No match, or `patterns` not an array, returns `null`. A pattern whose regex is invalid is skipped with a warning. Every system menu passes the reader patterns of `cargo.authCapture`. The copy in `demos/make-payment.js` handles regex patterns only and returns the whole normalized answer instead of the matched part.
+
+**Card checks** (in the reference host, `foundation/payment/card-checks.js`), used by ask-field: `validateCardNumber(digits)` is true for 12 to 19 digits that pass the Luhn checksum; `validateExpiration(mm, yy)` is true for a real month that has not passed, at most 20 years out.
 
 **Answer vocabulary.** The YES / NO / AGENT / EXIT / TEXT words are not in the flows. They live in the host's answer module (in the reference host, hy-rag-lambdas, `foundation/text/answer.js`), one list per kind shared by every flow set. Words match whole words or word runs, never substrings.
 - `isAnswer(input, kind, extra?)` returns whether the answer is a `kind` answer, `kind` being one of `yes`, `no`, `agent`, `exit`, `text`, with the caller's `extra` words added to that kind's list. `0` is AGENT and `*` is EXIT. A negated answer ("not sure", "I don't want an agent") never matches YES, AGENT or TEXT.
 - `isAgentRequest(input)` returns whether the whole answer asks for a person ("agent", "I want to talk to a representative", "hablar con una persona") or is `0`. A negated answer never does. Used at free-text prompts, where an AGENT word inside a longer answer is not a request.
-- `pickChoice(answer, choices, acceptOther)` is the ask-choice matcher of the ai-ar flow set: it returns the key of the choice the answer picks, `__agent`, `__exit`, or `''` for no choice.
+- `pickChoice(answer, choices, acceptOther)` is [ask-choice](#askchoice)'s matcher: it returns the key of the choice the answer picks, `__agent`, `__exit`, or `''` for no choice. Its rules are under AskChoice.
 
-**`digits`** on a SAY-GET (`{ min, max, autoSubmitChars?, autoSubmitMs? }`) is copied by the engine to `cargo.digits` while the answer is awaited, for the host's keypad handling (e.g. Twilio ConversationRelay). The engine removes it once the input is collected.
+**`digits`** on a SAY-GET (`{ min, max, autoSubmitChars?, autoSubmitMs? }`) is copied by the engine to `cargo.digits` while the answer is awaited, for the host's keypad handling (e.g. Twilio ConversationRelay). The engine removes it once the input is collected. ask-choice, whose SAY-GETs carry no `digits`, writes its `digits` parameter to `cargo.digits` itself before each question and removes it after the answer.
 
 ---
 
@@ -210,7 +235,7 @@ graph TD
 ---
 
 ## AuthenticateUser
-**ID**: `authenticate-user` · **Version**: 1.4.0 · **Sub-flow**  
+**ID**: `authenticate-user` · **Version**: 1.5.0 · **Sub-flow**  
 **Description**: Generic flow to authenticate user via OTP sent to cell or email.
 
 The gatekeeper. It records its options in `cargo.authOptions` / `cargo.authCancelFlow`, collects a phone or email (via `get-cell-or-email`), optionally lets a tenant-supplied validator flow approve the contact, records the destination in `cargo.otp_cell_number` / `cargo.otp_email`, sends the code through [`send-otp-code`](#sendotpcode), hands any send failure to [`otp-send-failed`](#otpsendfailed), and hands off to `get-and-validate-otp-code`. On success it sets `auth_result = true` and returns to its caller, with `cargo.otpVerified` set by the `validate-otp` tool.
@@ -222,30 +247,33 @@ The gatekeeper. It records its options in `cargo.authOptions` / `cargo.authCance
 *   `email` (string): Email already supplied by the caller. Forwarded the same way.
 *   `email_validator` (string, optional flow name): When supplied, it is called with `{email}` before an email OTP is sent, and it MUST set `contact_valid = true` to allow the send. **Fail-closed.** The validator must end by completion, because a `RETURN` in it terminates all flows.
 *   `cell_validator` (string, optional flow name): Same contract, called with `{cell_number}` before an SMS OTP.
-*   `retrying` (boolean): Set by the retry menu. When true and `cargo.authOptions` exists, `retry_flow`, `cancel_flow`, `email_validator` and `cell_validator` are restored from `cargo.authOptions` and the values passed with the retry are ignored, so a retry keeps the options of the authentication being retried.
+*   `retrying` (boolean): Set by the retry menu. When true and `cargo.authOptions` exists, `retry_flow`, `cancel_flow`, `email_validator`, `cell_validator` and `retry_returns` are restored from `cargo.authOptions` and the values passed with the retry are ignored, so a retry keeps the options of the authentication being retried.
+*   `retry_returns` (boolean): When true, a retry from the menu that carries no contact (YES or `1`, not a captured phone or email) returns to the caller with `cargo.authRetry = true`, so the caller asks for the contact again its own way. Default: authenticate-user asks (through `get-cell-or-email`). No flow in this library passes it.
 
 ### Variables
 `cell_or_email`, `cell_number`, `email`, `contact_valid` (true when no validator applies), `unverified_contact` / `unverified_contact_es` (the rejected contact phrased for the retry message: "the number 555…" / "the email a@b.c").
 
 ### Steps
 1. `check_already_verified` (CASE) - `cargo.otpVerified` → **END** (return to the caller at once). Otherwise continue.
-2. `remember_or_restore_retry_flow` / `_cancel_flow` / `_email_validator` / `_cell_validator` (SET) - with `retrying` and a `cargo.authOptions`: each option = its value in `cargo.authOptions` (`''` when absent there). Otherwise: each option = the passed value, `''` when undefined or empty.
+2. `remember_or_restore_retry_flow` / `_cancel_flow` / `_email_validator` / `_cell_validator` / `_retry_returns` (SET) - with `retrying` and a `cargo.authOptions`: each option = its value in `cargo.authOptions` (`''` when absent there; `retry_returns` = `!!cargo.authOptions.retry_returns`). Otherwise: each option = the passed value, `''` when undefined or empty (`retry_returns` = `!!retry_returns`, false when undefined).
 3. `default_retry_flow` / `default_cancel_flow` (SET) - `retry_flow ||= 'authenticate-user'`, `cancel_flow ||= 'contact-support'`.
-4. `remember_options` (SET, side effect) - `cargo.authOptions = { retry_flow, cancel_flow, email_validator, cell_validator }` and `cargo.authCancelFlow = cancel_flow`.
-5. `get_contact_info` (FLOW `get-cell-or-email`, `call`) - passes `retry_flow`, `cancel_flow`, `cell_number`, `email`. Sets `cell_number` or `email`, or leaves the flow stack via one of its own exits.
-6. `init_contact_valid` (SET) - `contact_valid` = false when a validator applies to the collected contact (`cell_validator` with a `cell_number`, or `email_validator` with an `email`); true otherwise.
-7. `validate_contact` (CASE) - runs `{{cell_validator}}` with `{cell_number}` or `{{email_validator}}` with `{email}` (`call`). The cell validator is checked first.
-8. `describe_unverified_contact` / `_es` (SET) - builds the phrase used below.
-9. `gate_otp_on_contact_valid` (CASE) - `!contact_valid` → FLOW [`generic-retry-with-options`](#genericretrywithoptions) (`replace`) with "Sorry, I could not verify {{unverified_contact}}.", `retry_flow`, `cancel_flow`, and `capture_patterns` for `cell_number` (`[0-9\-\(\)\.\s]{10,}`, normalizer `[^0-9]`) and `email` (`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`). No `retry_call_type`, `allow_code_entry` or `question`.
-10. `reset_resend_count` / `reset_mismatch_count` (SET, side effect) - `cargo.otpResends = 0`, `cargo.otpMismatches = 0`.
-11. `set_cell_number_to_cargo` / `set_email_to_cargo` (SET, side effect) - `cargo.otp_cell_number = cell_number || ''`, `cargo.otp_email = email || ''`. This is the destination `send-otp-code` reads.
-12. `send_code` (FLOW [`send-otp-code`](#sendotpcode), `call`) - sends the code by SMS to `cargo.otp_cell_number` or by email to `cargo.otp_email`, and records `cargo.otpSendFailure` (`''` when the code went out). A number already refused for texts (`cargo.otpUndeliverableTo`) is not texted again.
-13. `auth_check_sent` (CASE) - `cargo.otpSendFailure` → FLOW [`otp-send-failed`](#otpsendfailed) (`replace`). Otherwise continue.
-14. `get_and_validate_otp_code` (FLOW `get-and-validate-otp-code`, `call`).
-15. `check_validation_result` (CASE) - `cargo.otpVerified` → SET `auth_result = true`. Otherwise → FLOW `generic-retry-with-options` (`replace`), "Sorry, the code you entered was invalid or expired.", with the [authentication retry parameters](#genericretrywithoptions) and `allow_code_entry: true`.
+4. `remember_options` (SET, side effect) - `cargo.authOptions = { retry_flow, cancel_flow, email_validator, cell_validator, retry_returns }` and `cargo.authCancelFlow = cancel_flow`.
+5. `retry_through_caller` (SET, side effect) - `cargo.authRetry = !!(retrying && !cell_number && !email && retry_returns)`.
+6. `hand_retry_to_caller` (CASE) - `cargo.authRetry` → **END** (`caller_asks_again`: return to the caller, which asks again). Otherwise continue.
+7. `get_contact_info` (FLOW `get-cell-or-email`, `call`) - passes `retry_flow`, `cancel_flow`, `cell_number`, `email`. Sets `cell_number` or `email`, or leaves the flow stack via one of its own exits. It also writes `cargo.authCapture`, the capture patterns of every retry menu below.
+8. `init_contact_valid` (SET) - `contact_valid` = false when a validator applies to the collected contact (`cell_validator` with a `cell_number`, or `email_validator` with an `email`); true otherwise.
+9. `validate_contact` (CASE) - runs `{{cell_validator}}` with `{cell_number}` or `{{email_validator}}` with `{email}` (`call`). The cell validator is checked first.
+10. `describe_unverified_contact` / `_es` (SET) - builds the phrase used below.
+11. `gate_otp_on_contact_valid` (CASE) - `!contact_valid` → FLOW [`generic-retry-with-options`](#genericretrywithoptions) (`replace`) with "Sorry, I could not verify {{unverified_contact}}.", `retry_flow`, `cancel_flow`, and `capture_patterns: "{{cargo.authCapture}}"`. No `retry_call_type`, `allow_code_entry` or `question`.
+12. `reset_resend_count` / `reset_mismatch_count` (SET, side effect) - `cargo.otpResends = 0`, `cargo.otpMismatches = 0`.
+13. `set_cell_number_to_cargo` / `set_email_to_cargo` (SET, side effect) - `cargo.otp_cell_number = cell_number || ''`, `cargo.otp_email = email || ''`. This is the destination `send-otp-code` reads.
+14. `send_code` (FLOW [`send-otp-code`](#sendotpcode), `call`) - sends the code by SMS to `cargo.otp_cell_number` or by email to `cargo.otp_email`, and records `cargo.otpSendFailure` (`''` when the code went out). A number already refused for texts (`cargo.otpUndeliverableTo`) is not texted again.
+15. `auth_check_sent` (CASE) - `cargo.otpSendFailure` → FLOW [`otp-send-failed`](#otpsendfailed) (`replace`). Otherwise continue.
+16. `get_and_validate_otp_code` (FLOW `get-and-validate-otp-code`, `call`).
+17. `check_validation_result` (CASE) - `cargo.otpVerified` → SET `auth_result = true`. Otherwise → FLOW `generic-retry-with-options` (`replace`), "Sorry, the code you entered was invalid or expired.", with the [authentication retry parameters](#genericretrywithoptions) and `allow_code_entry: true`.
 
 ### Ends
-Success returns to the caller (by completion) with `auth_result = true` and `cargo.otpVerified` set. Already verified → `END`. Failures leave through `generic-retry-with-options`, `otp-send-failed` (which goes on to `otp-text-undeliverable` or `generic-retry-with-options`), or through `get-cell-or-email`'s own exits (cancel, live agent, off-topic hand-off). `otp-send-failed` and the flow it replaces itself with keep this frame's variables (`retry_flow`, `cancel_flow`, the validators) because they are reached by `replace`, and `otp-text-undeliverable` returns here by `replace`. EXIT at any step goes to the authentication's `cancel_flow`: `get-cell-or-email` and the contact menu receive it as a variable, the other steps read `cargo.authCancelFlow`.
+Success returns to the caller (by completion) with `auth_result = true` and `cargo.otpVerified` set. Already verified → `END`. A contact-less retry with `retry_returns` → `END` with `cargo.authRetry = true`. Failures leave through `generic-retry-with-options`, `otp-send-failed` (which goes on to `otp-text-undeliverable` or `generic-retry-with-options`), or through `get-cell-or-email`'s own exits (cancel, live agent, off-topic hand-off). `otp-send-failed` and the flow it replaces itself with keep this frame's variables (`retry_flow`, `cancel_flow`, the validators) because they are reached by `replace`, and `otp-text-undeliverable` returns here by `replace`. EXIT at any step goes to the authentication's `cancel_flow`: `get-cell-or-email` and the contact menu receive it as a variable, the other steps read `cargo.authCancelFlow`.
 
 ### Flowchart
 ```mermaid
@@ -254,7 +282,10 @@ graph TD
     check_already_verified -->|yes| already_verified[END]
     check_already_verified -->|no| options["SET: options from cargo.authOptions when retrying, else the parameters; defaults authenticate-user / contact-support"]
     options --> remember_options[SET: cargo.authOptions, cargo.authCancelFlow]
-    remember_options --> get_contact_info[FLOW call: get-cell-or-email]
+    remember_options --> retry_through_caller[SET: cargo.authRetry]
+    retry_through_caller --> hand_retry{cargo.authRetry?}
+    hand_retry -->|yes| caller_asks_again[END: the caller asks again]
+    hand_retry -->|no| get_contact_info[FLOW call: get-cell-or-email]
     get_contact_info --> init_contact_valid[SET: contact_valid]
     init_contact_valid --> validate_contact{validator for this contact?}
     validate_contact -->|cell_validator + cell_number| run_cell_validator["FLOW call: {{cell_validator}}"]
@@ -275,13 +306,14 @@ graph TD
     check_result -->|no| auth_failed["FLOW replace: generic-retry-with-options, code entry allowed"]
     auth_success --> stop((Return to caller))
     already_verified --> stop
+    caller_asks_again --> stop
 ```
 
 ---
 ---
 
 ## GetCellOrEmail
-**ID**: `get-cell-or-email` · **Version**: 1.1.2 · **Sub-flow**  
+**ID**: `get-cell-or-email` · **Version**: 1.1.3 · **Sub-flow**  
 **Description**: Prompt user to provide either their cell phone number or email address for account lookup.
 
 ### Parameters
@@ -290,20 +322,21 @@ graph TD
 *   Also reads `cell_number` / `email` when the caller passes them (`authenticate-user` does). These are not declared as parameters here.
 
 ### Steps
-1. Guard `cell_number` and `email` to `''` when undefined.
-2. `ask_cell_or_email_if_no_param` (CASE):
+1. `contact_capture_patterns` (SET, side effect) - `cargo.authCapture = [{ variable: 'cell_number', reader: 'phone' }, { variable: 'email', reader: 'email' }]`, the capture patterns every authentication retry menu passes.
+2. Guard `cell_number` and `email` to `''` when undefined.
+3. `ask_cell_or_email_if_no_param` (CASE):
    - nothing supplied and `cargo.callerId` → SAY-GET `cell_or_email`: "To authenticate using your caller id, please {verb} yes. Otherwise, please {verb}[ or enter] the phone or email associated with your account[ followed by the pound key]. To exit anytime you can [press the asterisk key or ]{verb} EXIT." `digits: {min 7, max 12, autoSubmitChars ["1"], autoSubmitMs 2500}` (a single keypad "1" auto-submits).
    - nothing supplied → SAY-GET `cell_or_email`: "Please {verb} [or enter] the phone or email associated with your account[ followed by the pound key if entered using the dial pad]. To exit anytime …", `digits: {min 7, max 12}`.
    - otherwise → `cell_or_email = cell_number || email` (no prompt).
-3. Normalization (SET) - `prospective_cell_number` = digits only. `prospective_email` = the first email-shaped match, or failing that `email` or a match that allows spaces, with the spaces removed. `cell_or_email` is trimmed, lower-cased and stripped of punctuation.
-4. `branch_on_cell_or_email` (CASE, first match wins):
+4. Normalization (SET) - `prospective_cell_number` = digits only. `prospective_email` = `readEmail(cell_or_email)` (typed, spoken or spelled; see [Contact readers](#conventions-used-by-these-flows)). Then `cell_or_email` is trimmed, lower-cased and stripped of punctuation.
+5. `branch_on_cell_or_email` (CASE, first match wins):
    1. `validatePhone(prospective_cell_number)` → `cell_number` = those digits.
    2. `validateEmail(prospective_email)` → `email` = it.
    3. `cargo.callerId` and the answer is `1`, or `isAnswer(…, 'yes', ['thanks', 'thank you', 'gracias'])` with no digit and no `@`, or `matchesChoice` phone words (`phone, cell, caller id, number, numero, teléfono, celular, identificador de llamadas`…) → `cell_number = cargo.callerId`.
    4. `isAnswer(…, 'exit')` (EXIT words or `*`) in an answer of at most two words → FLOW `{{cancel_flow || 'contact-support'}}` (`reboot`).
    5. `isAgentRequest` (the whole answer asks for a person, or is `0`) → FLOW `live-agent-requested` (`reboot`).
    6. `cargo.callerId` and digits that are not a valid phone → `cell_number = cargo.callerId`.
-   7. digits that are not a valid phone (no caller ID) → FLOW `generic-retry-with-options` (`replace`): "Sorry, the phone number you provided isn't valid.", with `retry_flow`, `cancel_flow` and the cell/email `capture_patterns` (no `retry_call_type`, so a retry by YES or `1` reboots).
+   7. digits that are not a valid phone (no caller ID) → FLOW `generic-retry-with-options` (`replace`): "Sorry, the phone number you provided isn't valid.", with `retry_flow`, `cancel_flow` and `capture_patterns: "{{cargo.authCapture}}"` (no `retry_call_type`, so a retry by YES or `1` reboots).
    8. `cargo.callerId` (anything else) → `cell_number = cargo.callerId`.
    9. the question was asked (`!cell_number && !email`) and the answer is three or more words containing no digit and no `@` → **`DISPATCH`** with **`outcome: "unresolved"`, `reason: "auth_prompt_off_topic"`**. The answer goes to intent detection: a matching flow starts at once (the outcome is dropped); otherwise the host answers with the outcome.
    10. default → FLOW `generic-retry-with-options` (`replace`): "Sorry, I do need the the phone or email associated with your account to proceed.", same parameters.
@@ -316,12 +349,13 @@ By completion (returning to `authenticate-user` with `cell_number` or `email` se
 ### Flowchart
 ```mermaid
 graph TD
-    start((Start)) --> guards[SET: cell_number/email default '']
+    start((Start)) --> capture_patterns[SET: cargo.authCapture]
+    capture_patterns --> guards[SET: cell_number/email default '']
     guards --> ask{contact supplied?}
     ask -->|no + callerId| ask_with_caller_id[SAY-GET: say yes for caller id, or phone/email]
     ask -->|no| ask_plain[SAY-GET: phone or email]
     ask -->|yes| use_provided[SET: cell_or_email]
-    ask_with_caller_id --> normalize[SET: prospective_cell_number / prospective_email / cell_or_email]
+    ask_with_caller_id --> normalize["SET: prospective_cell_number, prospective_email = readEmail, cell_or_email"]
     ask_plain --> normalize
     use_provided --> normalize
     normalize --> branch{first match}
@@ -379,7 +413,7 @@ graph TD
 ---
 
 ## ValidateOtpCode
-**ID**: `validate-otp-code` · **Version**: 1.1.3 · **Sub-flow**  
+**ID**: `validate-otp-code` · **Version**: 1.1.4 · **Sub-flow**  
 **Description**: Validate OTP code entered by user; sets `cargo.otpVerified` on success. Capped at 3 wrong codes per authentication (`cargo.otpMismatches`, reset by authenticate-user): the code is withdrawn and the retry/agent/exit choice follows, where retry sends a fresh code.
 
 Reads `normalized_otp_code` and `user_choice` from `get-and-validate-otp-code`. An expired or missing code is answered with a fresh one (via `resend-otp-code`), not with "didn't match".
@@ -458,7 +492,7 @@ graph TD
 ---
 
 ## ResendOtpCode
-**ID**: `resend-otp-code` · **Version**: 1.1.1 · **Sub-flow**  
+**ID**: `resend-otp-code` · **Version**: 1.1.2 · **Sub-flow**  
 **Description**: Worker: sends a fresh code to the destination authenticate-user used (`cargo.otp_cell_number` / `cargo.otp_email`) and says why (`expired`, `missing` or `requested`). At most 2 per authentication (`cargo.otpResends`), then the retry menu.
 
 Called by `validate-otp-code` with `callType: "call"`.
@@ -512,7 +546,7 @@ The library's only retry menu: the authentication flows and the Shopify lookups 
 *   `retry_flow` (string): Flow to run again on YES / `1` or a captured contact.
 *   `retry_call_type` (string): `'reboot'` (the default: start `retry_flow` afresh, alone) or `'replace'` (re-enter it in this frame, e.g. `authenticate-user` inside its caller).
 *   `cancel_flow` (string): Flow to reboot on EXIT. Empty or absent = `contact-support`.
-*   `capture_patterns` (array): Optional `[{variable, regex, normalizer?}]` for [`normalizeAndFindCapture`](#conventions-used-by-these-flows). Absent = no smart capture.
+*   `capture_patterns` (array): Optional `[{variable, reader}]` or `[{variable, regex, normalizer?}]` for [`normalizeAndFindCapture`](#conventions-used-by-these-flows). Absent = no smart capture. The JSON's parameter description still names only `{variable, regex}`.
 *   `allow_code_entry` (boolean): A 6-digit answer is a verification code, checked with `validate-otp-code`.
 *   `caller_outcome`, `caller_reason` (string): Optional. The caller's declared outcome (usually `unresolved`) and reason for the failure that led here. The `DISPATCH` of an unrecognised answer declares them, so they reach the host only when intent detection matches no flow. Omitted = no outcome.
 
@@ -523,10 +557,10 @@ The library's only retry menu: the authentication flows and the Shopify lookups 
 | `retry_flow` | `authenticate-user` |
 | `retry_call_type` | `replace` |
 | `cancel_flow` | `{{cargo.authCancelFlow}}` |
-| `capture_patterns` | `cell_number`: `[0-9\-\(\)\.\s]{10,}`, normalizer `[^0-9]`; `email`: `[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}` |
+| `capture_patterns` | `{{cargo.authCapture}}`: `cell_number` read with `readPhone`, `email` read with `readEmail` |
 | `question` / `question_es` | "Would you like to try again to get access to your account?" / "¿Le gustaría intentar nuevamente obtener acceso a su cuenta?" |
 
-`allow_code_entry` is `true` after a wrong code (authenticate-user) and at the resend cap, `false` at the wrong-code cap (the code was withdrawn) and after a failed send. `authenticate-user`'s rejected-contact menu and `get-cell-or-email`'s menus pass only `retry_flow`, `cancel_flow` and the cell/email `capture_patterns`.
+`allow_code_entry` is `true` after a wrong code (authenticate-user) and at the resend cap, `false` at the wrong-code cap (the code was withdrawn) and after a failed send. `authenticate-user`'s rejected-contact menu and `get-cell-or-email`'s menus pass only `retry_flow`, `cancel_flow` and `capture_patterns: "{{cargo.authCapture}}"`.
 
 ### Variables
 `user_choice`, `smart_capture_result`, `normalized_otp_code` (a 6-digit code typed at the menu, when `allow_code_entry`).
@@ -539,7 +573,7 @@ The library's only retry menu: the authentication flows and the Shopify lookups 
    - a capture and `retry_call_type === 'replace'` → FLOW `{{retry_flow}}` (`replace`) with `cell_number: ''`, `email: ''`, `[captured variable]: captured value`, `retry_flow`, `cancel_flow`, `retrying: true`.
    - a capture → FLOW `{{retry_flow}}` (`reboot`) with `[captured variable]: captured value`, `retry_flow`, `cancel_flow`.
 
-   So an answer that contains a phone or email goes straight back in with that value (the matched part of the answer).
+   So an answer that contains a phone or email goes straight back in with that value (with the `cargo.authCapture` readers: the 10-digit number, or the email address lower-cased).
 5. `read_typed_code` (SET) - with `allow_code_entry`, `normalized_otp_code` = the answer's digits when there are exactly 6; else `''`.
 6. `check_typed_code` (CASE) - `normalized_otp_code` → FLOW [`validate-otp-code`](#validateotpcode) (`call`).
 7. `normalize_choice` (SET) - trim, lower-case, strip punctuation.
@@ -589,7 +623,7 @@ graph TD
 ---
 
 ## OtpSendFailed
-**ID**: `otp-send-failed` · **Version**: 1.0.1 · **Sub-flow**  
+**ID**: `otp-send-failed` · **Version**: 1.0.2 · **Sub-flow**  
 **Description**: Worker: a code could not be sent (`cargo.otpSendFailure`). A line that cannot receive texts goes to otp-text-undeliverable; any other failure offers the retry.
 
 Reached by `replace` from `authenticate-user` (`auth_check_sent`) and from `resend-otp-code` (`resend_check_sent`) when [`send-otp-code`](#sendotpcode) recorded a failure, so it keeps the replaced frame's variables.
@@ -726,19 +760,19 @@ graph TD
 ---
 
 ## OtpTextUndeliverable
-**ID**: `otp-text-undeliverable` · **Version**: 1.0.3 · **Sub-flow**  
+**ID**: `otp-text-undeliverable` · **Version**: 1.0.4 · **Sub-flow**  
 **Description**: Worker for authenticate-user: the number for the code cannot receive texts (landline, toll-free, invalid). Says so and asks for the account's email or a mobile number; never offers to text the same number again.
 
 Reached by `replace` from [`otp-send-failed`](#otpsendfailed) when `cargo.otpSendFailure` is `undeliverable`, so it keeps `authenticate-user`'s variables (`retry_flow`, `cancel_flow`, the validators) and returns to it by `replace`.
 
 ### Variables
-`user_choice` (the answer), `undeliverable_last4` (last four digits of the refused number; comma-spaced on voice), `choice_digits` (digits in the answer), `choice_email` (an email address in the answer, if any).
+`user_choice` (the answer), `undeliverable_last4` (last four digits of the refused number; comma-spaced on voice), `choice_digits` (the 10-digit number in the answer, if any), `choice_email` (an email address in the answer, if any).
 
 ### Steps
 1. `describe_number` (SET) - `undeliverable_last4` from `cargo.otpUndeliverableTo`: "1, 2, 3, 4" on voice, "1234" otherwise.
 2. `ask_other_contact` (SAY-GET `user_choice`, `digits: {min 1, max 12, autoSubmitChars ["0"], autoSubmitMs 2500}`) - "The number ending with {undeliverable_last4} can't receive text messages, so I can't text it a code. Please {verb} the email address on your account, or {voice ? 'say or enter' : verb} a mobile number that can receive texts. To talk to an agent [press 0 or ]{verb} AGENT. To exit [press the asterisk key or ]{verb} EXIT."
-3. `read_digits` (SET) - `choice_digits` = the answer's digits.
-4. `read_email` (SET) - `choice_email` = the first email address in the answer (`[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}`); failing that, the first match that allows spaces, with the spaces removed; else `''`.
+3. `read_digits` (SET) - `choice_digits = readPhone(user_choice)`: the answer's digits when there are exactly 10 (or 11 with a leading `1`, dropped); else `''`.
+4. `read_email` (SET) - `choice_email = readEmail(user_choice)`: the email address in the answer, typed, spoken or spelled, lower-cased; else `''`.
 5. `clear_cell` / `clear_email` (SET) - `cell_number = ''`, `email = ''`.
 6. `handle_choice` (CASE, first match wins):
    - `choice_email` and `validateEmail(choice_email)` → FLOW `authenticate-user` (`replace`) with `email: {{choice_email}}`.
@@ -828,11 +862,343 @@ graph TD
 
 ---
 
+## AskChoice
+**ID**: `ask-choice` · **Version**: 1.8.0 · **Sub-flow** · **Scope**: isolated  
+**Description**: Worker: asks one question and returns the caller's choice in `cargo.choice` (the matching key) and `cargo.choiceText` (the answer as given). One re-ask on a short miss; AGENT (or `0`) reaches a person and EXIT (or `*`) ends, the same for every question; anything still unrecognised is another request and is `DISPATCH`ed, unless `accept_other`, which returns `cargo.choice = 'other'` with the text for the caller to interpret.
+
+The question primitive the other generic workers are built on: ask-email, ask-address, ask-field and card-entry ask every question through it.
+
+### Parameters
+*   `question` (string, required): The question (English).
+*   `question_es` (string): The question (Spanish). Empty or absent = `question`.
+*   `choices` (array, required): `[{ key, words, negative?, neutral? }]` in priority order. `words` include any keypad digit (e.g. `"1"`). See the matching rules below.
+*   `retry` / `retry_es` (string): Re-ask wording. Empty or absent = "Sorry, I didn't catch that. " + `question` / "Disculpe, no le entendí. " + the Spanish question.
+*   `accept_other` (boolean): Return any other answer as choice `other` instead of re-asking. `true` or `'true'`.
+*   `digits` (object): Keypad bounds `{ min, max }`, written to `cargo.digits` while each answer is awaited.
+*   `exit_context` / `exit_context_es` (string): What EXIT abandons, passed to contact-support as `support_context`. Empty or absent = "your request" / "su solicitud".
+
+### Variables
+`ac_answer`, `ac_key`, `ac_other`, `ac_q_es`, `ac_retry`, `ac_retry_es`, `ac_exit_ctx`, `ac_exit_ctx_es`.
+
+### Matching (`pickChoice`)
+The host's `pickChoice(answer, choices, accept_other)` decides; the rules, read from `foundation/text/answer.js` in the reference host:
+- The answer is unescaped, lower-cased and stripped of punctuation (`*`, `@` and `.` kept). Agreeing phrases that hold a negation word ("no problem", "why not", "no hay problema") are removed first.
+- A choice keyed `yes` also takes the standard YES words. The NO-type choice (the first keyed `no`, `decline`, `done` or `cancel`, or marked `negative: true`) also takes the standard NO words.
+- The answer is split into clauses (at `,` `;` `!` `?`, ". ", "but", "pero"). In each clause, the words from the first negation word on ("not", "don't", "no", "nunca"…) are negated.
+- A NO-type word, or a word that itself holds a negation, matches the whole answer. Any other word picks its choice when it appears outside a negated part. Inside a negated part only, a `neutral: true` choice still matches (the negation is about the object), unless the word follows its negation within two words; any other choice is blocked.
+- Choices are tried in order and the first match wins. Then: a deferral ("later", "tomorrow", "not now", "mañana", "luego"…) answers with the NO-type choice; a YES match in a reply led by a bare "no" ("no", "nope", "nah", "no thanks", "no gracias") becomes the NO-type choice; a blocked match with a NO-type choice answers NO.
+- No choice matched: `0`, or an answer with no negation and no `@` that holds an AGENT word (with `accept_other`: that is entirely an agent request), returns `__agent`. `*`, or an answer that is just exit / quit / salir / abort (and, without `accept_other`, cancel / cancelar), optionally followed by "please" / "por favor", returns `__exit`. Otherwise `''`.
+
+The flow's description says that with `accept_other` EXIT matches "exit / salir / cancel / cancelar"; `pickChoice` treats cancel / cancelar as an answer there (as the description's last sentence also says), and accepts quit and abort.
+
+### Steps
+1. `ac_reset` (SET, side effect) - `cargo.choice = ''`, `cargo.choiceText = ''`.
+2. `ac_accepts_other`, `ac_question_es`, `ac_retry_en`, `ac_retry_spanish`, `ac_exit_context`, `ac_exit_context_es` (SET) - the defaults above.
+3. `ac_keypad` (SET, side effect) - `cargo.digits = digits` when it is an object, else `undefined`.
+4. `ac_ask` (SAY-GET `ac_answer`) - `{{question}}` / `{{ac_q_es}}`.
+5. `ac_match` (SET) - `ac_key = pickChoice(ac_answer, choices, ac_other)`.
+6. `ac_keypad_again` (SET, side effect) - `cargo.digits` as in step 3, for a re-ask.
+7. `ac_reask_on_miss` (CASE) - no key, no `accept_other`, and fewer than three words that contain a letter → SAY-GET `ac_answer` with the retry wording. A longer miss is not re-asked; it is a new request.
+8. `ac_match_again` (SET) - after a re-ask, `ac_key = pickChoice(…)` on the new answer.
+9. `ac_keypad_done` (SET, side effect) - `cargo.digits = undefined`. When the answer leaves through AGENT, EXIT or `DISPATCH` (`__agent`, `__exit`, or no key without `accept_other`) and `cargo.sensitive` is an array, each dotted path in it is set to `null` inside the cargo first.
+10. `ac_route` (CASE, first match wins):
+    - `__agent` → FLOW `live-agent-requested` (`reboot`).
+    - `__exit` → FLOW `contact-support` (`reboot`) with `support_context` / `support_context_es` = the exit context.
+    - no key with `accept_other` → `cargo.choice = 'other'`, `cargo.choiceText` = the answer (the engine's `\'`, `\"` and `\\` escapes removed).
+    - no key → **`DISPATCH`** (no outcome): the answer goes to intent detection, otherwise the host answers.
+    - default → `cargo.choice = ac_key`, `cargo.choiceText` = the answer, unescaped.
+
+### Ends
+By completion with `cargo.choice` set, by `reboot` into `live-agent-requested` or `contact-support`, or by `DISPATCH`.
+
+### Flowchart
+```mermaid
+graph TD
+    start((Start)) --> ac_reset["SET: cargo.choice = '', cargo.choiceText = ''"]
+    ac_reset --> defaults[SET: accept_other, Spanish question, retry wording, exit context]
+    defaults --> ac_keypad[SET: cargo.digits]
+    ac_keypad --> ac_ask[SAY-GET: question]
+    ac_ask --> ac_match[SET: ac_key = pickChoice]
+    ac_match --> reask{no key, no accept_other, under 3 words?}
+    reask -->|yes| ac_reask[SAY-GET: retry wording]
+    reask -->|no| keypad_done
+    ac_reask --> ac_match_again[SET: ac_key = pickChoice]
+    ac_match_again --> keypad_done["SET: cargo.digits removed; cargo.sensitive paths = null on AGENT, EXIT, DISPATCH"]
+    keypad_done --> route{ac_key}
+    route -->|__agent| ac_agent[FLOW reboot: live-agent-requested]
+    route -->|__exit| ac_exit[FLOW reboot: contact-support + exit context]
+    route -->|none, accept_other| ac_return_other["SET: cargo.choice = 'other', cargo.choiceText"]
+    route -->|none| ac_other_request[DISPATCH]
+    route -->|a key| ac_return_choice[SET: cargo.choice = key, cargo.choiceText]
+    ac_return_other --> stop((Return to caller))
+    ac_return_choice --> stop
+```
+
+---
+
+## AskEmail
+**ID**: `ask-email` · **Version**: 1.3.0 · **Sub-flow** · **Scope**: isolated  
+**Description**: Worker: an email address. With `on_file`, the question offers it (OK keeps it) and any other address the caller gives replaces it. One re-ask when the answer is not an email. Sets `cargo.email` (`''` when none).
+
+### Parameters
+*   `question` (string, required) / `question_es` (string): The question. With `on_file`, the caller's question is the one that offers it; the flow does not word the offer itself.
+*   `on_file` (string): The address on file, kept by OK.
+*   `confirm` (string): `'true'` when `on_file` came from the caller, so it is read back too.
+*   `attempt`, `why` (string, internal): the attempt number, and `'invalid'` (not an address) or `'retry'` (the read-back was wrong), passed by the flow's own re-ask.
+
+### Variables
+`ae_n`, `ae_q`, `ae_q_es`, `ae_found`, `ae_next`, `ae_new`, `ae_why` (initial `'invalid'`).
+
+### Steps
+1. `ae_attempt` (SET) - `ae_n` = `attempt`, else 0.
+2. `ae_question` / `ae_question_es` (SET) - on a re-ask, "Okay, let's try again. " (`why === 'retry'`) or "That doesn't look like an email address. " (Spanish: "De acuerdo, intentemos de nuevo. " / "Eso no parece un correo electrónico. "), then the question.
+3. `ae_ask` (FLOW [`ask-choice`](#askchoice), `call`) - one choice `ok` (`1`, ok, okay, yes, send, send it, si, sí, enviar, envíalo, correcto; only these words, since the key is not `yes`), `accept_other: true`, `digits: {min 1, max 1}`, exit context "email" / "correo".
+4. `ae_read` (SET) - `ae_found = readEmail(cargo.choiceText)`; failing that, `on_file` when the choice was `ok` and `on_file` is set; else `''`.
+5. `ae_is_new` (SET) - `ae_new` = an address was found, and `confirm === 'true'` or it differs from `on_file` (compared with `on_file` lower-cased).
+6. `ae_readback` / `ae_readback_es` (SET) - "I have {address}. Is that right? Press 1 or say YES, or press 2 or say NO." On voice the address is spelled out character by character, `@` as "at" and `.` as "dot" ("arroba" / "punto" in Spanish); in text it is shown as is, with "Type YES, or type NO.". Spanish: "Tengo {address}. ¿Es correcto? Presione 1 o diga SÍ, o presione 2 o diga NO." / "Escriba SÍ, o escriba NO.".
+7. `ae_confirm_new` (CASE) - `ae_new` → FLOW `ask-choice` (`call`) with the read-back, choices `no` (`2`, wrong, incorrect, incorrecto, plus the standard NO words) and `yes` (`1`, plus the standard YES words), `digits: {min 1, max 1}`, exit context "email". No `accept_other`, so a miss is re-asked once and then `DISPATCH`ed.
+8. `ae_wrong` / `ae_drop_wrong` (SET) - a read-back not answered YES: `ae_why = 'retry'` and `ae_found = ''`.
+9. `ae_next_attempt` (SET) - `ae_next = String(ae_n + 1)`.
+10. `ae_route` (CASE, first match wins):
+    - `ae_found` → `cargo.email = ae_found`.
+    - first attempt (`ae_n < 1`) → FLOW `ask-email` (`replace`) with `question`, `question_es`, `on_file`, `confirm`, `attempt: ae_next`, `why: ae_why`.
+    - default → `cargo.email = ''`.
+
+An `on_file` kept by OK is used as given while `readEmail` lower-cases, so an `on_file` with capital letters is read back like a new address. ask-email does not clear `cargo.email` at the start: when ask-choice leaves through AGENT, EXIT or `DISPATCH`, `cargo.email` keeps its earlier value.
+
+### Ends
+By completion with `cargo.email` set (`''` after two failed attempts), or through ask-choice's exits.
+
+### Flowchart
+```mermaid
+graph TD
+    start((Start)) --> ae_attempt[SET: ae_n]
+    ae_attempt --> ae_question[SET: question, with the re-ask lead-in]
+    ae_question --> ae_ask[FLOW call: ask-choice, OK or any answer]
+    ae_ask --> ae_read["SET: ae_found = readEmail, else on_file on OK"]
+    ae_read --> ae_is_new[SET: ae_new]
+    ae_is_new --> ae_readback[SET: read-back wording]
+    ae_readback --> confirm{ae_new?}
+    confirm -->|yes| ae_ask_right[FLOW call: ask-choice, YES / NO]
+    confirm -->|no| ae_wrong
+    ae_ask_right --> ae_wrong["SET: not YES = retry, ae_found = ''"]
+    ae_wrong --> ae_route{result}
+    ae_route -->|ae_found| ae_record[SET: cargo.email = ae_found]
+    ae_route -->|first attempt| ae_again[FLOW replace: ask-email, next attempt]
+    ae_route -->|default| ae_none["SET: cargo.email = ''"]
+    ae_record --> stop((Return to caller))
+    ae_none --> stop
+```
+
+---
+
+## AskAddress
+**ID**: `ask-address` · **Version**: 1.2.0 · **Sub-flow** · **Scope**: isolated  
+**Description**: Worker: a new mailing address, zip first: the zip (city and state from Google; asked only when Google has none), the street (normalized by Google when it matches exactly inside that zip, otherwise kept as said), the unit, then read back for YES / NO; NO collects it once more. Sets `cargo.address = { line, street, said, verified }` or `null`.
+
+Every question goes through [`ask-choice`](#askchoice) with exit context "address change" / "cambio de dirección". The unit question and the read-back use `cargo.verb` / `cargo.verb_es` directly (`cargo.verb.charAt(0)`), so the host must set them.
+
+### Parameters
+*   `attempt` (string, internal): the attempt number, passed by the flow's own restart.
+
+### Variables
+`ad_n`, `ad_zip`, `ad_components` (the Google component filter), `ad_zip_result`, `ad_place` ("City, ST"), `ad_said` (the street as said), `ad_street_result`, `ad_street`, `ad_norm` (Google's street), `ad_verified`, `ad_unit`, `ad_line`, `ad_q`, `ad_q_es`, `ad_next`.
+
+### Steps
+1. `ad_attempt` (SET) - `ad_n` = `attempt`, else 0.
+2. `ad_start` (SET, side effect) - `cargo.address = null`.
+3. `ad_next_attempt` (SET) - `ad_next = String(ad_n + 1)`.
+4. `ad_zip_question` / `_es` (SET) - "[Let's try again. ]What is the 5-digit zip code of your new address?[ When entering on the keypad, press the pound key when you are done.]" (the keypad sentence on voice only).
+5. `ad_ask_zip` (FLOW `ask-choice`, `call`) - no choices, `accept_other: true`, `digits: {min 5, max 5}`.
+6. `ad_read_zip` (SET) - `ad_zip` = the first standalone 5-digit run in the answer, else the answer's digits when there are exactly 5, else `''`.
+7. `ad_bad_zip` (CASE) - no zip on the first attempt → FLOW `ask-address` (`replace`) with the next `attempt`.
+8. `ad_give_up_zip` (CASE) - still no zip → **END** (`cargo.address` stays `null`).
+9. `ad_filter` (SET) - `ad_components = 'postal_code:' + ad_zip + '|country:US'`.
+10. `ad_lookup_zip` (CALL-TOOL [`geocode-zip`](#geocode-zip)) `{components}` into `ad_zip_result`. `onFail` → SET `ad_zip_result = null`.
+11. `ad_city_state` (SET) - `ad_place` = "City, ST" when the status is `OK`, the country is `US`, and the result has a city (`locality`, else `postal_town`, `sublocality_level_1`, `sublocality`, `neighborhood`) and a state (`administrative_area_level_1`, short name); else `''`.
+12. `ad_ask_city` (CASE) - no `ad_place` → FLOW `ask-choice` (`call`): "What city and state is that in?" / "¿En qué ciudad y estado está?", no choices, `accept_other: true`.
+13. `ad_city_given` (SET) - `ad_place` ||= the answer, trimmed, with whitespace collapsed.
+14. `ad_street_question` / `_es` (SET) - "[Got it, {ad_place}. ]What is the street address, with the house number? For example, 123 Main Street."
+15. `ad_ask_street` (FLOW `ask-choice`, `call`) - no choices, `accept_other: true`.
+16. `ad_read_street` (SET) - `ad_said` = the answer, trimmed, whitespace collapsed, a final period dropped.
+17. `ad_street_shape` (CASE) - not 1 to 6 digits, a space, then a word of two or more letters → FLOW `ask-choice` (`call`): "Please include the house number and the street name, like 123 Main Street."
+18. `ad_read_street_again` (SET) - after that question, `ad_said` = its answer, cleaned the same way.
+19. `ad_no_street` (CASE) - still not that shape → **END** (`cargo.address` stays `null`), on any attempt.
+20. `ad_lookup_street` (CALL-TOOL [`geocode-street`](#geocode-street)) `{address: ad_said, components: ad_components}` into `ad_street_result`. `onFail` → SET `ad_street_result = null`.
+21. `ad_street_match` (SET) - `ad_norm` = "{street_number} {route}" from Google when the status is `OK`, it is not a `partial_match`, its `postal_code` equals `ad_zip`, and its street number equals the number said; else `''`.
+22. `ad_street_verified` / `ad_street_final` (SET) - `ad_verified = !!ad_norm`; `ad_street = ad_norm || ad_said`.
+23. `ad_unit_question` / `_es` (SET) - "Is there an apartment or unit number? {Verb} the number, or NONE." / "¿Tiene número de apartamento o unidad? {Verbo} el número, o NINGUNO."
+24. `ad_ask_unit` (FLOW `ask-choice`, `call`) - choice `none` (none, no, skip, n/a, no apartment, no unit, ninguno, ninguna, no tengo, no aplica, omitir), `accept_other: true`.
+25. `ad_read_unit` (SET) - `''` when the choice was `none` and the answer has no digit. Otherwise the answer, trimmed, a final period dropped; a single token of up to 6 characters (letters, digits, `-`, `#`) becomes "Apt {token}" (`#` removed).
+26. `ad_full_line` (SET) - `ad_line = "{ad_street}[ {ad_unit}], {ad_place} {ad_zip}"`.
+27. `ad_readback` / `_es` (SET) - "Your new address is {ad_line}. Is that correct? Press 1 or {verb} YES, or press 2 or {verb} NO." (text: "{Verb} YES, or {verb} NO."). Spanish: "Su nueva dirección es {ad_line}. ¿Es correcta? …".
+28. `ad_confirm` (FLOW `ask-choice`, `call`) - choices `yes` (`1`, así es, plus the standard YES words) and `no` (`2`, wrong, incorrect, not right, incorrecto, no es correcto, plus the standard NO words), `digits: {min 1, max 1}`. No `accept_other`.
+29. `ad_route` (CASE, first match wins):
+    - `cargo.choice === 'yes'` → `cargo.address = { line: ad_line, street: ad_street, said: ad_said, verified: ad_verified }`.
+    - first attempt → FLOW `ask-address` (`replace`) with the next `attempt`: the whole address is collected once more, starting at the zip.
+    - default → nothing (`cargo.address` stays `null`).
+
+### Ends
+By completion (`cargo.address` set, or `null` after a second NO), by `END` with `cargo.address = null` when no zip or no street shape could be read, or through ask-choice's exits.
+
+### Flowchart
+```mermaid
+graph TD
+    start((Start)) --> ad_start[SET: cargo.address = null]
+    ad_start --> ad_ask_zip[FLOW call: ask-choice, zip, 5 keypad digits]
+    ad_ask_zip --> ad_read_zip[SET: ad_zip]
+    ad_read_zip --> zip_ok{zip read?}
+    zip_ok -->|no, first attempt| ad_zip_again[FLOW replace: ask-address, next attempt]
+    zip_ok -->|no, second attempt| ad_no_zip[END]
+    zip_ok -->|yes| ad_lookup_zip[TOOL: geocode-zip]
+    ad_lookup_zip -.->|onFail| zip_null[SET: ad_zip_result = null]
+    ad_lookup_zip --> ad_city_state[SET: ad_place = City, ST]
+    zip_null --> ad_city_state
+    ad_city_state --> place{ad_place?}
+    place -->|empty| ad_ask_city_state[FLOW call: ask-choice, city and state]
+    place -->|set| ad_ask_street[FLOW call: ask-choice, street]
+    ad_ask_city_state --> ad_ask_street
+    ad_ask_street --> shape{number + street name?}
+    shape -->|no| ad_ask_street_again[FLOW call: ask-choice, include the house number]
+    shape -->|yes| ad_lookup_street[TOOL: geocode-street]
+    ad_ask_street_again --> shape2{number + street name?}
+    shape2 -->|no| ad_no_street_end[END]
+    shape2 -->|yes| ad_lookup_street
+    ad_lookup_street -.->|onFail| street_null[SET: ad_street_result = null]
+    ad_lookup_street --> ad_street_match["SET: ad_street = Google's street on an exact match, else as said"]
+    street_null --> ad_street_match
+    ad_street_match --> ad_ask_unit[FLOW call: ask-choice, unit or NONE]
+    ad_ask_unit --> ad_full_line[SET: ad_unit, ad_line]
+    ad_full_line --> ad_confirm[FLOW call: ask-choice, read back YES / NO]
+    ad_confirm --> ad_route{answer}
+    ad_route -->|YES| ad_done["SET: cargo.address = { line, street, said, verified }"]
+    ad_route -->|NO, first attempt| ad_again[FLOW replace: ask-address, next attempt]
+    ad_route -->|NO, second attempt| ad_given_up[nothing: cargo.address stays null]
+    ad_done --> stop((Return to caller))
+    ad_given_up --> stop
+    ad_no_zip --> stop
+    ad_no_street_end --> stop
+```
+
+---
+
+## AskField
+**ID**: `ask-field` · **Version**: 1.2.0 · **Sub-flow** · **Scope**: isolated  
+**Description**: Worker: one card field, kind `card` (13 to 19 digits, checksum), `exp` (MMYY, not expired), `cvv` (3 to 4 digits) or `zip` (5 digits). One re-ask with the error; LINK switches to a payment link. Sets `cargo.field` (the value) and `cargo.fieldOutcome` (`'ok'`, `'link'` or `'failed'`). The answer is erased from `cargo.choiceText` as soon as it is read.
+
+The card check is the host's `validateCardNumber`, which accepts 12 to 19 digits; the description's 13 is the lower keypad bound only.
+
+### Parameters
+*   `kind` (string, required): `'card'`, `'exp'`, `'cvv'` or `'zip'`.
+*   `question` (string, required) / `question_es` (string): The question.
+*   `error` / `error_es` (string): Said before the re-ask.
+*   `attempt` (string, internal): the attempt number, passed by the flow's own re-ask.
+
+### Variables
+`af_n`, `af_q`, `af_q_es`, `af_digits` (keypad bounds), `af_value`, `af_next_attempt`.
+
+### Steps
+1. `af_attempt` (SET) - `cargo.field = ''`; `af_n` = `attempt`, else 0.
+2. `af_question` / `af_question_es` (SET) - on a re-ask, `error` / `error_es` first, then the question; on voice, except for `exp`, "When entering on the keypad, press the pound key when you are done." / "Si usa el teclado, presione la tecla de numeral al terminar.".
+3. `af_keypad` (SET) - `af_digits` by kind: card `{13, 19}`, exp `{3, 6}`, cvv `{3, 4}`, zip `{5, 5}`.
+4. `af_ask` (FLOW [`ask-choice`](#askchoice), `call`) - choice `link` (link, enlace, payment link, enlace de pago), `accept_other: true`, `digits: af_digits`, exit context "payment" / "pago".
+5. `af_read` (SET) - `''` when the choice was `link`. Otherwise the answer's digits, checked by kind:
+   - `card`: `validateCardNumber(digits)`.
+   - `exp`: MMYYYY with a `20` year and MYYYY are first shortened to MMYY; a 3-digit answer is MYY. The month must be 01 to 12 and `validateExpiration(mm, yy)` must pass. The value is MMYY.
+   - `cvv`: 3 or 4 digits. `zip`: 5 digits.
+6. `af_forget_answer` (SET, side effect) - `cargo.choiceText = ''`.
+7. `af_next` (SET) - `af_next_attempt = String(af_n + 1)`.
+8. `af_route` (CASE, first match wins):
+   - `link` → `cargo.field = ''`, `cargo.fieldOutcome = 'link'`.
+   - a valid value → `cargo.field = af_value`, `cargo.fieldOutcome = 'ok'`.
+   - first attempt → FLOW `ask-field` (`replace`) with `kind`, `question`, `question_es`, `error`, `error_es` and the next `attempt`.
+   - default → `cargo.field = ''`, `cargo.fieldOutcome = 'failed'`.
+
+### Ends
+By completion with `cargo.fieldOutcome` set, or through ask-choice's exits (which null the `cargo.sensitive` paths card-entry marked).
+
+### Flowchart
+```mermaid
+graph TD
+    start((Start)) --> af_attempt["SET: cargo.field = '', af_n"]
+    af_attempt --> af_question[SET: question, error first on a re-ask]
+    af_question --> af_keypad[SET: keypad bounds by kind]
+    af_keypad --> af_ask[FLOW call: ask-choice, LINK or any answer]
+    af_ask --> af_read[SET: af_value, checked by kind]
+    af_read --> af_forget["SET: cargo.choiceText = ''"]
+    af_forget --> af_route{result}
+    af_route -->|LINK| af_link["SET: cargo.fieldOutcome = 'link'"]
+    af_route -->|valid| af_ok["SET: cargo.field, cargo.fieldOutcome = 'ok'"]
+    af_route -->|invalid, first attempt| af_again[FLOW replace: ask-field + error]
+    af_route -->|invalid, second attempt| af_failed["SET: cargo.fieldOutcome = 'failed'"]
+    af_link --> stop((Return to caller))
+    af_ok --> stop
+    af_failed --> stop
+```
+
+---
+
+## CardEntry
+**ID**: `card-entry` · **Version**: 1.1.0 · **Sub-flow** · **Scope**: isolated  
+**Description**: Worker: a new card's number, expiration, security code and billing zip (each through ask-field), and whether to save it. Sets `cargo.payMethod = { kind: 'card', card, save, label }`, or `cargo.payNext` `'link'` / `'card_failed'`.
+
+`cargo.payMethod` also carries `label_es`. card-entry clears neither `cargo.payMethod` nor `cargo.payNext` at the start, so its caller resets them before calling it when a stale value matters.
+
+### Variables
+`ce_number_value`, `ce_exp_value`, `ce_cvv_value`, `ce_zip_value`, `ce_q`, `ce_q_es`.
+
+### Steps
+1. `ce_mark_sensitive` (SET, side effect) - `cargo.sensitive = ['field', 'payMethod.card']`, so any later ask-choice that leaves through AGENT, EXIT or `DISPATCH` nulls the card data first.
+2. For each field, in order, FLOW [`ask-field`](#askfield) (`call`), then the same three steps (`ce_<field>_stop`, `ce_<field>_end`, `ce_<field>_keep`): when `cargo.fieldOutcome` is not `ok`, `cargo.payNext` = `'link'` (for `link`) or `'card_failed'`, then **END**; otherwise the value is kept in `ce_<field>_value`.
+
+   | Step | `kind` | Question | Error |
+   |---|---|---|---|
+   | `ce_number` | `card` | "Please say or enter the card number." | "That doesn't look like a valid card number." |
+   | `ce_exp` | `exp` | "Please say or enter the expiration month and year, for example 0 4 2 8 for April 2028." | "That isn't a valid, unexpired date." |
+   | `ce_cvv` | `cvv` | "Please say or enter the 3 or 4 digit security code on the card." | "That isn't a valid security code." |
+   | `ce_zip` | `zip` | "Please say or enter the card's 5 digit billing zip code." | "The zip code must be 5 digits." |
+
+   Each also passes its Spanish question and error.
+3. `ce_save_question` / `_es` (SET) - "Would you like to save this card for future payments? Press 1 or say YES, or press 2 or say NO." (text: "Type YES, or type NO."). Spanish: "¿Desea guardar esta tarjeta para pagos futuros? …".
+4. `ce_save` (FLOW [`ask-choice`](#askchoice), `call`) - choices `yes` (`1`, save, guardar, plus the standard YES words) and `no` (`2`, don't, do not, rather not, don't save, do not save, no guardar, no la guarde, mejor no, plus the standard NO words), `digits: {min 1, max 1}`, exit context "payment" / "pago". No `accept_other`.
+5. `ce_method` (SET, side effect) - `cargo.payMethod = { kind: 'card', card: { cardNumber, expirationMonth, expirationYear, cvv, zip }, save: cargo.choice === 'yes', label: 'the card ending in 1234', label_es: 'la tarjeta que termina en 1234' }` (the last four comma-spaced on voice, "1, 2, 3, 4"), and `cargo.field = ''`.
+6. `ce_forget` (SET, side effect) - `ce_number_value = ''`, `ce_cvv_value = ''`.
+
+### Ends
+By completion with `cargo.payMethod` set, by `END` with `cargo.payNext` set when a field was not collected, or through ask-choice's exits (card data nulled through `cargo.sensitive`). `cargo.sensitive` stays set after card-entry ends.
+
+### Flowchart
+```mermaid
+graph TD
+    start((Start)) --> ce_mark_sensitive["SET: cargo.sensitive = ['field', 'payMethod.card']"]
+    ce_mark_sensitive --> ce_number[FLOW call: ask-field card]
+    ce_number --> n_ok{fieldOutcome ok?}
+    n_ok -->|no| stop_field["SET: cargo.payNext = 'link' or 'card_failed', END"]
+    n_ok -->|yes| ce_exp[FLOW call: ask-field exp]
+    ce_exp --> e_ok{fieldOutcome ok?}
+    e_ok -->|no| stop_field
+    e_ok -->|yes| ce_cvv[FLOW call: ask-field cvv]
+    ce_cvv --> c_ok{fieldOutcome ok?}
+    c_ok -->|no| stop_field
+    c_ok -->|yes| ce_zip[FLOW call: ask-field zip]
+    ce_zip --> z_ok{fieldOutcome ok?}
+    z_ok -->|no| stop_field
+    z_ok -->|yes| ce_save[FLOW call: ask-choice, save the card?]
+    ce_save --> ce_method["SET: cargo.payMethod, cargo.field = ''"]
+    ce_method --> ce_forget[SET: forget number and cvv]
+    ce_forget --> stop((Return to caller))
+    stop_field --> stop
+```
+
+---
+
 ## Tools
 
-All eight are `local` tools. The host supplies the function named in `implementation.function` through `APPROVED_FUNCTIONS`. Their `parameters` use the flat form (a map of properties with no top-level `type`), so the engine calls the function with **positional arguments: the `required` names in order, then the remaining properties in definition order**. For these eight tools that order matches the `implementation.args` list shown; the engine itself does not read `implementation.args`.
+The first eight are `local` tools. The host supplies the function named in `implementation.function` through `APPROVED_FUNCTIONS`. Their `parameters` use the flat form (a map of properties with no top-level `type`), so the engine calls the function with **positional arguments: the `required` names in order, then the remaining properties in definition order**. For these eight tools that order matches the `implementation.args` list shown; the engine itself does not read `implementation.args`.
 
-Each tool declares `returns`, a JSON Schema of the value the CALL-TOOL `variable` receives. It is documentation, plus an optional warning when the host sets `engine.validateToolReturns = true`. The summaries below paraphrase each `returns`. Cargo fields the reference host (hy-rag) writes beyond what `returns` describes are noted as such.
+The two geocode tools are `http` tools: the engine itself calls Google's Geocoding API, and no host function is involved.
+
+Each local tool declares `returns`, a JSON Schema of the value the CALL-TOOL `variable` receives. It is documentation, plus an optional warning when the host sets `engine.validateToolReturns = true`. The summaries below paraphrase each `returns`. Cargo fields the reference host (hy-rag) writes beyond what `returns` describes are noted as such.
 
 `security.requiresAuth`, `auditLevel` and `dataClassification` are declarative. The engine enforces `security.rateLimit`.
 
@@ -947,3 +1313,26 @@ Reference host: a refusal also sets `container.otpFailure` to `missing`, `expire
 | `container` | object | no | session cargo; annotated with `liveConnectOffered` when a link is returned |
 
 **Returns** a string: the guest link (`{url}/?ref=<dbPrefix>`), or `''` when Live Connect is off, no agent is reachable, or the presence check fails.
+
+### geocode-zip
+**Name**: Geocode Zip - looks up the city and state for a 5-digit US zip code via Google Geocoding, so address collection can skip the city and state prompts. Called by [ask-address](#askaddress).  
+**Implementation**: `http` `GET` to Google's Geocoding API, timeout 5000 ms, no retries. Rate limit: 20 per 60 s. `security`: no auth, audit `low`, data `public`.
+
+| Parameter | Type | Required | Notes |
+|---|---|---|---|
+| `components` | string | yes | Google component filter, e.g. `postal_code:90015\|country:US` (default `""`) |
+
+The parameters use the JSON Schema form (`type: object`, `additionalProperties: false`). On a `GET` the engine sends every argument as a query parameter.
+
+**Returns** (by `responseMapping`, no `returns` schema) an object: `status` (Google's status, e.g. `OK`; fallback `''`) and `components` (`results[0].address_components`; fallback `[]`).
+
+### geocode-street
+**Name**: Geocode Street - looks up a spoken or typed street address inside a known US zip code via Google Geocoding, so address collection can replace what the caller said with Google's normalized street when there is a precise match. Called by [ask-address](#askaddress).  
+**Implementation**: `http` `GET` to Google's Geocoding API, with the same timeout, retries, rate limit and `security` as geocode-zip.
+
+| Parameter | Type | Required | Notes |
+|---|---|---|---|
+| `address` | string | yes | the street address as given, e.g. `1605 west olimpic blvd` (default `""`) |
+| `components` | string | yes | Google component filter, e.g. `postal_code:90015\|country:US` (default `""`) |
+
+**Returns** (by `responseMapping`) an object: `status` (fallback `''`), `components` (`results[0].address_components`, fallback `[]`), `types` (`results[0].types`, fallback `[]`), `location_type` (`results[0].geometry.location_type`, fallback `''`), `partial_match` (`results[0].partial_match`, fallback `false`) and `formatted_address` (fallback `''`). ask-address reads `status`, `partial_match` and `components`.
