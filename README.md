@@ -544,6 +544,11 @@ Two cargo fields connect the engine to a voice channel:
 - **`cargo.digits`** (set by the engine): when a `SAY-GET` step declares `digits` (for example
   `{ "min": 6, "max": 6 }`), the engine copies it to `cargo.digits` while the answer is awaited, so
   the host can configure keypad (DTMF) collection. It is removed once the input is collected.
+  On voice, `digits` also shapes how the answer is stored: an answer whose digit count fits the range is
+  stored as its digits, taken as heard and never sent to the voice cleaner ("es 41 34 18…" → `413418…`). On a
+  one-key question (`max: 1`) only an answer that is exactly one key (a digit, `*` or `#`, punctuation aside)
+  becomes that key; any other answer is stored as spoken and never sent to the cleaner, so a digit inside a
+  sentence ("I want to pay 1") is never a key press (jsfe ≥ 1.3.1).
 - **`asSpoken`** (a `SAY-GET` attribute, opt-in): the answer is stored exactly as given, never reduced to
   its digits and never sent to the voice cleaner. Use it where the words carry meaning the digits lose,
   such as an amount: without it, "$1" fitting `digits: { min: 1, max: 1 }` is stored as `1`. The value is
