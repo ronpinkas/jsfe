@@ -28,7 +28,7 @@
   {
     "id": "contact-support",
     "name": "ContactSupport",
-    "version": "1.2.1",
+    "version": "1.2.2",
     "description": "Worker: give the tenant's customer-service contact information. Params: support_context(_es), closing_prompt(_es).",
     "parameters": [
       {
@@ -63,13 +63,13 @@
         "id": "set_contact_info",
         "type": "SET",
         "variable": "contact_info",
-        "value": "cargo.voice ? textWithUrlToSpeech(cargo.contact_info || 'please contact Customer Support', language) : (cargo.contact_info || 'please contact Customer Support')"
+        "value": "cargo.voice ? textWithUrlToSpeech((cargo.contact_info ? String(cargo.contact_info).replace(/[.\\s]+$/, '') : '') || 'please contact Customer Support', language) : ((cargo.contact_info ? String(cargo.contact_info).replace(/[.\\s]+$/, '') : '') || 'please contact Customer Support')"
       },
       {
         "id": "set_contact_info_es",
         "type": "SET",
         "variable": "contact_info_es",
-        "value": "cargo.voice ? textWithUrlToSpeech(cargo.contact_info || 'por favor contacte a Servicio al Cliente', language) : (cargo.contact_info || 'por favor contacte a Servicio al Cliente')"
+        "value": "cargo.voice ? textWithUrlToSpeech((cargo.contact_info ? String(cargo.contact_info).replace(/[.\\s]+$/, '') : '') || 'por favor contacte a Servicio al Cliente', language) : ((cargo.contact_info ? String(cargo.contact_info).replace(/[.\\s]+$/, '') : '') || 'por favor contacte a Servicio al Cliente')"
       },
       {
         "id": "set_support_message",
@@ -220,7 +220,7 @@
   {
     "id": "authenticate-user",
     "name": "AuthenticateUser",
-    "version": "1.5.0",
+    "version": "1.5.1",
     "description": "Generic flow to authenticate user via OTP sent to cell or email",
     "parameters": [
       {
@@ -265,10 +265,6 @@
       }
     ],
     "variables": {
-      "cell_or_email": {
-        "type": "string",
-        "description": "User cell or email"
-      },
       "cell_number": {
         "type": "string",
         "description": "Customer cell phone number"
@@ -550,7 +546,7 @@
   {
     "id": "get-cell-or-email",
     "name": "GetCellOrEmail",
-    "version": "1.1.3",
+    "version": "1.1.4",
     "description": "Prompt user to provide either their cell phone number or email address for account lookup",
     "parameters": [
       {
@@ -650,13 +646,13 @@
         "type": "CASE",
         "branches": {
           "condition: validatePhone(prospective_cell_number)": {
-            "id": "treat_as_phone_number",
+            "id": "read_phone_number",
             "type": "SET",
             "variable": "cell_number",
             "value": "prospective_cell_number"
           },
           "condition: validateEmail(prospective_email)": {
-            "id": "treat_as_email_address",
+            "id": "read_email_address",
             "type": "SET",
             "variable": "email",
             "value": "prospective_email"
@@ -730,7 +726,7 @@
   {
     "id": "get-and-validate-otp-code",
     "name": "GetAndValidateOtpCode",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "description": "Get and validate OTP code from user",
     "variables": {
       "otp_code": {
@@ -770,7 +766,7 @@
         "id": "formatted_otp_destination",
         "type": "SET",
         "variable": "formatted_otp_destination",
-        "value": "cargo.otp_cell_number ? ((language == 'es' ? 'celular que termina con ' : 'cell ending with ') + (cargo.voice ? cargo.otp_cell_number.slice(-4).split('').join(', ') : cargo.otp_cell_number.slice(-4))) : (language == 'es' ? 'correo electrónico: ' : 'email: ') + cargo.otp_email"
+        "value": "cargo.otp_cell_number ? ((language == 'es' ? 'celular que termina con ' : 'cell ending with ') + last4(cargo.otp_cell_number, cargo.voice)) : (language == 'es' ? 'correo electrónico: ' : 'email: ') + cargo.otp_email"
       },
       {
         "id": "set_otp_where",
@@ -1499,7 +1495,7 @@
   {
     "id": "text-destination",
     "name": "TextDestination",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Worker: where a text to the customer can go. Sets cargo.textTo (10 digits: the verified cell, else the caller's phone on a call; '' when there is none, no sender, or the line cannot receive texts) and cargo.textTo4 (its last four, spaced on voice).",
     "steps": [
       {
@@ -1512,7 +1508,7 @@
         "id": "say_last_four",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "cargo.textTo4 = cargo.textTo ? (cargo.voice ? cargo.textTo.slice(-4).split('').join(', ') : cargo.textTo.slice(-4)) : ''"
+        "value": "cargo.textTo4 = cargo.textTo ? last4(cargo.textTo, cargo.voice) : ''"
       }
     ]
   },
@@ -1665,7 +1661,7 @@
   {
     "id": "otp-text-undeliverable",
     "name": "OtpTextUndeliverable",
-    "version": "1.0.5",
+    "version": "1.0.6",
     "description": "Worker for authenticate-user: the number cannot receive texts; ask for an email or a mobile number.",
     "variables": {
       "user_choice": {
@@ -1690,7 +1686,7 @@
         "id": "describe_number",
         "type": "SET",
         "variable": "undeliverable_last4",
-        "value": "cargo.voice ? String(cargo.otpUndeliverableTo || '').slice(-4).split('').join(', ') : String(cargo.otpUndeliverableTo || '').slice(-4)"
+        "value": "last4(cargo.otpUndeliverableTo, cargo.voice)"
       },
       {
         "id": "ask_other_contact",
@@ -1778,7 +1774,7 @@
   {
     "id": "live-agent-requested",
     "name": "LiveAgentRequested",
-    "version": "1.7.1",
+    "version": "1.7.2",
     "description": "Customer wants to talk to a person: a live agent, a representative, customer service ('agent', 'speak to an agent', 'customer service representative', 'transfer me', 'I need to talk to someone', 'can I talk to a human', 'agente', 'representante', 'servicio al cliente', 'atención al cliente', 'transfiéreme', 'hablar con una persona', 'comunicarme con alguien'), including a cut-off 'service' or 'al cliente' said alone. Not: continuing by text (SwitchToText); only asking for a phone number, email or hours (None).",
     "prompt": "live agent confirmation",
     "prompt_es": "confirmación de agente en vivo",
@@ -1858,7 +1854,7 @@
           "condition: !cargo.voice || (!cargo.agentPhoneNumber && !cargo.agentHours)": {
             "id": "say_cannot_connect",
             "type": "RETURN",
-            "value": "[language == 'es' ? 'No puedo comunicarle con un agente en vivo por aquí.' : \"I can't connect you with a live agent here.\", !cargo.voice ? (language == 'es' ? (typeof global_live_agents_comment_es !== 'undefined' && global_live_agents_comment_es ? global_live_agents_comment_es : '') : (typeof global_live_agents_comment !== 'undefined' && global_live_agents_comment ? global_live_agents_comment : '')) : '', cargo.contact_info ? ((language == 'es' ? 'Así puede comunicarse con Servicio al Cliente: ' : 'Here is how to reach Customer Support: ') + (cargo.voice ? textWithUrlToSpeech(cargo.contact_info, language) : cargo.contact_info) + '.') : (language == 'es' ? 'Por favor contacte a Servicio al Cliente.' : 'Please contact Customer Support.')].filter(Boolean).join(' ')",
+            "value": "[language == 'es' ? 'No puedo comunicarle con un agente en vivo por aquí.' : \"I can't connect you with a live agent here.\", !cargo.voice ? (language == 'es' ? (typeof global_live_agents_comment_es !== 'undefined' && global_live_agents_comment_es ? global_live_agents_comment_es : '') : (typeof global_live_agents_comment !== 'undefined' && global_live_agents_comment ? global_live_agents_comment : '')) : '', cargo.contact_info ? ((language == 'es' ? 'Así puede comunicarse con Servicio al Cliente: ' : 'Here is how to reach Customer Support: ') + (cargo.voice ? textWithUrlToSpeech(String(cargo.contact_info).replace(/[.\\s]+$/, ''), language) : String(cargo.contact_info).replace(/[.\\s]+$/, '')) + '.') : (language == 'es' ? 'Por favor contacte a Servicio al Cliente.' : 'Please contact Customer Support.')].filter(Boolean).join(' ')",
             "outcome": "{{after_give_up ? 'unresolved' : 'resolved'}}",
             "reason": "{{after_give_up ? 'gave_up' : 'no_agent_reachable'}}",
             "keepSay": true
@@ -3162,7 +3158,7 @@
   {
     "id": "card-entry",
     "name": "CardEntry",
-    "version": "1.1.0",
+    "version": "1.1.1",
     "description": "Worker: a new card's number, expiration, security code and billing zip (each through ask-field), and whether to save it. Sets cargo.payMethod = { kind: 'card', card, save, label }, or cargo.payNext 'link' / 'card_failed'.",
     "variables": {
       "ce_number_value": {
@@ -3465,7 +3461,7 @@
         "id": "ce_method",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(cargo.payMethod = { kind: 'card', card: { cardNumber: ce_number_value, expirationMonth: ce_exp_value.slice(0, 2), expirationYear: ce_exp_value.slice(2), cvv: ce_cvv_value, zip: ce_zip_value }, save: cargo.choice === 'yes', label: 'the card ending in ' + (cargo.voice ? ce_number_value.slice(-4).split('').join(', ') : ce_number_value.slice(-4)), label_es: 'la tarjeta que termina en ' + (cargo.voice ? ce_number_value.slice(-4).split('').join(', ') : ce_number_value.slice(-4)) }, cargo.field = '', true)"
+        "value": "(cargo.payMethod = { kind: 'card', card: { cardNumber: ce_number_value, expirationMonth: ce_exp_value.slice(0, 2), expirationYear: ce_exp_value.slice(2), cvv: ce_cvv_value, zip: ce_zip_value }, save: cargo.choice === 'yes', label: 'the card ending in ' + last4(ce_number_value, cargo.voice), label_es: 'la tarjeta que termina en ' + last4(ce_number_value, cargo.voice) }, cargo.field = '', true)"
       },
       {
         "id": "ce_forget",

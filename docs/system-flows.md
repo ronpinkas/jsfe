@@ -165,7 +165,7 @@ graph TD
 ---
 
 ## ContactSupport
-**ID**: `contact-support` · **Version**: 1.2.1 · **Sub-flow**  
+**ID**: `contact-support` · **Version**: 1.2.2 · **Sub-flow**  
 **Description**: Provide customer service contact information. Optional `support_context` / `support_context_es` name what the caller needed help with (else `cargo.support_context`); optional `closing_prompt` / `closing_prompt_es` are spoken after the contact info.
 
 ### Parameters
@@ -240,7 +240,7 @@ graph TD
 ---
 
 ## AuthenticateUser
-**ID**: `authenticate-user` · **Version**: 1.5.0 · **Sub-flow**  
+**ID**: `authenticate-user` · **Version**: 1.5.1 · **Sub-flow**  
 **Description**: Generic flow to authenticate user via OTP sent to cell or email.
 
 The gatekeeper. It records its options in `cargo.authOptions` / `cargo.authCancelFlow`, collects a phone or email (via `get-cell-or-email`), optionally lets a tenant-supplied validator flow approve the contact, records the destination in `cargo.otp_cell_number` / `cargo.otp_email`, sends the code through [`send-otp-code`](#sendotpcode), hands any send failure to [`otp-send-failed`](#otpsendfailed), and hands off to `get-and-validate-otp-code`. On success it sets `auth_result = true` and returns to its caller, with `cargo.otpVerified` set by the `validate-otp` tool.
@@ -256,7 +256,7 @@ The gatekeeper. It records its options in `cargo.authOptions` / `cargo.authCance
 *   `retry_returns` (boolean): When true, a retry from the menu that carries no contact (YES or `1`, not a captured phone or email) returns to the caller with `cargo.authRetry = true`, so the caller asks for the contact again its own way. Default: authenticate-user asks (through `get-cell-or-email`). No flow in this library passes it.
 
 ### Variables
-`cell_or_email`, `cell_number`, `email`, `contact_valid` (true when no validator applies), `unverified_contact` / `unverified_contact_es` (the rejected contact phrased for the retry message: "the number 555…" / "the email a@b.c").
+`cell_number`, `email`, `contact_valid` (true when no validator applies), `unverified_contact` / `unverified_contact_es` (the rejected contact phrased for the retry message: "the number 555…" / "the email a@b.c").
 
 ### Steps
 1. `check_already_verified` (CASE) - `cargo.otpVerified` → **END** (return to the caller at once). Otherwise continue.
@@ -318,7 +318,7 @@ graph TD
 ---
 
 ## GetCellOrEmail
-**ID**: `get-cell-or-email` · **Version**: 1.1.3 · **Sub-flow**  
+**ID**: `get-cell-or-email` · **Version**: 1.1.4 · **Sub-flow**  
 **Description**: Prompt user to provide either their cell phone number or email address for account lookup.
 
 ### Parameters
@@ -384,7 +384,7 @@ graph TD
 ---
 
 ## GetAndValidateOtpCode
-**ID**: `get-and-validate-otp-code` · **Version**: 1.0.2 · **Sub-flow**  
+**ID**: `get-and-validate-otp-code` · **Version**: 1.0.3 · **Sub-flow**  
 **Description**: Get and validate OTP code from user.
 
 ### Variables
@@ -657,7 +657,7 @@ graph TD
 ---
 
 ## TextDestination
-**ID**: `text-destination` · **Version**: 1.0.0 · **Sub-flow**  
+**ID**: `text-destination` · **Version**: 1.0.1 · **Sub-flow**  
 **Description**: Worker: where a text to the customer can go. Sets `cargo.textTo` (10 digits: the verified cell, else the caller's phone on a call; `''` when there is none, no sender, or the line cannot receive texts) and `cargo.textTo4` (its last four, spaced on voice).
 
 No flow in this library calls it. A caller runs it (`call`) before [`send-text`](#sendtext), and can use `cargo.textTo4` to tell the customer where the text went.
@@ -765,7 +765,7 @@ graph TD
 ---
 
 ## OtpTextUndeliverable
-**ID**: `otp-text-undeliverable` · **Version**: 1.0.5 · **Sub-flow**  
+**ID**: `otp-text-undeliverable` · **Version**: 1.0.6 · **Sub-flow**  
 **Description**: Worker for authenticate-user: the number for the code cannot receive texts (landline, toll-free, invalid). Says so and asks for the account's email or a mobile number; never offers to text the same number again.
 
 Reached by `replace` from [`otp-send-failed`](#otpsendfailed) when `cargo.otpSendFailure` is `undeliverable`, so it keeps `authenticate-user`'s variables (`retry_flow`, `cancel_flow`, the validators) and returns to it by `replace`.
@@ -809,7 +809,7 @@ graph TD
 ---
 
 ## LiveAgentRequested
-**ID**: `live-agent-requested` · **Version**: 1.7.1 · **Primary** (prompt "live agent confirmation" / "confirmación de agente en vivo")  
+**ID**: `live-agent-requested` · **Version**: 1.7.2 · **Primary** (prompt "live agent confirmation" / "confirmación de agente en vivo")  
 **Description**: Customer wants to talk to a person: a live agent, a representative, customer service ('agent', 'speak to an agent', 'customer service representative', 'transfer me', 'I need to talk to someone', 'can I talk to a human', 'agente', 'representante', 'servicio al cliente', 'atención al cliente', 'transfiéreme', 'hablar con una persona', 'comunicarme con alguien'), including a cut-off 'service' or 'al cliente' said alone. Not: continuing by text (SwitchToText); only asking for a phone number, email or hours (None).
 
 **Behaviour**: On the phone it offers the transfer when an agent is scheduled (`cargo.agentPhoneNumber`); on every other channel it sends the Live Connect link when the tenant runs Live Connect and an agent is reachable. On the phone after hours (no agent number this turn, the number has a schedule) it says so, states the agent hours and offers to help, ending `unresolved` (`agent_unavailable`). Otherwise (any non-phone channel without a Live Connect link, or a phone number with no agents at all) it says it cannot connect the customer with a live agent and gives the tenant's contact information, ending `resolved` (`no_agent_reachable`). Started by [give-up](#giveup) (`cargo.giveUp`), it transfers on the phone without the offer to continue with the AI, and the cannot-connect end is `unresolved` (`gave_up`). Its worded RETURNs carry `keepSay: true`, so text a calling flow queued before rebooting here is delivered first.
@@ -1189,7 +1189,7 @@ graph TD
 ---
 
 ## CardEntry
-**ID**: `card-entry` · **Version**: 1.1.0 · **Sub-flow** · **Scope**: isolated  
+**ID**: `card-entry` · **Version**: 1.1.1 · **Sub-flow** · **Scope**: isolated  
 **Description**: Worker: a new card's number, expiration, security code and billing zip (each through ask-field), and whether to save it. Sets `cargo.payMethod = { kind: 'card', card, save, label }`, or `cargo.payNext` `'link'` / `'card_failed'`.
 
 `cargo.payMethod` also carries `label_es`. card-entry clears neither `cargo.payMethod` nor `cargo.payNext` at the start, so its caller resets them before calling it when a stale value matters.

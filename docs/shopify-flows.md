@@ -31,7 +31,7 @@ Everything below is read from the JSON. The flows call the system flows (`no-act
 ## Flows
 
 ## ShopifyProductSearch
-**ID**: `shopify-product-search` · **Version**: 1.1.3 · **Primary** (prompt "product search" / "buscar producto")  
+**ID**: `shopify-product-search` · **Version**: 1.1.4 · **Primary** (prompt "product search" / "buscar producto")  
 **Description**: Customer asks to find a product, whether one is in stock (online or at a store near them), or what it costs ('do you have air fryers', 'is this TV in stock in Phoenix', 'how much is the iPhone 16', '¿tienen refrigeradores?', '¿cuánto cuesta?'). Not: general advice without asking for a product (None); an order already placed (ShopifyTrackOrder); returns, shipping or other store policies (ShopifyStorePolicies).
 
 ### Parameters
@@ -105,7 +105,7 @@ graph TD
     ask_city_again --> retry_answer{answer given?}
     retry_answer -->|yes| lookup_retry[TOOL: shopify-store-availability, user_city_retry]
     retry_answer -->|no| display_availability
-    lookup_retry -.->|onFail| availability_failed
+    lookup_retry -.->|onFail| availability_retry_failed[RETURN: couldn't check at this time]
     lookup_retry --> display_availability
     geocode_failed -->|no| display_availability{result}
     display_availability -->|found| show_stores[RETURN: store list]
@@ -145,14 +145,14 @@ graph TD
 ---
 
 ## ShopifyTrackOrder
-**ID**: `shopify-track-order` · **Version**: 1.0.1 · **Primary** (prompt "track order" / "rastrear pedido")  
+**ID**: `shopify-track-order` · **Version**: 1.0.2 · **Primary** (prompt "track order" / "rastrear pedido")  
 **Description**: Customer asks about an order or purchase they placed: its status, when it will arrive or be ready for pickup, where it is, its tracking, a package that has not arrived, or a list of their orders ('where is my order', 'order status', 'my order', 'help with an order', 'track my package', 'when will my delivery arrive', 'order #1234', '¿dónde está mi pedido?', 'mi pedido', 'estado de mi orden', '¿cuándo llega mi pedido?', '¿ya está listo para recoger?', 'no me ha llegado mi pedido', 'rastrear mi pedido'). Not: finding a product (ShopifyProductSearch); a return, refund or shipping policy (ShopifyStorePolicies); cancelling an order (None).
 
 ### Parameters
 *   `order_number` (string): Order number in the message ('#1234').
 
 ### Variables
-`customer_email`, `order_number` (initial `""`), `order_result`, `cell_number` (initial `""`), `email` (initial `""`), `order_detail`, `validate_identifier`, `error_message`.
+`order_number` (initial `""`), `cell_number` (initial `""`), `email` (initial `""`), `order_detail`, `validate_identifier`.
 
 ### Steps
 1. `set_validate_if_from_param` - `validate_identifier = !!order_number`. An order number taken from the user's prompt must be checked against the verified identity.
