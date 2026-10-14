@@ -77,9 +77,10 @@ const digitStep = { id: 'ask', type: 'SAY-GET', variable: 'x', value: 'Your card
 {
   const menu = { id: 'ask', type: 'SAY-GET', variable: 'x', value: 'Press 1 or say NEW CARD', digits: { min: 1, max: 1 } };
   const r = await answer(menu, 'option 2');
-  eq(r.shown, '2', 'a spoken key is taken as heard');
+  eq(r.shown, 'option 2', 'a digit inside a longer answer is not the key (owner rule: a key is the whole answer)');
   eq(r.cleanerCalls, 0, 'no AI call for it');
-  eq((await answer(menu, 'nueva tarjeta')).cleanerCalls, 1, 'a menu word still goes to the cleaner');
+  const w = await answer(menu, 'nueva tarjeta');
+  eq([w.shown, w.cleanerCalls], ['nueva tarjeta', 0], 'a menu word is kept as spoken for the flow to match, never sent to the cleaner');
 }
 
 // ── a word on a digit step still goes to the cleaner (the flow matches "agent", "back", …) ──
@@ -128,6 +129,23 @@ const digitStep = { id: 'ask', type: 'SAY-GET', variable: 'x', value: 'Your card
   eq(r.shown, '1', 'asSpoken condition false: reduced to its digits as before');
   r = await answer({ ...amount, asSpoken: false }, '$1.');
   eq(r.shown, '1', 'asSpoken: false is the default');
+}
+
+// ── a ONE-key question takes a key only when the whole answer is that key (owner rule) ──
+{
+  const oneKey = { id: 'ask', type: 'SAY-GET', variable: 'x', value: 'Press 1 for a receipt, or 2 for no.', digits: { min: 1, max: 1 } };
+  let r = await answer(oneKey, '1');
+  eq([r.shown, r.cleanerCalls], ['1', 0], 'one-key question: a bare key is the key');
+  r = await answer(oneKey, '2.');
+  eq([r.shown, r.cleanerCalls], ['2', 0], 'one-key question: a key with ASR punctuation is the key');
+  r = await answer(oneKey, 'No, I want to make a payment for 1.');
+  eq([r.shown, r.cleanerCalls], ['No, I want to make a payment for 1.', 0], 'one-key question: a digit inside a sentence is not the key, and the cleaner never extracts it (dev 2026-10-14)');
+  r = await answer(oneKey, 'I made payments by 1,');
+  eq([r.shown, r.cleanerCalls], ['I made payments by 1,', 0], 'one-key question: the express-offer answer that charged the full due');
+  r = await answer(oneKey, 'yes please');
+  eq([r.shown, r.cleanerCalls], ['yes please', 0], 'one-key question: words are kept as spoken for the flow to match');
+  r = await answer(oneKey, '1', false);
+  eq(r.shown, '1', 'text: unchanged');
 }
 
 console.log(`voice-digits: ${checks} checks passed`);

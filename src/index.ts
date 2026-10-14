@@ -6375,11 +6375,18 @@ async function setUserInputVariable(
   // A SAY-GET with `asSpoken` (opt-in) keeps a voice answer exactly as heard: neither reduced to its digits nor sent
   // to the AI cleaner, whose rule is also "extract only the digits". For an answer whose words carry meaning the
   // digits lose — an amount: "$1" reduced to "1" read as a keypad choice (2026-10-14), "$12.50" as "1250".
+  // A ONE-key question (digits max 1) takes a key only when the WHOLE answer is that key: a digit inside a sentence is
+  // never a key press, so such an answer is kept as spoken and never sent to the cleaner, which would extract its digit.
+  // Dev 2026-10-14: "No, I want to make a payment for 1." at "press 1 for a receipt" was reduced to "1".
   const range = expectedDigits(engine.cargo?.digits);
   const digits = typeof value === 'string' ? value.replace(/\D/g, '') : '';
+  const keyPress = typeof value === 'string' ? value.replace(/^[\s.,;:!?¿¡'"]+|[\s.,;:!?¿¡'"]+$/g, '') : '';
   if (sanitize && engine.cargo?.voice && asSpoken) {
     processedValue = value;
     logger.info('Voice answer kept as spoken (asSpoken)');
+  } else if (sanitize && engine.cargo?.voice && range && range.max === 1) {
+    processedValue = /^[0-9*#]$/.test(keyPress) ? keyPress : value;
+    logger.info(/^[0-9*#]$/.test(keyPress) ? 'Voice key taken as heard' : 'Voice answer to a one-key question kept as spoken (not a key)');
   } else if (sanitize && engine.cargo?.voice && range && digits.length >= range.min && digits.length <= range.max) {
     processedValue = digits;
     logger.info(`Voice digits taken as heard (no AI cleanup): ${(processedValue as string).length} digits`);
