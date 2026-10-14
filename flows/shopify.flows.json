@@ -2,7 +2,7 @@
   {
     "id": "shopify-product-search",
     "name": "ShopifyProductSearch",
-    "version": "1.1.4",
+    "version": "1.1.5",
     "description": "Customer asks to find a product, whether one is in stock (online or at a store near them), or what it costs ('do you have air fryers', 'is this TV in stock in Phoenix', 'how much is the iPhone 16', '¿tienen refrigeradores?', '¿cuánto cuesta?'). Not: general advice without asking for a product (None); an order already placed (ShopifyTrackOrder); returns, shipping or other store policies (ShopifyStorePolicies).",
     "prompt": "product search",
     "prompt_es": "buscar producto",
@@ -26,7 +26,7 @@
       },
       "product_choice": {
         "type": "string",
-        "description": "User's product selection (1-5)"
+        "description": "User's product selection (a listed product's number)"
       },
       "product_idx": {
         "type": "number",
@@ -127,8 +127,8 @@
             "id": "ask_store_check",
             "type": "SAY-GET",
             "variable": "product_choice",
-            "value": "Would you like to check which stores near you have any of these in stock? Tell me the product number (1-5), or say 'done' if you're all set.",
-            "value_es": "¿Te gustaría saber qué tiendas tienen alguno de estos en stock cerca de ti? Dime el número del producto (1-5), o di 'listo' si ya terminaste."
+            "value": "Would you like to check which stores near you have any of these in stock? Tell me the product number ({{Math.min((search_result && search_result.products ? search_result.products.length : 0), cargo.voice ? 3 : 5) > 1 ? '1-' + Math.min((search_result && search_result.products ? search_result.products.length : 0), cargo.voice ? 3 : 5) : '1'}}), or {{cargo.voice ? 'say' : 'type'}} 'done' if you're all set.",
+            "value_es": "¿Te gustaría saber qué tiendas tienen alguno de estos en stock cerca de ti? Dime el número del producto ({{Math.min((search_result && search_result.products ? search_result.products.length : 0), cargo.voice ? 3 : 5) > 1 ? '1-' + Math.min((search_result && search_result.products ? search_result.products.length : 0), cargo.voice ? 3 : 5) : '1'}}), o {{cargo.voice ? 'di' : 'escribe'}} 'listo' si ya terminaste."
           },
           "default": {
             "id": "all_done",
@@ -152,7 +152,7 @@
             "type": "RETURN",
             "value": "language == 'es' ? '¡Genial! Si necesitas algo más, solo pregunta.' : 'Cool! If you need anything else, just ask.'"
           },
-          "condition: /^[1-5]$/.test(String(product_choice?.value || product_choice || '').trim())": {
+          "condition: /^[1-5]$/.test(String(product_choice?.value || product_choice || '').trim()) && parseInt(String(product_choice?.value || product_choice).trim(), 10) <= Math.min((search_result && search_result.products ? search_result.products.length : 0), cargo.voice ? 3 : 5)": {
             "id": "set_product_idx",
             "type": "SET",
             "variable": "product_idx",
@@ -219,8 +219,13 @@
         },
         "onFail": {
           "id": "availability_failed",
-          "type": "RETURN",
-          "value": "language == 'es' ? 'Lo siento, no pude verificar la disponibilidad en tiendas en este momento.' : 'Sorry, I couldn\\'t check store availability at this time.'"
+          "type": "FLOW",
+          "value": "give-up",
+          "callType": "reboot",
+          "parameters": {
+            "context": "checking the store availability",
+            "context_es": "la disponibilidad en tiendas"
+          }
         }
       },
       {
@@ -259,8 +264,13 @@
             },
             "onFail": {
               "id": "availability_retry_failed",
-              "type": "RETURN",
-              "value": "language == 'es' ? 'Lo siento, no pude verificar la disponibilidad en tiendas en este momento.' : 'Sorry, I couldn\\'t check store availability at this time.'"
+              "type": "FLOW",
+              "value": "give-up",
+              "callType": "reboot",
+              "parameters": {
+                "context": "checking the store availability",
+                "context_es": "la disponibilidad en tiendas"
+              }
             }
           },
           "default": {
@@ -292,8 +302,13 @@
           },
           "default": {
             "id": "availability_error",
-            "type": "RETURN",
-            "value": "language == 'es' ? 'No pude verificar la disponibilidad en tiendas. Por favor intenta de nuevo más tarde.' : 'I couldn\\'t check store availability. Please try again later.'"
+            "type": "FLOW",
+            "value": "give-up",
+            "callType": "reboot",
+            "parameters": {
+              "context": "checking the store availability",
+              "context_es": "la disponibilidad en tiendas"
+            }
           }
         }
       }
@@ -436,7 +451,7 @@
   {
     "id": "shopify-get-orders-verified",
     "name": "ShopifyGetOrdersVerified",
-    "version": "1.1.0",
+    "version": "1.1.2",
     "description": "Get order list for verified customer",
     "variables": {
       "orders_result": {
@@ -459,9 +474,19 @@
       "tracking_detail": {
         "type": "object",
         "description": "ShipStation real-time tracking result"
+      },
+      "number_from_customer": {
+        "type": "boolean",
+        "description": "The customer gave the order number (not picked from their list): only then is a miss worth listing their orders"
       }
     },
     "steps": [
+      {
+        "id": "note_number_source",
+        "type": "SET",
+        "variable": "number_from_customer",
+        "value": "typeof order_number !== 'undefined' && !!order_number"
+      },
       {
         "id": "set_shopify_identifier",
         "type": "SET",
@@ -484,13 +509,11 @@
             "onFail": {
               "id": "lookup_failed",
               "type": "FLOW",
-              "value": "generic-retry-with-options",
+              "value": "give-up",
               "callType": "reboot",
               "parameters": {
-                "error_message": "I had trouble looking up your orders.",
-                "error_message_es": "Tuve problemas buscando tus pedidos.",
-                "retry_flow": "shopify-get-orders-verified",
-                "cancel_flow": "contact-support"
+                "context": "your order",
+                "context_es": "su pedido"
               }
             }
           },
@@ -509,8 +532,12 @@
           "condition: !orders_result || !orders_result.success": {
             "id": "lookup_error",
             "type": "FLOW",
-            "value": "contact-support",
-            "callType": "reboot"
+            "value": "give-up",
+            "callType": "reboot",
+            "parameters": {
+              "context": "your order",
+              "context_es": "su pedido"
+            }
           },
           "condition: orders_result.orders.length === 0": {
             "id": "no_orders",
@@ -594,9 +621,13 @@
             },
             "onFail": {
               "id": "order_detail_failed",
-              "type": "SAY",
-              "value": "I couldn't retrieve details for that order. Please try again.",
-              "value_es": "No pude obtener los detalles de ese pedido. Por favor intenta de nuevo."
+              "type": "FLOW",
+              "value": "give-up",
+              "callType": "reboot",
+              "parameters": {
+                "context": "your order",
+                "context_es": "su pedido"
+              }
             }
           },
           "default": {
@@ -646,12 +677,24 @@
             "value": "Order {{order_detail.order.orderNumber}}\n\nStatus: {{(() => { const o = order_detail.order; if (o.cancelled) return 'Cancelled'; const m = { UNFULFILLED: 'Not shipped yet', OPEN: 'Not shipped yet', RESTOCKED: 'Not shipped yet', PARTIALLY_FULFILLED: 'Partly shipped', FULFILLED: 'Shipped', IN_PROGRESS: 'Being prepared', PENDING_FULFILLMENT: 'Being prepared', ON_HOLD: 'On hold', SCHEDULED: 'Scheduled', REQUEST_DECLINED: 'Delayed', FULFILLMENT_NOT_REQUIRED: 'Nothing to ship' }; const v = o.fulfillmentStatus; return v ? (m[v] || String(v).toLowerCase().replace(/_/g, ' ')) : 'Processing'; })()}}\nPayment: {{(() => { const m = { AUTHORIZED: 'Authorized', PAID: 'Paid', PARTIALLY_PAID: 'Partly paid', PENDING: 'Pending', REFUNDED: 'Refunded', PARTIALLY_REFUNDED: 'Partly refunded', VOIDED: 'Voided', EXPIRED: 'Expired' }; const v = order_detail.order.financialStatus; return v ? (m[v] || String(v).toLowerCase().replace(/_/g, ' ')) : ''; })()}}\nTotal: ${{order_detail.order.total?.amount}}\n\nItems:\n{{order_detail.order.items.map(item => `- ${item.title} (x${item.quantity})`).join('\\n')}}\n\n{{order_detail.order.fulfillments && order_detail.order.fulfillments.length > 0 && order_detail.order.fulfillments[0].tracking ? 'Tracking: ' + (order_detail.order.fulfillments[0].tracking[0]?.company || '') + ' - ' + (order_detail.order.fulfillments[0].tracking[0]?.number || 'N/A') + (order_detail.order.fulfillments[0].tracking[0]?.url ? '\\nTrack: ' + order_detail.order.fulfillments[0].tracking[0].url : '') : ''}}{{(() => { const t = tracking_detail; if (!t || !t.success) return ''; const lines = []; lines.push('Delivery status: ' + (t.statusDescription || 'Unknown')); if (t.exception) lines.push('Delivery issue: ' + t.exception); if (t.lastEvent) lines.push('Last update: ' + t.lastEvent); if (t.actualDelivery) lines.push('Delivered on: ' + new Date(t.actualDelivery).toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })); else if (t.estimatedDelivery) lines.push('Estimated delivery: ' + new Date(t.estimatedDelivery).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })); return '\\n' + lines.join('\\n'); })()}}\n\nShipping to:\n{{(() => { const sa = order_detail.order.shippingAddress; if (!sa) return 'N/A'; const line1 = [sa.firstName, sa.lastName].filter(Boolean).join(' '); const line2 = sa.address1 || ''; const cityProv = [sa.city, sa.province].filter(Boolean).join(', '); const line3 = [cityProv, sa.zip].filter(Boolean).join(' '); const lines = [line1, line2, line3].filter(s => s && s.trim()); return lines.length ? lines.join('\\n') : 'N/A'; })()}}\n\nAnything else I can help with?",
             "value_es": "Pedido {{order_detail.order.orderNumber}}\n\nEstado: {{(() => { const o = order_detail.order; if (o.cancelled) return 'Cancelado'; const m = { UNFULFILLED: 'Aún no enviado', OPEN: 'Aún no enviado', RESTOCKED: 'Aún no enviado', PARTIALLY_FULFILLED: 'Enviado en parte', FULFILLED: 'Enviado', IN_PROGRESS: 'En preparación', PENDING_FULFILLMENT: 'En preparación', ON_HOLD: 'En espera', SCHEDULED: 'Programado', REQUEST_DECLINED: 'Retrasado', FULFILLMENT_NOT_REQUIRED: 'Nada que enviar' }; const v = o.fulfillmentStatus; return v ? (m[v] || String(v).toLowerCase().replace(/_/g, ' ')) : 'Procesando'; })()}}\nPago: {{(() => { const m = { AUTHORIZED: 'Autorizado', PAID: 'Pagado', PARTIALLY_PAID: 'Pagado en parte', PENDING: 'Pendiente', REFUNDED: 'Reembolsado', PARTIALLY_REFUNDED: 'Reembolsado en parte', VOIDED: 'Anulado', EXPIRED: 'Vencido' }; const v = order_detail.order.financialStatus; return v ? (m[v] || String(v).toLowerCase().replace(/_/g, ' ')) : ''; })()}}\nTotal: ${{order_detail.order.total?.amount}}\n\nArtículos:\n{{order_detail.order.items.map(item => `- ${item.title} (x${item.quantity})`).join('\\n')}}\n\n{{order_detail.order.fulfillments && order_detail.order.fulfillments.length > 0 && order_detail.order.fulfillments[0].tracking ? 'Rastreo: ' + (order_detail.order.fulfillments[0].tracking[0]?.company || '') + ' - ' + (order_detail.order.fulfillments[0].tracking[0]?.number || 'N/A') + (order_detail.order.fulfillments[0].tracking[0]?.url ? '\\nRastrear: ' + order_detail.order.fulfillments[0].tracking[0].url : '') : ''}}{{(() => { const t = tracking_detail; if (!t || !t.success) return ''; const map = { AC: 'Aceptado', IT: 'En tránsito', DE: 'Entregado', EX: 'Excepción', AT: 'Intento de entrega', NY: 'Aún no en el sistema', SP: 'Entregado en punto de recogida', UN: 'Desconocido' }; const lines = []; lines.push('Estado de entrega: ' + (map[t.status] || t.statusDescription || 'Desconocido')); if (t.exception) lines.push('Problema de entrega: ' + t.exception); if (t.lastEventEs) lines.push('Última actualización: ' + t.lastEventEs); if (t.actualDelivery) lines.push('Entregado el: ' + new Date(t.actualDelivery).toLocaleString('es-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })); else if (t.estimatedDelivery) lines.push('Entrega estimada: ' + new Date(t.estimatedDelivery).toLocaleDateString('es-US', { weekday: 'long', month: 'short', day: 'numeric' })); return '\\n' + lines.join('\\n'); })()}}\n\nEnvío a:\n{{(() => { const sa = order_detail.order.shippingAddress; if (!sa) return 'N/A'; const line1 = [sa.firstName, sa.lastName].filter(Boolean).join(' '); const line2 = sa.address1 || ''; const cityProv = [sa.city, sa.province].filter(Boolean).join(', '); const line3 = [cityProv, sa.zip].filter(Boolean).join(' '); const lines = [line1, line2, line3].filter(s => s && s.trim()); return lines.length ? lines.join('\\n') : 'N/A'; })()}}\n\n¿Hay algo más en lo que pueda ayudarte?"
           },
+          "condition: number_from_customer": {
+            "id": "order_not_found_list_orders",
+            "type": "FLOW",
+            "value": "shopify-get-orders-verified",
+            "callType": "replace",
+            "parameters": {
+              "order_number": ""
+            }
+          },
           "default": {
             "id": "order_not_found",
-            "type": "SAY",
-            "variable": "continue_choice",
-            "value": "Sorry, I couldn't find that order. Anything else I can help with?",
-            "value_es": "No pude encontrar ese pedido. ¿Hay algo más en lo que pueda ayudarte?"
+            "type": "FLOW",
+            "value": "give-up",
+            "callType": "reboot",
+            "parameters": {
+              "context": "your order",
+              "context_es": "su pedido"
+            }
           }
         }
       }
@@ -771,7 +814,7 @@
   {
     "id": "shipstation-track-by-number-verified",
     "name": "ShipStationTrackByNumberVerified",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "description": "Collect a tracking number and read back real-time ShipStation tracking for verified customer",
     "variables": {
       "tracking_number": {
@@ -886,13 +929,11 @@
             "onFail": {
               "id": "shipstation_lookup_failed",
               "type": "FLOW",
-              "value": "generic-retry-with-options",
+              "value": "give-up",
               "callType": "reboot",
               "parameters": {
-                "error_message": "I had trouble looking up that tracking number.",
-                "error_message_es": "Tuve problemas buscando ese número de rastreo.",
-                "retry_flow": "shipstation-track-by-number-verified",
-                "cancel_flow": "contact-support"
+                "context": "your tracking",
+                "context_es": "el rastreo de su paquete"
               }
             }
           },
@@ -927,19 +968,37 @@
             "value": "Here's the latest on tracking number {{cargo.voice ? 'ending in ' + tn_clean.slice(-4).split('').join(', ') : tn_clean}}:{{(() => { const t = tracking_detail; if (!t || !t.success) return ''; const lines = []; lines.push('Delivery status: ' + (t.statusDescription || 'Unknown')); if (t.exception) lines.push('Delivery issue: ' + t.exception); if (t.lastEvent) lines.push('Last update: ' + t.lastEvent); if (t.actualDelivery) lines.push('Delivered on: ' + new Date(t.actualDelivery).toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })); else if (t.estimatedDelivery) lines.push('Estimated delivery: ' + new Date(t.estimatedDelivery).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })); return '\\n' + lines.join('\\n'); })()}}\n\nAnything else I can help with?",
             "value_es": "Esto es lo último sobre el número de rastreo {{cargo.voice ? 'terminando en ' + tn_clean.slice(-4).split('').join(', ') : tn_clean}}:{{(() => { const t = tracking_detail; if (!t || !t.success) return ''; const map = { AC: 'Aceptado', IT: 'En tránsito', DE: 'Entregado', EX: 'Excepción', AT: 'Intento de entrega', NY: 'Aún no en el sistema', SP: 'Entregado en punto de recogida', UN: 'Desconocido' }; const lines = []; lines.push('Estado de entrega: ' + (map[t.status] || t.statusDescription || 'Desconocido')); if (t.exception) lines.push('Problema de entrega: ' + t.exception); if (t.lastEventEs) lines.push('Última actualización: ' + t.lastEventEs); if (t.actualDelivery) lines.push('Entregado el: ' + new Date(t.actualDelivery).toLocaleString('es-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })); else if (t.estimatedDelivery) lines.push('Entrega estimada: ' + new Date(t.estimatedDelivery).toLocaleDateString('es-US', { weekday: 'long', month: 'short', day: 'numeric' })); return '\\n' + lines.join('\\n'); })()}}\n\n¿Hay algo más en lo que pueda ayudarte?"
           },
-          "condition: tracking_detail && tracking_detail.notFound": {
+          "condition: tracking_detail && tracking_detail.notFound && !(typeof tn_attempt !== 'undefined' && tn_attempt)": {
             "id": "tracking_not_found",
-            "type": "SAY",
-            "variable": "continue_choice",
-            "value": "I couldn't find tracking number {{cargo.voice ? 'ending in ' + tn_clean.slice(-4).split('').join(', ') : tn_clean}} in our shipping system. Please double-check the number. Anything else I can help with?",
-            "value_es": "No pude encontrar el número de rastreo {{cargo.voice ? 'terminando en ' + tn_clean.slice(-4).split('').join(', ') : tn_clean}} en nuestro sistema de envíos. Por favor verifica el número. ¿Hay algo más en lo que pueda ayudarte?"
+            "type": "FLOW",
+            "value": "shipstation-track-by-number-verified",
+            "callType": "replace",
+            "parameters": {
+              "tracking_number": "",
+              "tn_attempt": "1",
+              "intro_message": "I couldn't find that tracking number in our shipping system.",
+              "intro_message_es": "No encontré ese número de rastreo en nuestro sistema de envíos."
+            }
+          },
+          "condition: tracking_detail && tracking_detail.notFound": {
+            "id": "tracking_not_found_again",
+            "type": "FLOW",
+            "value": "give-up",
+            "callType": "reboot",
+            "parameters": {
+              "context": "your tracking",
+              "context_es": "el rastreo de su paquete"
+            }
           },
           "default": {
             "id": "tracking_error",
-            "type": "SAY",
-            "variable": "continue_choice",
-            "value": "I wasn't able to retrieve tracking information right now. Please try again later. Anything else I can help with?",
-            "value_es": "No pude obtener la información de rastreo en este momento. Por favor intenta más tarde. ¿Hay algo más en lo que pueda ayudarte?"
+            "type": "FLOW",
+            "value": "give-up",
+            "callType": "reboot",
+            "parameters": {
+              "context": "your tracking",
+              "context_es": "el rastreo de su paquete"
+            }
           }
         }
       }

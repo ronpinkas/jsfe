@@ -2,7 +2,7 @@
 
 This document details the e-commerce flows in `flows/shopify.flows.json` and the tools in `flows/shopify.tools.json`. These flows provide integration with Shopify (and ShipStation for carrier tracking) for product search, local store availability, order tracking and store policy questions.
 
-Everything below is read from the JSON. The flows call the system flows (`no-action-needed`, `cancel-process`, `contact-support`, `live-agent-requested`, `authenticate-user`, `generic-retry-with-options`). Call types, `onFail` behaviour, cargo fields and the host-supplied expression helpers (`isAnswer`, `isAgentRequest`, `matchesChoice`…) and the shared answer vocabulary work as described in [System Flows → Conventions](system-flows.md#conventions-used-by-these-flows).
+Everything below is read from the JSON. The flows call the system flows (`no-action-needed`, `cancel-process`, `contact-support`, `live-agent-requested`, [give-up](system-flows.md#giveup), `authenticate-user`, `generic-retry-with-options`). Call types, `onFail` behaviour, cargo fields and the host-supplied expression helpers (`isAnswer`, `isAgentRequest`, `matchesChoice`…) and the shared answer vocabulary work as described in [System Flows → Conventions](system-flows.md#conventions-used-by-these-flows).
 
 ## Table of Contents
 - [Flows](#flows)
@@ -24,21 +24,21 @@ Everything below is read from the JSON. The flows call the system flows (`no-act
   - [shopify-store-availability](#shopify-store-availability)
   - [shipstation-get-tracking](#shipstation-get-tracking)
 
-**Tenant inputs these flows read:** the global variables `global_store_locations` (an array of store records, required for the local-stock offer in ShopifyProductSearch) and `global_shopify_policy` (opt-in for ShopifyStorePolicies). They also read the cargo fields `cargo.voice`, `cargo.verb` / `verb_es`, `cargo.otpVerified`, `cargo.otp_email` and `cargo.otp_cell_number`. `shopify-track-order` writes `cargo.support_context` / `support_context_es`.
+**Tenant inputs these flows read:** the global variables `global_store_locations` (an array of store records, required for the local-stock offer in ShopifyProductSearch), `global_store_locator` (optional; the store-locator address ShopifyProductSearch offers when a city is not found) and `global_shopify_policy` (opt-in for ShopifyStorePolicies). They also read the cargo fields `cargo.voice`, `cargo.verb` / `verb_es`, `cargo.otpVerified`, `cargo.otp_email` and `cargo.otp_cell_number`. `shopify-track-order` writes `cargo.support_context` / `support_context_es`.
 
 ---
 
 ## Flows
 
 ## ShopifyProductSearch
-**ID**: `shopify-product-search` · **Version**: 1.1.4 · **Primary** (prompt "product search" / "buscar producto")  
+**ID**: `shopify-product-search` · **Version**: 1.1.5 · **Primary** (prompt "product search" / "buscar producto")  
 **Description**: Customer asks to find a product, whether one is in stock (online or at a store near them), or what it costs ('do you have air fryers', 'is this TV in stock in Phoenix', 'how much is the iPhone 16', '¿tienen refrigeradores?', '¿cuánto cuesta?'). Not: general advice without asking for a product (None); an order already placed (ShopifyTrackOrder); returns, shipping or other store policies (ShopifyStorePolicies).
 
 ### Parameters
 *   `search_query` (string): The product name, brand and/or features the user specified.
 
 ### Variables
-`search_query` (initial `""`), `search_result`, `product_choice`, `product_idx`, `selected_product`, `selected_variant`, `user_city`, `store_availability`, `user_prompt` (the user's follow-up when no stores are defined; dispatched to intent detection), `variant_gid` (initial `""`; the selected variant id, set by `variant_ok`), `user_city_retry` (initial `""`; the second city or ZIP, after the first was not found).
+`search_query` (initial `""`), `search_result`, `product_choice` (the number of a listed product), `product_idx`, `selected_product`, `selected_variant`, `user_city`, `store_availability`, `user_prompt` (the user's follow-up when no stores are defined; dispatched to intent detection), `variant_gid` (initial `""`; the selected variant id, set by `variant_ok`), `user_city_retry` (initial `""`; the second city or ZIP, after the first was not found).
 
 ### Steps
 1. `get-search-query-if-no-param` (CASE) - `!search_query` → FLOW `get-search-query` (`call`).
@@ -50,29 +50,29 @@ Everything below is read from the JSON. The flows call the system flows (`no-act
    - "View: {url}".
 
    No products → FLOW `no-action-needed` (`reboot`).
-4. `check_global_store_locations` (CASE) - `global_store_locations` is a non-empty array → SAY-GET `product_choice`: "Would you like to check which stores near you have any of these in stock? Tell me the product number (1-5), or say 'done'…". Otherwise → SAY-GET `user_prompt`: "Is there anything else I can help you with today?"
+4. `check_global_store_locations` (CASE) - `global_store_locations` is a non-empty array → SAY-GET `product_choice`: "Would you like to check which stores near you have any of these in stock? Tell me the product number (1-N), or say 'done' if you're all set.", where N = the number of products found, at most 3 on voice and 5 otherwise ("1" alone when N is 1), and "say" on voice / "type" otherwise (Spanish "di" / "escribe"). Otherwise → SAY-GET `user_prompt`: "Is there anything else I can help you with today?"
 5. `check_product_choice` (CASE, first match wins):
    - `user_prompt` set (the answer to "Anything else?") → **`DISPATCH`**: the answer goes to intent detection (another flow can start at once), else to the host.
    - `done | no | exit | listo | no gracias | salir` (whole answer, case-insensitive) → `RETURN` "Cool! If you need anything else, just ask."
-   - `1`–`5` → SET `product_idx` (0-based).
+   - `1`–`5` and at most N (the products offered in step 4) → SET `product_idx` (0-based).
    - anything else → **`DISPATCH`**.
 6. `set_selected_product` → `search_result.products[product_idx]`.
 7. `ask_city` (SAY-GET `user_city`) - "What city are you near? I'll find stores with this item in stock." Then `normalize_city` trims the answer.
 8. `set_selected_variant` - the first variant that is available, else the first variant, else `null`.
 9. `check_variant_valid` (CASE) - a variant id (`id` or `variant_id`) → `variant_ok` SETs `variant_gid`. Otherwise `RETURN` "Sorry, I couldn't get variant information for this product."
-10. `lookup_store_availability` (CALL-TOOL [`shopify-store-availability`](#shopify-store-availability)) - `{variantId: variant_gid, city: user_city, storeLocations: global_store_locations, maxStores: 3}` into `store_availability`. `onFail` → `RETURN` "Sorry, I couldn't check store availability at this time."
+10. `lookup_store_availability` (CALL-TOOL [`shopify-store-availability`](#shopify-store-availability)) - `{variantId: variant_gid, city: user_city, storeLocations: global_store_locations, maxStores: 3}` into `store_availability`. `onFail` → FLOW [give-up](system-flows.md#giveup) (`reboot`), `context: "checking the store availability"` / `context_es: "la disponibilidad en tiendas"`.
 11. `ask_city_again_if_not_a_place` (CASE) - `store_availability.success === false` with an `error` matching `could not geocode` (case-insensitive) → SAY-GET `user_city_retry`: "I couldn't find "{user_city}" as a city. What city or ZIP code are you near?"
-12. `lookup_again_with_new_city` (CASE) - the same geocode failure and a non-blank `user_city_retry` → CALL-TOOL `shopify-store-availability` again with `city: user_city_retry` (other args unchanged) into `store_availability`. Same `onFail` `RETURN`. The answer is not trimmed, and there is one retry only.
+12. `lookup_again_with_new_city` (CASE) - the same geocode failure and a non-blank `user_city_retry` → CALL-TOOL `shopify-store-availability` again with `city: user_city_retry` (other args unchanged) into `store_availability`. Same `onFail` (give-up). The answer is not trimmed, and there is one retry only.
 13. `display_availability` (CASE):
     - `success && found && stores.length > 0` → `RETURN` "{productTitle}[ - {variantTitle}] Available for pickup at:", then per store "{n}. {name} ({city}) / {available} in stock - {distance.toFixed(1)} miles away / {address} / {phone}", then "Need anything else?".
     - `success && !found` → `RETURN` "Sorry, this product is not currently available for in-store pickup at any location. You can order it online for delivery."
-    - still a geocode failure → `RETURN` "I couldn't find that location. You can see all our stores at icuracao.com, or tell me your city any time." **The domain `icuracao.com` is hard-coded in the flow** (English and Spanish).
-    - otherwise → `RETURN` "I couldn't check store availability. Please try again later."
+    - still a geocode failure → `RETURN` "I couldn't find that location. You can see all our stores at {global_store_locator}, or tell me your city any time." When `global_store_locator` is not set: "I couldn't find that location. Tell me your city any time."
+    - otherwise (`availability_error`) → FLOW [give-up](system-flows.md#giveup) (`reboot`), `context: "checking the store availability"` / `context_es: "la disponibilidad en tiendas"`.
 
-Voice lists 3 products, but the store prompt still offers "1-5", so a caller can pick a product that was not read aloud. On a store-availability failure the `onFail` RETURN (step 10 or 12) ends the flow with its own message.
+A number above N (a product that was not offered) is not a product choice and is DISPATCHed. A store-availability failure (the tool's `onFail` in step 10 or 12, or an unsuccessful result other than a geocode failure) reboots into give-up, which says "Sorry, I wasn't able to help with checking the store availability." and hands the customer to `live-agent-requested`.
 
 ### Ends
-By `RETURN` (all flows end), by `DISPATCH` (the answer goes to intent detection, else to the host), or by a `reboot` into `no-action-needed`, which hands the turn to the host.
+By `RETURN` (all flows end), by `DISPATCH` (the answer goes to intent detection, else to the host), by a `reboot` into `no-action-needed`, which hands the turn to the host, or by a `reboot` into give-up (a store-availability failure).
 
 ### Flowchart
 ```mermaid
@@ -86,32 +86,32 @@ graph TD
     display_results -->|none| no_results[FLOW reboot: no-action-needed]
     display_results -->|found| show_results[SAY: 3 voice / 5 text products]
     show_results --> stores{global_store_locations?}
-    stores -->|non-empty array| ask_store_check[SAY-GET: product number or done]
+    stores -->|non-empty array| ask_store_check[SAY-GET: product number 1-N or done]
     stores -->|none| all_done[SAY-GET: anything else?]
     ask_store_check --> choice{choice}
     all_done --> choice
     choice -->|user_prompt set| no_choice_made[DISPATCH]
     choice -->|done / no / exit| end_search[RETURN: Cool!]
-    choice -->|1-5| set_product_idx[SET: product_idx, selected_product]
+    choice -->|1 to N| set_product_idx[SET: product_idx, selected_product]
     choice -->|other| invalid_choice[DISPATCH]
     set_product_idx --> ask_city[SAY-GET: which city?]
     ask_city --> set_selected_variant[SET: first available variant]
     set_selected_variant --> check_variant_valid{variant id?}
     check_variant_valid -->|no| no_variants[RETURN: no variant info]
     check_variant_valid -->|yes| lookup[TOOL: shopify-store-availability]
-    lookup -.->|onFail| availability_failed[RETURN: couldn't check at this time]
+    lookup -.->|onFail| availability_failed[FLOW reboot: give-up]
     lookup --> geocode_failed{city not found?}
     geocode_failed -->|yes| ask_city_again[SAY-GET: city or ZIP again]
     ask_city_again --> retry_answer{answer given?}
     retry_answer -->|yes| lookup_retry[TOOL: shopify-store-availability, user_city_retry]
     retry_answer -->|no| display_availability
-    lookup_retry -.->|onFail| availability_retry_failed[RETURN: couldn't check at this time]
+    lookup_retry -.->|onFail| availability_retry_failed[FLOW reboot: give-up]
     lookup_retry --> display_availability
     geocode_failed -->|no| display_availability{result}
     display_availability -->|found| show_stores[RETURN: store list]
     display_availability -->|not found| no_stock[RETURN: order online]
-    display_availability -->|still not a place| still_not_a_place[RETURN: see all stores at icuracao.com]
-    display_availability -->|error| availability_error[RETURN: try again later]
+    display_availability -->|still not a place| still_not_a_place[RETURN: see all stores at global_store_locator]
+    display_availability -->|error| availability_error[FLOW reboot: give-up]
 ```
 
 ---
@@ -163,7 +163,7 @@ graph TD
    - otherwise → FLOW `authenticate-user` (`call`) with `retry_flow: "shopify-track-order"`, `cancel_flow: "contact-support"`.
 5. `proceed_to_orders` - FLOW `shopify-get-orders-verified` (`replace`), reached when `authenticate-user` returns.
 
-The flow does not re-check `cargo.otpVerified` after `authenticate-user` returns. The order tools enforce OTP themselves (they return `success: false` with `requiresOTP: true`). In `shopify-get-orders-verified`, that sends a failed order lookup to `contact-support`, and a failed order-status call to "Sorry, I couldn't find that order".
+The flow does not re-check `cargo.otpVerified` after `authenticate-user` returns. The order tools enforce OTP themselves (they return `success: false` with `requiresOTP: true`). In `shopify-get-orders-verified`, a failed order lookup or order-status call ends in [give-up](system-flows.md#giveup).
 
 ### Ends
 By `replace` into `shopify-get-orders-verified`, or through `authenticate-user`'s exits.
@@ -183,7 +183,7 @@ graph TD
 ---
 
 ## ShopifyGetOrdersVerified
-**ID**: `shopify-get-orders-verified` · **Version**: 1.1.0 · **Sub-flow**  
+**ID**: `shopify-get-orders-verified` · **Version**: 1.1.2 · **Sub-flow**  
 **Description**: Get order list for verified customer.
 
 Reached by `replace` from `shopify-track-order`, so it keeps that flow's variables (`order_number`, `validate_identifier`).
@@ -192,12 +192,13 @@ Reached by `replace` from `shopify-track-order`, so it keeps that flow's variabl
 `orders_result`, `order_number`, `user_choice` (initial `""`), `shopify_identifier`, `tracking_detail` (ShipStation real-time tracking result).
 
 ### Steps
+0. `note_number_source` (SET) - `number_from_customer = !!order_number` when the flow starts: the customer gave the number (it was not picked from their list).
 1. `set_shopify_identifier` - `cargo.otp_email || cargo.otp_cell_number` (the verified contact).
 2. `call_tool_if_no_param` (CASE):
-   - `!order_number` → CALL-TOOL [`shopify-lookup-orders`](#shopify-lookup-orders) `{identifier: shopify_identifier, container: cargo}` into `orders_result`. `onFail` → FLOW `generic-retry-with-options` (`reboot`): "I had trouble looking up your orders.", `retry_flow: "shopify-get-orders-verified"`, `cancel_flow: "contact-support"`.
+   - `!order_number` → CALL-TOOL [`shopify-lookup-orders`](#shopify-lookup-orders) `{identifier: shopify_identifier, container: cargo}` into `orders_result`. `onFail` (`lookup_failed`) → FLOW [give-up](system-flows.md#giveup) (`reboot`), `context: "your order"` / `context_es: "su pedido"`.
    - otherwise → SET `orders_result = {success: true, orders: [{orderNumber: order_number}]}` (skips the lookup).
 3. `display_orders` (CASE):
-   - `!orders_result || !orders_result.success` → FLOW `contact-support` (`reboot`).
+   - `!orders_result || !orders_result.success` (`lookup_error`) → FLOW [give-up](system-flows.md#giveup) (`reboot`), `context: "your order"` / `context_es: "su pedido"`.
    - no orders → FLOW `shipstation-track-by-number-verified` (`replace`) with `intro_message`: "Sorry, I couldn't find any orders associated with your account. If you have a package tracking number, I can look it up directly." (and Spanish).
    - one order → SET `order_number = orders_result.orders[0].orderNumber`.
    - several → SAY-GET `user_choice`: "Hi {orders_result.customer.firstName}! Here are your recent orders:", then up to 5 entries: "{n}. Order {orderNumber} / Date: {createdAt as locale date, or 'N/A'} / Status: {status}[ / Payment: {payment}] / Total: ${total.amount or 'N/A'}". Then "To see details for a specific order, {verb} the order number (e.g., '1' for the first order). Or {verb} anything else if you're done."
@@ -206,7 +207,7 @@ Reached by `replace` from `shopify-track-order`, so it keeps that flow's variabl
 4. `check_single_order` - `go_to_details = !!order_number`.
 5. `handle_selection` (CASE) - `go_to_details` → continue. `1`–`5` → `order_number = orders_result.orders[n-1]?.orderNumber || ''`. Otherwise → **`DISPATCH`**: the answer goes to intent detection, else to the host.
 6. `get_specific_order` (CASE):
-   - `order_number` → CALL-TOOL [`shopify-get-order-status`](#shopify-get-order-status) `{orderNumber: order_number, identifier: shopify_identifier, container: cargo, validateIdentifier: validate_identifier}` into `order_detail`. `onFail` → SAY "I couldn't retrieve details for that order. Please try again."
+   - `order_number` → CALL-TOOL [`shopify-get-order-status`](#shopify-get-order-status) `{orderNumber: order_number, identifier: shopify_identifier, container: cargo, validateIdentifier: validate_identifier}` into `order_detail`. `onFail` (`order_detail_failed`) → FLOW [give-up](system-flows.md#giveup) (`reboot`), `context: "your order"` / `context_es: "su pedido"`.
    - otherwise → FLOW `contact-support` (`reboot`).
 7. `fetch_shipstation_tracking` (CASE) - when `order_detail.success` and `order_detail.order.fulfillments[0].tracking[0].number` exists → CALL-TOOL [`shipstation-get-tracking`](#shipstation-get-tracking) `{trackingNumber: that number, container: cargo}` into `tracking_detail`. Its `onFail` is SET `tracking_detail = {success: false}`. Without a tracking number → SET `tracking_detail = {success: false}`.
 8. `show_order_detail` (CASE):
@@ -219,12 +220,13 @@ Reached by `replace` from `shopify-track-order`, so it keeps that flow's variabl
      - "Anything else I can help with?"
 
      The Spanish text maps `tracking_detail.status` codes (AC, IT, DE, EX, AT, NY, SP, UN) to Spanish labels and uses `lastEventEs`.
-   - otherwise → SAY "Sorry, I couldn't find that order. Anything else I can help with?"
+   - `number_from_customer` (the customer gave the number) → FLOW `shopify-get-orders-verified` (`replace`) with `order_number: ''`, which looks up and lists the customer's recent orders. A number picked from that list, or the only order picked automatically, is never re-listed, so the flow cannot loop.
+   - otherwise (`order_not_found`) → FLOW [give-up](system-flows.md#giveup) (`reboot`), `context: "your order"` / `context_es: "su pedido"`.
 
-Both onFail handlers in steps 6 and 7 are non-FLOW, so they run immediately after the failed tool and the flow then continues (see Conventions). On a `shopify-get-order-status` failure the user hears the step-6 SAY ("I couldn't retrieve details…") and then step 8's "Sorry, I couldn't find that order…", since `order_detail` still holds the error text.
+The step-7 `onFail` is non-FLOW, so it runs immediately after the failed tool and the flow then continues to step 8 (see Conventions); the order detail is shown without the delivery lines. Give-up says "Sorry, I wasn't able to help with your order." and hands the customer to `live-agent-requested`.
 
 ### Ends
-By completion after the order detail (the SAYs carry `variable: continue_choice`, which is not read). Otherwise by `DISPATCH` (an answer that is not 1-5), `reboot` into `contact-support` / `generic-retry-with-options`, or `replace` into `shipstation-track-by-number-verified`.
+By completion after the order detail (the SAYs carry `variable: continue_choice`, which is not read). Otherwise by `DISPATCH` (an answer that is not 1-5), `reboot` into give-up (a failed lookup or order-status call, or an order not found) or `contact-support` (no order number at step 6), or `replace` into `shipstation-track-by-number-verified` (no orders) or into `shopify-get-orders-verified` itself (`go_to_details` and the order not found).
 
 ### Flowchart
 ```mermaid
@@ -233,10 +235,10 @@ graph TD
     set_shopify_identifier --> has_order{order_number?}
     has_order -->|no| lookup_orders[TOOL: shopify-lookup-orders]
     has_order -->|yes| skip_lookup[SET: orders_result = the one order]
-    lookup_orders -.->|onFail| lookup_failed[FLOW reboot: generic-retry-with-options]
+    lookup_orders -.->|onFail| lookup_failed[FLOW reboot: give-up]
     lookup_orders --> display_orders{orders_result}
     skip_lookup --> display_orders
-    display_orders -->|!success| lookup_error[FLOW reboot: contact-support]
+    display_orders -->|!success| lookup_error[FLOW reboot: give-up]
     display_orders -->|0 orders| no_orders[FLOW replace: shipstation-track-by-number-verified]
     display_orders -->|1 order| single_order_auto[SET: order_number]
     display_orders -->|several| show_orders[SAY-GET: pick 1-5]
@@ -247,25 +249,27 @@ graph TD
     handle_selection -->|other| finished[DISPATCH]
     get_specific_order -->|yes| fetch_order_status[TOOL: shopify-get-order-status]
     get_specific_order -->|no| unexpected_no_order[FLOW reboot: contact-support]
+    fetch_order_status -.->|onFail| order_detail_failed[FLOW reboot: give-up]
     fetch_order_status --> has_tracking{tracking number?}
     has_tracking -->|yes| call_shipstation[TOOL: shipstation-get-tracking]
     has_tracking -->|no| no_tracking[SET: tracking_detail = success false]
     call_shipstation --> show_order_detail{order_detail.success?}
     no_tracking --> show_order_detail
     show_order_detail -->|yes| display_detail[SAY: order, items, tracking, delivery, address]
-    show_order_detail -->|no| order_not_found[SAY: couldn't find that order]
+    show_order_detail -->|no, number from the customer| order_not_found_list_orders[FLOW replace: shopify-get-orders-verified, no order_number]
+    show_order_detail -->|no| order_not_found[FLOW reboot: give-up]
 ```
 
 ---
 
 ## ShipStationTrackByNumberVerified
-**ID**: `shipstation-track-by-number-verified` · **Version**: 1.0.2 · **Sub-flow**  
+**ID**: `shipstation-track-by-number-verified` · **Version**: 1.0.3 · **Sub-flow**  
 **Description**: Collect a tracking number and read back real-time ShipStation tracking for verified customer.
 
-Reached by `replace` from `shopify-get-orders-verified` when the verified customer has no Shopify orders. It retries into itself via `generic-retry-with-options`.
+Reached by `replace` from `shopify-get-orders-verified` when the verified customer has no Shopify orders. It retries into itself via `generic-retry-with-options` (an invalid number) and once directly (a number not found).
 
 ### Variables
-`tracking_number` (initial `""`; also the smart-capture target), `tn_input`, `tn_clean`, `intro_message` / `intro_message_es` (optional text spoken before the question), `tracking_detail`.
+`tracking_number` (initial `""`; also the smart-capture target), `tn_attempt` (a parameter, not declared; `'1'` on the retry after a number was not found), `tn_input`, `tn_clean`, `intro_message` / `intro_message_es` (optional text spoken before the question), `tracking_detail`.
 
 ### Steps
 1. Guards - `tracking_number` (as a string), `intro_message` and `intro_message_es` default to `''` when undefined.
@@ -275,15 +279,18 @@ Reached by `replace` from `shopify-get-orders-verified` when the verified custom
 5. `route_input` (CASE):
    - `isAnswer(…, 'exit')` (EXIT words or `*`) in an answer of at most two words → FLOW `no-action-needed` (`reboot`).
    - `isAgentRequest` (the whole answer asks for a person, or is `0`) → FLOW `live-agent-requested` (`reboot`).
-   - `tn_clean` is 8–40 characters and contains a digit → CALL-TOOL [`shipstation-get-tracking`](#shipstation-get-tracking) `{trackingNumber: tn_clean, container: cargo}` into `tracking_detail`. `onFail` → FLOW `generic-retry-with-options` (`reboot`): "I had trouble looking up that tracking number.", `retry_flow: "shipstation-track-by-number-verified"`, `cancel_flow: "contact-support"`.
-   - default → FLOW `generic-retry-with-options` (`replace`): "That doesn't look like a valid tracking number. Tracking numbers are at least 8 letters and digits.", same retry/cancel flows, `capture_patterns: [{variable: "tracking_number", regex: "\b(?=[A-Za-z0-9]*[0-9])[A-Za-z0-9]{8,40}\b"}]`. The capture is the first whole word of 8 to 40 letters and digits that holds a digit (`normalizeAndFindCapture` returns the matched part), so "my tracking number is 1Z…" captures the `1Z…` number and reboots this flow with it. No `retry_call_type` is passed, so a YES or `1` at the menu reboots this flow afresh and asks for the number (see [GenericRetryWithOptions](system-flows.md#genericretrywithoptions)).
+   - `tn_clean` is 8–40 characters and contains a digit → CALL-TOOL [`shipstation-get-tracking`](#shipstation-get-tracking) `{trackingNumber: tn_clean, container: cargo}` into `tracking_detail`. `onFail` (`shipstation_lookup_failed`) → FLOW [give-up](system-flows.md#giveup) (`reboot`), `context: "your tracking"` / `context_es: "el rastreo de su paquete"`.
+   - default → FLOW `generic-retry-with-options` (`replace`): "That doesn't look like a valid tracking number. Tracking numbers are at least 8 letters and digits.", `retry_flow: "shipstation-track-by-number-verified"`, `cancel_flow: "contact-support"`, `capture_patterns: [{variable: "tracking_number", regex: "\b(?=[A-Za-z0-9]*[0-9])[A-Za-z0-9]{8,40}\b"}]`. The capture is the first whole word of 8 to 40 letters and digits that holds a digit (`normalizeAndFindCapture` returns the matched part), so "my tracking number is 1Z…" captures the `1Z…` number and reboots this flow with it. No `retry_call_type` is passed, so a YES or `1` at the menu reboots this flow afresh and asks for the number (see [GenericRetryWithOptions](system-flows.md#genericretrywithoptions)).
 6. `show_result` (CASE):
    - `tracking_detail.success` → SAY "Here's the latest on tracking number {number}:", then the delivery status, issue, last update and delivered / estimated date (same rendering as ShopifyGetOrdersVerified), then "Anything else I can help with?". On voice the number is read as "ending in 1, 2, 3, 4" (its last four characters).
-   - `tracking_detail.notFound` → SAY "I couldn't find tracking number {number} in our shipping system. Please double-check the number. Anything else I can help with?"
-   - otherwise → SAY "I wasn't able to retrieve tracking information right now. Please try again later. Anything else I can help with?"
+   - `tracking_detail.notFound` on the first try (`tn_attempt` not set) → FLOW `shipstation-track-by-number-verified` (`replace`) with `tracking_number: ''`, `tn_attempt: '1'` and `intro_message`: "I couldn't find that tracking number in our shipping system." (Spanish: "No encontré ese número de rastreo en nuestro sistema de envíos."), so the customer is asked for the number again.
+   - `tracking_detail.notFound` again (`tn_attempt` set) → FLOW [give-up](system-flows.md#giveup) (`reboot`) (`tracking_not_found_again`), `context: "your tracking"` / `context_es: "el rastreo de su paquete"`.
+   - otherwise (`tracking_error`) → FLOW [give-up](system-flows.md#giveup) (`reboot`), same context.
+
+Give-up says "Sorry, I wasn't able to help with your tracking." and hands the customer to `live-agent-requested`.
 
 ### Ends
-By completion after the result SAY, or by a `reboot` / `replace` into another flow.
+By completion after the tracking SAY, by `replace` into itself (a number not found the first time), or by a `reboot` / `replace` into another flow (give-up on a failed lookup, a second number not found or an error).
 
 ### Flowchart
 ```mermaid
@@ -300,11 +307,12 @@ graph TD
     route_input -->|agent request or 0| goto_live_agent[FLOW reboot: live-agent-requested]
     route_input -->|8-40 chars with a digit| call_shipstation[TOOL: shipstation-get-tracking]
     route_input -->|default| invalid_tracking_number[FLOW replace: generic-retry-with-options + capture]
-    call_shipstation -.->|onFail| lookup_failed[FLOW reboot: generic-retry-with-options]
+    call_shipstation -.->|onFail| shipstation_lookup_failed[FLOW reboot: give-up]
     call_shipstation --> show_result{tracking_detail}
     show_result -->|success| display_tracking[SAY: delivery status]
-    show_result -->|notFound| tracking_not_found[SAY: not in our shipping system]
-    show_result -->|other| tracking_error[SAY: try again later]
+    show_result -->|notFound, first try| tracking_not_found[FLOW replace: shipstation-track-by-number-verified, tn_attempt 1]
+    show_result -->|notFound again| tracking_not_found_again[FLOW reboot: give-up]
+    show_result -->|other| tracking_error[FLOW reboot: give-up]
 ```
 
 ---
