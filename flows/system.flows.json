@@ -1692,7 +1692,7 @@
   {
     "id": "otp-text-undeliverable",
     "name": "OtpTextUndeliverable",
-    "version": "1.0.7",
+    "version": "1.0.8",
     "description": "Worker for authenticate-user: the number cannot receive texts; ask for an email or a mobile number.",
     "variables": {
       "user_choice": {
@@ -1712,6 +1712,14 @@
         "description": "Email address in the answer, if any"
       }
     },
+    "parameters": [
+      {
+        "name": "note",
+        "type": "string",
+        "description": "'international' when asked again after a number outside the US and Canada: the question says codes reach only US and Canadian numbers",
+        "required": false
+      }
+    ],
     "steps": [
       {
         "id": "describe_number",

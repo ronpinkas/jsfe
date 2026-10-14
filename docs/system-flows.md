@@ -774,13 +774,14 @@ graph TD
 ---
 
 ## OtpTextUndeliverable
-**ID**: `otp-text-undeliverable` · **Version**: 1.0.7 · **Sub-flow**  
+**ID**: `otp-text-undeliverable` · **Version**: 1.0.8 · **Sub-flow**  
 **Description**: Worker for authenticate-user: the number for the code cannot receive texts (landline, toll-free, invalid). Says so and asks for the account's email or a mobile number; never offers to text the same number again.
 
 Reached by `replace` from [`otp-send-failed`](#otpsendfailed) when `cargo.otpSendFailure` is `undeliverable`, so it keeps `authenticate-user`'s variables (`retry_flow`, `cancel_flow`, the validators) and returns to it by `replace`.
 
 ### Variables
-Reads an undeclared `note` parameter: `international` when it re-asks after an international number.
+### Parameters
+*   `note` (string): `international` when asked again after a number outside the US and Canada; the question then says codes reach only US and Canadian numbers.
 
 `user_choice` (the answer), `undeliverable_last4` (last four digits of the refused number; comma-spaced on voice), `choice_digits` (the 10-digit number in the answer, if any), `choice_email` (an email address in the answer, if any).
 
