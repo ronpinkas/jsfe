@@ -114,8 +114,9 @@ Everything below is read from the JSON. Where a flow's `description` text and it
 **Host functions called in expressions.** The flows call `isAnswer`, `isAgentRequest`, `pickChoice`, `matchesChoice`, `readEmail`, `readPhone`, `validatePhone`, `validateEmail`, `validateCardNumber`, `validateExpiration`, `normalizeAndFindCapture` and `textWithUrlToSpeech` inside conditions and SET values. The engine does not provide them: the host must register them in `APPROVED_FUNCTIONS`. `demos/make-payment.js` has reference implementations of `matchesChoice` (exact word / word-sequence membership, not substring matching), `validatePhone`, `validateEmail` and `textWithUrlToSpeech`.
 
 **Contact readers** (in the reference host, hy-rag-lambdas, `foundation/text/contact.js`), one way to read a contact for every flow set:
-- `readEmail(text)` returns the email address in the answer, lower-cased, or `''`. Spelled single letters and digits are joined ("j u a n" → `juan`), and `at` / `arroba` and `dot` / `punto` between words become `@` and `.`, so "juan at gmail dot com" reads as `juan@gmail.com`. Trailing punctuation is dropped; the result must end in a dot and two or more letters.
+- `readEmail(text)` returns the email address in the answer, lower-cased, or `''`. `at` / `arroba` and `dot` / `punto` may be spoken, and the name before the @ may come in several pieces ("R. A Alvarado at aura.com", "j u a n"): every piece back to the first lead-in word ("my email is", "mi correo es", "yes", "hola") is kept and joined. Accents are dropped from the name, and only the last @ counts.
 - `readPhone(text)` returns the answer's digits when there are exactly 10, or 11 starting with `1` (the `1` dropped); otherwise `''`.
+- `callerTextNumber(cargo)` is ONE rule for whether a text can reach the caller: the caller ID as 10 digits only on a call with a sender (`cargo.twilioNumber`), for a US / Canada number (10 digits, or 11 starting with `1`), and not the number a code could not be texted to (`cargo.otpUndeliverableTo`); otherwise `''`. `textDestination(cargo)` is where a text goes: the verified cell (`cargo.otp_cell_number`, by the same rule), else `callerTextNumber`.
 - `readIdentifier(text, accountPattern)` returns `{ kind: 'account' | 'phone' | 'email', value }` or `null`, the tenant's account-number shape (a regex on the answer's digits) winning first. No system flow calls it.
 
 `normalizeAndFindCapture(answer, patterns)` is the retry menu's smart capture (in the reference host, `foundation/text/capture.js`). Each pattern is either `{ variable, reader }`, where `reader` is `'phone'` or `'email'` and the answer is read with `readPhone` / `readEmail`, or `{ variable, regex, normalizer? }`, where the `normalizer` regex (global) is removed from the answer first and `regex` is run on the result. The first pattern that yields a value returns `{ variable, value }`; for a regex pattern `value` is **the matched part only**, trimmed ("my email is a@b.com" captures `a@b.com`). No match, or `patterns` not an array, returns `null`. A pattern whose regex is invalid is skipped with a warning. Every system menu passes the reader patterns of `cargo.authCapture`. The copy in `demos/make-payment.js` handles regex patterns only and returns the whole normalized answer instead of the matched part.
@@ -198,7 +199,7 @@ graph TD
 ---
 
 ## SwitchToText
-**ID**: `switch-to-text` · **Version**: 1.2.1 · **Primary** (prompt "Switch to text" / "Cambiar a texto")  
+**ID**: `switch-to-text` · **Version**: 1.2.2 · **Primary** (prompt "Switch to text" / "Cambiar a texto")  
 **Description**: Customer explicitly asks to continue this conversation by text message / SMS ('switch to text', 'text me instead', 'can we continue by text', 'pásame a texto', 'seguimos por mensaje de texto'). Not: asking for a live agent or a person (LiveAgentRequested); asking to have one thing texted, such as a link, an address or a statement, a yes or no, or any answer that does not mention text or SMS (None).
 
 ### Variables
@@ -208,8 +209,8 @@ The welcome text also reads `text_starter` / `text_starter_es` when a caller pas
 
 ### Steps
 1. `check_already_text` (CASE) - not on voice (`!cargo.voice`) → **END** (nothing to switch). Otherwise continue.
-2. `check_can_text` (CASE) - no `cargo.callerId` → SAY "I can't send a text message to the number you're calling from."
-3. `route_cannot_text` (CASE) - no `cargo.callerId` → FLOW `contact-support` (`reboot`). The SAY from step 2 is delivered with ContactSupport's output.
+2. `check_can_text` (CASE) - `can_text = !!callerTextNumber(cargo)` (see the contact readers).
+3. `route_cannot_text` (CASE) - not `can_text` → FLOW [give-up](#giveup) (`reboot`), `context: "texting the number you are calling from"` / `context_es: "enviar un mensaje de texto al número desde el que llama"`.
 4. `get_whatsapp_link` (CALL-TOOL [`get-whatsapp-link`](#get-whatsapp-link), no args) into `wa_link`; `onFail` → `wa_link = ''`.
 5. `set_welcome_message` (SET) - "Hi, I remember our phone conversation and can continue to help you here via text.", plus " You can also continue on WhatsApp: {wa_link}?text=Hi" when there is a link (Spanish variant when `language === 'es'`), followed by a blank line and `text_starter` when one was passed (Spanish: `text_starter_es`, else `text_starter`).
 6. `set_switch_user_turn` (SET) - `switch_user_turn` = "Switch to text" / "Cambiar a texto".
@@ -224,15 +225,14 @@ By completion after the confirmation, `END` when not on voice, or `reboot` into 
 graph TD
     start((Start)) --> check_already_text{cargo.voice?}
     check_already_text -->|not voice| already_text_mode[END]
-    check_already_text -->|voice| check_can_text{cargo.callerId?}
-    check_can_text -->|missing| say_cannot_text[SAY: can't text the number you're calling from]
-    say_cannot_text --> cannot_text_contact_support[FLOW reboot: contact-support]
-    check_can_text -->|set| get_whatsapp_link[TOOL: get-whatsapp-link]
+    check_already_text -->|voice| check_can_text{callerTextNumber?}
+    check_can_text -->|none| cannot_text_give_up[FLOW reboot: give-up]
+    check_can_text -->|a number| get_whatsapp_link[TOOL: get-whatsapp-link]
     get_whatsapp_link --> set_welcome_message[SET: welcome_message + WhatsApp link when any + text_starter]
     set_welcome_message --> set_switch_user_turn[SET: switch_user_turn]
     set_switch_user_turn --> send_welcome_sms[TOOL: switch-to-sms]
     send_welcome_sms --> confirm_sms_sent[SAY: text sent, goodbye]
-    send_welcome_sms -.->|onFail, reboot| sms_failed_flow[FLOW: contact-support]
+    send_welcome_sms -.->|onFail, reboot| sms_failed_flow[FLOW: give-up]
     confirm_sms_sent --> stop((End))
     already_text_mode --> stop
 ```
@@ -540,8 +540,8 @@ graph TD
 ---
 
 ## GenericRetryWithOptions
-**ID**: `generic-retry-with-options` · **Version**: 1.3.1 · **Sub-flow**  
-**Description**: Worker: says what failed and offers retry (YES / 1), switch to text (TEXT / 9, voice with caller ID), an agent (AGENT / 0) or exit (EXIT / *). A contact in the answer retries with it; with allow_code_entry a 6-digit code is checked on the spot; anything else goes back to intent detection.
+**ID**: `generic-retry-with-options` · **Version**: 1.3.2 · **Sub-flow**  
+**Description**: Worker: says what failed and offers retry (YES / 1), switch to text (TEXT / 9, when callerTextNumber can reach the caller), an agent (AGENT / 0) or exit (EXIT / *). A contact in the answer retries with it; with allow_code_entry a 6-digit code is checked on the spot; anything else goes back to intent detection.
 
 The library's only retry menu: the authentication flows and the Shopify lookups offer their retry through it.
 
@@ -571,7 +571,7 @@ The library's only retry menu: the authentication flows and the Shopify lookups 
 `user_choice`, `smart_capture_result`, `normalized_otp_code` (a 6-digit code typed at the menu, when `allow_code_entry`).
 
 ### Steps
-1. `say_error_and_prompt` (SAY-GET `user_choice`, `digits: {min 1, max 1}`) - "{error_message} {question} To retry [Press 1 or ]{verb} YES. [To switch to text press 9 or {verb} TEXT. ]To abort [press the asterisk key or ]{verb} EXIT." The keypad wording appears on voice only, and the TEXT option only on voice with a `cargo.callerId`. This prompt does not name the AGENT option; the error messages of the two cap menus do.
+1. `say_error_and_prompt` (SAY-GET `user_choice`, `digits: {min 1, max 1}`) - "{error_message} {question} To retry [Press 1 or ]{verb} YES. [To switch to text press 9 or {verb} TEXT. (only when `callerTextNumber(cargo)` returns a number)]To abort [press the asterisk key or ]{verb} EXIT." The keypad wording appears on voice only, and the TEXT option only on voice with a `cargo.callerId`. This prompt does not name the AGENT option; the error messages of the two cap menus do.
 2. `reprompt_on_unknown_key` (CASE) - a single key `2` to `8` → SAY-GET `user_choice` again: "Sorry, that is not an option. To retry … [For an agent press 0. ]To abort …" (the agent sentence on voice only; same `digits`). One re-prompt only; its answer goes on to step 3.
 3. `check_smart_capture` (SET) - `smart_capture_result = normalizeAndFindCapture(user_choice, capture_patterns)` when patterns were passed, else `null`.
 4. `handle_smart_capture` (CASE, first match wins):
@@ -657,7 +657,7 @@ graph TD
 ---
 
 ## TextDestination
-**ID**: `text-destination` · **Version**: 1.0.1 · **Sub-flow**  
+**ID**: `text-destination` · **Version**: 1.0.2 · **Sub-flow**  
 **Description**: Worker: where a text to the customer can go. Sets `cargo.textTo` (10 digits: the verified cell, else the caller's phone on a call; `''` when there is none, no sender, or the line cannot receive texts) and `cargo.textTo4` (its last four, spaced on voice).
 
 No flow in this library calls it. A caller runs it (`call`) before [`send-text`](#sendtext), and can use `cargo.textTo4` to tell the customer where the text went.
@@ -665,7 +665,7 @@ No flow in this library calls it. A caller runs it (`call`) before [`send-text`]
 The "verified cell" of the description is `cargo.otp_cell_number`, the number `authenticate-user` sent the code to. The step does not check `cargo.otpVerified`.
 
 ### Steps
-1. `pick_destination` (SET, side effect) - `cargo.textTo` = the last 10 digits of `cargo.otp_cell_number`, or, when that is empty and `cargo.voice`, of `cargo.callerId`. It is `''` when there is no `cargo.twilioNumber`, when the result is not 10 digits, or when it equals `cargo.otpUndeliverableTo`. A set `cargo.otp_cell_number` is used even when it is the refused number; the caller ID is then not tried.
+1. `pick_destination` (SET, side effect) - `cargo.textTo = textDestination(cargo)`: the verified cell, else the caller (`callerTextNumber`); `''` when neither can be texted (see the contact readers).
 2. `say_last_four` (SET, side effect) - `cargo.textTo4` = the last four digits of `cargo.textTo`, comma-spaced on voice ("1, 2, 3, 4"); `''` when `cargo.textTo` is empty.
 
 ### Ends
@@ -674,7 +674,7 @@ By completion.
 ### Flowchart
 ```mermaid
 graph TD
-    start((Start)) --> pick_destination["SET: cargo.textTo = otp_cell_number, else callerId on voice; '' if no sender, not 10 digits or undeliverable"]
+    start((Start)) --> pick_destination["SET: cargo.textTo = textDestination(cargo)"]
     pick_destination --> say_last_four[SET: cargo.textTo4]
     say_last_four --> stop((Return to caller))
 ```

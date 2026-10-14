@@ -96,7 +96,7 @@
   {
     "id": "switch-to-text",
     "name": "SwitchToText",
-    "version": "1.2.1",
+    "version": "1.2.2",
     "prompt": "Switch to text",
     "prompt_es": "Cambiar a texto",
     "description": "Customer explicitly asks to continue this conversation by text message / SMS ('switch to text', 'text me instead', 'can we continue by text', 'pásame a texto', 'seguimos por mensaje de texto'). Not: asking for a live agent or a person (LiveAgentRequested); asking to have one thing texted, such as a link, an address or a statement, a yes or no, or any answer that does not mention text or SMS (None).",
@@ -132,17 +132,17 @@
         "id": "check_can_text",
         "type": "CASE",
         "branches": {
-          "condition: !cargo.callerId": {
-            "id": "say_cannot_text",
-            "type": "SAY",
-            "value": "I can't send a text message to the number you're calling from.",
-            "value_es": "No puedo enviar un mensaje de texto al número desde el que llama."
+          "condition: !callerTextNumber(cargo)": {
+            "id": "cannot_text",
+            "type": "SET",
+            "variable": "can_text",
+            "value": "false"
           },
           "default": {
             "id": "can_text",
             "type": "SET",
             "variable": "can_text",
-            "value": true
+            "value": "true"
           }
         }
       },
@@ -150,17 +150,21 @@
         "id": "route_cannot_text",
         "type": "CASE",
         "branches": {
-          "condition: !cargo.callerId": {
-            "id": "cannot_text_contact_support",
+          "condition: !can_text": {
+            "id": "cannot_text_give_up",
             "type": "FLOW",
-            "value": "contact-support",
-            "callType": "reboot"
+            "value": "give-up",
+            "callType": "reboot",
+            "parameters": {
+              "context": "texting the number you are calling from",
+              "context_es": "enviar un mensaje de texto al número desde el que llama"
+            }
           },
           "default": {
             "id": "proceed_to_send",
             "type": "SET",
-            "variable": "can_text",
-            "value": true
+            "variable": "noop",
+            "value": "true"
           }
         }
       },
@@ -205,8 +209,12 @@
         "onFail": {
           "id": "sms_failed_flow",
           "type": "FLOW",
-          "value": "contact-support",
-          "callType": "reboot"
+          "value": "give-up",
+          "callType": "reboot",
+          "parameters": {
+            "context": "texting the number you are calling from",
+            "context_es": "enviar un mensaje de texto al número desde el que llama"
+          }
         }
       },
       {
@@ -1178,8 +1186,8 @@
   {
     "id": "generic-retry-with-options",
     "name": "GenericRetryWithOptions",
-    "version": "1.3.1",
-    "description": "Worker: says what failed and offers retry (YES / 1), switch to text (TEXT / 9, voice with caller ID), an agent (AGENT / 0) or exit (EXIT / *). A contact in the answer retries with it; with allow_code_entry a 6-digit code is checked on the spot; anything else goes back to intent detection.",
+    "version": "1.3.2",
+    "description": "Worker: says what failed and offers retry (YES / 1), switch to text (TEXT / 9, when callerTextNumber can reach the caller), an agent (AGENT / 0) or exit (EXIT / *). A contact in the answer retries with it; with allow_code_entry a 6-digit code is checked on the spot; anything else goes back to intent detection.",
     "parameters": [
       {
         "name": "error_message",
@@ -1254,8 +1262,8 @@
         "id": "say_error_and_prompt",
         "type": "SAY-GET",
         "variable": "user_choice",
-        "value": "{{error_message}} {{typeof question !== 'undefined' && question ? question : 'Would you like to try again?'}} To retry {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. {{cargo.voice && cargo.callerId ? 'To switch to text press 9 or ' + cargo.verb + ' TEXT. ' : ''}}To abort {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
-        "value_es": "{{error_message_es}} {{typeof question_es !== 'undefined' && question_es ? question_es : '¿Le gustaría intentar nuevamente?'}} Para reintentar {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ. {{cargo.voice && cargo.callerId ? 'Para cambiar a texto presione 9 o ' + cargo.verb_es + ' TEXTO. ' : ''}}Para salir {{cargo.voice ? 'presione la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
+        "value": "{{error_message}} {{typeof question !== 'undefined' && question ? question : 'Would you like to try again?'}} To retry {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. {{callerTextNumber(cargo) ? 'To switch to text press 9 or ' + cargo.verb + ' TEXT. ' : ''}}To abort {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
+        "value_es": "{{error_message_es}} {{typeof question_es !== 'undefined' && question_es ? question_es : '¿Le gustaría intentar nuevamente?'}} Para reintentar {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ. {{callerTextNumber(cargo) ? 'Para cambiar a texto presione 9 o ' + cargo.verb_es + ' TEXTO. ' : ''}}Para salir {{cargo.voice ? 'presione la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
         "digits": {
           "min": 1,
           "max": 1
@@ -1269,8 +1277,8 @@
             "id": "say_not_an_option",
             "type": "SAY-GET",
             "variable": "user_choice",
-            "value": "Sorry, that is not an option. To retry {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. {{cargo.voice && cargo.callerId ? 'To switch to text press 9 or ' + cargo.verb + ' TEXT. ' : ''}}{{cargo.voice ? 'For an agent press 0. ' : ''}}To abort {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
-            "value_es": "Lo siento, esa no es una opción. Para reintentar {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ. {{cargo.voice && cargo.callerId ? 'Para cambiar a texto presione 9 o ' + cargo.verb_es + ' TEXTO. ' : ''}}{{cargo.voice ? 'Para un agente presione 0. ' : ''}}Para salir {{cargo.voice ? 'presione la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
+            "value": "Sorry, that is not an option. To retry {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. {{callerTextNumber(cargo) ? 'To switch to text press 9 or ' + cargo.verb + ' TEXT. ' : ''}}{{cargo.voice ? 'For an agent press 0. ' : ''}}To abort {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
+            "value_es": "Lo siento, esa no es una opción. Para reintentar {{cargo.voice ? 'Presione 1 o ' : ''}}{{cargo.verb_es}} SÍ. {{callerTextNumber(cargo) ? 'Para cambiar a texto presione 9 o ' + cargo.verb_es + ' TEXTO. ' : ''}}{{cargo.voice ? 'Para un agente presione 0. ' : ''}}Para salir {{cargo.voice ? 'presione la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
             "digits": {
               "min": 1,
               "max": 1
@@ -1495,14 +1503,14 @@
   {
     "id": "text-destination",
     "name": "TextDestination",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "Worker: where a text to the customer can go. Sets cargo.textTo (10 digits: the verified cell, else the caller's phone on a call; '' when there is none, no sender, or the line cannot receive texts) and cargo.textTo4 (its last four, spaced on voice).",
     "steps": [
       {
         "id": "pick_destination",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "cargo.textTo = (function() { var n = String(cargo.otp_cell_number || (cargo.voice ? cargo.callerId : '') || '').replace(/[^0-9]/g, '').slice(-10); return cargo.twilioNumber && n.length === 10 && n !== cargo.otpUndeliverableTo ? n : ''; })()"
+        "value": "cargo.textTo = textDestination(cargo)"
       },
       {
         "id": "say_last_four",
