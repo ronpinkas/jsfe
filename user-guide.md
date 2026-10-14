@@ -2881,7 +2881,7 @@ Handle tool failures gracefully:
 **CallType Options:**
 - `"call"`: Execute onFail as sub-flow, return to original flow after
 - `"replace"`: Replace current flow with onFail flow
-- `"reboot"`: Clear all flows and start fresh with onFail flow (SAY output accumulated before the failure is delivered with the onFail flow's output)
+- `"reboot"`: Clear all flows and start fresh with onFail flow (SAY output accumulated before the failure is delivered with the onFail flow's output; `discardSay: true` on the onFail step drops it)
 
 ### Smart Default Error Handling
 
@@ -4314,7 +4314,7 @@ fields; the host does.
 **Call Types:**
 - **`"call"`** (default): Execute sub-workflow, return to current workflow after completion
 - **`"replace"`**: Replace current workflow with new workflow (one-way transfer)
-- **`"reboot"`**: Clear all active workflows (including parents) and start fresh (emergency recovery). SAY output accumulated before the reboot is not lost: it is delivered together with the new flow's output.
+- **`"reboot"`**: Clear all active workflows (including parents) and start fresh (emergency recovery). SAY output accumulated before the reboot is not lost: it is delivered together with the new flow's output. `discardSay: true` on the step drops it instead: the new flow starts with nothing queued.
 
 **Sub-workflow Examples:**
 
@@ -4450,6 +4450,7 @@ fields; the host does.
 - **Type Conversion**: Automatically converts result to string for response
 - **Transaction Handling**: Marks the terminated flows' transactions as completed, unless a flow declared `outcome: "unresolved"` (then failed; see [Declaring How a Flow Ended](#declaring-how-a-flow-ended-outcome-and-reason))
 - **Empty Value**: `RETURN ''` produces an empty response, so the host handles the user's message itself (the standard `no-action-needed` flow is exactly this)
+- **Queued SAY text**: by default a `RETURN` delivers only its value; text queued by earlier `SAY` steps this turn (in this flow, or in a flow that rebooted into it) is not delivered. `keepSay: true` delivers that text ahead of the value. An empty value hands the turn to the host either way
 - **Stack Cleanup**: Clears all flow stacks to ensure clean state
 - **Audit Logging**: Logs flow termination with reason
 

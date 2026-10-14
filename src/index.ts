@@ -574,6 +574,8 @@ export interface FlowStep {
   [key: string]: unknown; // Allow for value-xx properties and future extensions
   name?: string;
   callType?: 'call' | 'replace' | 'reboot';
+  keepSay?: boolean; // RETURN only: deliver the SAY text queued before it ahead of the value (default: not delivered)
+  discardSay?: boolean; // reboot only: drop the SAY text queued before it (default: delivered with the new flow's output)
   branches?: Record<string, FlowStep>;  // SWITCH branches contain single steps, not arrays
   _branchOrder?: string[];  // Preserved key order for branches - survives unordered serialization (e.g. DynamoDB Maps)
   onFail?: FlowStep;
@@ -4158,8 +4160,14 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
         // user-facing SAY emitted before the failure carries into the onFail
         // reboot target and is delivered with its output (same as the FLOW-step
         // reboot). The free initializeFlowStacks(engine) would also clear the
-        // buffer via getAndClearAccumulatedMessages().
-        engine.initializeFlowStacks();
+        // buffer via getAndClearAccumulatedMessages(). `discardSay: true` on the
+        // onFail step opts out, as on a FLOW step.
+        if (onFailStep.discardSay === true) {
+          engine.resetFlowState();
+          logger.info(`onFail reboot: discardSay, queued messages dropped`);
+        } else {
+          engine.initializeFlowStacks();
+        }
 
         // Start the onFail flow as a new root flow
         if (onFailStep.type === "FLOW") {
@@ -4715,6 +4723,27 @@ function handleReturnStep(currentFlowFrame: FlowFrame, engine: Engine): string {
     logger.info(`RETURN step: no value expression provided, returning empty string`);
   }
 
+  // `keepSay: true` delivers the SAY text queued before this RETURN — in this flow or one that rebooted into
+  // it — ahead of the value. Default (as before): initializeFlowStacks below clears the buffer, so queued text
+  // is not delivered. An empty value still hands the turn to the host, with or without keepSay; the tentative
+  // flow_init placeholder is never delivered.
+  if (step.keepSay === true) {
+    const value = String(returnValue);
+    let pending: string[] = engine.hasAccumulatedMessages() ? engine.getAndClearAccumulatedMessages!() : [];
+    if (engine.getTentativeFlowInit() && pending.length > 0) {
+      pending = pending.slice(1);
+      engine.setTentativeFlowInit(false);
+    }
+    if (value && pending.length > 0) {
+      returnValue = [...pending, value].join('\n\n');
+      logger.info(`RETURN step: keepSay, delivering ${pending.length} queued message(s) ahead of the value`);
+    } else {
+      logger.info(`RETURN step: keepSay, nothing delivered (${pending.length} queued, empty value: ${!value})`);
+    }
+  } else {
+    logger.debug(`RETURN step: queued messages, if any, are not delivered (no keepSay)`);
+  }
+
   // Terminate all flows by clearing all stacks
   logger.info(`RETURN step: terminating all flows`);
   while (engine.flowStacks.length > 0) {
@@ -4862,8 +4891,14 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
       // right now") must carry into the reboot target and be delivered with its
       // output. The free initializeFlowStacks(engine) ALSO calls
       // getAndClearAccumulatedMessages(), which silently dropped those pending
-      // user-facing messages.
-      engine.initializeFlowStacks();
+      // user-facing messages. `discardSay: true` opts out: the target starts with
+      // nothing queued (and no tentative flow_init placeholder).
+      if (step.discardSay === true) {
+        engine.resetFlowState();
+        logger.info(`Reboot to ${subFlow.name}: discardSay, queued messages dropped`);
+      } else {
+        engine.initializeFlowStacks();
+      }
 
       // Start the reboot flow as the only flow in the system
       const transaction = TransactionManager.create(subFlow.name, 'reboot', currentFlowFrame.userId);

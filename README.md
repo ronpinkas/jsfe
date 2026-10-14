@@ -1024,7 +1024,7 @@ their original workflow seamlessly.
 - ✅ **Flow Interruption** - Suspend current flow for new task
 - ✅ **Flow Resumption** - Return to previously suspended flows
 - ✅ **Flow Replacement** - Replace current flow with new flow
-- ✅ **Flow Reboot** - Nuclear option: clear all flows and restart (SAY output accumulated before the reboot is kept and delivered with the new flow's output)
+- ✅ **Flow Reboot** - Nuclear option: clear all flows and restart (SAY output accumulated before the reboot is kept and delivered with the new flow's output; `discardSay: true` drops it)
 
 ### Step Types
 - ✅ **SAY** - Non-blocking output messages (accumulated)
@@ -1034,7 +1034,7 @@ their original workflow seamlessly.
 - ✅ **FLOW** - Sub-flow execution with multiple call types
 - ✅ **CASE** - Conditional branching with expressions
 - ✅ **SWITCH** - Conditional branching based on single value matching
-- ✅ **RETURN** - Terminate all flows and return evaluated expression value (an EXIT/abort)
+- ✅ **RETURN** - Terminate all flows and return evaluated expression value (an EXIT/abort); `keepSay: true` delivers the SAY text queued before it ahead of the value
 - ✅ **END** - Return from the current flow only, resuming the parent flow — a functional `return` (no value; variables are shared with the parent)
 - ✅ **DISPATCH** - End all flows and route this turn's input through intent detection, as if no flow had been active (a matched flow starts in the same turn; no match → no response, the host answers). Resets everything; the ended flows' declared outcome is kept only when no flow matches. Takes `id`, `outcome`, `reason`. See the user guide's *DISPATCH Steps*
 
