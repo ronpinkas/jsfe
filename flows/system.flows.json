@@ -1778,8 +1778,8 @@
   {
     "id": "live-agent-requested",
     "name": "LiveAgentRequested",
-    "version": "1.6.1",
-    "description": "Customer's primary intent is to reach a human: live agent, representative, 'customer service', 'servicio al cliente', 'I need to talk to someone', 'speak to a person', 'comunicarme con alguien', 'hablar con una persona'. On the phone it offers the transfer when an agent is scheduled (cargo.agentPhoneNumber); on every other channel it sends the Live Connect link when the tenant runs Live Connect and an agent is reachable. On the phone after hours (no agent number this turn, the number has a schedule) it says so, states the agent hours (on the phone built from the number's schedule, cargo.agentHours / agentHours_es; otherwise the optional global_live_agents_comment / global_live_agents_comment_es) and offers to help, in the number's own words (cargo.agentUnavailableMessage, a voice setting) or a generic default; the flow ends 'unresolved' (agent_unavailable). Contact information is given when the customer asks for it. Otherwise (any non-phone channel without a Live Connect link, or a phone number with no agents at all) it says it cannot connect the customer with a live agent and gives the tenant's contact information (cargo.contact_info), ending 'resolved' (no_agent_reachable).",
+    "version": "1.7.0",
+    "description": "Customer's primary intent is to reach a human: live agent, representative, 'customer service', 'servicio al cliente', 'I need to talk to someone', 'speak to a person', 'comunicarme con alguien', 'hablar con una persona'. On the phone it offers the transfer when an agent is scheduled (cargo.agentPhoneNumber) — and transfers without the offer when started by give-up; on every other channel it sends the Live Connect link when the tenant runs Live Connect and an agent is reachable. On the phone after hours (no agent number this turn, the number has a schedule) it says so, states the agent hours (on the phone built from the number's schedule, cargo.agentHours / agentHours_es; otherwise the optional global_live_agents_comment / global_live_agents_comment_es) and offers to help, in the number's own words (cargo.agentUnavailableMessage, a voice setting) or a generic default; the flow ends 'unresolved' (agent_unavailable). Text a calling flow queued before rebooting here is delivered first (keepSay). Contact information is given when the customer asks for it. Otherwise (any non-phone channel without a Live Connect link, or a phone number with no agents at all) it says it cannot connect the customer with a live agent and gives the tenant's contact information (cargo.contact_info), ending 'resolved' (no_agent_reachable), or 'unresolved' (gave_up) when started by give-up.",
     "prompt": "live agent confirmation",
     "prompt_es": "confirmación de agente en vivo",
     "primary": true,
@@ -1791,9 +1791,19 @@
       "live_connect_link": {
         "type": "string",
         "description": "Live Connect guest link on non-phone channels; '' when not available"
+      },
+      "after_give_up": {
+        "type": "boolean",
+        "description": "Started by give-up: a flow could not finish, so no offer to continue with the AI"
       }
     },
     "steps": [
+      {
+        "id": "take_give_up",
+        "type": "SET",
+        "variable": "after_give_up",
+        "value": "(function() { var g = !!cargo.giveUp; cargo.giveUp = false; return g; })()"
+      },
       {
         "id": "get_live_connect",
         "type": "CASE",
@@ -1830,7 +1840,8 @@
             "type": "RETURN",
             "value": "(language == 'es' ? 'Puede hablar ahora con un agente en vivo, por audio o video, aquí: ' : 'You can talk to a live agent now, by audio or video, here: ') + live_connect_link",
             "outcome": "resolved",
-            "reason": "live_connect_link"
+            "reason": "live_connect_link",
+            "keepSay": true
           },
           "default": {
             "id": "no_live_connect",
@@ -1848,8 +1859,9 @@
             "id": "say_cannot_connect",
             "type": "RETURN",
             "value": "[language == 'es' ? 'No puedo comunicarle con un agente en vivo por aquí.' : \"I can't connect you with a live agent here.\", !cargo.voice ? (language == 'es' ? (typeof global_live_agents_comment_es !== 'undefined' && global_live_agents_comment_es ? global_live_agents_comment_es : '') : (typeof global_live_agents_comment !== 'undefined' && global_live_agents_comment ? global_live_agents_comment : '')) : '', cargo.contact_info ? ((language == 'es' ? 'Así puede comunicarse con Servicio al Cliente: ' : 'Here is how to reach Customer Support: ') + (cargo.voice ? textWithUrlToSpeech(cargo.contact_info, language) : cargo.contact_info) + '.') : (language == 'es' ? 'Por favor contacte a Servicio al Cliente.' : 'Please contact Customer Support.')].filter(Boolean).join(' ')",
-            "outcome": "resolved",
-            "reason": "no_agent_reachable"
+            "outcome": "{{after_give_up ? 'unresolved' : 'resolved'}}",
+            "reason": "{{after_give_up ? 'gave_up' : 'no_agent_reachable'}}",
+            "keepSay": true
           },
           "default": {
             "id": "phone_with_agents",
@@ -1868,7 +1880,8 @@
             "type": "RETURN",
             "value": "[language == 'es' ? 'Nuestro equipo de agentes no está disponible en este momento.' : \"Our live agent team isn't available right now.\", language == 'es' ? (cargo.agentHours_es || (typeof global_live_agents_comment_es !== 'undefined' && global_live_agents_comment_es ? global_live_agents_comment_es : '')) : (cargo.agentHours || (typeof global_live_agents_comment !== 'undefined' && global_live_agents_comment ? global_live_agents_comment : '')), cargo.agentUnavailableMessage || (language == 'es' ? (cargo.voice ? 'Aún puedo ayudarle con muchas preguntas. Solo dígame qué necesita.' : 'Aún puedo ayudarle con muchas preguntas. Solo escríbame qué necesita.') : 'I can still help with many questions. Just tell me what you need.')].filter(Boolean).join(' ')",
             "outcome": "unresolved",
-            "reason": "agent_unavailable"
+            "reason": "agent_unavailable",
+            "keepSay": true
           },
           "default": {
             "id": "agent_available",
@@ -1879,14 +1892,26 @@
         }
       },
       {
-        "id": "ask_user_choice",
-        "type": "SAY-GET",
-        "variable": "user_choice",
-        "value": "Before I try to transfer you, I want you to know that I can help you faster with many inquiries, including account information even if you don't have your account number. I can also locate and provide directions to our nearest location. Many customers find it faster to continue with me. Please wait for my questions and listen to the options before choosing. To have me help you now {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. For a live agent {{cargo.voice ? 'Press 0 or ' : ''}}{{cargo.verb}} LIVE AGENT.",
-        "value_es": "Antes de intentar transferirte, quiero que sepas que puedo ayudarte más rápido con muchas consultas, incluida la información de la cuenta incluso si no tienes tu número de cuenta. También puedo localizar y proporcionar direcciones a nuestra ubicación más cercana. Muchos clientes encuentran que es más rápido continuar conmigo. Por favor espera mis preguntas y escucha las opciones antes de elegir. Para que te ayude ahora {{cargo.voice ? 'Presiona 1 o ' : ''}}{{cargo.verb_es}} SÍ. Para un agente en vivo {{cargo.voice ? 'Presiona 0 o ' : ''}}{{cargo.verb_es}} AGENTE EN VIVO.",
-        "digits": {
-          "min": 1,
-          "max": 1
+        "id": "offer_unless_give_up",
+        "type": "CASE",
+        "branches": {
+          "condition: after_give_up": {
+            "id": "no_offer_after_give_up",
+            "type": "SET",
+            "variable": "user_choice",
+            "value": "'agent'"
+          },
+          "default": {
+            "id": "ask_user_choice",
+            "type": "SAY-GET",
+            "variable": "user_choice",
+            "value": "Before I try to transfer you, I want you to know that I can help you faster with many inquiries, including account information even if you don't have your account number. I can also locate and provide directions to our nearest location. Many customers find it faster to continue with me. Please wait for my questions and listen to the options before choosing. To have me help you now {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. For a live agent {{cargo.voice ? 'Press 0 or ' : ''}}{{cargo.verb}} LIVE AGENT.",
+            "value_es": "Antes de intentar transferirte, quiero que sepas que puedo ayudarte más rápido con muchas consultas, incluida la información de la cuenta incluso si no tienes tu número de cuenta. También puedo localizar y proporcionar direcciones a nuestra ubicación más cercana. Muchos clientes encuentran que es más rápido continuar conmigo. Por favor espera mis preguntas y escucha las opciones antes de elegir. Para que te ayude ahora {{cargo.voice ? 'Presiona 1 o ' : ''}}{{cargo.verb_es}} SÍ. Para un agente en vivo {{cargo.voice ? 'Presiona 0 o ' : ''}}{{cargo.verb_es}} AGENTE EN VIVO.",
+            "digits": {
+              "min": 1,
+              "max": 1
+            }
+          }
         }
       },
       {
@@ -1906,14 +1931,16 @@
               "condition: cargo.agentPhoneNumber": {
                 "id": "confirm_transfer",
                 "type": "RETURN",
-                "value": "language == 'es' ? 'Entendido. Te transfiero a un agente en vivo.' : 'Understood. Let me transfer you to a live agent.'"
+                "value": "after_give_up ? (language == 'es' ? 'Te transfiero a un agente en vivo.' : 'Let me transfer you to a live agent.') : (language == 'es' ? 'Entendido. Te transfiero a un agente en vivo.' : 'Understood. Let me transfer you to a live agent.')",
+                "keepSay": true
               },
               "default": {
                 "id": "no_agents_available",
                 "type": "RETURN",
                 "value": "[language == 'es' ? 'Nuestro equipo de agentes no está disponible en este momento.' : \"Our live agent team isn't available right now.\", language == 'es' ? (cargo.agentHours_es || (typeof global_live_agents_comment_es !== 'undefined' && global_live_agents_comment_es ? global_live_agents_comment_es : '')) : (cargo.agentHours || (typeof global_live_agents_comment !== 'undefined' && global_live_agents_comment ? global_live_agents_comment : '')), cargo.agentUnavailableMessage || (language == 'es' ? (cargo.voice ? 'Aún puedo ayudarle con muchas preguntas. Solo dígame qué necesita.' : 'Aún puedo ayudarle con muchas preguntas. Solo escríbame qué necesita.') : 'I can still help with many questions. Just tell me what you need.')].filter(Boolean).join(' ')",
                 "outcome": "unresolved",
-                "reason": "agent_unavailable"
+                "reason": "agent_unavailable",
+                "keepSay": true
               }
             }
           },
@@ -1928,10 +1955,60 @@
     ]
   },
   {
+    "id": "give-up",
+    "name": "GiveUp",
+    "version": "1.0.0",
+    "description": "Worker: a flow could not finish — its tries ran out or a service it needs failed. Says so (context / context_es: what it was, e.g. 'your payment' / 'su pago') and hands the caller to live-agent-requested, which transfers at once on the phone instead of offering to continue with the AI. Not for an answer that changes direction: that is DISPATCHed.",
+    "parameters": [
+      {
+        "name": "context",
+        "type": "string",
+        "description": "What could not be finished (English), e.g. 'your payment'"
+      },
+      {
+        "name": "context_es",
+        "type": "string",
+        "description": "The same in Spanish, e.g. 'su pago'"
+      }
+    ],
+    "steps": [
+      {
+        "id": "gu_context",
+        "type": "SET",
+        "variable": "gu_ctx",
+        "value": "typeof context !== 'undefined' && context ? String(context) : 'your request'"
+      },
+      {
+        "id": "gu_context_es",
+        "type": "SET",
+        "variable": "gu_ctx_es",
+        "value": "typeof context_es !== 'undefined' && context_es ? String(context_es) : (typeof context !== 'undefined' && context ? String(context) : 'su solicitud')"
+      },
+      {
+        "id": "gu_mark",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(cargo.giveUp = true, true)"
+      },
+      {
+        "id": "gu_sorry",
+        "type": "SAY",
+        "value": "Sorry, I wasn't able to help with {{gu_ctx}}.",
+        "value_es": "Lo siento, no pude ayudarle con {{gu_ctx_es}}."
+      },
+      {
+        "id": "gu_to_agent",
+        "type": "FLOW",
+        "value": "live-agent-requested",
+        "callType": "replace"
+      }
+    ]
+  },
+  {
     "id": "ask-choice",
     "name": "AskChoice",
-    "version": "1.8.0",
-    "description": "Worker: ask one question and return the caller's choice . Parameters: question / question_es, choices [{key, words}] (words include any keypad digit), optional retry / retry_es, accept_other, digits ({min, max} for the keypad), exit_context / exit_context_es. Returns cargo.choice = the matching key, and cargo.choiceText = the answer as given. One re-ask on a miss of fewer than three words (three or more is a new request: DISPATCH); AGENT (or 0) reaches a person and EXIT (or *) ends, the same for every question; anything still unrecognised is another request and is DISPATCHed — unless accept_other, which returns cargo.choice = 'other' with the text for the caller to interpret. Matching: a word after a negation in its clause is negated. A negated match goes to a NO-type choice (key 'no', negative: true, or a word that holds the negation); a choice marked neutral: true still matches (the negation is about the object); any other choice is blocked and a 'no' key answers. A reply led by a bare 'no' answers a plain YES with NO. With accept_other, AGENT only when the whole answer is an agent request; EXIT only when the answer is just exit / salir / cancel / cancelar. A neutral choice is refused when it follows its negation within two words; a refusal or a deferral (later, mañana) answers with the choice keyed no / decline / done / cancel; on a free-text question cancel / cancelar is an answer.",
+    "version": "1.9.0",
+    "description": "Worker: ask one question and return the caller's choice . Parameters: question / question_es, choices [{key, words}] (words include any keypad digit), optional retry / retry_es, accept_other, digits ({min, max} for the keypad), exit_context / exit_context_es. Returns cargo.choice = the matching key, and cargo.choiceText = the answer as given. One re-ask on a miss of fewer than three words (three or more is a new request: DISPATCH); AGENT (or 0) reaches a person and EXIT (or *) ends, the same for every question; anything still unrecognised is another request and is DISPATCHed — unless accept_other, which returns cargo.choice = 'other' with the text for the caller to interpret; with accept_other and expect ('number' | 'email' | 'contact'), an answer of three or more words none of which has that shape is another request and is DISPATCHed, never returned as a failed try. Matching: a word after a negation in its clause is negated. A negated match goes to a NO-type choice (key 'no', negative: true, or a word that holds the negation); a choice marked neutral: true still matches (the negation is about the object); any other choice is blocked and a 'no' key answers. A reply led by a bare 'no' answers a plain YES with NO. With accept_other, AGENT only when the whole answer is an agent request; EXIT only when the answer is just exit / quit / salir / abort. A neutral choice is refused when it follows its negation within two words; a refusal or a deferral (later, mañana) answers with the choice keyed no / decline / done / cancel; on a free-text question cancel / cancelar is an answer.",
     "parameters": [
       {
         "name": "question",
@@ -1986,6 +2063,11 @@
         "type": "string",
         "description": "What EXIT abandons (Spanish)",
         "required": false
+      },
+      {
+        "name": "expect",
+        "type": "string",
+        "description": "With accept_other: what the answer should be — 'number', 'email' or 'contact' (either). Three or more words of neither shape are another request and are DISPATCHed"
       }
     ],
     "variables": {
@@ -2116,10 +2198,16 @@
         "value": "ac_key === '' && !ac_other ? pickChoice(ac_answer, choices, ac_other) : ac_key"
       },
       {
+        "id": "ac_other_request_check",
+        "type": "SET",
+        "variable": "ac_key",
+        "value": "ac_key === '' && ac_other && typeof expect !== 'undefined' && expect && isOtherRequest(ac_answer, expect) ? '__elsewhere' : ac_key"
+      },
+      {
         "id": "ac_keypad_done",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(cargo.digits = undefined, (ac_key === '__agent' || ac_key === '__exit' || (ac_key === '' && !ac_other)) && Array.isArray(cargo.sensitive) ? cargo.sensitive.forEach(function(p) { var o = cargo, k = String(p).split('.'); for (var i = 0; i < k.length - 1 && o; i++) { o = o[k[i]]; } if (o && typeof o === 'object') { o[k[k.length - 1]] = null; } }) : null, true)"
+        "value": "(cargo.digits = undefined, (ac_key === '__agent' || ac_key === '__exit' || ac_key === '__elsewhere' || (ac_key === '' && !ac_other)) && Array.isArray(cargo.sensitive) ? cargo.sensitive.forEach(function(p) { var o = cargo, k = String(p).split('.'); for (var i = 0; i < k.length - 1 && o; i++) { o = o[k[i]]; } if (o && typeof o === 'object') { o[k[k.length - 1]] = null; } }) : null, true)"
       },
       {
         "id": "ac_route",
@@ -2140,6 +2228,10 @@
               "support_context": "{{ac_exit_ctx}}",
               "support_context_es": "{{ac_exit_ctx_es}}"
             }
+          },
+          "condition: ac_key === '__elsewhere'": {
+            "id": "ac_elsewhere",
+            "type": "DISPATCH"
           },
           "condition: ac_key === '' && ac_other": {
             "id": "ac_return_other",
@@ -2165,7 +2257,7 @@
   {
     "id": "ask-email",
     "name": "AskEmail",
-    "version": "1.3.0",
+    "version": "1.3.1",
     "description": "Worker: an email address. With on_file, the question offers it (OK keeps it) and any other address the caller gives replaces it. One re-ask when the answer is not an email. Sets cargo.email ('' when none).",
     "parameters": [
       {
@@ -2286,7 +2378,8 @@
           },
           "exit_context": "email",
           "exit_context_es": "correo",
-          "accept_other": true
+          "accept_other": true,
+          "expect": "email"
         }
       },
       {
@@ -2414,7 +2507,7 @@
   {
     "id": "ask-address",
     "name": "AskAddress",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "description": "Worker: a new mailing address, zip first: the zip (city and state from Google; asked only when Google has none), the street (normalized by Google when it matches exactly inside that zip, otherwise kept as said), the unit, then read back for YES / NO; NO collects it once more. Sets cargo.address = { line, street, said, verified } or null.",
     "parameters": [
       {
@@ -2532,7 +2625,8 @@
             "max": 5
           },
           "exit_context": "address change",
-          "exit_context_es": "cambio de dirección"
+          "exit_context_es": "cambio de dirección",
+          "expect": "number"
         }
       },
       {
@@ -2660,7 +2754,8 @@
           "choices": [],
           "accept_other": true,
           "exit_context": "address change",
-          "exit_context_es": "cambio de dirección"
+          "exit_context_es": "cambio de dirección",
+          "expect": "number"
         }
       },
       {
@@ -2684,7 +2779,8 @@
               "choices": [],
               "accept_other": true,
               "exit_context": "address change",
-              "exit_context_es": "cambio de dirección"
+              "exit_context_es": "cambio de dirección",
+              "expect": "number"
             }
           },
           "default": {
@@ -2887,7 +2983,7 @@
   {
     "id": "ask-field",
     "name": "AskField",
-    "version": "1.2.0",
+    "version": "1.2.1",
     "description": "Worker: one card field — kind 'card' (13–19 digits, checksum), 'exp' (MMYY, not expired), 'cvv' (3–4 digits) or 'zip' (5 digits). One re-ask with the error; LINK switches to a payment link. Sets cargo.field (the value) and cargo.fieldOutcome ('ok' | 'link' | 'failed'). The answer is erased from cargo.choiceText as soon as it is read.",
     "parameters": [
       {
@@ -3000,7 +3096,8 @@
           "exit_context": "payment",
           "exit_context_es": "pago",
           "accept_other": true,
-          "digits": "{{af_digits}}"
+          "digits": "{{af_digits}}",
+          "expect": "number"
         }
       },
       {

@@ -23,6 +23,7 @@ Everything below is read from the JSON. Where a flow's `description` text and it
   - [SendOtpCode](#sendotpcode)
   - [OtpTextUndeliverable](#otptextundeliverable)
   - [LiveAgentRequested](#liveagentrequested)
+  - [GiveUp](#giveup)
   - [AskChoice](#askchoice)
   - [AskEmail](#askemail)
   - [AskAddress](#askaddress)
@@ -124,6 +125,7 @@ Everything below is read from the JSON. Where a flow's `description` text and it
 - `isAnswer(input, kind, extra?)` returns whether the answer is a `kind` answer, `kind` being one of `yes`, `no`, `agent`, `exit`, `text`, with the caller's `extra` words added to that kind's list. `0` is AGENT and `*` is EXIT. A negated answer ("not sure", "I don't want an agent") never matches YES, AGENT or TEXT.
 - `isAgentRequest(input)` returns whether the whole answer asks for a person ("agent", "I want to talk to a representative", "hablar con una persona") or is `0`. A negated answer never does. Used at free-text prompts, where an AGENT word inside a longer answer is not a request.
 - `pickChoice(answer, choices, acceptOther)` is [ask-choice](#askchoice)'s matcher: it returns the key of the choice the answer picks, `__agent`, `__exit`, or `''` for no choice. Its rules are under AskChoice.
+- `isOtherRequest(input, kind)` returns whether a free-text answer to a question that expects `kind` (`number`: a digit or a number word in English or Spanish; `email`: `@`, "at", "arroba", "dot", "punto" or a common mail domain; `contact`: either) is a new request rather than an attempt: three or more words, none of that shape. ask-choice's `expect` uses it.
 
 **`digits`** on a SAY-GET (`{ min, max, autoSubmitChars?, autoSubmitMs? }`) is copied by the engine to `cargo.digits` while the answer is awaited, for the host's keypad handling (e.g. Twilio ConversationRelay). The engine removes it once the input is collected. ask-choice, whose SAY-GETs carry no `digits`, writes its `digits` parameter to `cargo.digits` itself before each question and removes it after the answer.
 
@@ -804,19 +806,21 @@ graph TD
 ---
 
 ## LiveAgentRequested
-**ID**: `live-agent-requested` · **Version**: 1.6.1 · **Primary** (prompt "live agent confirmation" / "confirmación de agente en vivo")  
-**Description**: The customer's primary intent is to reach a human: live agent, representative, "customer service", "servicio al cliente", "I need to talk to someone", "speak to a person", "comunicarme con alguien", "hablar con una persona". On the phone it offers the transfer when an agent is scheduled (`cargo.agentPhoneNumber`); on every other channel it sends the Live Connect link when the tenant runs Live Connect and an agent is reachable. On the phone after hours (no agent number this turn, the number has a schedule) it says so, states the agent hours and offers to help, ending `unresolved` (`agent_unavailable`). Otherwise (any non-phone channel without a Live Connect link, or a phone number with no agents at all) it says it cannot connect the customer with a live agent and gives the tenant's contact information, ending `resolved` (`no_agent_reachable`).
+**ID**: `live-agent-requested` · **Version**: 1.7.0 · **Primary** (prompt "live agent confirmation" / "confirmación de agente en vivo")  
+**Description**: The customer's primary intent is to reach a human: live agent, representative, "customer service", "servicio al cliente", "I need to talk to someone", "speak to a person", "comunicarme con alguien", "hablar con una persona". On the phone it offers the transfer when an agent is scheduled (`cargo.agentPhoneNumber`); on every other channel it sends the Live Connect link when the tenant runs Live Connect and an agent is reachable. On the phone after hours (no agent number this turn, the number has a schedule) it says so, states the agent hours and offers to help, ending `unresolved` (`agent_unavailable`). Otherwise (any non-phone channel without a Live Connect link, or a phone number with no agents at all) it says it cannot connect the customer with a live agent and gives the tenant's contact information, ending `resolved` (`no_agent_reachable`). Started by [give-up](#giveup) (`cargo.giveUp`), it transfers on the phone without the offer to continue with the AI, and the cannot-connect end is `unresolved` (`gave_up`). Its worded RETURNs carry `keepSay: true`, so text a calling flow queued before rebooting here is delivered first.
 
 The description also says "Contact information is given when the customer asks for it". No step of the after-hours path gives it; a later request reaches the host or another flow.
 
 ### Variables
 *   `user_choice` (string): continue with AI or transfer.
 *   `live_connect_link` (string): the Live Connect guest link on non-phone channels; `''` when not available.
+*   `after_give_up` (boolean): started by give-up.
 
 ### Steps
+0. `take_give_up` (SET) - `after_give_up = !!cargo.giveUp`, and `cargo.giveUp = false`.
 1. `get_live_connect` (CASE) - not on voice → CALL-TOOL [`get-live-connect-link`](#get-live-connect-link) `{container: cargo}` into `live_connect_link`; `onFail` → SET `live_connect_link = ''`. On voice → `live_connect_link = ''`.
 2. `offer_live_connect` (CASE) - not on voice and a link → **`RETURN`** "You can talk to a live agent now, by audio or video, here: {live_connect_link}" (Spanish: "Puede hablar ahora con un agente en vivo, por audio o video, aquí: …"), **`outcome: "resolved"`, `reason: "live_connect_link"`**.
-3. `cannot_connect` (CASE) - not on voice, or on voice with neither `cargo.agentPhoneNumber` nor `cargo.agentHours` (a number with no agents) → **`RETURN`**, sentences joined with spaces, **`outcome: "resolved"`, `reason: "no_agent_reachable"`**:
+3. `cannot_connect` (CASE) - not on voice, or on voice with neither `cargo.agentPhoneNumber` nor `cargo.agentHours` (a number with no agents) → **`RETURN`**, sentences joined with spaces, **`outcome: "resolved"`, `reason: "no_agent_reachable"`** (after a give-up: `unresolved`, `gave_up`):
    - "I can't connect you with a live agent here." (Spanish: "No puedo comunicarle con un agente en vivo por aquí.");
    - not on voice: `global_live_agents_comment` / `_es`, when set;
    - `cargo.contact_info` set: "Here is how to reach Customer Support: {contact_info}." (on voice through `textWithUrlToSpeech`); otherwise "Please contact Customer Support."
@@ -824,10 +828,10 @@ The description also says "Contact information is given when the customer asks f
    - "Our live agent team isn't available right now." (Spanish: "Nuestro equipo de agentes no está disponible en este momento.");
    - `cargo.agentHours` / `cargo.agentHours_es`, else `global_live_agents_comment` / `_es` when set;
    - `cargo.agentUnavailableMessage`, else "I can still help with many questions. Just tell me what you need." (Spanish: "Aún puedo ayudarle con muchas preguntas. Solo dígame qué necesita." on voice, "… Solo escríbame qué necesita." otherwise).
-5. `ask_user_choice` (SAY-GET `user_choice`, `digits: {min 1, max 1}`) - the deflection pitch ("Before I try to transfer you, I want you to know that I can help you faster with many inquiries…"), then "To have me help you now [Press 1 or] {verb} YES. For a live agent [Press 0 or] {verb} LIVE AGENT."
+5. `offer_unless_give_up` (CASE) - `after_give_up` → SET `user_choice = 'agent'` (no offer). Otherwise `ask_user_choice` (SAY-GET `user_choice`, `digits: {min 1, max 1}`) - the deflection pitch ("Before I try to transfer you, I want you to know that I can help you faster with many inquiries…"), then "To have me help you now [Press 1 or] {verb} YES. For a live agent [Press 0 or] {verb} LIVE AGENT."
 6. `normalize_choice` - trim, lower-case, strip punctuation.
 7. `handle_choice` (CASE):
-   - **anything that is not** `isAnswer(…, 'yes', ['continue', 'thanks', 'gracias'])` and not `1` (so a negated answer such as "not sure" transfers) → nested CASE: `cargo.agentPhoneNumber` → **`RETURN`** "Understood. Let me transfer you to a live agent." (Spanish: "Entendido. Te transfiero a un agente en vivo."). Otherwise (the agent number is gone when the answer arrives) → **`RETURN`** the same "not available" text as step 4, `outcome: "unresolved"`, `reason: "agent_unavailable"`.
+   - **anything that is not** `isAnswer(…, 'yes', ['continue', 'thanks', 'gracias'])` and not `1` (so a negated answer such as "not sure" transfers) → nested CASE: `cargo.agentPhoneNumber` → **`RETURN`** "Understood. Let me transfer you to a live agent." (Spanish: "Entendido. Te transfiero a un agente en vivo."); after a give-up without "Understood." / "Entendido.". Otherwise (the agent number is gone when the answer arrives) → **`RETURN`** the same "not available" text as step 4, `outcome: "unresolved"`, `reason: "agent_unavailable"`.
    - YES / `1` → SAY "Great! I'm glad to help. What would you like assistance with today?"
 
 The flow only returns the transfer sentence. **Performing the transfer is the host's job**; no tool is called.
@@ -838,7 +842,8 @@ The flow only returns the transfer sentence. **Performing the transfer is the ho
 ### Flowchart
 ```mermaid
 graph TD
-    start((Start)) --> get_live_connect{cargo.voice?}
+    start((Start)) --> take_give_up[SET: after_give_up from cargo.giveUp]
+    take_give_up --> get_live_connect{cargo.voice?}
     get_live_connect -->|not voice| fetch_live_connect_link[TOOL: get-live-connect-link]
     get_live_connect -->|voice| phone_channel[SET: live_connect_link = '']
     fetch_live_connect_link -.->|onFail| live_connect_unavailable[SET: live_connect_link = '']
@@ -850,7 +855,10 @@ graph TD
     cannot_connect -->|yes| say_cannot_connect["RETURN: can't connect + contact info<br/>outcome: resolved"]
     cannot_connect -->|no| check_agent_available{cargo.agentPhoneNumber?}
     check_agent_available -->|missing| no_agent_available["RETURN: not available + hours + offer to help<br/>outcome: unresolved"]
-    check_agent_available -->|set| ask_user_choice[SAY-GET: 1 = stay with AI, 0 = agent]
+    check_agent_available -->|set| offer{after_give_up?}
+    offer -->|yes| no_offer[SET: user_choice = agent]
+    offer -->|no| ask_user_choice[SAY-GET: 1 = stay with AI, 0 = agent]
+    no_offer --> normalize_choice
     ask_user_choice --> normalize_choice[SET: normalize]
     normalize_choice --> handle_choice{YES or 1?}
     handle_choice -->|yes| continue_with_ai[SAY: Great, what can I help with]
@@ -862,9 +870,37 @@ graph TD
 
 ---
 
+## GiveUp
+**ID**: `give-up` · **Version**: 1.0.0 · **Sub-flow**  
+**Description**: Worker: a flow could not finish, because its tries ran out or a service it needs failed. Says so and hands the caller to [LiveAgentRequested](#liveagentrequested), which transfers at once on the phone instead of offering to continue with the AI. Not for an answer that changes direction: that is `DISPATCH`ed.
+
+### Parameters
+*   `context` (string): What could not be finished (English), e.g. "your payment". Empty or absent = "your request".
+*   `context_es` (string): The same in Spanish, e.g. "su pago". Empty or absent = `context`, else "su solicitud".
+
+### Steps
+1. `gu_context`, `gu_context_es` (SET) - the defaults above.
+2. `gu_mark` (SET, side effect) - `cargo.giveUp = true`.
+3. `gu_sorry` (SAY) - "Sorry, I wasn't able to help with {context}." (Spanish: "Lo siento, no pude ayudarle con {context_es}.")
+4. `gu_to_agent` - FLOW `live-agent-requested` (`replace`).
+
+### Ends
+In LiveAgentRequested.
+
+### Flowchart
+```mermaid
+graph TD
+    start((Start)) --> gu_context[SET: context defaults]
+    gu_context --> gu_mark[SET: cargo.giveUp = true]
+    gu_mark --> gu_sorry[SAY: Sorry, I wasn't able to help with context]
+    gu_sorry --> gu_to_agent[FLOW replace: live-agent-requested]
+```
+
+---
+
 ## AskChoice
-**ID**: `ask-choice` · **Version**: 1.8.0 · **Sub-flow** · **Scope**: isolated  
-**Description**: Worker: asks one question and returns the caller's choice in `cargo.choice` (the matching key) and `cargo.choiceText` (the answer as given). One re-ask on a short miss; AGENT (or `0`) reaches a person and EXIT (or `*`) ends, the same for every question; anything still unrecognised is another request and is `DISPATCH`ed, unless `accept_other`, which returns `cargo.choice = 'other'` with the text for the caller to interpret.
+**ID**: `ask-choice` · **Version**: 1.9.0 · **Sub-flow** · **Scope**: isolated  
+**Description**: Worker: asks one question and returns the caller's choice in `cargo.choice` (the matching key) and `cargo.choiceText` (the answer as given). One re-ask on a short miss; AGENT (or `0`) reaches a person and EXIT (or `*`) ends, the same for every question; anything still unrecognised is another request and is `DISPATCH`ed, unless `accept_other`, which returns `cargo.choice = 'other'` with the text for the caller to interpret. With `accept_other` and `expect`, an answer of three or more words, none of the expected shape, is another request and is `DISPATCH`ed rather than returned as a failed try.
 
 The question primitive the other generic workers are built on: ask-email, ask-address, ask-field and card-entry ask every question through it.
 
@@ -875,6 +911,7 @@ The question primitive the other generic workers are built on: ask-email, ask-ad
 *   `retry` / `retry_es` (string): Re-ask wording. Empty or absent = "Sorry, I didn't catch that. " + `question` / "Disculpe, no le entendí. " + the Spanish question.
 *   `accept_other` (boolean): Return any other answer as choice `other` instead of re-asking. `true` or `'true'`.
 *   `digits` (object): Keypad bounds `{ min, max }`, written to `cargo.digits` while each answer is awaited.
+*   `expect` (string): With `accept_other`: what the answer should be, `number`, `email` or `contact` (either). See `isOtherRequest` under the conventions.
 *   `exit_context` / `exit_context_es` (string): What EXIT abandons, passed to contact-support as `support_context`. Empty or absent = "your request" / "su solicitud".
 
 ### Variables
@@ -900,10 +937,12 @@ The flow's description says that with `accept_other` EXIT matches "exit / salir 
 6. `ac_keypad_again` (SET, side effect) - `cargo.digits` as in step 3, for a re-ask.
 7. `ac_reask_on_miss` (CASE) - no key, no `accept_other`, and fewer than three words that contain a letter → SAY-GET `ac_answer` with the retry wording. A longer miss is not re-asked; it is a new request.
 8. `ac_match_again` (SET) - after a re-ask, `ac_key = pickChoice(…)` on the new answer.
-9. `ac_keypad_done` (SET, side effect) - `cargo.digits = undefined`. When the answer leaves through AGENT, EXIT or `DISPATCH` (`__agent`, `__exit`, or no key without `accept_other`) and `cargo.sensitive` is an array, each dotted path in it is set to `null` inside the cargo first.
+8a. `ac_other_request_check` (SET) - no key, `accept_other` and `expect`, and `isOtherRequest(ac_answer, expect)` → `ac_key = '__elsewhere'`.
+9. `ac_keypad_done` (SET, side effect) - `cargo.digits = undefined`. When the answer leaves through AGENT, EXIT or `DISPATCH` (`__agent`, `__exit`, `__elsewhere`, or no key without `accept_other`) and `cargo.sensitive` is an array, each dotted path in it is set to `null` inside the cargo first.
 10. `ac_route` (CASE, first match wins):
     - `__agent` → FLOW `live-agent-requested` (`reboot`).
     - `__exit` → FLOW `contact-support` (`reboot`) with `support_context` / `support_context_es` = the exit context.
+    - `__elsewhere` → **`DISPATCH`**: a new request at a free-text question.
     - no key with `accept_other` → `cargo.choice = 'other'`, `cargo.choiceText` = the answer (the engine's `\'`, `\"` and `\\` escapes removed).
     - no key → **`DISPATCH`** (no outcome): the answer goes to intent detection, otherwise the host answers.
     - default → `cargo.choice = ac_key`, `cargo.choiceText` = the answer, unescaped.
@@ -921,12 +960,14 @@ graph TD
     ac_ask --> ac_match[SET: ac_key = pickChoice]
     ac_match --> reask{no key, no accept_other, under 3 words?}
     reask -->|yes| ac_reask[SAY-GET: retry wording]
-    reask -->|no| keypad_done
+    reask -->|no| other_check
     ac_reask --> ac_match_again[SET: ac_key = pickChoice]
-    ac_match_again --> keypad_done["SET: cargo.digits removed; cargo.sensitive paths = null on AGENT, EXIT, DISPATCH"]
+    ac_match_again --> other_check["SET: __elsewhere when expect and isOtherRequest"]
+    other_check --> keypad_done["SET: cargo.digits removed; cargo.sensitive paths = null on AGENT, EXIT, DISPATCH"]
     keypad_done --> route{ac_key}
     route -->|__agent| ac_agent[FLOW reboot: live-agent-requested]
     route -->|__exit| ac_exit[FLOW reboot: contact-support + exit context]
+    route -->|__elsewhere| ac_elsewhere[DISPATCH]
     route -->|none, accept_other| ac_return_other["SET: cargo.choice = 'other', cargo.choiceText"]
     route -->|none| ac_other_request[DISPATCH]
     route -->|a key| ac_return_choice[SET: cargo.choice = key, cargo.choiceText]
@@ -937,7 +978,7 @@ graph TD
 ---
 
 ## AskEmail
-**ID**: `ask-email` · **Version**: 1.3.0 · **Sub-flow** · **Scope**: isolated  
+**ID**: `ask-email` · **Version**: 1.3.1 · **Sub-flow** · **Scope**: isolated  
 **Description**: Worker: an email address. With `on_file`, the question offers it (OK keeps it) and any other address the caller gives replaces it. One re-ask when the answer is not an email. Sets `cargo.email` (`''` when none).
 
 ### Parameters
@@ -948,6 +989,8 @@ graph TD
 
 ### Variables
 `ae_n`, `ae_q`, `ae_q_es`, `ae_found`, `ae_next`, `ae_new`, `ae_why` (initial `'invalid'`).
+
+Its free-text questions pass ask-choice `expect: `email``, so a new request there is `DISPATCH`ed, not counted as a failed try.
 
 ### Steps
 1. `ae_attempt` (SET) - `ae_n` = `attempt`, else 0.
@@ -993,7 +1036,7 @@ graph TD
 ---
 
 ## AskAddress
-**ID**: `ask-address` · **Version**: 1.2.0 · **Sub-flow** · **Scope**: isolated  
+**ID**: `ask-address` · **Version**: 1.2.1 · **Sub-flow** · **Scope**: isolated  
 **Description**: Worker: a new mailing address, zip first: the zip (city and state from Google; asked only when Google has none), the street (normalized by Google when it matches exactly inside that zip, otherwise kept as said), the unit, then read back for YES / NO; NO collects it once more. Sets `cargo.address = { line, street, said, verified }` or `null`.
 
 Every question goes through [`ask-choice`](#askchoice) with exit context "address change" / "cambio de dirección". The unit question and the read-back use `cargo.verb` / `cargo.verb_es` directly (`cargo.verb.charAt(0)`), so the host must set them.
@@ -1003,6 +1046,8 @@ Every question goes through [`ask-choice`](#askchoice) with exit context "addres
 
 ### Variables
 `ad_n`, `ad_zip`, `ad_components` (the Google component filter), `ad_zip_result`, `ad_place` ("City, ST"), `ad_said` (the street as said), `ad_street_result`, `ad_street`, `ad_norm` (Google's street), `ad_verified`, `ad_unit`, `ad_line`, `ad_q`, `ad_q_es`, `ad_next`.
+
+Its free-text questions pass ask-choice `expect: `number` (the zip and the street questions)`, so a new request there is `DISPATCH`ed, not counted as a failed try.
 
 ### Steps
 1. `ad_attempt` (SET) - `ad_n` = `attempt`, else 0.
@@ -1083,7 +1128,7 @@ graph TD
 ---
 
 ## AskField
-**ID**: `ask-field` · **Version**: 1.2.0 · **Sub-flow** · **Scope**: isolated  
+**ID**: `ask-field` · **Version**: 1.2.1 · **Sub-flow** · **Scope**: isolated  
 **Description**: Worker: one card field, kind `card` (13 to 19 digits, checksum), `exp` (MMYY, not expired), `cvv` (3 to 4 digits) or `zip` (5 digits). One re-ask with the error; LINK switches to a payment link. Sets `cargo.field` (the value) and `cargo.fieldOutcome` (`'ok'`, `'link'` or `'failed'`). The answer is erased from `cargo.choiceText` as soon as it is read.
 
 The card check is the host's `validateCardNumber`, which accepts 12 to 19 digits; the description's 13 is the lower keypad bound only.
@@ -1096,6 +1141,8 @@ The card check is the host's `validateCardNumber`, which accepts 12 to 19 digits
 
 ### Variables
 `af_n`, `af_q`, `af_q_es`, `af_digits` (keypad bounds), `af_value`, `af_next_attempt`.
+
+Its free-text questions pass ask-choice `expect: `number``, so a new request there is `DISPATCH`ed, not counted as a failed try.
 
 ### Steps
 1. `af_attempt` (SET) - `cargo.field = ''`; `af_n` = `attempt`, else 0.
