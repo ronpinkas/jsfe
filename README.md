@@ -544,6 +544,11 @@ Two cargo fields connect the engine to a voice channel:
 - **`cargo.digits`** (set by the engine): when a `SAY-GET` step declares `digits` (for example
   `{ "min": 6, "max": 6 }`), the engine copies it to `cargo.digits` while the answer is awaited, so
   the host can configure keypad (DTMF) collection. It is removed once the input is collected.
+- **`asSpoken`** (a `SAY-GET` attribute, opt-in): the answer is stored exactly as given, never reduced to
+  its digits and never sent to the voice cleaner. Use it where the words carry meaning the digits lose,
+  such as an amount: without it, "$1" fitting `digits: { min: 1, max: 1 }` is stored as `1`. The value is
+  `true`, or a condition on the flow's variables (`"ac_amount === true"`), so a worker flow can switch it
+  with a parameter. Absent or false keeps the default behaviour.
 
 #### Correct Session Update Pattern
 

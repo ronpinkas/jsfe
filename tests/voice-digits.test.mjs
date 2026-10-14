@@ -16,7 +16,7 @@ const eq = (a, b, what) => { assert.deepEqual(a, b, what); checks++; };
 
 const quiet = { info() {}, debug() {}, warn() {}, error() {} };
 
-async function answer(step, said, voice = true) {
+async function answer(step, said, voice = true, variables = undefined) {
   let cleanerCalls = 0;
   const aiCallback = async (systemInstruction) => {
     if (/voice input cleaner/.test(systemInstruction)) {
@@ -27,6 +27,7 @@ async function answer(step, said, voice = true) {
     }
   };
   const flow = { id: 'F', name: 'F', description: 'f', version: '1.0.0', primary: true,
+    ...(variables ? { variables } : {}),
     steps: [step, { id: 'show', type: 'SAY', value: '[{{x}}]' }] };
   const e = new WorkflowEngine(quiet, aiCallback, [flow], [], {}, {}, false, 'en');
   let s = e.initSession('u', `t-${Math.random()}`);
@@ -97,6 +98,36 @@ const digitStep = { id: 'ask', type: 'SAY-GET', variable: 'x', value: 'Your card
 {
   const r = await answer(digitStep, '41 34 18 73 33 57 41 80', false);
   eq(r.cleanerCalls, 0, 'no cleanup off voice');
+}
+
+// ── asSpoken (opt-in, any SAY-GET): the answer is kept as heard; the default is unchanged ──
+{
+  // with a digit range: an amount keeps its unit and decimals instead of being reduced to its digits
+  const amount = { id: 'ask', type: 'SAY-GET', variable: 'x', value: 'Say the amount', digits: { min: 1, max: 7 }, asSpoken: true };
+  for (const said of ['$1.', '1 dollar', '$12.50', '235.90']) {
+    const r = await answer(amount, said);
+    eq(r.shown, said, `asSpoken: "${said}" kept as spoken`);
+    eq(r.cleanerCalls, 0, `asSpoken: "${said}" never sent to the AI cleaner`);
+  }
+  const plain = { id: 'ask', type: 'SAY-GET', variable: 'x', value: 'Say the amount', digits: { min: 1, max: 7 } };
+  eq((await answer(plain, '$12.50')).shown, '1250', 'without asSpoken a fitting answer is still reduced to its digits (default unchanged)');
+  eq((await answer(amount, '$1.', false)).shown, '$1.', 'text: kept as typed, as always');
+
+  // without a digit range: any input is kept as heard, never cleaned
+  const free = { id: 'ask', type: 'SAY-GET', variable: 'x', value: 'Your name?', asSpoken: true };
+  let r = await answer(free, 'um it is Ron');
+  eq([r.shown, r.cleanerCalls], ['um it is Ron', 0], 'asSpoken on a free answer: kept as heard, no AI cleanup');
+  r = await answer({ ...free, asSpoken: undefined }, 'um it is Ron');
+  eq([r.shown, r.cleanerCalls], ['MANGLED', 1], 'without asSpoken a free answer is still cleaned (default unchanged)');
+
+  // a condition on the flow's variables: a worker switches it with a parameter
+  const cond = { ...amount, asSpoken: 'wantSpoken === true' };
+  r = await answer(cond, '$1.', true, { wantSpoken: { type: 'boolean', value: true } });
+  eq([r.shown, r.cleanerCalls], ['$1.', 0], 'asSpoken condition true: kept as spoken');
+  r = await answer(cond, '$1.', true, { wantSpoken: { type: 'boolean', value: false } });
+  eq(r.shown, '1', 'asSpoken condition false: reduced to its digits as before');
+  r = await answer({ ...amount, asSpoken: false }, '$1.');
+  eq(r.shown, '1', 'asSpoken: false is the default');
 }
 
 console.log(`voice-digits: ${checks} checks passed`);

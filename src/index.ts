@@ -571,6 +571,7 @@ export interface FlowStep {
   variable?: string;
   value?: string;
   digits?: unknown; // Digit collection configuration for SAY-GET steps (exposed to sessionContext.cargo for platform integration like Twilio ConversationRelay)
+  asSpoken?: boolean | string; // SAY-GET only: store the answer exactly as given (no voice digit reduction, no AI voice cleanup). true, or a condition on the flow's variables
   [key: string]: unknown; // Allow for value-xx properties and future extensions
   name?: string;
   callType?: 'call' | 'replace' | 'reboot';
@@ -760,6 +761,7 @@ export interface FlowFrame {
   startTime: number;
   pendingVariable?: string;
   pendingVariableContext?: string; // Question context for AI voice cleanup
+  pendingVariableAsSpoken?: boolean; // The awaited SAY-GET declared asSpoken: its answer is stored as given
   lastSayMessage?: string;
   pendingInterruption?: Record<string, unknown>;
   declaredOutcome?: { outcome: string; reason?: string }; // From a step's `outcome` attribute — applied when this frame terminates (see FlowOutcome)
@@ -2908,7 +2910,8 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
         userInput,
         true, // Sanitize user input
         engine, // Pass engine for AI voice cleanup
-        currentFlowFrame.pendingVariableContext // Pass question context for AI voice cleanup
+        currentFlowFrame.pendingVariableContext, // Pass question context for AI voice cleanup
+        currentFlowFrame.pendingVariableAsSpoken === true
       );
 
       // Log the actual stored value (which may have been processed by AI voice cleanup)
@@ -2926,6 +2929,7 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
 
       delete currentFlowFrame.pendingVariable;
       delete currentFlowFrame.pendingVariableContext; // Clean up context
+      delete currentFlowFrame.pendingVariableAsSpoken;
 
       // Pop the SAY-GET step now that variable assignment is complete
       currentFlowFrame.flowStepsStack.pop();
@@ -4375,6 +4379,13 @@ function handleSayGetStep(currentFlowFrame: FlowFrame, engine: Engine): string |
     if (step.variable) {
       currentFlowFrame.pendingVariable = step.variable;
       currentFlowFrame.pendingVariableContext = finalMessage; // Store question context for AI voice cleanup
+      const asSpoken = sayGetAsSpoken(step, currentFlowFrame, engine);
+      if (asSpoken) {
+        currentFlowFrame.pendingVariableAsSpoken = true;
+        logger.info(`SAY-GET step '${step.id}' keeps its answer as spoken (asSpoken)`);
+      } else {
+        delete currentFlowFrame.pendingVariableAsSpoken;
+      }
       logger.info(`SAY-GET step will store next user input in variable '${step.variable}' (step will be popped after input)`);
 
       // Expose digits setting to sessionContext.cargo for Twilio ConversationRelay integration
@@ -4394,6 +4405,25 @@ function handleSayGetStep(currentFlowFrame: FlowFrame, engine: Engine): string |
   }
 
   return finalMessage;
+}
+
+/**
+ * A SAY-GET's `asSpoken`: `true`, or a condition evaluated against the flow's variables (so a worker flow can
+ * switch it with a parameter). Anything else — absent, false, a condition that is false or fails — is false.
+ */
+function sayGetAsSpoken(step: FlowStep, frame: FlowFrame, engine: Engine): boolean {
+  if (step.asSpoken === true) {
+    return true;
+  } else if (typeof step.asSpoken === 'string' && step.asSpoken.trim() !== '') {
+    try {
+      return evaluateSafeCondition(step.asSpoken, frame.variables || {}, engine);
+    } catch (error: any) {
+      logger.warn(`SAY-GET '${step.id}': asSpoken condition failed, answer cleaned as usual: ${error.message}`);
+      return false;
+    }
+  } else {
+    return false;
+  }
 }
 
 // Add contextual guidance to SAY messages when user input is expected
@@ -6330,7 +6360,8 @@ async function setUserInputVariable(
   value: unknown,
   sanitize: boolean = true,
   engine: Engine,
-  questionContext?: string
+  questionContext?: string,
+  asSpoken: boolean = false
 ): Promise<void> {
   let processedValue = value;
 
@@ -6341,9 +6372,15 @@ async function setUserInputVariable(
   // (measured 2026-10-09; prod refused a valid card in ~34 calls in 7 days). An answer whose digit
   // count does not fit — a number said twice, a word, a number in words — still goes to the cleaner.
   // It also keeps card numbers, codes and account numbers away from the AI vendor.
+  // A SAY-GET with `asSpoken` (opt-in) keeps a voice answer exactly as heard: neither reduced to its digits nor sent
+  // to the AI cleaner, whose rule is also "extract only the digits". For an answer whose words carry meaning the
+  // digits lose — an amount: "$1" reduced to "1" read as a keypad choice (2026-10-14), "$12.50" as "1250".
   const range = expectedDigits(engine.cargo?.digits);
   const digits = typeof value === 'string' ? value.replace(/\D/g, '') : '';
-  if (sanitize && engine.cargo?.voice && range && digits.length >= range.min && digits.length <= range.max) {
+  if (sanitize && engine.cargo?.voice && asSpoken) {
+    processedValue = value;
+    logger.info('Voice answer kept as spoken (asSpoken)');
+  } else if (sanitize && engine.cargo?.voice && range && digits.length >= range.min && digits.length <= range.max) {
     processedValue = digits;
     logger.info(`Voice digits taken as heard (no AI cleanup): ${(processedValue as string).length} digits`);
   } else if (sanitize && typeof value === 'string' && engine.cargo?.voice && questionContext) {
