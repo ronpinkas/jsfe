@@ -12,6 +12,7 @@ npm i jsfe
 - **[JavaScript Flow Engine User Guide](user-guide.md)** 
 - Comprehensive tutorials, examples, and best practices
 - **[README.md](README.md)** - Technical API reference (this document)
+- **[Flow author reference](docs/copilot-reference.md)** - the engine in one page, for flow authors and AI flow generators (shipped in the package; the Flow Designer's CoPilot reads it from the published version, so change it with the engine)
 - **[System Flows](docs/system-flows.md)** and **[Shopify Flows](docs/shopify-flows.md)** - the bundled flow and tool libraries in `flows/`, step by step
 
 *For detailed tutorials, step-by-step examples, and comprehensive workflow patterns, see the **[User Guide](user-guide.md)**.*
