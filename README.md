@@ -1043,7 +1043,7 @@ their original workflow seamlessly.
 - ✅ **END** - Return from the current flow only, resuming the parent flow — a functional `return` (no value; variables are shared with the parent)
 - ✅ **DISPATCH** - End all flows and route this turn's input through intent detection, as if no flow had been active (a matched flow starts in the same turn; no match → no response, the host answers). Resets everything; the ended flows' declared outcome is kept only when no flow matches. Takes `id`, `outcome`, `reason`. See the user guide's *DISPATCH Steps*
 
-A terminal step (`RETURN`, `END` or a final `SAY`) may also carry `outcome` / `reason`; see
+A terminal step (`RETURN`, `END`, `DISPATCH` or a final `SAY`) may also carry `outcome` / `reason`; see
 [Declared flow outcomes](#declared-flow-outcomes-lastflowoutcome).
 
 ### Step Reliability: Validation & Retry
