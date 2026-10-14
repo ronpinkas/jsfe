@@ -507,7 +507,7 @@
   {
     "id": "get-whatsapp-link",
     "name": "Get WhatsApp Link",
-    "description": "The tenant's own WhatsApp chat link (https://wa.me/<digits>) from its WhatsApp channel, or '' when the tenant has none.",
+    "description": "The tenant's WhatsApp chat link (https://wa.me/<digits>) when all three hold: a WhatsApp channel, its admin switch 'Invite callers to switch to WhatsApp' (inviteCallers), and Meta's APPROVED invite template; '' otherwise.",
     "parameters": {},
     "required": [],
     "additionalProperties": false,
@@ -524,7 +524,7 @@
     },
     "returns": {
       "type": "string",
-      "description": "https://wa.me/<digits>, or '' when the tenant has no WhatsApp channel"
+      "description": "https://wa.me/<digits>, or '' unless the tenant's WhatsApp channel invites callers with an approved template"
     }
   }
 ]

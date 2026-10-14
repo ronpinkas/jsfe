@@ -38,6 +38,7 @@ Everything below is read from the JSON. Where a flow's `description` text and it
   - [switch-to-sms](#switch-to-sms)
   - [send-twilio-sms](#send-twilio-sms)
   - [get-live-connect-link](#get-live-connect-link)
+  - [get-whatsapp-link](#get-whatsapp-link)
   - [geocode-zip](#geocode-zip)
   - [geocode-street](#geocode-street)
 
@@ -164,7 +165,7 @@ graph TD
 ---
 
 ## ContactSupport
-**ID**: `contact-support` · **Version**: 1.2.0 · **Sub-flow**  
+**ID**: `contact-support` · **Version**: 1.2.1 · **Sub-flow**  
 **Description**: Provide customer service contact information. Optional `support_context` / `support_context_es` name what the caller needed help with (else `cargo.support_context`); optional `closing_prompt` / `closing_prompt_es` are spoken after the contact info.
 
 ### Parameters
@@ -197,8 +198,8 @@ graph TD
 ---
 
 ## SwitchToText
-**ID**: `switch-to-text` · **Version**: 1.1.0 · **Primary** (prompt "Switch to text" / "Cambiar a texto")  
-**Description**: Used when the user explicitly asks to switch the chat to text/SMS. It must never be used when the user asks for a live agent, human or manager. It forwards the chat context to SMS and sends a welcome message.
+**ID**: `switch-to-text` · **Version**: 1.2.1 · **Primary** (prompt "Switch to text" / "Cambiar a texto")  
+**Description**: Customer explicitly asks to continue this conversation by text message / SMS ('switch to text', 'text me instead', 'can we continue by text', 'pásame a texto', 'seguimos por mensaje de texto'). Not: asking for a live agent or a person (LiveAgentRequested); asking to have one thing texted, such as a link, an address or a statement, a yes or no, or any answer that does not mention text or SMS (None).
 
 ### Variables
 *   `sms_result` (object): result of the SMS send.
@@ -209,10 +210,11 @@ The welcome text also reads `text_starter` / `text_starter_es` when a caller pas
 1. `check_already_text` (CASE) - not on voice (`!cargo.voice`) → **END** (nothing to switch). Otherwise continue.
 2. `check_can_text` (CASE) - no `cargo.callerId` → SAY "I can't send a text message to the number you're calling from."
 3. `route_cannot_text` (CASE) - no `cargo.callerId` → FLOW `contact-support` (`reboot`). The SAY from step 2 is delivered with ContactSupport's output.
-4. `set_welcome_message` (SET) - "Hi, I remember our phone conversation and can continue to help you here via text. You can also continue on WhatsApp: https://wa.me/18184162641?text=Hi" (Spanish variant when `language === 'es'`), followed by a blank line and `text_starter` when one was passed (Spanish: `text_starter_es`, else `text_starter`). **The WhatsApp number is hard-coded in the flow.**
-5. `set_switch_user_turn` (SET) - `switch_user_turn` = "Switch to text" / "Cambiar a texto".
-6. `send_welcome_sms` (CALL-TOOL [`switch-to-sms`](#switch-to-sms)) - args `accountSid: null`, `threadId: {{sessionId}}`, `from: {{cargo.twilioNumber}}`, `to: {{cargo.callerId}}`, `message: {{welcome_message}}`, `userTurn: {{switch_user_turn}}`; result in `sms_result`. `onFail` → FLOW `contact-support`, `reboot`.
-7. `confirm_sms_sent` (SAY) - "I've sent you a text message. Please check your phone and reply via text. Goodbye and take care!"
+4. `get_whatsapp_link` (CALL-TOOL [`get-whatsapp-link`](#get-whatsapp-link), no args) into `wa_link`; `onFail` → `wa_link = ''`.
+5. `set_welcome_message` (SET) - "Hi, I remember our phone conversation and can continue to help you here via text.", plus " You can also continue on WhatsApp: {wa_link}?text=Hi" when there is a link (Spanish variant when `language === 'es'`), followed by a blank line and `text_starter` when one was passed (Spanish: `text_starter_es`, else `text_starter`).
+6. `set_switch_user_turn` (SET) - `switch_user_turn` = "Switch to text" / "Cambiar a texto".
+7. `send_welcome_sms` (CALL-TOOL [`switch-to-sms`](#switch-to-sms)) - args `accountSid: null`, `threadId: {{sessionId}}`, `from: {{cargo.twilioNumber}}`, `to: {{cargo.callerId}}`, `message: {{welcome_message}}`, `userTurn: {{switch_user_turn}}`; result in `sms_result`. `onFail` → FLOW `contact-support`, `reboot`.
+8. `confirm_sms_sent` (SAY) - "I've sent you a text message. Please check your phone and reply via text. Goodbye and take care!"
 
 ### Ends
 By completion after the confirmation, `END` when not on voice, or `reboot` into `contact-support` when there is no caller ID or the send fails. Besides intent detection, other flows reach it with `callType: "reboot"` (keypad 9 / "TEXT" in the retry menu, text words in validate-otp-code).
@@ -225,7 +227,8 @@ graph TD
     check_already_text -->|voice| check_can_text{cargo.callerId?}
     check_can_text -->|missing| say_cannot_text[SAY: can't text the number you're calling from]
     say_cannot_text --> cannot_text_contact_support[FLOW reboot: contact-support]
-    check_can_text -->|set| set_welcome_message[SET: welcome_message + text_starter]
+    check_can_text -->|set| get_whatsapp_link[TOOL: get-whatsapp-link]
+    get_whatsapp_link --> set_welcome_message[SET: welcome_message + WhatsApp link when any + text_starter]
     set_welcome_message --> set_switch_user_turn[SET: switch_user_turn]
     set_switch_user_turn --> send_welcome_sms[TOOL: switch-to-sms]
     send_welcome_sms --> confirm_sms_sent[SAY: text sent, goodbye]
@@ -415,7 +418,7 @@ graph TD
 ---
 
 ## ValidateOtpCode
-**ID**: `validate-otp-code` · **Version**: 1.1.4 · **Sub-flow**  
+**ID**: `validate-otp-code` · **Version**: 1.1.5 · **Sub-flow**  
 **Description**: Validate OTP code entered by user; sets `cargo.otpVerified` on success. Capped at 3 wrong codes per authentication (`cargo.otpMismatches`, reset by authenticate-user): the code is withdrawn and the retry/agent/exit choice follows, where retry sends a fresh code.
 
 Reads `normalized_otp_code` and `user_choice` from `get-and-validate-otp-code`. An expired or missing code is answered with a fresh one (via `resend-otp-code`), not with "didn't match".
@@ -494,7 +497,7 @@ graph TD
 ---
 
 ## ResendOtpCode
-**ID**: `resend-otp-code` · **Version**: 1.1.2 · **Sub-flow**  
+**ID**: `resend-otp-code` · **Version**: 1.1.3 · **Sub-flow**  
 **Description**: Worker: sends a fresh code to the destination authenticate-user used (`cargo.otp_cell_number` / `cargo.otp_email`) and says why (`expired`, `missing` or `requested`). At most 2 per authentication (`cargo.otpResends`), then the retry menu.
 
 Called by `validate-otp-code` with `callType: "call"`.
@@ -762,7 +765,7 @@ graph TD
 ---
 
 ## OtpTextUndeliverable
-**ID**: `otp-text-undeliverable` · **Version**: 1.0.4 · **Sub-flow**  
+**ID**: `otp-text-undeliverable` · **Version**: 1.0.5 · **Sub-flow**  
 **Description**: Worker for authenticate-user: the number for the code cannot receive texts (landline, toll-free, invalid). Says so and asks for the account's email or a mobile number; never offers to text the same number again.
 
 Reached by `replace` from [`otp-send-failed`](#otpsendfailed) when `cargo.otpSendFailure` is `undeliverable`, so it keeps `authenticate-user`'s variables (`retry_flow`, `cancel_flow`, the validators) and returns to it by `replace`.
@@ -806,10 +809,10 @@ graph TD
 ---
 
 ## LiveAgentRequested
-**ID**: `live-agent-requested` · **Version**: 1.7.0 · **Primary** (prompt "live agent confirmation" / "confirmación de agente en vivo")  
-**Description**: The customer's primary intent is to reach a human: live agent, representative, "customer service", "servicio al cliente", "I need to talk to someone", "speak to a person", "comunicarme con alguien", "hablar con una persona". On the phone it offers the transfer when an agent is scheduled (`cargo.agentPhoneNumber`); on every other channel it sends the Live Connect link when the tenant runs Live Connect and an agent is reachable. On the phone after hours (no agent number this turn, the number has a schedule) it says so, states the agent hours and offers to help, ending `unresolved` (`agent_unavailable`). Otherwise (any non-phone channel without a Live Connect link, or a phone number with no agents at all) it says it cannot connect the customer with a live agent and gives the tenant's contact information, ending `resolved` (`no_agent_reachable`). Started by [give-up](#giveup) (`cargo.giveUp`), it transfers on the phone without the offer to continue with the AI, and the cannot-connect end is `unresolved` (`gave_up`). Its worded RETURNs carry `keepSay: true`, so text a calling flow queued before rebooting here is delivered first.
+**ID**: `live-agent-requested` · **Version**: 1.7.1 · **Primary** (prompt "live agent confirmation" / "confirmación de agente en vivo")  
+**Description**: Customer wants to talk to a person: a live agent, a representative, customer service ('agent', 'speak to an agent', 'customer service representative', 'transfer me', 'I need to talk to someone', 'can I talk to a human', 'agente', 'representante', 'servicio al cliente', 'atención al cliente', 'transfiéreme', 'hablar con una persona', 'comunicarme con alguien'), including a cut-off 'service' or 'al cliente' said alone. Not: continuing by text (SwitchToText); only asking for a phone number, email or hours (None).
 
-The description also says "Contact information is given when the customer asks for it". No step of the after-hours path gives it; a later request reaches the host or another flow.
+**Behaviour**: On the phone it offers the transfer when an agent is scheduled (`cargo.agentPhoneNumber`); on every other channel it sends the Live Connect link when the tenant runs Live Connect and an agent is reachable. On the phone after hours (no agent number this turn, the number has a schedule) it says so, states the agent hours and offers to help, ending `unresolved` (`agent_unavailable`). Otherwise (any non-phone channel without a Live Connect link, or a phone number with no agents at all) it says it cannot connect the customer with a live agent and gives the tenant's contact information, ending `resolved` (`no_agent_reachable`). Started by [give-up](#giveup) (`cargo.giveUp`), it transfers on the phone without the offer to continue with the AI, and the cannot-connect end is `unresolved` (`gave_up`). Its worded RETURNs carry `keepSay: true`, so text a calling flow queued before rebooting here is delivered first.
 
 ### Variables
 *   `user_choice` (string): continue with AI or transfer.
@@ -871,7 +874,7 @@ graph TD
 ---
 
 ## GiveUp
-**ID**: `give-up` · **Version**: 1.0.0 · **Sub-flow**  
+**ID**: `give-up` · **Version**: 1.0.1 · **Sub-flow**  
 **Description**: Worker: a flow could not finish, because its tries ran out or a service it needs failed. Says so and hands the caller to [LiveAgentRequested](#liveagentrequested), which transfers at once on the phone instead of offering to continue with the AI. Not for an answer that changes direction: that is `DISPATCH`ed.
 
 ### Parameters
@@ -899,7 +902,7 @@ graph TD
 ---
 
 ## AskChoice
-**ID**: `ask-choice` · **Version**: 1.9.0 · **Sub-flow** · **Scope**: isolated  
+**ID**: `ask-choice` · **Version**: 1.9.1 · **Sub-flow** · **Scope**: isolated  
 **Description**: Worker: asks one question and returns the caller's choice in `cargo.choice` (the matching key) and `cargo.choiceText` (the answer as given). One re-ask on a short miss; AGENT (or `0`) reaches a person and EXIT (or `*`) ends, the same for every question; anything still unrecognised is another request and is `DISPATCH`ed, unless `accept_other`, which returns `cargo.choice = 'other'` with the text for the caller to interpret. With `accept_other` and `expect`, an answer of three or more words, none of the expected shape, is another request and is `DISPATCH`ed rather than returned as a failed try.
 
 The question primitive the other generic workers are built on: ask-email, ask-address, ask-field and card-entry ask every question through it.
@@ -1036,7 +1039,7 @@ graph TD
 ---
 
 ## AskAddress
-**ID**: `ask-address` · **Version**: 1.2.1 · **Sub-flow** · **Scope**: isolated  
+**ID**: `ask-address` · **Version**: 1.2.2 · **Sub-flow** · **Scope**: isolated  
 **Description**: Worker: a new mailing address, zip first: the zip (city and state from Google; asked only when Google has none), the street (normalized by Google when it matches exactly inside that zip, otherwise kept as said), the unit, then read back for YES / NO; NO collects it once more. Sets `cargo.address = { line, street, said, verified }` or `null`.
 
 Every question goes through [`ask-choice`](#askchoice) with exit context "address change" / "cambio de dirección". The unit question and the read-back use `cargo.verb` / `cargo.verb_es` directly (`cargo.verb.charAt(0)`), so the host must set them.
@@ -1128,7 +1131,7 @@ graph TD
 ---
 
 ## AskField
-**ID**: `ask-field` · **Version**: 1.2.1 · **Sub-flow** · **Scope**: isolated  
+**ID**: `ask-field` · **Version**: 1.2.2 · **Sub-flow** · **Scope**: isolated  
 **Description**: Worker: one card field, kind `card` (13 to 19 digits, checksum), `exp` (MMYY, not expired), `cvv` (3 to 4 digits) or `zip` (5 digits). One re-ask with the error; LINK switches to a payment link. Sets `cargo.field` (the value) and `cargo.fieldOutcome` (`'ok'`, `'link'` or `'failed'`). The answer is erased from `cargo.choiceText` as soon as it is read.
 
 The card check is the host's `validateCardNumber`, which accepts 12 to 19 digits; the description's 13 is the lower keypad bound only.
@@ -1360,6 +1363,12 @@ Reference host: a refusal also sets `container.otpFailure` to `missing`, `expire
 | `container` | object | no | session cargo; annotated with `liveConnectOffered` when a link is returned |
 
 **Returns** a string: the guest link (`{url}/?ref=<dbPrefix>`), or `''` when Live Connect is off, no agent is reachable, or the presence check fails.
+
+### get-whatsapp-link
+**Name**: Get WhatsApp Link - the tenant's WhatsApp chat link when all three hold: a WhatsApp channel, its admin switch "Invite callers to switch to WhatsApp" (`inviteCallers`), and Meta's APPROVED invite template. Never throws.  
+**Implementation**: local `getWhatsAppLink()`, no arguments, timeout 5000 ms.
+
+**Returns** a string: `https://wa.me/<digits>`, or `''` when any of the three is missing.
 
 ### geocode-zip
 **Name**: Geocode Zip - looks up the city and state for a 5-digit US zip code via Google Geocoding, so address collection can skip the city and state prompts. Called by [ask-address](#askaddress).  

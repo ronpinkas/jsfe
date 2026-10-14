@@ -31,8 +31,8 @@ Everything below is read from the JSON. The flows call the system flows (`no-act
 ## Flows
 
 ## ShopifyProductSearch
-**ID**: `shopify-product-search` · **Version**: 1.1.1 · **Primary** (prompt "product search" / "buscar producto")  
-**Description**: Help customers search for products, product availability (also per location), or pricing. It should not trigger on requests for general advice; the prompt must explicitly ask to find a product, its availability (possibly at a location), or its price.
+**ID**: `shopify-product-search` · **Version**: 1.1.3 · **Primary** (prompt "product search" / "buscar producto")  
+**Description**: Customer asks to find a product, whether one is in stock (online or at a store near them), or what it costs ('do you have air fryers', 'is this TV in stock in Phoenix', 'how much is the iPhone 16', '¿tienen refrigeradores?', '¿cuánto cuesta?'). Not: general advice without asking for a product (None); an order already placed (ShopifyTrackOrder); returns, shipping or other store policies (ShopifyStorePolicies).
 
 ### Parameters
 *   `search_query` (string): The product name, brand and/or features the user specified.
@@ -145,11 +145,11 @@ graph TD
 ---
 
 ## ShopifyTrackOrder
-**ID**: `shopify-track-order` · **Version**: 1.0.0 · **Primary** (prompt "track order" / "rastrear pedido")  
-**Description**: Help customers view their orders and track their order status. Requires OTP verification.
+**ID**: `shopify-track-order` · **Version**: 1.0.1 · **Primary** (prompt "track order" / "rastrear pedido")  
+**Description**: Customer asks about an order or purchase they placed: its status, when it will arrive or be ready for pickup, where it is, its tracking, a package that has not arrived, or a list of their orders ('where is my order', 'order status', 'my order', 'help with an order', 'track my package', 'when will my delivery arrive', 'order #1234', '¿dónde está mi pedido?', 'mi pedido', 'estado de mi orden', '¿cuándo llega mi pedido?', '¿ya está listo para recoger?', 'no me ha llegado mi pedido', 'rastrear mi pedido'). Not: finding a product (ShopifyProductSearch); a return, refund or shipping policy (ShopifyStorePolicies); cancelling an order (None).
 
 ### Parameters
-*   `order_number` (string): Order number, if provided in the query.
+*   `order_number` (string): Order number in the message ('#1234').
 
 ### Variables
 `customer_email`, `order_number` (initial `""`), `order_result`, `cell_number` (initial `""`), `email` (initial `""`), `order_detail`, `validate_identifier`, `error_message`.
@@ -310,8 +310,8 @@ graph TD
 ---
 
 ## ShopifyStorePolicies
-**ID**: `shopify-store-policies` · **Version**: 1.1.0 · **Primary** (prompt "store policies" / "políticas de la tienda")  
-**Description**: Help customers find online store policies and FAQs.
+**ID**: `shopify-store-policies` · **Version**: 1.1.1 · **Primary** (prompt "store policies" / "políticas de la tienda")  
+**Description**: Customer asks about a store policy: returns, refunds, exchanges or shipping ('what is your return policy', 'do you ship to Canada', '¿cuál es su política de devoluciones?'). Not: a specific order (ShopifyTrackOrder); finding a product or its price (ShopifyProductSearch); other questions about the store or its products (None).
 
 ### Parameters
 *   `policy_query` (string): The user's question about store policies.

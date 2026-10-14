@@ -2,8 +2,8 @@
   {
     "id": "shopify-product-search",
     "name": "ShopifyProductSearch",
-    "version": "1.1.2",
-    "description": "Help customers search for products, products availability (also availability per location), or pricing - this should not be triggered by prompts asking about general advice, the user prompt should explicitly ask to find a product, product availability (possibly for a given location), or pricing.",
+    "version": "1.1.3",
+    "description": "Customer asks to find a product, whether one is in stock (online or at a store near them), or what it costs ('do you have air fryers', 'is this TV in stock in Phoenix', 'how much is the iPhone 16', '¿tienen refrigeradores?', '¿cuánto cuesta?'). Not: general advice without asking for a product (None); an order already placed (ShopifyTrackOrder); returns, shipping or other store policies (ShopifyStorePolicies).",
     "prompt": "product search",
     "prompt_es": "buscar producto",
     "primary": true,
@@ -347,15 +347,15 @@
   {
     "id": "shopify-track-order",
     "name": "ShopifyTrackOrder",
-    "version": "1.0.0",
-    "description": "Help customers view their orders and track their order status - requires OTP verification",
+    "version": "1.0.1",
+    "description": "Customer asks about an order or purchase they placed: its status, when it will arrive or be ready for pickup, where it is, its tracking, a package that has not arrived, or a list of their orders ('where is my order', 'order status', 'my order', 'help with an order', 'track my package', 'when will my delivery arrive', 'order #1234', '¿dónde está mi pedido?', 'mi pedido', 'estado de mi orden', '¿cuándo llega mi pedido?', '¿ya está listo para recoger?', 'no me ha llegado mi pedido', 'rastrear mi pedido'). Not: finding a product (ShopifyProductSearch); a return, refund or shipping policy (ShopifyStorePolicies); cancelling an order (None).",
     "prompt": "track order",
     "prompt_es": "rastrear pedido",
     "primary": true,
     "parameters": [
       {
         "name": "order_number",
-        "description": "Order number (if provided in the query)",
+        "description": "Order number in the message ('#1234').",
         "type": "string"
       }
     ],
@@ -672,8 +672,8 @@
   {
     "id": "shopify-store-policies",
     "name": "ShopifyStorePolicies",
-    "version": "1.1.0",
-    "description": "Help customers find online store policies and FAQs",
+    "version": "1.1.1",
+    "description": "Customer asks about a store policy: returns, refunds, exchanges or shipping ('what is your return policy', 'do you ship to Canada', '¿cuál es su política de devoluciones?'). Not: a specific order (ShopifyTrackOrder); finding a product or its price (ShopifyProductSearch); other questions about the store or its products (None).",
     "prompt": "store policies",
     "prompt_es": "políticas de la tienda",
     "primary": true,
