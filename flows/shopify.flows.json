@@ -2,7 +2,7 @@
   {
     "id": "shopify-product-search",
     "name": "ShopifyProductSearch",
-    "version": "1.1.1",
+    "version": "1.1.2",
     "description": "Help customers search for products, products availability (also availability per location), or pricing - this should not be triggered by prompts asking about general advice, the user prompt should explicitly ask to find a product, product availability (possibly for a given location), or pricing.",
     "prompt": "product search",
     "prompt_es": "buscar producto",
@@ -288,7 +288,7 @@
           "condition: store_availability && store_availability.success === false && /could not geocode/i.test(String(store_availability.error || ''))": {
             "id": "still_not_a_place",
             "type": "RETURN",
-            "value": "language == 'es' ? 'No encontré esa ubicación. Puede ver todas nuestras tiendas en icuracao.com, o decirme el nombre de su ciudad cuando quiera.' : 'I couldn\\'t find that location. You can see all our stores at icuracao.com, or tell me your city any time.'"
+            "value": "(typeof global_store_locator !== 'undefined' && global_store_locator) ? (language == 'es' ? 'No encontré esa ubicación. Puede ver todas nuestras tiendas en ' + global_store_locator + ', o decirme el nombre de su ciudad cuando quiera.' : 'I couldn\\'t find that location. You can see all our stores at ' + global_store_locator + ', or tell me your city any time.') : (language == 'es' ? 'No encontré esa ubicación. Dígame el nombre de su ciudad cuando quiera.' : 'I couldn\\'t find that location. Tell me your city any time.')"
           },
           "default": {
             "id": "availability_error",

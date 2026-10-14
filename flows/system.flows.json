@@ -96,7 +96,7 @@
   {
     "id": "switch-to-text",
     "name": "SwitchToText",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "prompt": "Switch to text",
     "prompt_es": "Cambiar a texto",
     "description": "This flow can be used when the user asks to switch the chat to text/SMS. It should never ever be used when the user asks to speak to a live agent, human, manager, etc. The user must explictly ask to switch the chat to text or to SMS. It will forward their chat context to SMS and send them a welcome message.",
@@ -105,6 +105,10 @@
       "sms_result": {
         "type": "object",
         "description": "Result from SMS sending"
+      },
+      "wa_link": {
+        "type": "string",
+        "description": "The tenant's WhatsApp chat link, '' when it has none"
       }
     },
     "steps": [
@@ -161,10 +165,23 @@
         }
       },
       {
+        "id": "get_whatsapp_link",
+        "type": "CALL-TOOL",
+        "tool": "get-whatsapp-link",
+        "variable": "wa_link",
+        "args": {},
+        "onFail": {
+          "id": "no_whatsapp_link",
+          "type": "SET",
+          "variable": "wa_link",
+          "value": "''"
+        }
+      },
+      {
         "id": "set_welcome_message",
         "type": "SET",
         "variable": "welcome_message",
-        "value": "(language !== 'es' ? 'Hi, I remember our phone conversation and can continue to help you here via text. You can also continue on WhatsApp: https://wa.me/18184162641?text=Hi' : 'Hola, recuerdo nuestra conversación telefónica y puedo seguir ayudándote aquí por mensaje de texto. También puedes continuar en WhatsApp: https://wa.me/18184162641?text=Hola') + (language !== 'es' ? (typeof text_starter !== 'undefined' && text_starter ? '\\n\\n' + text_starter : '') : (typeof text_starter_es !== 'undefined' && text_starter_es ? '\\n\\n' + text_starter_es : (typeof text_starter !== 'undefined' && text_starter ? '\\n\\n' + text_starter : '')))"
+        "value": "(language !== 'es' ? 'Hi, I remember our phone conversation and can continue to help you here via text.' + (wa_link ? ' You can also continue on WhatsApp: ' + wa_link + '?text=Hi' : '') : 'Hola, recuerdo nuestra conversación telefónica y puedo seguir ayudándote aquí por mensaje de texto.' + (wa_link ? ' También puedes continuar en WhatsApp: ' + wa_link + '?text=Hola' : '')) + (language !== 'es' ? (typeof text_starter !== 'undefined' && text_starter ? '\\n\\n' + text_starter : '') : (typeof text_starter_es !== 'undefined' && text_starter_es ? '\\n\\n' + text_starter_es : (typeof text_starter !== 'undefined' && text_starter ? '\\n\\n' + text_starter : '')))"
       },
       {
         "id": "set_switch_user_turn",

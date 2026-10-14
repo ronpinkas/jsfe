@@ -503,5 +503,28 @@
         "window": 60000
       }
     }
+  },
+  {
+    "id": "get-whatsapp-link",
+    "name": "Get WhatsApp Link",
+    "description": "The tenant's own WhatsApp chat link (https://wa.me/<digits>) from its WhatsApp channel, or '' when the tenant has none.",
+    "parameters": {},
+    "required": [],
+    "additionalProperties": false,
+    "implementation": {
+      "type": "local",
+      "function": "getWhatsAppLink",
+      "args": [],
+      "timeout": 5000
+    },
+    "security": {
+      "requiresAuth": false,
+      "auditLevel": "low",
+      "dataClassification": "public"
+    },
+    "returns": {
+      "type": "string",
+      "description": "https://wa.me/<digits>, or '' when the tenant has no WhatsApp channel"
+    }
   }
 ]
