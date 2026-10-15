@@ -238,7 +238,7 @@
   {
     "id": "authenticate-user",
     "name": "AuthenticateUser",
-    "version": "1.5.3",
+    "version": "1.5.5",
     "description": "Generic flow to authenticate user via OTP sent to cell or email",
     "parameters": [
       {
@@ -280,6 +280,11 @@
         "name": "retry_returns",
         "type": "boolean",
         "description": "A retry with no contact returns to the caller with cargo.authRetry set, so the caller asks again its own way (default: authenticate-user asks)"
+      },
+      {
+        "name": "declined_caller",
+        "type": "boolean",
+        "description": "True when the caller said ANOTHER ACCOUNT at the code question after the caller ID was used without asking: the caller ID is not offered again in this session."
       }
     ],
     "variables": {
@@ -305,6 +310,12 @@
       }
     },
     "steps": [
+      {
+        "id": "remember_declined_caller",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(function() { if (typeof declined_caller !== 'undefined' && (declined_caller === true || declined_caller === 'true')) { cargo.callerDeclined = true; cargo.callerPreselected = false; cargo.otpHash = null; } else { /* the caller did not ask for another account */ } return true; })()"
+      },
       {
         "id": "check_already_verified",
         "type": "CASE",
@@ -373,7 +384,7 @@
         "id": "retry_through_caller",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "cargo.authRetry = !!(typeof retrying !== 'undefined' && retrying && !cell_number && !email && retry_returns)"
+        "value": "cargo.authRetry = !!(typeof retrying !== 'undefined' && retrying && !(typeof cell_number !== 'undefined' && cell_number) && !(typeof email !== 'undefined' && email) && retry_returns)"
       },
       {
         "id": "hand_retry_to_caller",
@@ -552,6 +563,10 @@
             "variable": "auth_result",
             "value": "true"
           },
+          "condition: cargo.authRetry && cargo.callerDeclined": {
+            "id": "auth_handed_back",
+            "type": "END"
+          },
           "default": {
             "id": "auth_failed",
             "type": "FLOW",
@@ -576,7 +591,7 @@
   {
     "id": "get-cell-or-email",
     "name": "GetCellOrEmail",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "description": "Prompt user to provide either their cell phone number or email address for account lookup. Optional: account_pattern / account_name(_es) also accept the tenant's account number (sets acct_number); intro(_es) leads the question; retry_call_type is passed to the retry menu. Records cargo.contactKind ('caller' | 'phone' | 'email' | 'account') and cargo.contactValue.",
     "parameters": [
       {
@@ -624,6 +639,11 @@
         "type": "string",
         "description": "Passed to the retry menu: 'reboot' (default) or 'replace' (retry in place, with retry_flow 'get-cell-or-email')",
         "required": false
+      },
+      {
+        "name": "caller_on_file",
+        "type": "string",
+        "description": "'yes': the tenant found an account for the caller ID, so the caller ID is used without asking (the code question then offers ANOTHER ACCOUNT); 'no': the caller-ID option is not offered; empty: ask as before."
       }
     ],
     "variables": {
@@ -721,7 +741,13 @@
         "id": "ask_cell_or_email_if_no_param",
         "type": "CASE",
         "branches": {
-          "condition: !cell_number && !email && !acct_number && cargo.callerId && !callerIsInternational(cargo)": {
+          "condition: !cell_number && !email && !acct_number && cargo.callerId && !callerIsInternational(cargo) && typeof caller_on_file !== 'undefined' && caller_on_file === 'yes'": {
+            "id": "use_caller_on_file",
+            "type": "SET",
+            "variable": "cell_or_email",
+            "value": "'yes'"
+          },
+          "condition: !cell_number && !email && !acct_number && cargo.callerId && !callerIsInternational(cargo) && !(typeof caller_on_file !== 'undefined' && caller_on_file === 'no')": {
             "id": "ask_cell_or_email_with_caller_id",
             "type": "SAY-GET",
             "variable": "cell_or_email",
@@ -754,6 +780,12 @@
             "value": "acct_number || cell_number || email"
           }
         }
+      },
+      {
+        "id": "gce_mark_caller_preselected",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(function() { if (cell_number || email || acct_number) { /* a contact was passed in, nothing was asked here: unchanged */ } else if (cargo.callerId && !callerIsInternational(cargo) && typeof caller_on_file !== 'undefined' && caller_on_file === 'yes') { cargo.callerPreselected = true; } else { cargo.callerPreselected = false; } return true; })()"
       },
       {
         "id": "treat_as_phone_number",
@@ -886,7 +918,7 @@
   {
     "id": "get-and-validate-otp-code",
     "name": "GetAndValidateOtpCode",
-    "version": "1.0.4",
+    "version": "1.0.5",
     "description": "Get and validate OTP code from user",
     "variables": {
       "otp_code": {
@@ -944,8 +976,8 @@
         "id": "get_otp_from_user",
         "type": "SAY-GET",
         "variable": "otp_code",
-        "value": "Please {{cargo.verb}} {{cargo.voice ? 'or enter ' : ''}}the 6-digit verification code {{otp_where}}. You can also {{cargo.voice ? 'press * or ' : ''}}{{cargo.verb}} EXIT to cancel.",
-        "value_es": "Por favor {{cargo.verb_es}} {{cargo.voice ? 'o ingrese ' : ''}}el código de verificación de 6 dígitos {{otp_where_es}}. También puede {{cargo.voice ? 'presionar * o decir' : 'escribir'}} SALIR para cancelar.",
+        "value": "Please {{cargo.verb}} {{cargo.voice ? 'or enter ' : ''}}the 6-digit verification code {{otp_where}}. You can also {{cargo.voice ? 'press * or ' : ''}}{{cargo.verb}} EXIT to cancel.{{cargo.callerPreselected ? ' To use another account, ' + cargo.verb + ' ANOTHER ACCOUNT.' : ''}}",
+        "value_es": "Por favor {{cargo.verb_es}} {{cargo.voice ? 'o ingrese ' : ''}}el código de verificación de 6 dígitos {{otp_where_es}}. También puede {{cargo.voice ? 'presionar * o decir' : 'escribir'}} SALIR para cancelar.{{cargo.callerPreselected ? ' Para usar otra cuenta, ' + cargo.verb_es + ' OTRA CUENTA.' : ''}}",
         "digits": {
           "min": 6,
           "max": 6
@@ -974,7 +1006,7 @@
   {
     "id": "validate-otp-code",
     "name": "ValidateOtpCode",
-    "version": "1.1.7",
+    "version": "1.1.9",
     "description": "Worker: validate the one-time code the customer enters; sets cargo.otpVerified on success.",
     "variables": {
       "otp_validation_result": {
@@ -993,9 +1025,19 @@
       "no_code_given": {
         "type": "boolean",
         "value": false
+      },
+      "wants_other_account": {
+        "type": "boolean",
+        "value": false
       }
     },
     "steps": [
+      {
+        "id": "another_account_check",
+        "type": "SET",
+        "variable": "wants_other_account",
+        "value": "!!(cargo.callerPreselected && normalized_otp_code.length !== 6 && matchesChoice(user_choice, ['otra cuenta', 'otro número', 'otro numero', 'cuenta diferente', 'another account', 'different account', 'other account', 'another number', 'different number', 'not my account', 'no es mi cuenta']))"
+      },
       {
         "id": "validate_otp_and_lookup",
         "type": "CASE",
@@ -1014,6 +1056,18 @@
               "type": "FLOW",
               "value": "get-and-validate-otp-code",
               "callType": "replace"
+            }
+          },
+          "condition: wants_other_account": {
+            "id": "use_another_account",
+            "type": "FLOW",
+            "value": "authenticate-user",
+            "callType": "replace",
+            "parameters": {
+              "cell_number": "",
+              "email": "",
+              "retrying": true,
+              "declined_caller": true
             }
           },
           "condition: isAnswer(user_choice, 'exit')": {
@@ -1287,17 +1341,17 @@
         "id": "mention_whatsapp_invite",
         "type": "CASE",
         "branches": {
-          "condition: whatsapp_invite_sent": {
-            "id": "say_whatsapp_invite",
-            "type": "SAY",
-            "value": "I texted you a WhatsApp link so you can try again on WhatsApp to help overcome voice limitations.",
-            "value_es": "Te envié por texto un enlace de WhatsApp para que puedas intentarlo de nuevo allí y así evitar las limitaciones de la voz."
-          },
           "default": {
             "id": "no_invite_to_mention",
             "type": "SET",
             "variable": "skip",
             "value": "true"
+          },
+          "condition: typeof whatsapp_invite_sent !== 'undefined' && whatsapp_invite_sent": {
+            "id": "say_whatsapp_invite",
+            "type": "SAY",
+            "value": "I texted you a WhatsApp link so you can try again on WhatsApp to help overcome voice limitations.",
+            "value_es": "Te envié por texto un enlace de WhatsApp para que puedas intentarlo de nuevo allí y así evitar las limitaciones de la voz."
           }
         }
       },

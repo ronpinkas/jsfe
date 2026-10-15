@@ -247,7 +247,7 @@ graph TD
 ---
 
 ## AuthenticateUser
-**ID**: `authenticate-user` · **Version**: 1.5.3 · **Sub-flow**  
+**ID**: `authenticate-user` · **Version**: 1.5.5 · **Sub-flow**  
 **Description**: Generic flow to authenticate user via OTP sent to cell or email.
 
 The gatekeeper. It records its options in `cargo.authOptions` / `cargo.authCancelFlow`, collects a phone or email (via `get-cell-or-email`), optionally lets a tenant-supplied validator flow approve the contact, records the destination in `cargo.otp_cell_number` / `cargo.otp_email`, sends the code through [`send-otp-code`](#sendotpcode), hands any send failure to [`otp-send-failed`](#otpsendfailed), and hands off to `get-and-validate-otp-code`. On success it sets `auth_result = true` and returns to its caller, with `cargo.otpVerified` set by the `validate-otp` tool.
@@ -277,6 +277,7 @@ The gatekeeper. It records its options in `cargo.authOptions` / `cargo.authCance
 9. `validate_contact` (CASE) - runs `{{cell_validator}}` with `{cell_number}` or `{{email_validator}}` with `{email}` (`call`). The cell validator is checked first.
 10. `describe_unverified_contact` / `_es` (SET) - builds the phrase used below.
 11. `gate_otp_on_contact_valid` (CASE) - `!contact_valid` → FLOW [`generic-retry-with-options`](#genericretrywithoptions) (`replace`) with "Sorry, I could not verify {{unverified_contact}}.", `retry_flow`, `cancel_flow`, and `capture_patterns: "{{cargo.authCapture}}"`. No `retry_call_type`, `allow_code_entry` or `question`.
+0. `remember_declined_caller` (SET, side effect) - with `declined_caller`: `cargo.callerDeclined = true`, `cargo.callerPreselected = false`, the code withdrawn. `retry_through_caller` reads `cell_number` / `email` with `typeof` guards; `check_validation_result` ends quietly (hands back) when `cargo.authRetry && cargo.callerDeclined`.
 12. `reset_resend_count` / `reset_mismatch_count` / `reset_format_miss_count` (SET, side effect) - `cargo.otpResends = 0`, `cargo.otpMismatches = 0`, `cargo.otpFormatMisses = 0`, `cargo.otpWordMisses = 0`.
 13. `set_cell_number_to_cargo` / `set_email_to_cargo` (SET, side effect) - `cargo.otp_cell_number = cell_number || ''`, `cargo.otp_email = email || ''`. This is the destination `send-otp-code` reads.
 14. `send_code` (FLOW [`send-otp-code`](#sendotpcode), `call`) - sends the code by SMS to `cargo.otp_cell_number` or by email to `cargo.otp_email`, and records `cargo.otpSendFailure` (`''` when the code went out). A number already refused for texts (`cargo.otpUndeliverableTo`) is not texted again.
@@ -325,12 +326,13 @@ graph TD
 ---
 
 ## GetCellOrEmail
-**ID**: `get-cell-or-email` · **Version**: 1.2.0 · **Sub-flow**  
+**ID**: `get-cell-or-email` · **Version**: 1.3.0 · **Sub-flow**  
 **Description**: Prompt user to provide either their cell phone number or email address for account lookup. Optional: account_pattern / account_name(_es) also accept the tenant's account number (sets acct_number); intro(_es) leads the question; retry_call_type is passed to the retry menu. Records cargo.contactKind ('caller' | 'phone' | 'email' | 'account') and cargo.contactValue.
 
 The one contact question every tenant uses: `authenticate-user` calls it, and a tenant whose callers may also answer with an account number calls it directly with that number's pattern instead of keeping its own copy.
 
 ### Parameters
+*   `caller_on_file` (string): `'yes'` = the tenant found an account for the caller ID (its own lookup), so the caller ID is used without asking and the code question then offers ANOTHER ACCOUNT; `'no'` = the caller-ID option is not offered; empty = asked as before.
 *   `retry_flow` (string): Flow the retry menu runs again. With `retry_call_type: 'replace'` and `retry_flow: 'get-cell-or-email'` a retry asks again in place and returns to the caller.
 *   `cancel_flow` (string): Flow to reboot if the user cancels. Empty falls back to `contact-support`.
 *   `account_pattern` (string, optional): a regex for the tenant's account number (e.g. `'^5\\d{6,7}$'`). An answer matching it sets `acct_number`; without it nothing about account numbers changes.
@@ -404,7 +406,7 @@ graph TD
 ---
 
 ## GetAndValidateOtpCode
-**ID**: `get-and-validate-otp-code` · **Version**: 1.0.4 · **Sub-flow**  
+**ID**: `get-and-validate-otp-code` · **Version**: 1.0.5 · **Sub-flow**  
 **Description**: Get and validate OTP code from user.
 
 ### Variables
@@ -414,7 +416,7 @@ graph TD
 1. `set_otp_destination` - `cargo.otp_cell_number` if set, else `cargo.otp_email`.
 2. `formatted_otp_destination` - "cell ending with 1234" (the last four digits; on voice comma-separated, "1, 2, 3, 4") or "email: a@b.c". Spanish wording when `language == 'es'`.
 3. `set_otp_where` / `set_otp_where_es` - `cargo.otpSentOn === 'whatsapp'` → "I just sent you here in this chat" / "que le acabo de enviar aquí en este chat". Otherwise "you received at {formatted destination}" / "que recibió en …".
-4. `get_otp_from_user` (SAY-GET `otp_code`, `digits: {min 6, max 6}`) - "Please {verb} [or enter ]the 6-digit verification code {otp_where}. You can also [press * or ]{verb} EXIT to cancel." The Spanish exit sentence is "También puede presionar * o decir SALIR para cancelar." on voice and "También puede escribir SALIR para cancelar." otherwise.
+4. `get_otp_from_user` (SAY-GET `otp_code`, `digits: {min 6, max 6}`; when `cargo.callerPreselected`, it ends "To use another account, {verb} ANOTHER ACCOUNT.") - "Please {verb} [or enter ]the 6-digit verification code {otp_where}. You can also [press * or ]{verb} EXIT to cancel." The Spanish exit sentence is "También puede presionar * o decir SALIR para cancelar." on voice and "También puede escribir SALIR para cancelar." otherwise.
 5. `set_user_choice` - `user_choice` = the answer trimmed and lower-cased (for word matching).
 6. `set_otp_code` - `normalized_otp_code` = digits only.
 7. `proceed_to_validation` (FLOW `validate-otp-code`, `replace`). A replace, so the code question can be asked any number of times without the flow stack growing.
@@ -437,7 +439,7 @@ graph TD
 ---
 
 ## ValidateOtpCode
-**ID**: `validate-otp-code` · **Version**: 1.1.7 · **Sub-flow**  
+**ID**: `validate-otp-code` · **Version**: 1.1.9 · **Sub-flow**  
 **Description**: Validate OTP code entered by user; sets `cargo.otpVerified` on success. Capped at 3 wrong codes per authentication (`cargo.otpMismatches`, reset by authenticate-user): the code is withdrawn and the retry/agent/exit choice follows, where retry sends a fresh code. Also capped at 3 answers with digits but not 6 (`cargo.otpFormatMisses`, reset by authenticate-user): the same choice follows, without withdrawing the code.
 
 Reads `normalized_otp_code` and `user_choice` from `get-and-validate-otp-code`. An expired or missing code is answered with a fresh one (via `resend-otp-code`), not with "didn't match".
@@ -446,7 +448,8 @@ Reads `normalized_otp_code` and `user_choice` from `get-and-validate-otp-code`. 
 `otp_validation_result` (boolean), `invite_text` (WhatsApp invite wording for this session's language; empty means the feature is off), `whatsapp_invite_sent` (initial `false`; true only if an invite was actually sent).
 
 ### Steps
-1. `validate_otp_and_lookup` (CASE, first match wins):
+1. `validate_otp_and_lookup` (CASE, first match wins; `another_account_check` before it sets `wants_other_account` when the caller ID was used without asking and the answer is "another account" / "otra cuenta" / "different number"…):
+   - `wants_other_account` → FLOW `authenticate-user` (`replace`) with `retrying: true, declined_caller: true`: the contact question again, without the caller ID.
    - `normalized_otp_code.length === 6` → CALL-TOOL [`validate-otp`](#validate-otp) `{otp: normalized_otp_code, container: cargo}` into `otp_validation_result`. `onFail` → FLOW `get-and-validate-otp-code` (`replace`).
    - `isAnswer(…, 'exit')` (EXIT words or `*`) → FLOW `{{cargo.authCancelFlow || 'contact-support'}}` (`reboot`).
    - `isAnswer(…, 'agent')` (an AGENT word anywhere in the answer, or `0`) → FLOW `live-agent-requested` (`reboot`).
