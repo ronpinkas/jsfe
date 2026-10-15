@@ -247,7 +247,7 @@ graph TD
 ---
 
 ## AuthenticateUser
-**ID**: `authenticate-user` · **Version**: 1.5.1 · **Sub-flow**  
+**ID**: `authenticate-user` · **Version**: 1.5.2 · **Sub-flow**  
 **Description**: Generic flow to authenticate user via OTP sent to cell or email.
 
 The gatekeeper. It records its options in `cargo.authOptions` / `cargo.authCancelFlow`, collects a phone or email (via `get-cell-or-email`), optionally lets a tenant-supplied validator flow approve the contact, records the destination in `cargo.otp_cell_number` / `cargo.otp_email`, sends the code through [`send-otp-code`](#sendotpcode), hands any send failure to [`otp-send-failed`](#otpsendfailed), and hands off to `get-and-validate-otp-code`. On success it sets `auth_result = true` and returns to its caller, with `cargo.otpVerified` set by the `validate-otp` tool.
@@ -277,7 +277,7 @@ The gatekeeper. It records its options in `cargo.authOptions` / `cargo.authCance
 9. `validate_contact` (CASE) - runs `{{cell_validator}}` with `{cell_number}` or `{{email_validator}}` with `{email}` (`call`). The cell validator is checked first.
 10. `describe_unverified_contact` / `_es` (SET) - builds the phrase used below.
 11. `gate_otp_on_contact_valid` (CASE) - `!contact_valid` → FLOW [`generic-retry-with-options`](#genericretrywithoptions) (`replace`) with "Sorry, I could not verify {{unverified_contact}}.", `retry_flow`, `cancel_flow`, and `capture_patterns: "{{cargo.authCapture}}"`. No `retry_call_type`, `allow_code_entry` or `question`.
-12. `reset_resend_count` / `reset_mismatch_count` (SET, side effect) - `cargo.otpResends = 0`, `cargo.otpMismatches = 0`.
+12. `reset_resend_count` / `reset_mismatch_count` / `reset_format_miss_count` (SET, side effect) - `cargo.otpResends = 0`, `cargo.otpMismatches = 0`, `cargo.otpFormatMisses = 0`.
 13. `set_cell_number_to_cargo` / `set_email_to_cargo` (SET, side effect) - `cargo.otp_cell_number = cell_number || ''`, `cargo.otp_email = email || ''`. This is the destination `send-otp-code` reads.
 14. `send_code` (FLOW [`send-otp-code`](#sendotpcode), `call`) - sends the code by SMS to `cargo.otp_cell_number` or by email to `cargo.otp_email`, and records `cargo.otpSendFailure` (`''` when the code went out). A number already refused for texts (`cargo.otpUndeliverableTo`) is not texted again.
 15. `auth_check_sent` (CASE) - `cargo.otpSendFailure` → FLOW [`otp-send-failed`](#otpsendfailed) (`replace`). Otherwise continue.
@@ -307,7 +307,7 @@ graph TD
     run_email_validator --> describe
     describe --> gate{contact_valid?}
     gate -->|no| contact_not_verified[FLOW replace: generic-retry-with-options]
-    gate -->|yes| reset_counts[SET: cargo.otpResends = 0, cargo.otpMismatches = 0]
+    gate -->|yes| reset_counts[SET: cargo.otpResends = 0, cargo.otpMismatches = 0, cargo.otpFormatMisses = 0]
     reset_counts --> set_cargo[SET: cargo.otp_cell_number, cargo.otp_email]
     set_cargo --> send_code[FLOW call: send-otp-code]
     send_code --> auth_check_sent{cargo.otpSendFailure?}
@@ -404,7 +404,7 @@ graph TD
 ---
 
 ## GetAndValidateOtpCode
-**ID**: `get-and-validate-otp-code` · **Version**: 1.0.3 · **Sub-flow**  
+**ID**: `get-and-validate-otp-code` · **Version**: 1.0.4 · **Sub-flow**  
 **Description**: Get and validate OTP code from user.
 
 ### Variables
@@ -417,10 +417,10 @@ graph TD
 4. `get_otp_from_user` (SAY-GET `otp_code`, `digits: {min 6, max 6}`) - "Please {verb} [or enter ]the 6-digit verification code {otp_where}. You can also [press * or ]{verb} EXIT to cancel." The Spanish exit sentence is "También puede presionar * o decir SALIR para cancelar." on voice and "También puede escribir SALIR para cancelar." otherwise.
 5. `set_user_choice` - `user_choice` = the answer trimmed and lower-cased (for word matching).
 6. `set_otp_code` - `normalized_otp_code` = digits only.
-7. `proceed_to_validation` (FLOW `validate-otp-code`, `call`).
+7. `proceed_to_validation` (FLOW `validate-otp-code`, `replace`). A replace, so the code question can be asked any number of times without the flow stack growing.
 
 ### Ends
-By completion once `validate-otp-code` returns. Retries happen inside `validate-otp-code`, which replaces itself with this flow to prompt again.
+Through `validate-otp-code`, which takes this flow's place. Retries happen there, by replacing itself with this flow to prompt again.
 
 ### Flowchart
 ```mermaid
@@ -431,15 +431,14 @@ graph TD
     set_otp_where --> get_otp[SAY-GET: 6-digit code, digits 6..6]
     get_otp --> set_user_choice[SET: user_choice]
     set_user_choice --> set_otp_code[SET: normalized_otp_code]
-    set_otp_code --> validate[FLOW call: validate-otp-code]
-    validate --> stop((Return to caller))
+    set_otp_code --> validate[FLOW replace: validate-otp-code]
 ```
 
 ---
 
 ## ValidateOtpCode
-**ID**: `validate-otp-code` · **Version**: 1.1.5 · **Sub-flow**  
-**Description**: Validate OTP code entered by user; sets `cargo.otpVerified` on success. Capped at 3 wrong codes per authentication (`cargo.otpMismatches`, reset by authenticate-user): the code is withdrawn and the retry/agent/exit choice follows, where retry sends a fresh code.
+**ID**: `validate-otp-code` · **Version**: 1.1.6 · **Sub-flow**  
+**Description**: Validate OTP code entered by user; sets `cargo.otpVerified` on success. Capped at 3 wrong codes per authentication (`cargo.otpMismatches`, reset by authenticate-user): the code is withdrawn and the retry/agent/exit choice follows, where retry sends a fresh code. Also capped at 3 answers with digits but not 6 (`cargo.otpFormatMisses`, reset by authenticate-user): the same choice follows, without withdrawing the code.
 
 Reads `normalized_otp_code` and `user_choice` from `get-and-validate-otp-code`. An expired or missing code is answered with a fresh one (via `resend-otp-code`), not with "didn't match".
 
@@ -454,21 +453,23 @@ Reads `normalized_otp_code` and `user_choice` from `get-and-validate-otp-code`. 
    - `isAnswer(…, 'text')` (TEXT words) → FLOW `switch-to-text` (`reboot`).
    - "didn't receive / resend" phrases (`resend, send again, not received, didn t get, no code, no llegó, no recibí, reenviar`…) → FLOW [`resend-otp-code`](#resendotpcode) (`call`) with `resend_reason: "requested"`.
    - "I'm driving / busy / later" phrases → SAY "No problem. Say TEXT and I'll continue with you by message so you can do this when you are free, or {verb} the code whenever you are ready."
-   - some digits, but not 6 → SAY "I was expecting a 6-digit code. Let's try again. You can also [press * or ]{verb} EXIT to cancel." (Spanish exit sentence as in GetAndValidateOtpCode.)
+   - some digits, but not 6, fewer than two such answers before → SAY "I was expecting a 6-digit code. Let's try again. You can also [press * or ]{verb} EXIT to cancel." (Spanish exit sentence as in GetAndValidateOtpCode.)
+   - some digits, but not 6, the third such answer → nothing said here (step 3 answers).
    - default (no digits) → SAY "Let me explain. I sent you a message with a six-digit code in it. Read those six digits back to me. You can also {verb} AGENT to reach a person, or EXIT to cancel."
-2. `retry_if_bad_format` (CASE) - not 6 digits → FLOW `get-and-validate-otp-code` (`replace`), which prompts again after the SAY or the fresh code above.
-3. `count_wrong_code` (SET, side effect) - `cargo.otpMismatches` + 1 when not verified and `cargo.otpFailure === 'mismatch'`.
-4. `withdraw_code_at_cap` (CASE) - a mismatch with `cargo.otpMismatches >= 3` → `cargo.otpHash = null`, so the code can no longer be accepted.
-5. `check_validation_result` (CASE, first match wins):
+2. `count_format_miss` (SET, side effect) - `cargo.otpFormatMisses` + 1 when the answer has digits but not 6.
+3. `retry_if_bad_format` (CASE) - 6 digits → continue. `cargo.otpFormatMisses >= 3` → FLOW `generic-retry-with-options` (`replace`): "I still don't have a 6-digit code. To reach a person, {verb} AGENT.", with the [authentication retry parameters](#genericretrywithoptions) and `allow_code_entry: true`. Otherwise → FLOW `get-and-validate-otp-code` (`replace`), which prompts again after the SAY or the fresh code above.
+4. `count_wrong_code` (SET, side effect) - `cargo.otpMismatches` + 1 when not verified and `cargo.otpFailure === 'mismatch'`.
+5. `withdraw_code_at_cap` (CASE) - a mismatch with `cargo.otpMismatches >= 3` → `cargo.otpHash = null`, so the code can no longer be accepted.
+6. `check_validation_result` (CASE, first match wins):
    - `cargo.otpVerified` → SET `otp_validated = true`.
    - `cargo.otpFailure === 'expired'` → FLOW `resend-otp-code` (`call`), `resend_reason: "expired"`.
    - `cargo.otpFailure === 'missing'` → FLOW `resend-otp-code` (`call`), `resend_reason: "missing"`.
    - a mismatch at the cap → FLOW `generic-retry-with-options` (`replace`): "That code didn't match three times, so I can't accept another try with it. To reach a person, {verb} AGENT.", with the [authentication retry parameters](#genericretrywithoptions) and `allow_code_entry: false`.
    - default → SAY "That code didn't match. Let's try again."
-6. `set_invite_text` - `global_whatsapp_invite_es` (Spanish) or `global_whatsapp_invite`, `''` when undefined.
-7. `invite_if_wrong_code` (CASE) - verified, or `cargo.otpFailure` is not `mismatch` → no invite. Otherwise → CALL-TOOL [`send-whatsapp-invite`](#send-whatsapp-invite) `{accountSid: null, from: cargo.twilioNumber, to: cargo.otp_cell_number, inviteText, language, container: cargo}` into `whatsapp_invite_sent`. `onFail` → SET `whatsapp_invite_sent = false`. Per the tool's contract it returns `false` when `inviteText` is empty, when it already invited on this call, or when `to` is missing. `to` is `''` when the code went by email.
-8. `mention_whatsapp_invite` (CASE) - `whatsapp_invite_sent` → SAY "I texted you a WhatsApp link so you can try again on WhatsApp to help overcome voice limitations."
-9. `retry_if_wrong_code` (CASE) - not verified → FLOW `get-and-validate-otp-code` (`replace`).
+7. `set_invite_text` - `global_whatsapp_invite_es` (Spanish) or `global_whatsapp_invite`, `''` when undefined.
+8. `invite_if_wrong_code` (CASE) - verified, or `cargo.otpFailure` is not `mismatch` → no invite. Otherwise → CALL-TOOL [`send-whatsapp-invite`](#send-whatsapp-invite) `{accountSid: null, from: cargo.twilioNumber, to: cargo.otp_cell_number, inviteText, language, container: cargo}` into `whatsapp_invite_sent`. `onFail` → SET `whatsapp_invite_sent = false`. Per the tool's contract it returns `false` when `inviteText` is empty, when it already invited on this call, or when `to` is missing. `to` is `''` when the code went by email.
+9. `mention_whatsapp_invite` (CASE) - `whatsapp_invite_sent` → SAY "I texted you a WhatsApp link so you can try again on WhatsApp to help overcome voice limitations."
+10. `retry_if_wrong_code` (CASE) - not verified → FLOW `get-and-validate-otp-code` (`replace`).
 
 ### Ends
 Verified → completion (the caller chain returns to `authenticate-user` or `generic-retry-with-options`). A wrong code loops back to the prompt until the third mismatch, which leaves through `generic-retry-with-options`. An expired or missing code gets a fresh one and loops back, until `resend-otp-code`'s own cap. The exits in step 1 leave at any time.
@@ -483,7 +484,8 @@ graph TD
     route -->|TEXT words| goto_text[FLOW reboot: switch-to-text]
     route -->|not received / resend| code_not_arrived[FLOW call: resend-otp-code, requested]
     route -->|busy / driving| cannot_now[SAY: say TEXT or send code later]
-    route -->|other digits| invalid_format[SAY: expecting 6 digits]
+    route -->|other digits, 1st or 2nd| invalid_format[SAY: expecting 6 digits]
+    route -->|other digits, 3rd| fmt
     route -->|no digits| explain[SAY: let me explain]
     validate_otp -.->|onFail| otp_tool_error[FLOW replace: get-and-validate-otp-code]
     validate_otp --> fmt{6 digits?}
@@ -491,6 +493,7 @@ graph TD
     cannot_now --> fmt
     invalid_format --> fmt
     explain --> fmt
+    fmt -->|no, 3rd answer with other digits| format_cap[FLOW replace: generic-retry-with-options]
     fmt -->|no| loop_back_for_code[FLOW replace: get-and-validate-otp-code]
     fmt -->|yes| count[SET: count mismatch, withdraw code at 3]
     count --> check{result}

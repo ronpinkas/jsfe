@@ -238,7 +238,7 @@
   {
     "id": "authenticate-user",
     "name": "AuthenticateUser",
-    "version": "1.5.1",
+    "version": "1.5.2",
     "description": "Generic flow to authenticate user via OTP sent to cell or email",
     "parameters": [
       {
@@ -487,6 +487,12 @@
         "type": "SET",
         "variable": "assignment_side_effect",
         "value": "cargo.otpMismatches = 0"
+      },
+      {
+        "id": "reset_format_miss_count",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.otpFormatMisses = 0"
       },
       {
         "id": "set_cell_number_to_cargo",
@@ -874,7 +880,7 @@
   {
     "id": "get-and-validate-otp-code",
     "name": "GetAndValidateOtpCode",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "description": "Get and validate OTP code from user",
     "variables": {
       "otp_code": {
@@ -955,14 +961,14 @@
         "id": "proceed_to_validation",
         "type": "FLOW",
         "value": "validate-otp-code",
-        "callType": "call"
+        "callType": "replace"
       }
     ]
   },
   {
     "id": "validate-otp-code",
     "name": "ValidateOtpCode",
-    "version": "1.1.5",
+    "version": "1.1.6",
     "description": "Worker: validate the one-time code the customer enters; sets cargo.otpVerified on success.",
     "variables": {
       "otp_validation_result": {
@@ -1033,11 +1039,17 @@
             "value": "No problem. Say TEXT and I'll continue with you by message so you can do this when you are free, or {{cargo.verb}} the code whenever you are ready.",
             "value_es": "No hay problema. Diga TEXTO y sigo con usted por mensaje para que lo haga cuando esté libre, o {{cargo.verb_es}} el código cuando pueda."
           },
-          "condition: normalized_otp_code.length > 0": {
+          "condition: normalized_otp_code.length > 0 && (cargo.otpFormatMisses || 0) < 2": {
             "id": "invalid_otp_format",
             "type": "SAY",
             "value": "I was expecting a 6-digit code. Let's try again. You can also {{cargo.voice ? 'press * or ' : ''}}{{cargo.verb}} EXIT to cancel.",
             "value_es": "Esperaba un código de 6 dígitos. Intentemos de nuevo. También puede {{cargo.voice ? 'presionar * o decir' : 'escribir'}} SALIR para cancelar."
+          },
+          "condition: normalized_otp_code.length > 0": {
+            "id": "format_cap_next",
+            "type": "SET",
+            "variable": "skip",
+            "value": "true"
           },
           "default": {
             "id": "no_digits_explain",
@@ -1048,6 +1060,12 @@
         }
       },
       {
+        "id": "count_format_miss",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.otpFormatMisses = (cargo.otpFormatMisses || 0) + (normalized_otp_code.length > 0 && normalized_otp_code.length !== 6 ? 1 : 0)"
+      },
+      {
         "id": "retry_if_bad_format",
         "type": "CASE",
         "branches": {
@@ -1056,6 +1074,23 @@
             "type": "SET",
             "variable": "skip",
             "value": "true"
+          },
+          "condition: (cargo.otpFormatMisses || 0) >= 3": {
+            "id": "format_cap_reached",
+            "type": "FLOW",
+            "value": "generic-retry-with-options",
+            "callType": "replace",
+            "parameters": {
+              "error_message": "I still don't have a 6-digit code. To reach a person, {{cargo.verb}} AGENT.",
+              "error_message_es": "Todavía no tengo un código de 6 dígitos. Para hablar con una persona, {{cargo.verb_es}} AGENTE.",
+              "retry_flow": "authenticate-user",
+              "retry_call_type": "replace",
+              "cancel_flow": "{{cargo.authCancelFlow}}",
+              "allow_code_entry": true,
+              "capture_patterns": "{{cargo.authCapture}}",
+              "question": "Would you like to try again to get access to your account?",
+              "question_es": "¿Le gustaría intentar nuevamente obtener acceso a su cuenta?"
+            }
           },
           "default": {
             "id": "loop_back_for_code",
