@@ -2480,6 +2480,29 @@ function checkToolReturns(engine: Engine, tool: ToolDefinition, result: unknown)
   }
 }
 
+/**
+ * Opt-in diagnostic: a tool that RETURNED a failure (`success: false`, or a non-zero `error`) is not an
+ * exception, so nothing else reports it — an HTTP tool that accepts a 4xx as an answer (`acceptStatus`)
+ * hands the flow a failure the host never sees. With `engine.logToolFailures` one warning names the tool
+ * and the failure's own words. Digit runs of 4 or more are masked, so an account, phone or card number
+ * in a message is never logged. Never throws and never touches the result.
+ */
+function reportToolFailure(engine: Engine, tool: ToolDefinition, result: unknown): void {
+  if (!engine.logToolFailures || !result || typeof result !== 'object' || Array.isArray(result)) return;
+  try {
+    const r = result as Record<string, unknown>;
+    const err = r.error;
+    const failed = r.success === false || (err !== undefined && err !== null && err !== 0 && err !== '0' && err !== false && err !== '');
+    if (!failed) return;
+    const code = r.code ?? r.error_code ?? (typeof err === 'object' ? '' : err);
+    const raw = r.error_message ?? r.message ?? r.error_reason ?? r.info ?? (typeof err === 'string' ? err : '');
+    const text = String(raw ?? '').replace(/\d{4,}/g, '<n>').replace(/\s+/g, ' ').trim().slice(0, 240);
+    logger.warn(`Tool ${tool.id} answered a failure${code !== '' && code !== undefined && code !== null ? ` (${String(code).replace(/\d{4,}/g, '<n>')})` : ''}: ${text || 'no message'}`);
+  } catch (e: any) {
+    logger.warn(`Tool ${tool.id}: failure report failed (${e.message}); result delivered unchanged`);
+  }
+}
+
 function validateToolArgs(tool: ToolDefinition, args: Record<string, unknown>): Record<string, unknown> {
   if (!tool.parameters) return args; // No validation schema
   if (!ajv) return args; // ajv not available — skip validation
@@ -5135,6 +5158,7 @@ async function generateToolCallAndResponse(
 
     const result = await callTool(engine, tool, validatedArgs, userId, transactionId);
     checkToolReturns(engine, tool, result);
+    reportToolFailure(engine, tool, result);
     return result;
   } catch (error: any) {
     logger.info(`Error generating tool call for ${toolName}: ${error.message}`);
@@ -7152,6 +7176,11 @@ export class WorkflowEngine implements Engine {
    * warning on a mismatch. Diagnostic only — a result is never altered or withheld because of it.
    */
   public validateToolReturns: boolean = false;
+  /**
+   * Opt-in (default false): log one warning when a tool returns a failure (`success: false` or a
+   * non-zero `error`), with the tool and its message, digit runs masked. Diagnostic only.
+   */
+  public logToolFailures: boolean = false;
   /**
    * Set by a DISPATCH step to the name of the flow that dispatched; processActivity consumes it
    * within the same call and routes the turn's input to intent detection. Never persisted.

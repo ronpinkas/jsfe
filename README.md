@@ -478,6 +478,11 @@ A host can opt in to a diagnostic, `engine.validateToolReturns = true` (default 
 each result against `returns` and logs a warning on a mismatch or on a schema that does not compile.
 The result is still delivered unchanged either way.
 
+A second opt-in, `engine.logToolFailures = true` (default `false`), logs one warning when a tool *returns*
+a failure (`success: false`, or a non-zero `error`): `Tool <id> answered a failure (<code>): <message>`, with digit
+runs of four or more masked. Such a result is not an exception, so nothing else reports it, notably an HTTP
+tool whose `acceptStatus` turns a 4xx into an answer. The result is delivered unchanged.
+
 #### 3. **Approved Functions Registry** - Secure Local Functions
 
 ```javascript
