@@ -238,7 +238,7 @@
   {
     "id": "authenticate-user",
     "name": "AuthenticateUser",
-    "version": "1.5.2",
+    "version": "1.5.3",
     "description": "Generic flow to authenticate user via OTP sent to cell or email",
     "parameters": [
       {
@@ -493,6 +493,12 @@
         "type": "SET",
         "variable": "assignment_side_effect",
         "value": "cargo.otpFormatMisses = 0"
+      },
+      {
+        "id": "reset_word_miss_count",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.otpWordMisses = 0"
       },
       {
         "id": "set_cell_number_to_cargo",
@@ -968,7 +974,7 @@
   {
     "id": "validate-otp-code",
     "name": "ValidateOtpCode",
-    "version": "1.1.6",
+    "version": "1.1.7",
     "description": "Worker: validate the one-time code the customer enters; sets cargo.otpVerified on success.",
     "variables": {
       "otp_validation_result": {
@@ -982,6 +988,10 @@
       "whatsapp_invite_sent": {
         "type": "boolean",
         "description": "True only if an invite text was actually sent — gates whether we mention it",
+        "value": false
+      },
+      "no_code_given": {
+        "type": "boolean",
         "value": false
       }
     },
@@ -1051,11 +1061,69 @@
             "variable": "skip",
             "value": "true"
           },
+          "condition: matchesChoice(user_choice, ['don t have that phone', 'don t have that number', 'don t have that phone anymore', 'don t have the phone', 'not my number anymore', 'not my phone anymore', 'that s an old number', 'old number', 'changed my number', 'changed my phone', 'lost my phone', 'no tengo ese teléfono', 'no tengo ese telefono', 'no tengo ese número', 'no tengo ese numero', 'ya no tengo ese', 'ya no tengo el teléfono', 'ya no tengo el telefono', 'ya no es mi número', 'ya no es mi numero', 'número viejo', 'numero viejo', 'cambié de número', 'cambie de numero', 'cambié mi número', 'perdí mi teléfono', 'perdi mi telefono'])": {
+            "id": "no_longer_has_phone",
+            "type": "FLOW",
+            "value": "generic-retry-with-options",
+            "callType": "replace",
+            "parameters": {
+              "retry_flow": "authenticate-user",
+              "retry_call_type": "replace",
+              "cancel_flow": "{{cargo.authCancelFlow}}",
+              "allow_code_entry": false,
+              "capture_patterns": "{{cargo.authCapture}}",
+              "question": "Would you like to try again to get access to your account?",
+              "question_es": "¿Le gustaría intentar nuevamente obtener acceso a su cuenta?",
+              "error_message": "No problem. Then the code can't reach you there. You can use the email on your account instead, or {{cargo.verb}} AGENT to reach a person.",
+              "error_message_es": "No hay problema. Entonces el código no le puede llegar ahí. Puede usar el correo electrónico de su cuenta, o {{cargo.verb_es}} AGENTE para hablar con una persona."
+            }
+          },
           "default": {
+            "id": "no_digits_noted",
+            "type": "SET",
+            "variable": "no_code_given",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "count_no_code",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.otpWordMisses = (cargo.otpWordMisses || 0) + (no_code_given === true ? 1 : 0)"
+      },
+      {
+        "id": "explain_or_cap",
+        "type": "CASE",
+        "branches": {
+          "condition: no_code_given === true && (cargo.otpWordMisses || 0) >= 3": {
+            "id": "no_code_cap_reached",
+            "type": "FLOW",
+            "value": "generic-retry-with-options",
+            "callType": "replace",
+            "parameters": {
+              "retry_flow": "authenticate-user",
+              "retry_call_type": "replace",
+              "cancel_flow": "{{cargo.authCancelFlow}}",
+              "allow_code_entry": true,
+              "capture_patterns": "{{cargo.authCapture}}",
+              "question": "Would you like to try again to get access to your account?",
+              "question_es": "¿Le gustaría intentar nuevamente obtener acceso a su cuenta?",
+              "error_message": "I still don't have the code. To reach a person, {{cargo.verb}} AGENT.",
+              "error_message_es": "Todavía no tengo el código. Para hablar con una persona, {{cargo.verb_es}} AGENTE."
+            }
+          },
+          "condition: no_code_given === true": {
             "id": "no_digits_explain",
             "type": "SAY",
             "value": "Let me explain. I sent you a message with a six-digit code in it. Read those six digits back to me. You can also {{cargo.verb}} AGENT to reach a person, or EXIT to cancel.",
             "value_es": "Le explico. Le envié un mensaje con un código de seis dígitos. Dígame esos seis dígitos. También puede {{cargo.verb_es}} AGENTE para hablar con una persona, o SALIR para cancelar."
+          },
+          "default": {
+            "id": "no_explanation_needed",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
           }
         }
       },
@@ -2203,7 +2271,7 @@
   {
     "id": "ask-choice",
     "name": "AskChoice",
-    "version": "1.9.3",
+    "version": "1.9.4",
     "description": "Worker: ask one question; sets cargo.choice (the matched key, or 'other' with accept_other) and cargo.choiceText. AGENT / 0 reaches a person, EXIT / * ends, a new request is DISPATCHed. With amount: an answer naming an amount returns 'amount'. Params: question(_es), choices [{key, words, negative?, neutral?}], retry(_es), accept_other, expect ('number' | 'email' | 'contact'), amount, digits, exit_context(_es).",
     "parameters": [
       {
@@ -2367,6 +2435,46 @@
         "asSpoken": "ac_amount === true",
         "value": "{{question}}",
         "value_es": "{{ac_q_es}}"
+      },
+      {
+        "id": "ac_repeat_1",
+        "type": "CASE",
+        "branches": {
+          "condition: /^\\s*(?:(?:por favor|please|a|que|me lo|me|lo|puede|can you|could you)\\s+)*(?:repetir|repite|rep[ií]t[ae](?:lo|la|me|melo|nos)?|rep[ií]tamelo|otra vez|de nuevo|repeat(?:\\s+(?:that|it))?|say (?:that|it) again|again|one more time)(?:\\s+(?:por favor|please|la pregunta|las opciones|eso|that|it))*[\\s.!?¿,]*$/i.test(String(ac_answer || '')) && pickChoice(ac_answer, choices, ac_other) === ''": {
+            "id": "ac_repeat_ask_1",
+            "type": "SAY-GET",
+            "variable": "ac_answer",
+            "asSpoken": "ac_amount === true",
+            "value": "{{question}}",
+            "value_es": "{{ac_q_es}}"
+          },
+          "default": {
+            "id": "ac_no_repeat_1",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ac_repeat_2",
+        "type": "CASE",
+        "branches": {
+          "condition: /^\\s*(?:(?:por favor|please|a|que|me lo|me|lo|puede|can you|could you)\\s+)*(?:repetir|repite|rep[ií]t[ae](?:lo|la|me|melo|nos)?|rep[ií]tamelo|otra vez|de nuevo|repeat(?:\\s+(?:that|it))?|say (?:that|it) again|again|one more time)(?:\\s+(?:por favor|please|la pregunta|las opciones|eso|that|it))*[\\s.!?¿,]*$/i.test(String(ac_answer || '')) && pickChoice(ac_answer, choices, ac_other) === ''": {
+            "id": "ac_repeat_ask_2",
+            "type": "SAY-GET",
+            "variable": "ac_answer",
+            "asSpoken": "ac_amount === true",
+            "value": "{{question}}",
+            "value_es": "{{ac_q_es}}"
+          },
+          "default": {
+            "id": "ac_no_repeat_2",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
       },
       {
         "id": "ac_match",

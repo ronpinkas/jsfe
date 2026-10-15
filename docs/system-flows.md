@@ -247,7 +247,7 @@ graph TD
 ---
 
 ## AuthenticateUser
-**ID**: `authenticate-user` · **Version**: 1.5.2 · **Sub-flow**  
+**ID**: `authenticate-user` · **Version**: 1.5.3 · **Sub-flow**  
 **Description**: Generic flow to authenticate user via OTP sent to cell or email.
 
 The gatekeeper. It records its options in `cargo.authOptions` / `cargo.authCancelFlow`, collects a phone or email (via `get-cell-or-email`), optionally lets a tenant-supplied validator flow approve the contact, records the destination in `cargo.otp_cell_number` / `cargo.otp_email`, sends the code through [`send-otp-code`](#sendotpcode), hands any send failure to [`otp-send-failed`](#otpsendfailed), and hands off to `get-and-validate-otp-code`. On success it sets `auth_result = true` and returns to its caller, with `cargo.otpVerified` set by the `validate-otp` tool.
@@ -277,7 +277,7 @@ The gatekeeper. It records its options in `cargo.authOptions` / `cargo.authCance
 9. `validate_contact` (CASE) - runs `{{cell_validator}}` with `{cell_number}` or `{{email_validator}}` with `{email}` (`call`). The cell validator is checked first.
 10. `describe_unverified_contact` / `_es` (SET) - builds the phrase used below.
 11. `gate_otp_on_contact_valid` (CASE) - `!contact_valid` → FLOW [`generic-retry-with-options`](#genericretrywithoptions) (`replace`) with "Sorry, I could not verify {{unverified_contact}}.", `retry_flow`, `cancel_flow`, and `capture_patterns: "{{cargo.authCapture}}"`. No `retry_call_type`, `allow_code_entry` or `question`.
-12. `reset_resend_count` / `reset_mismatch_count` / `reset_format_miss_count` (SET, side effect) - `cargo.otpResends = 0`, `cargo.otpMismatches = 0`, `cargo.otpFormatMisses = 0`.
+12. `reset_resend_count` / `reset_mismatch_count` / `reset_format_miss_count` (SET, side effect) - `cargo.otpResends = 0`, `cargo.otpMismatches = 0`, `cargo.otpFormatMisses = 0`, `cargo.otpWordMisses = 0`.
 13. `set_cell_number_to_cargo` / `set_email_to_cargo` (SET, side effect) - `cargo.otp_cell_number = cell_number || ''`, `cargo.otp_email = email || ''`. This is the destination `send-otp-code` reads.
 14. `send_code` (FLOW [`send-otp-code`](#sendotpcode), `call`) - sends the code by SMS to `cargo.otp_cell_number` or by email to `cargo.otp_email`, and records `cargo.otpSendFailure` (`''` when the code went out). A number already refused for texts (`cargo.otpUndeliverableTo`) is not texted again.
 15. `auth_check_sent` (CASE) - `cargo.otpSendFailure` → FLOW [`otp-send-failed`](#otpsendfailed) (`replace`). Otherwise continue.
@@ -437,7 +437,7 @@ graph TD
 ---
 
 ## ValidateOtpCode
-**ID**: `validate-otp-code` · **Version**: 1.1.6 · **Sub-flow**  
+**ID**: `validate-otp-code` · **Version**: 1.1.7 · **Sub-flow**  
 **Description**: Validate OTP code entered by user; sets `cargo.otpVerified` on success. Capped at 3 wrong codes per authentication (`cargo.otpMismatches`, reset by authenticate-user): the code is withdrawn and the retry/agent/exit choice follows, where retry sends a fresh code. Also capped at 3 answers with digits but not 6 (`cargo.otpFormatMisses`, reset by authenticate-user): the same choice follows, without withdrawing the code.
 
 Reads `normalized_otp_code` and `user_choice` from `get-and-validate-otp-code`. An expired or missing code is answered with a fresh one (via `resend-otp-code`), not with "didn't match".
@@ -455,21 +455,24 @@ Reads `normalized_otp_code` and `user_choice` from `get-and-validate-otp-code`. 
    - "I'm driving / busy / later" phrases → SAY "No problem. Say TEXT and I'll continue with you by message so you can do this when you are free, or {verb} the code whenever you are ready."
    - some digits, but not 6, fewer than two such answers before → SAY "I was expecting a 6-digit code. Let's try again. You can also [press * or ]{verb} EXIT to cancel." (Spanish exit sentence as in GetAndValidateOtpCode.)
    - some digits, but not 6, the third such answer → nothing said here (step 3 answers).
-   - default (no digits) → SAY "Let me explain. I sent you a message with a six-digit code in it. Read those six digits back to me. You can also {verb} AGENT to reach a person, or EXIT to cancel."
-2. `count_format_miss` (SET, side effect) - `cargo.otpFormatMisses` + 1 when the answer has digits but not 6.
-3. `retry_if_bad_format` (CASE) - 6 digits → continue. `cargo.otpFormatMisses >= 3` → FLOW `generic-retry-with-options` (`replace`): "I still don't have a 6-digit code. To reach a person, {verb} AGENT.", with the [authentication retry parameters](#genericretrywithoptions) and `allow_code_entry: true`. Otherwise → FLOW `get-and-validate-otp-code` (`replace`), which prompts again after the SAY or the fresh code above.
-4. `count_wrong_code` (SET, side effect) - `cargo.otpMismatches` + 1 when not verified and `cargo.otpFailure === 'mismatch'`.
-5. `withdraw_code_at_cap` (CASE) - a mismatch with `cargo.otpMismatches >= 3` → `cargo.otpHash = null`, so the code can no longer be accepted.
-6. `check_validation_result` (CASE, first match wins):
+   - "I don't have that phone (anymore)" / "ya no tengo ese teléfono" and similar → FLOW `generic-retry-with-options` (`replace`): "No problem. Then the code can't reach you there. You can use the email on your account instead, or {verb} AGENT to reach a person.", with the [authentication retry parameters](#genericretrywithoptions).
+   - default (no digits) → SET `no_code_given = true`; the next steps explain or cap.
+2. `count_no_code` (SET, side effect) - `cargo.otpWordMisses` + 1 when no code was given (words).
+3. `explain_or_cap` (CASE) - no code and `cargo.otpWordMisses >= 3` → FLOW `generic-retry-with-options` (`replace`): "I still don't have the code. To reach a person, {verb} AGENT.", with the authentication retry parameters and `allow_code_entry: true`. No code otherwise → SAY "Let me explain. I sent you a message with a six-digit code in it. Read those six digits back to me. You can also {verb} AGENT to reach a person, or EXIT to cancel."
+4. `count_format_miss` (SET, side effect) - `cargo.otpFormatMisses` + 1 when the answer has digits but not 6.
+5. `retry_if_bad_format` (CASE) - 6 digits → continue. `cargo.otpFormatMisses >= 3` → FLOW `generic-retry-with-options` (`replace`): "I still don't have a 6-digit code. To reach a person, {verb} AGENT.", with the [authentication retry parameters](#genericretrywithoptions) and `allow_code_entry: true`. Otherwise → FLOW `get-and-validate-otp-code` (`replace`), which prompts again after the SAY or the fresh code above.
+6. `count_wrong_code` (SET, side effect) - `cargo.otpMismatches` + 1 when not verified and `cargo.otpFailure === 'mismatch'`.
+7. `withdraw_code_at_cap` (CASE) - a mismatch with `cargo.otpMismatches >= 3` → `cargo.otpHash = null`, so the code can no longer be accepted.
+8. `check_validation_result` (CASE, first match wins):
    - `cargo.otpVerified` → SET `otp_validated = true`.
    - `cargo.otpFailure === 'expired'` → FLOW `resend-otp-code` (`call`), `resend_reason: "expired"`.
    - `cargo.otpFailure === 'missing'` → FLOW `resend-otp-code` (`call`), `resend_reason: "missing"`.
    - a mismatch at the cap → FLOW `generic-retry-with-options` (`replace`): "That code didn't match three times, so I can't accept another try with it. To reach a person, {verb} AGENT.", with the [authentication retry parameters](#genericretrywithoptions) and `allow_code_entry: false`.
    - default → SAY "That code didn't match. Let's try again."
-7. `set_invite_text` - `global_whatsapp_invite_es` (Spanish) or `global_whatsapp_invite`, `''` when undefined.
-8. `invite_if_wrong_code` (CASE) - verified, or `cargo.otpFailure` is not `mismatch` → no invite. Otherwise → CALL-TOOL [`send-whatsapp-invite`](#send-whatsapp-invite) `{accountSid: null, from: cargo.twilioNumber, to: cargo.otp_cell_number, inviteText, language, container: cargo}` into `whatsapp_invite_sent`. `onFail` → SET `whatsapp_invite_sent = false`. Per the tool's contract it returns `false` when `inviteText` is empty, when it already invited on this call, or when `to` is missing. `to` is `''` when the code went by email.
-9. `mention_whatsapp_invite` (CASE) - `whatsapp_invite_sent` → SAY "I texted you a WhatsApp link so you can try again on WhatsApp to help overcome voice limitations."
-10. `retry_if_wrong_code` (CASE) - not verified → FLOW `get-and-validate-otp-code` (`replace`).
+9. `set_invite_text` - `global_whatsapp_invite_es` (Spanish) or `global_whatsapp_invite`, `''` when undefined.
+10. `invite_if_wrong_code` (CASE) - verified, or `cargo.otpFailure` is not `mismatch` → no invite. Otherwise → CALL-TOOL [`send-whatsapp-invite`](#send-whatsapp-invite) `{accountSid: null, from: cargo.twilioNumber, to: cargo.otp_cell_number, inviteText, language, container: cargo}` into `whatsapp_invite_sent`. `onFail` → SET `whatsapp_invite_sent = false`. Per the tool's contract it returns `false` when `inviteText` is empty, when it already invited on this call, or when `to` is missing. `to` is `''` when the code went by email.
+11. `mention_whatsapp_invite` (CASE) - `whatsapp_invite_sent` → SAY "I texted you a WhatsApp link so you can try again on WhatsApp to help overcome voice limitations."
+12. `retry_if_wrong_code` (CASE) - not verified → FLOW `get-and-validate-otp-code` (`replace`).
 
 ### Ends
 Verified → completion (the caller chain returns to `authenticate-user` or `generic-retry-with-options`). A wrong code loops back to the prompt until the third mismatch, which leaves through `generic-retry-with-options`. An expired or missing code gets a fresh one and loops back, until `resend-otp-code`'s own cap. The exits in step 1 leave at any time.
@@ -930,7 +933,7 @@ graph TD
 ---
 
 ## AskChoice
-**ID**: `ask-choice` · **Version**: 1.9.3 · **Sub-flow** · **Scope**: isolated  
+**ID**: `ask-choice` · **Version**: 1.9.4 · **Sub-flow** · **Scope**: isolated  
 **Description**: Worker: asks one question and returns the caller's choice in `cargo.choice` (the matching key) and `cargo.choiceText` (the answer as given). One re-ask on a short miss; AGENT (or `0`) reaches a person and EXIT (or `*`) ends, the same for every question; anything still unrecognised is another request and is `DISPATCH`ed, unless `accept_other`, which returns `cargo.choice = 'other'` with the text for the caller to interpret. With `accept_other` and `expect`, an answer of three or more words, none of the expected shape, is another request and is `DISPATCH`ed rather than returned as a failed try. With `amount`, an answer that names an amount returns `cargo.choice = 'amount'`.
 
 The question primitive the other generic workers are built on: ask-email, ask-address, ask-field and card-entry ask every question through it.
@@ -966,6 +969,7 @@ The flow's description says that with `accept_other` EXIT matches "exit / salir 
 2. `ac_accepts_other`, `ac_takes_amount`, `ac_question_es`, `ac_retry_en`, `ac_retry_spanish`, `ac_exit_context`, `ac_exit_context_es` (SET) - the defaults above.
 3. `ac_keypad` (SET, side effect) - `cargo.digits = digits` when it is an object, else `undefined`.
 4. `ac_ask` (SAY-GET `ac_answer`, `asSpoken: "ac_amount === true"`) - `{{question}}` / `{{ac_q_es}}`.
+   Then `ac_repeat_1` / `ac_repeat_2` (CASE) - an answer that only asks to hear the question again (repetir, repítalo, otra vez, de nuevo, repeat, again, say that again) and picks no choice → SAY-GET `ac_answer` with `{{question}}` again, up to twice. It is not a miss.
 5. `ac_match` (SET) - `ac_key = pickChoice(ac_answer, choices, ac_other)`. `ac_amount_check`: with `amount` and `isAmountAnswer(ac_answer)`, `ac_key = '__amount'`.
 6. `ac_keypad_again` (SET, side effect) - `cargo.digits` as in step 3, for a re-ask.
 7. `ac_reask_on_miss` (CASE) - no key, no `accept_other`, and fewer than three words that contain a letter → SAY-GET `ac_answer` with the retry wording (`asSpoken` as in step 4). A longer miss is not re-asked; it is a new request.
