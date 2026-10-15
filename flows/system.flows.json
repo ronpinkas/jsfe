@@ -1006,7 +1006,7 @@
   {
     "id": "validate-otp-code",
     "name": "ValidateOtpCode",
-    "version": "1.1.9",
+    "version": "1.1.10",
     "description": "Worker: validate the one-time code the customer enters; sets cargo.otpVerified on success.",
     "variables": {
       "otp_validation_result": {
@@ -1032,6 +1032,12 @@
       }
     },
     "steps": [
+      {
+        "id": "reset_no_code_given",
+        "type": "SET",
+        "variable": "no_code_given",
+        "value": "false"
+      },
       {
         "id": "another_account_check",
         "type": "SET",
