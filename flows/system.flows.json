@@ -564,8 +564,8 @@
   {
     "id": "get-cell-or-email",
     "name": "GetCellOrEmail",
-    "version": "1.1.5",
-    "description": "Prompt user to provide either their cell phone number or email address for account lookup",
+    "version": "1.2.0",
+    "description": "Prompt user to provide either their cell phone number or email address for account lookup. Optional: account_pattern / account_name(_es) also accept the tenant's account number (sets acct_number); intro(_es) leads the question; retry_call_type is passed to the retry menu. Records cargo.contactKind ('caller' | 'phone' | 'email' | 'account') and cargo.contactValue.",
     "parameters": [
       {
         "name": "retry_flow",
@@ -576,12 +576,72 @@
         "name": "cancel_flow",
         "type": "string",
         "description": "Flow to reboot if user cancels"
+      },
+      {
+        "name": "account_pattern",
+        "type": "string",
+        "description": "Optional regex of the tenant's account number (e.g. '^5\\d{6,7}$'): an answer matching it sets acct_number",
+        "required": false
+      },
+      {
+        "name": "account_name",
+        "type": "string",
+        "description": "With account_pattern: how the question names it ('your account number')",
+        "required": false
+      },
+      {
+        "name": "account_name_es",
+        "type": "string",
+        "description": "Spanish account_name ('su número de cuenta')",
+        "required": false
+      },
+      {
+        "name": "intro",
+        "type": "string",
+        "description": "Optional sentence said before the question (only when it asks)",
+        "required": false
+      },
+      {
+        "name": "intro_es",
+        "type": "string",
+        "description": "Spanish intro",
+        "required": false
+      },
+      {
+        "name": "retry_call_type",
+        "type": "string",
+        "description": "Passed to the retry menu: 'reboot' (default) or 'replace' (retry in place, with retry_flow 'get-cell-or-email')",
+        "required": false
       }
     ],
     "variables": {
       "cell_or_email": {
         "type": "string",
         "description": "User cell or email"
+      },
+      "gce_pattern": {
+        "type": "string",
+        "value": ""
+      },
+      "gce_or": {
+        "type": "string",
+        "value": ""
+      },
+      "gce_or_es": {
+        "type": "string",
+        "value": ""
+      },
+      "gce_intro": {
+        "type": "string",
+        "value": ""
+      },
+      "gce_intro_es": {
+        "type": "string",
+        "value": ""
+      },
+      "gce_retry_type": {
+        "type": "string",
+        "value": ""
       }
     },
     "steps": [
@@ -604,15 +664,57 @@
         "value": "typeof email === 'undefined' ? '' : email"
       },
       {
+        "id": "set-acct-number-if-undefined",
+        "type": "SET",
+        "variable": "acct_number",
+        "value": "typeof acct_number === 'undefined' ? '' : acct_number"
+      },
+      {
+        "id": "gce_account_pattern",
+        "type": "SET",
+        "variable": "gce_pattern",
+        "value": "typeof account_pattern !== 'undefined' && account_pattern ? String(account_pattern) : ''"
+      },
+      {
+        "id": "gce_account_or",
+        "type": "SET",
+        "variable": "gce_or",
+        "value": "gce_pattern && typeof account_name !== 'undefined' && account_name ? ', or ' + account_name : ''"
+      },
+      {
+        "id": "gce_account_or_es",
+        "type": "SET",
+        "variable": "gce_or_es",
+        "value": "gce_pattern && typeof account_name_es !== 'undefined' && account_name_es ? ', o ' + account_name_es : gce_or"
+      },
+      {
+        "id": "gce_lead",
+        "type": "SET",
+        "variable": "gce_intro",
+        "value": "typeof intro !== 'undefined' && intro ? intro + ' ' : ''"
+      },
+      {
+        "id": "gce_lead_es",
+        "type": "SET",
+        "variable": "gce_intro_es",
+        "value": "typeof intro_es !== 'undefined' && intro_es ? intro_es + ' ' : gce_intro"
+      },
+      {
+        "id": "gce_retry_call_type",
+        "type": "SET",
+        "variable": "gce_retry_type",
+        "value": "typeof retry_call_type !== 'undefined' && retry_call_type ? retry_call_type : 'reboot'"
+      },
+      {
         "id": "ask_cell_or_email_if_no_param",
         "type": "CASE",
         "branches": {
-          "condition: !cell_number && !email && cargo.callerId && !callerIsInternational(cargo)": {
+          "condition: !cell_number && !email && !acct_number && cargo.callerId && !callerIsInternational(cargo)": {
             "id": "ask_cell_or_email_with_caller_id",
             "type": "SAY-GET",
             "variable": "cell_or_email",
-            "value": "To authenticate using your caller id, please {{cargo.verb}} yes. Otherwise, please {{cargo.verb}}{{cargo.voice ? ' or enter' : ''}} the phone or email associated with your account{{cargo.voice ? ' followed by the pound key' : ''}}. To exit anytime you can {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
-            "value_es": "Para autenticar usando su identificador de llamadas, por favor {{cargo.verb_es}} sí. De lo contrario, por favor ingrese {{cargo.voice ? 'o ' : ''}}{{cargo.verb_es}} el teléfono o correo electrónico asociado con su cuenta{{cargo.voice ? ' seguido de la tecla numeral' : ''}}. Para salir en cualquier momento, puede {{cargo.voice ? 'presionar la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
+            "value": "{{gce_intro}}To use your caller id, please {{cargo.verb}} yes. Otherwise, please {{cargo.verb}}{{cargo.voice ? ' or enter' : ''}} the phone or email associated with your account{{gce_or}}{{cargo.voice ? ' followed by the pound key' : ''}}. To exit anytime you can {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
+            "value_es": "{{gce_intro_es}}Para usar su identificador de llamadas, por favor {{cargo.verb_es}} sí. De lo contrario, por favor ingrese {{cargo.voice ? 'o ' : ''}}{{cargo.verb_es}} el teléfono o correo electrónico asociado con su cuenta{{gce_or_es}}{{cargo.voice ? ' seguido de la tecla numeral' : ''}}. Para salir en cualquier momento, puede {{cargo.voice ? 'presionar la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
             "digits": {
               "min": 7,
               "max": 12,
@@ -622,12 +724,12 @@
               "autoSubmitMs": 2500
             }
           },
-          "condition: !cell_number && !email": {
+          "condition: !cell_number && !email && !acct_number": {
             "id": "ask_cell_or_email",
             "type": "SAY-GET",
             "variable": "cell_or_email",
-            "value": "Please {{cargo.verb}} {{cargo.voice ? 'or enter' : ''}} the phone or email associated with your account{{cargo.voice ? ' followed by the pound key if entered using the dial pad' : ''}}. To exit anytime you can {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
-            "value_es": "Por favor {{cargo.verb_es}} {{cargo.voice ? 'o ingrese' : ''}} el teléfono o correo electrónico asociado con su cuenta{{cargo.voice ? ' seguido de la tecla numeral si se ingresó usando el teclado de marcación' : ''}}. Para salir en cualquier momento, puede {{cargo.voice ? 'presionar la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
+            "value": "{{gce_intro}}Please {{cargo.verb}} {{cargo.voice ? 'or enter' : ''}} the phone or email associated with your account{{gce_or}}{{cargo.voice ? ' followed by the pound key if entered using the dial pad' : ''}}. To exit anytime you can {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
+            "value_es": "{{gce_intro_es}}Por favor {{cargo.verb_es}} {{cargo.voice ? 'o ingrese' : ''}} el teléfono o correo electrónico asociado con su cuenta{{gce_or_es}}{{cargo.voice ? ' seguido de la tecla numeral si se ingresó usando el teclado de marcación' : ''}}. Para salir en cualquier momento, puede {{cargo.voice ? 'presionar la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
             "digits": {
               "min": 7,
               "max": 12
@@ -637,7 +739,7 @@
             "id": "use_provided_contact",
             "type": "SET",
             "variable": "cell_or_email",
-            "value": "cell_number || email"
+            "value": "acct_number || cell_number || email"
           }
         }
       },
@@ -663,6 +765,12 @@
         "id": "branch_on_cell_or_email",
         "type": "CASE",
         "branches": {
+          "condition: gce_pattern && (readIdentifier(cell_or_email, gce_pattern) || {}).kind === 'account'": {
+            "id": "read_account_number",
+            "type": "SET",
+            "variable": "acct_number",
+            "value": "(readIdentifier(cell_or_email, gce_pattern) || {}).value"
+          },
           "condition: validatePhone(prospective_cell_number)": {
             "id": "read_phone_number",
             "type": "SET",
@@ -687,11 +795,12 @@
             "value": "generic-retry-with-options",
             "callType": "replace",
             "parameters": {
-              "error_message": "I can only text codes to US and Canadian numbers. Please give the email on your account, or a US or Canadian mobile number.",
-              "error_message_es": "Solo puedo enviar códigos por texto a números de EE. UU. y Canadá. Por favor indique el correo de su cuenta, o un celular de EE. UU. o Canadá.",
+              "error_message": "A number outside the US and Canada can't be used here. Please give the email on your account{{gce_or}}, or a US or Canadian mobile number.",
+              "error_message_es": "Un número fuera de EE. UU. y Canadá no se puede usar aquí. Por favor indique el correo de su cuenta{{gce_or_es}}, o un celular de EE. UU. o Canadá.",
               "retry_flow": "{{retry_flow}}",
               "cancel_flow": "{{cancel_flow}}",
-              "capture_patterns": "{{cargo.authCapture}}"
+              "capture_patterns": "{{cargo.authCapture}}",
+              "retry_call_type": "{{gce_retry_type}}"
             }
           },
           "condition: isAnswer(cell_or_email, 'exit') && cell_or_email.trim().split(/\\s+/).length <= 2": {
@@ -722,7 +831,8 @@
               "error_message_es": "El número de teléfono que proporcionó no es válido.",
               "retry_flow": "{{retry_flow}}",
               "cancel_flow": "{{cancel_flow}}",
-              "capture_patterns": "{{cargo.authCapture}}"
+              "capture_patterns": "{{cargo.authCapture}}",
+              "retry_call_type": "{{gce_retry_type}}"
             }
           },
           "condition: cargo.callerId && !callerIsInternational(cargo)": {
@@ -731,7 +841,7 @@
             "variable": "cell_number",
             "value": "cargo.callerId"
           },
-          "condition: !cell_number && !email && cell_or_email.trim().split(/\\s+/).length >= 3 && !/[0-9@]/.test(cell_or_email)": {
+          "condition: !cell_number && !email && !acct_number && cell_or_email.trim().split(/\\s+/).length >= 3 && !/[0-9@]/.test(cell_or_email)": {
             "id": "off_topic_handoff",
             "type": "DISPATCH",
             "outcome": "unresolved",
@@ -743,14 +853,21 @@
             "value": "generic-retry-with-options",
             "callType": "replace",
             "parameters": {
-              "error_message": "Sorry, I do need the the phone or email associated with your account to proceed.",
-              "error_message_es": "Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta para continuar.",
+              "error_message": "Sorry, I do need the phone or email associated with your account{{gce_or}} to proceed.",
+              "error_message_es": "Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta{{gce_or_es}} para continuar.",
               "retry_flow": "{{retry_flow}}",
               "cancel_flow": "{{cancel_flow}}",
-              "capture_patterns": "{{cargo.authCapture}}"
+              "capture_patterns": "{{cargo.authCapture}}",
+              "retry_call_type": "{{gce_retry_type}}"
             }
           }
         }
+      },
+      {
+        "id": "gce_record_contact",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(cargo.contactKind = acct_number ? 'account' : (email ? 'email' : (cell_number ? (String(cell_number).replace(/\\D/g, '').slice(-10) === String(cargo.callerId || '').replace(/\\D/g, '').slice(-10) ? 'caller' : 'phone') : '')), cargo.contactValue = String(acct_number || email || cell_number || ''), true)"
       }
     ]
   },

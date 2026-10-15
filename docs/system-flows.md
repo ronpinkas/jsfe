@@ -325,53 +325,62 @@ graph TD
 ---
 
 ## GetCellOrEmail
-**ID**: `get-cell-or-email` · **Version**: 1.1.5 · **Sub-flow**  
-**Description**: Prompt user to provide either their cell phone number or email address for account lookup.
+**ID**: `get-cell-or-email` · **Version**: 1.2.0 · **Sub-flow**  
+**Description**: Prompt user to provide either their cell phone number or email address for account lookup. Optional: account_pattern / account_name(_es) also accept the tenant's account number (sets acct_number); intro(_es) leads the question; retry_call_type is passed to the retry menu. Records cargo.contactKind ('caller' | 'phone' | 'email' | 'account') and cargo.contactValue.
+
+The one contact question every tenant uses: `authenticate-user` calls it, and a tenant whose callers may also answer with an account number calls it directly with that number's pattern instead of keeping its own copy.
 
 ### Parameters
-*   `retry_flow` (string): Flow to reboot if the user wants to retry.
+*   `retry_flow` (string): Flow the retry menu runs again. With `retry_call_type: 'replace'` and `retry_flow: 'get-cell-or-email'` a retry asks again in place and returns to the caller.
 *   `cancel_flow` (string): Flow to reboot if the user cancels. Empty falls back to `contact-support`.
-*   Also reads `cell_number` / `email` when the caller passes them (`authenticate-user` does). These are not declared as parameters here.
+*   `account_pattern` (string, optional): a regex for the tenant's account number (e.g. `'^5\\d{6,7}$'`). An answer matching it sets `acct_number`; without it nothing about account numbers changes.
+*   `account_name` / `account_name_es` (string, optional): with `account_pattern`, how the question names it ("your account number" / "su número de cuenta"): "…associated with your account, or your account number."
+*   `intro` / `intro_es` (string, optional): a sentence said before the question, only when it asks ("To access your account I'll send you a one-time code.").
+*   `retry_call_type` (string, optional): passed to every retry menu, `'reboot'` (default) or `'replace'`.
+*   Also reads `cell_number` / `email` / `acct_number` when the caller passes them (`authenticate-user` does). The flow shares its caller's scope, so the result lands in those variables.
 
 ### Steps
 1. `contact_capture_patterns` (SET, side effect) - `cargo.authCapture = [{ variable: 'cell_number', reader: 'phone' }, { variable: 'email', reader: 'email' }]`, the capture patterns every authentication retry menu passes.
-2. Guard `cell_number` and `email` to `''` when undefined.
+2. Guard `cell_number`, `email` and `acct_number` to `''` when undefined; `gce_pattern`, `gce_or` / `gce_or_es` (", or {account_name}" when there is a pattern), `gce_intro` / `gce_intro_es`, `gce_retry_type` (default `'reboot'`) from the optional parameters.
 3. `ask_cell_or_email_if_no_param` (CASE):
-   - nothing supplied and `cargo.callerId` from the US or Canada (`!callerIsInternational(cargo)`) → SAY-GET `cell_or_email`: "To authenticate using your caller id, please {verb} yes. Otherwise, please {verb}[ or enter] the phone or email associated with your account[ followed by the pound key]. To exit anytime you can [press the asterisk key or ]{verb} EXIT." `digits: {min 7, max 12, autoSubmitChars ["1"], autoSubmitMs 2500}` (a single keypad "1" auto-submits).
-   - nothing supplied (no caller ID, or an international one) → SAY-GET `cell_or_email`: "Please {verb} [or enter] the phone or email associated with your account[ followed by the pound key if entered using the dial pad]. To exit anytime …", `digits: {min 7, max 12}`.
-   - otherwise → `cell_or_email = cell_number || email` (no prompt).
+   - nothing supplied and `cargo.callerId` from the US or Canada (`!callerIsInternational(cargo)`) → SAY-GET `cell_or_email`: "{intro}To use your caller id, please {verb} yes. Otherwise, please {verb}[ or enter] the phone or email associated with your account{, or account_name}[ followed by the pound key]. To exit anytime you can [press the asterisk key or ]{verb} EXIT." `digits: {min 7, max 12, autoSubmitChars ["1"], autoSubmitMs 2500}` (a single keypad "1" auto-submits).
+   - nothing supplied (no caller ID, or an international one) → SAY-GET `cell_or_email`: "{intro}Please {verb} [or enter] the phone or email associated with your account{, or account_name}[ followed by the pound key if entered using the dial pad]. To exit anytime …", `digits: {min 7, max 12}`.
+   - otherwise → `cell_or_email = acct_number || cell_number || email` (no prompt).
 4. Normalization (SET) - `prospective_cell_number` = digits only. `prospective_email` = `readEmail(cell_or_email)` (typed, spoken or spelled; see [Contact readers](#conventions-used-by-these-flows)). Then `cell_or_email` is trimmed, lower-cased and stripped of punctuation.
 5. `branch_on_cell_or_email` (CASE, first match wins):
-   1. `validatePhone(prospective_cell_number)` → `cell_number` = those digits.
-   2. `validateEmail(prospective_email)` → `email` = it.
-   3. a US or Canadian `cargo.callerId` and the answer is `1`, or `isAnswer(…, 'yes', ['thanks', 'thank you', 'gracias'])` with no digit and no `@`, or `matchesChoice` phone words (`phone, cell, caller id, number, numero, teléfono, celular, identificador de llamadas`…) → `cell_number = cargo.callerId`.
-   4. `readInternationalPhone(cell_or_email)` → FLOW `generic-retry-with-options` (`replace`): "I can only text codes to US and Canadian numbers. Please give the email on your account, or a US or Canadian mobile number.", with `retry_flow`, `cancel_flow` and `capture_patterns: "{{cargo.authCapture}}"`.
-   5. `isAnswer(…, 'exit')` (EXIT words or `*`) in an answer of at most two words → FLOW `{{cancel_flow || 'contact-support'}}` (`reboot`).
-   6. `isAgentRequest` (the whole answer asks for a person, or is `0`) → FLOW `live-agent-requested` (`reboot`).
-   7. a US or Canadian `cargo.callerId` and digits that are not a valid phone → `cell_number = cargo.callerId`.
-   8. digits that are not a valid phone (no usable caller ID) → FLOW `generic-retry-with-options` (`replace`): "Sorry, the phone number you provided isn't valid.", with `retry_flow`, `cancel_flow` and `capture_patterns: "{{cargo.authCapture}}"` (no `retry_call_type`, so a retry by YES or `1` reboots).
-   9. a US or Canadian `cargo.callerId` (anything else) → `cell_number = cargo.callerId`.
-   10. the question was asked (`!cell_number && !email`) and the answer is three or more words containing no digit and no `@` → **`DISPATCH`** with **`outcome: "unresolved"`, `reason: "auth_prompt_off_topic"`**. The answer goes to intent detection: a matching flow starts at once (the outcome is dropped); otherwise the host answers with the outcome.
-   11. default → FLOW `generic-retry-with-options` (`replace`): "Sorry, I do need the the phone or email associated with your account to proceed.", same parameters.
+   1. with `account_pattern`, `readIdentifier(cell_or_email, pattern)` is an account number → `acct_number` = it.
+   2. `validatePhone(prospective_cell_number)` → `cell_number` = those digits.
+   3. `validateEmail(prospective_email)` → `email` = it.
+   4. a US or Canadian `cargo.callerId` and the answer is `1`, or `isAnswer(…, 'yes', ['thanks', 'thank you', 'gracias'])` with no digit and no `@`, or `matchesChoice` phone words (`phone, cell, caller id, number, numero, teléfono, celular, identificador de llamadas`…) → `cell_number = cargo.callerId`.
+   5. `readInternationalPhone(cell_or_email)` → FLOW `generic-retry-with-options` (`replace`): "A number outside the US and Canada can't be used here. Please give the email on your account{, or account_name}, or a US or Canadian mobile number.", with `retry_flow`, `cancel_flow`, `retry_call_type` and `capture_patterns: "{{cargo.authCapture}}"`.
+   6. `isAnswer(…, 'exit')` (EXIT words or `*`) in an answer of at most two words → FLOW `{{cancel_flow || 'contact-support'}}` (`reboot`).
+   7. `isAgentRequest` (the whole answer asks for a person, or is `0`) → FLOW `live-agent-requested` (`reboot`).
+   8. a US or Canadian `cargo.callerId` and digits that are not a valid phone → `cell_number = cargo.callerId`.
+   9. digits that are not a valid phone (no usable caller ID) → FLOW `generic-retry-with-options` (`replace`): "Sorry, the phone number you provided isn't valid.", same parameters.
+   10. a US or Canadian `cargo.callerId` (anything else: "este", "this one", "here"…) → `cell_number = cargo.callerId`.
+   11. the question was asked (`!cell_number && !email && !acct_number`) and the answer is three or more words containing no digit and no `@` → **`DISPATCH`** with **`outcome: "unresolved"`, `reason: "auth_prompt_off_topic"`**. The answer goes to intent detection: a matching flow starts at once (the outcome is dropped); otherwise the host answers with the outcome.
+   12. default → FLOW `generic-retry-with-options` (`replace`): "Sorry, I do need the phone or email associated with your account{, or account_name} to proceed.", same parameters.
 
-   Because branch 9 comes before branch 10, a caller with a US or Canadian caller ID who says something off-topic is authenticated against the caller ID, not handed off.
+   Because branch 10 comes before branch 11, a caller with a US or Canadian caller ID who says something off-topic is identified by the caller ID, not handed off; the code step that follows lets them leave (EXIT, AGENT).
+6. `gce_record_contact` (SET, side effect) - `cargo.contactKind` = `'account'` / `'email'` / `'caller'` (the phone is the caller ID's last 10 digits) / `'phone'`, and `cargo.contactValue` = that value.
 
 ### Ends
-By completion (returning to `authenticate-user` with `cell_number` or `email` set), or through one of the exits above.
+By completion (returning to the caller with `acct_number`, `cell_number` or `email` set and `cargo.contactKind` recorded), or through one of the exits above.
 
 ### Flowchart
 ```mermaid
 graph TD
     start((Start)) --> capture_patterns[SET: cargo.authCapture]
-    capture_patterns --> guards[SET: cell_number/email default '']
+    capture_patterns --> guards["SET: cell_number/email/acct_number default '', optional account pattern, intro, retry type"]
     guards --> ask{contact supplied?}
-    ask -->|no + US/Canada callerId| ask_with_caller_id[SAY-GET: say yes for caller id, or phone/email]
-    ask -->|no| ask_plain[SAY-GET: phone or email]
+    ask -->|no + US/Canada callerId| ask_with_caller_id["SAY-GET: intro + say yes for caller id, or phone/email[/account number]"]
+    ask -->|no| ask_plain["SAY-GET: intro + phone or email[/account number]"]
     ask -->|yes| use_provided[SET: cell_or_email]
     ask_with_caller_id --> normalize["SET: prospective_cell_number, prospective_email = readEmail, cell_or_email"]
     ask_plain --> normalize
     use_provided --> normalize
     normalize --> branch{first match}
+    branch -->|account pattern matches| read_account[SET: acct_number]
     branch -->|valid phone| valid_phone[SET: cell_number]
     branch -->|valid email| valid_email[SET: email]
     branch -->|callerId + yes / phone words| use_caller_id[SET: cell_number = callerId]
@@ -379,15 +388,17 @@ graph TD
     branch -->|EXIT or *, at most 2 words| abort_process["FLOW reboot: cancel_flow or contact-support"]
     branch -->|agent request or 0| goto_live_agent[FLOW reboot: live-agent-requested]
     branch -->|callerId + invalid digits| fallback_invalid[SET: cell_number = callerId]
-    branch -->|invalid digits| invalid_phone[FLOW replace: generic-retry-with-options]
+    branch -->|invalid digits| invalid_phone["FLOW replace: generic-retry-with-options (retry_call_type)"]
     branch -->|callerId| fallback_unrecognized[SET: cell_number = callerId]
     branch -->|asked, 3+ words, no digit or @| off_topic["DISPATCH: outcome unresolved"]
-    branch -->|default| retry[FLOW replace: generic-retry-with-options]
-    valid_phone --> stop((Return to caller))
-    valid_email --> stop
-    use_caller_id --> stop
-    fallback_invalid --> stop
-    fallback_unrecognized --> stop
+    branch -->|default| retry["FLOW replace: generic-retry-with-options (retry_call_type)"]
+    read_account --> record["SET: cargo.contactKind / contactValue"]
+    valid_phone --> record
+    valid_email --> record
+    use_caller_id --> record
+    fallback_invalid --> record
+    fallback_unrecognized --> record
+    record --> stop((Return to caller))
 ```
 
 ---
