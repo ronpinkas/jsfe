@@ -4411,9 +4411,13 @@ function handleSayGetStep(currentFlowFrame: FlowFrame, engine: Engine): string |
       }
       logger.info(`SAY-GET step will store next user input in variable '${step.variable}' (step will be popped after input)`);
 
-      // Expose digits setting to sessionContext.cargo for Twilio ConversationRelay integration
+      // Expose digits setting to sessionContext.cargo for Twilio ConversationRelay integration. A string value holding a
+      // {{path}} is filled from the flow's variables, as FLOW parameters are (paths, not expressions), so a generic step
+      // can take e.g. its `complete` shapes from the calling flow; a step without templates is passed exactly as before.
       if (step.digits && engine.cargo) {
-        engine.cargo.digits = step.digits;
+        engine.cargo.digits = JSON.stringify(step.digits).includes('{{')
+          ? interpolateObject(step.digits, { ...currentFlowFrame.variables, ...getEngineSessionVariables(engine, currentFlowFrame.contextStack) }, {}, engine)
+          : step.digits;
         logger.info(`SAY-GET step exposed digits setting to cargo: ${JSON.stringify(step.digits)}`);
       }
 

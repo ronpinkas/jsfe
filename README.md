@@ -549,7 +549,11 @@ Two cargo fields connect the engine to a voice channel:
   `rpinkas@…` is kept as said. If the cleanup fails or returns nothing, the raw answer is used.
 - **`cargo.digits`** (set by the engine): when a `SAY-GET` step declares `digits` (for example
   `{ "min": 6, "max": 6 }`), the engine copies it to `cargo.digits` while the answer is awaited, so
-  the host can configure keypad (DTMF) collection. It is removed once the input is collected.
+  the host can configure keypad (DTMF) collection. It is removed once the input is collected. A string value
+  holding a `{{path}}` is filled from the flow's variables, as FLOW parameters are (a path, not an expression;
+  an unknown path gives `''`), so a generic step can take its keypad settings from the calling flow
+  (`"complete": "{{shapes}}"`); a step without templates is passed exactly as declared (jsfe ≥ 1.3.4). Keys the
+  engine does not read are passed to the host unchanged.
   On voice, `digits` also shapes how the answer is stored: an answer whose digit count fits the range is
   stored as its digits, taken as heard and never sent to the voice cleaner ("es 41 34 18…" → `413418…`). On a
   one-key question (`max: 1`) only an answer that is exactly one key (a digit, `*` or `#`, punctuation aside)
