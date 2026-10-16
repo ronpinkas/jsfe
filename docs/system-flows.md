@@ -517,16 +517,16 @@ graph TD
 ---
 
 ## ValidateOtpCode
-**ID**: `validate-otp-code` · **Version**: 1.1.10 · **Sub-flow**  
+**ID**: `validate-otp-code` · **Version**: 1.1.11 · **Sub-flow**  
 **Description**: Validate OTP code entered by user; sets `cargo.otpVerified` on success. Capped at 3 wrong codes per authentication (`cargo.otpMismatches`, reset by authenticate-user): the code is withdrawn and the retry/agent/exit choice follows, where retry sends a fresh code. Also capped at 3 answers with digits but not 6 (`cargo.otpFormatMisses`, reset by authenticate-user): the same choice follows, without withdrawing the code.
 
 Reads `normalized_otp_code` and `user_choice` from `get-and-validate-otp-code`. An expired or missing code is answered with a fresh one (via `resend-otp-code`), not with "didn't match".
 
 ### Variables
-`otp_validation_result` (boolean), `invite_text` (WhatsApp invite wording for this session's language; empty means the feature is off), `whatsapp_invite_sent` (initial `false`; true only if an invite was actually sent).
+`otp_validation_result` (boolean), `invite_text` (WhatsApp invite wording for this session's language; empty means the feature is off), `whatsapp_invite_sent` (true only if an invite was sent on this answer). The flow is entered by `replace`, which does not apply declared defaults, so step 0 sets both flags itself.
 
 ### Steps
-0. `reset_no_code_given` (SET) - `no_code_given = false` on every answer, so a right code after a non-answer is not explained again.
+0. `reset_no_code_given`, `reset_whatsapp_invite_sent` (SET) - `no_code_given = false` and `whatsapp_invite_sent = false` on every answer, so a right code after a non-answer is not explained again and the invite is mentioned only on the answer that sent it.
 1. `validate_otp_and_lookup` (CASE, first match wins; `another_account_check` before it sets `wants_other_account` when the caller ID was used without asking and the answer is "another account" / "otra cuenta" / "different number"…):
    - `wants_other_account` → FLOW `authenticate-user` (`replace`) with `retrying: true, declined_caller: true`: the contact question again, without the caller ID.
    - `normalized_otp_code.length === 6` → CALL-TOOL [`validate-otp`](#validate-otp) `{otp: normalized_otp_code, container: cargo}` into `otp_validation_result`. `onFail` → FLOW `get-and-validate-otp-code` (`replace`).

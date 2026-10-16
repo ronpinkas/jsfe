@@ -1223,7 +1223,7 @@
   {
     "id": "validate-otp-code",
     "name": "ValidateOtpCode",
-    "version": "1.1.10",
+    "version": "1.1.11",
     "description": "Worker: validate the one-time code the customer enters; sets cargo.otpVerified on success.",
     "variables": {
       "otp_validation_result": {
@@ -1253,6 +1253,12 @@
         "id": "reset_no_code_given",
         "type": "SET",
         "variable": "no_code_given",
+        "value": "false"
+      },
+      {
+        "id": "reset_whatsapp_invite_sent",
+        "type": "SET",
+        "variable": "whatsapp_invite_sent",
         "value": "false"
       },
       {
@@ -1394,7 +1400,7 @@
             "id": "no_digits_explain",
             "type": "SAY",
             "value": "Let me explain. I sent you a message with a six-digit code in it. Read those six digits back to me. You can also {{cargo.verb}} AGENT to reach a person, or EXIT to cancel.",
-            "value_es": "Le explico. Le envié un mensaje con un código de seis dígitos. Dígame esos seis dígitos. También puede {{cargo.verb_es}} AGENTE para hablar con una persona, o SALIR para cancelar."
+            "value_es": "Le explico. Le envié un mensaje con un código de seis dígitos. Dígame esos seis dígitos. También puede {{cargo.voice ? 'decir' : 'escribir'}} AGENTE para hablar con una persona, o SALIR para cancelar."
           },
           "default": {
             "id": "no_explanation_needed",
@@ -1570,7 +1576,7 @@
             "variable": "skip",
             "value": "true"
           },
-          "condition: typeof whatsapp_invite_sent !== 'undefined' && whatsapp_invite_sent": {
+          "condition: whatsapp_invite_sent": {
             "id": "say_whatsapp_invite",
             "type": "SAY",
             "value": "I texted you a WhatsApp link so you can try again on WhatsApp to help overcome voice limitations.",
