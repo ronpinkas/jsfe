@@ -3663,8 +3663,8 @@
   {
     "id": "ask-field",
     "name": "AskField",
-    "version": "1.2.2",
-    "description": "Worker: one card field, kind 'card' | 'exp' | 'cvv' | 'zip'. Sets cargo.field and cargo.fieldOutcome ('ok' | 'link' | 'failed'); the answer is erased from cargo.choiceText once read.",
+    "version": "1.2.3",
+    "description": "Worker: one card field, kind 'card' | 'exp' | 'cvv' | 'zip'. Sets cargo.field and cargo.fieldOutcome ('ok' | 'link' | 'failed'); the answer is erased from cargo.choiceText once read. Two tries; the card number gets a third when its second answer was another card entry (12 or more digits). On voice the card number's keypad completes by shape (digits.complete, by first digit).",
     "parameters": [
       {
         "name": "kind",
@@ -3724,6 +3724,10 @@
         "type": "string",
         "value": ""
       },
+      "af_reentry": {
+        "type": "boolean",
+        "value": false
+      },
       "af_next_attempt": {
         "type": "string",
         "value": ""
@@ -3752,7 +3756,7 @@
         "id": "af_keypad",
         "type": "SET",
         "variable": "af_digits",
-        "value": "({ card: { min: 13, max: 19 }, exp: { min: 3, max: 6 }, cvv: { min: 3, max: 4 }, zip: { min: 5, max: 5 } })[kind] || null"
+        "value": "({ card: { min: 13, max: 19, complete: [{ first: '4', lengths: [16, 19] }, { first: '25', lengths: [16] }, { first: '3', lengths: [15] }, { first: '6', lengths: [16, 19] }] }, exp: { min: 3, max: 6 }, cvv: { min: 3, max: 4 }, zip: { min: 5, max: 5 } })[kind] || null"
       },
       {
         "id": "af_ask",
@@ -3787,6 +3791,12 @@
         "value": "cargo.choice === 'link' ? '' : (function() { var d = String(cargo.choiceText || '').replace(/[^0-9]/g, ''); if (kind === 'card') { return validateCardNumber(d) ? d : ''; } if (kind === 'exp') { if (d.length === 6 && /^(0[1-9]|1[0-2])20\\d\\d$/.test(d)) { d = d.slice(0, 2) + d.slice(4); } else if (d.length === 5 && /^[1-9]20\\d\\d$/.test(d)) { d = '0' + d.charAt(0) + d.slice(3); } var mm = d.length === 3 ? '0' + d.charAt(0) : d.slice(0, 2), yy = d.length === 3 ? d.slice(1) : d.slice(2, 4); return (d.length === 3 || d.length === 4) && parseInt(mm, 10) >= 1 && parseInt(mm, 10) <= 12 && validateExpiration(mm, yy) ? mm + yy : ''; } if (kind === 'cvv') { return /^\\d{3,4}$/.test(d) ? d : ''; } if (kind === 'zip') { return /^\\d{5}$/.test(d) ? d : ''; } return ''; })()"
       },
       {
+        "id": "af_reentry_check",
+        "type": "SET",
+        "variable": "af_reentry",
+        "value": "kind === 'card' && cargo.choice !== 'link' && String(cargo.choiceText || '').replace(/[^0-9]/g, '').length >= 12"
+      },
+      {
         "id": "af_forget_answer",
         "type": "SET",
         "variable": "assignment_side_effect",
@@ -3814,7 +3824,7 @@
             "variable": "assignment_side_effect",
             "value": "(cargo.field = af_value, cargo.fieldOutcome = 'ok', true)"
           },
-          "condition: af_n < 1": {
+          "condition: af_n < 1 || (af_n < 2 && af_reentry)": {
             "id": "af_again",
             "type": "FLOW",
             "value": "ask-field",

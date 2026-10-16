@@ -107,9 +107,9 @@ Everything below is read from the JSON. Where a flow's `description` text and it
 | `cargo.sensitive` | written by card-entry; read by ask-choice | paths inside the cargo (`['field', 'payMethod.card']`) that hold card data. When an ask-choice answer leaves through AGENT, EXIT or `DISPATCH`, each path is set to `null` first. card-entry does not clear the list |
 | `cargo.email` | written by ask-email; read by its callers | the address ask-email collected, `''` when none. Not the OTP destination (`cargo.otp_email`) |
 | `cargo.address` | written by ask-address; read by its callers | `{ line, street, said, verified }` once the caller confirmed the address; `null` otherwise |
-| `cargo.field` / `cargo.fieldOutcome` | written by ask-field; read by card-entry | the validated value (`''` unless ok) and `'ok'`, `'link'` (the caller asked for a payment link) or `'failed'` (invalid twice) |
+| `cargo.field` / `cargo.fieldOutcome` | written by ask-field; read by card-entry | the validated value (`''` unless ok) and `'ok'`, `'link'` (the caller asked for a payment link) or `'failed'` (invalid twice; the card number three times when its second answer was another card entry) |
 | `cargo.payMethod` | written by card-entry; read by its callers | `{ kind: 'card', card: { cardNumber, expirationMonth, expirationYear, cvv, zip }, save, label, label_es }` when all four fields were collected. card-entry does not clear it at the start |
-| `cargo.payNext` | written by card-entry; read by its callers | `'link'` when the caller asked for a payment link at a card field, `'card_failed'` when a field failed twice. Not written when the card was collected, and not cleared at the start |
+| `cargo.payNext` | written by card-entry; read by its callers | `'link'` when the caller asked for a payment link at a card field, `'card_failed'` when a field failed (ask-field's `'failed'`). Not written when the card was collected, and not cleared at the start |
 
 **Global variables** (tenant-level, optional): `global_whatsapp_invite` / `global_whatsapp_invite_es` (validate-otp-code; empty or absent = the WhatsApp invite is off), `global_live_agents_comment` / `global_live_agents_comment_es` (live-agent-requested: on non-phone channels, and on the phone when the number's schedule gives no hours).
 
@@ -1281,10 +1281,10 @@ graph TD
 ---
 
 ## AskField
-**ID**: `ask-field` · **Version**: 1.2.2 · **Sub-flow** · **Scope**: isolated  
-**Description**: Worker: one card field, kind `card` (13 to 19 digits, checksum), `exp` (MMYY, not expired), `cvv` (3 to 4 digits) or `zip` (5 digits). One re-ask with the error; LINK switches to a payment link. Sets `cargo.field` (the value) and `cargo.fieldOutcome` (`'ok'`, `'link'` or `'failed'`). The answer is erased from `cargo.choiceText` as soon as it is read.
+**ID**: `ask-field` · **Version**: 1.2.3 · **Sub-flow** · **Scope**: isolated  
+**Description**: Worker: one card field, kind `card` (checksum), `exp` (MMYY, not expired), `cvv` (3 to 4 digits) or `zip` (5 digits). One re-ask with the error, and for `card` a second one when the second answer was another card entry (12 or more digits); LINK switches to a payment link. Sets `cargo.field` (the value) and `cargo.fieldOutcome` (`'ok'`, `'link'` or `'failed'`). The answer is erased from `cargo.choiceText` as soon as it is read.
 
-The card check is the host's `validateCardNumber`, which accepts 12 to 19 digits; the description's 13 is the lower keypad bound only.
+The card check is the host's `validateCardNumber`, which accepts 12 to 19 digits; the keypad bounds and shapes below decide when the voice relay submits a number, and which voice answers the engine takes as heard (13 to 19 digits).
 
 ### Parameters
 *   `kind` (string, required): `'card'`, `'exp'`, `'cvv'` or `'zip'`.
@@ -1293,25 +1293,26 @@ The card check is the host's `validateCardNumber`, which accepts 12 to 19 digits
 *   `attempt` (string, internal): the attempt number, passed by the flow's own re-ask.
 
 ### Variables
-`af_n`, `af_q`, `af_q_es`, `af_digits` (keypad bounds), `af_value`, `af_next_attempt`.
+`af_n`, `af_q`, `af_q_es`, `af_digits` (keypad bounds and shapes), `af_value`, `af_reentry`, `af_next_attempt`.
 
 Its free-text questions pass ask-choice `expect: `number``, so a new request there is `DISPATCH`ed, not counted as a failed try.
 
 ### Steps
 1. `af_attempt` (SET) - `cargo.field = ''`; `af_n` = `attempt`, else 0.
 2. `af_question` / `af_question_es` (SET) - on a re-ask, `error` / `error_es` first, then the question; on voice, except for `exp`, "When entering on the keypad, press the pound key when you are done." / "Si usa el teclado, presione la tecla de numeral al terminar.".
-3. `af_keypad` (SET) - `af_digits` by kind: card `{13, 19}`, exp `{3, 6}`, cvv `{3, 4}`, zip `{5, 5}`.
+3. `af_keypad` (SET) - `af_digits` by kind: card `{13, 19}` with `complete` shapes, exp `{3, 6}`, cvv `{3, 4}`, zip `{5, 5}`. The card shapes, by first digit: `4` (Visa) 16 or 19, `2` and `5` (Mastercard) 16, `3` 15 (American Express), `6` (Discover) 16 or 19. The voice relay submits a number as soon as it is complete and no shape can grow (a Mastercard at 16, an American Express at 15, a Visa at 19); when it is complete but could grow (a Visa or Discover at 16), keyed digits are submitted after the relay's keypad pause (the step sets no `autoSubmitMs`, so the relay's default) and spoken digits at once; a number that is not complete waits for more digits, `#` or `*` (a caller who stops hears the idle prompt), so a 14-digit fragment of a 16-digit card is never submitted. A number of no listed shape (a 14-digit Diners Club card, a stray leading `1`) needs `#`; a 16-digit card starting with `3` (JCB) is submitted at 15 when keyed, and fails the check.
 4. `af_ask` (FLOW [`ask-choice`](#askchoice), `call`) - choice `link` (link, enlace, payment link, enlace de pago), `accept_other: true`, `digits: af_digits`, exit context "payment" / "pago".
 5. `af_read` (SET) - `''` when the choice was `link`. Otherwise the answer's digits, checked by kind:
    - `card`: `validateCardNumber(digits)`.
    - `exp`: MMYYYY with a `20` year and MYYYY are first shortened to MMYY; a 3-digit answer is MYY. The month must be 01 to 12 and `validateExpiration(mm, yy)` must pass. The value is MMYY.
    - `cvv`: 3 or 4 digits. `zip`: 5 digits.
-6. `af_forget_answer` (SET, side effect) - `cargo.choiceText = ''`.
-7. `af_next` (SET) - `af_next_attempt = String(af_n + 1)`.
-8. `af_route` (CASE, first match wins):
+6. `af_reentry_check` (SET) - `af_reentry`: `kind` is `card`, the choice was not `link`, and the answer holds 12 or more digits (everything else in it ignored).
+7. `af_forget_answer` (SET, side effect) - `cargo.choiceText = ''`.
+8. `af_next` (SET) - `af_next_attempt = String(af_n + 1)`.
+9. `af_route` (CASE, first match wins):
    - `link` → `cargo.field = ''`, `cargo.fieldOutcome = 'link'`.
    - a valid value → `cargo.field = af_value`, `cargo.fieldOutcome = 'ok'`.
-   - first attempt → FLOW `ask-field` (`replace`) with `kind`, `question`, `question_es`, `error`, `error_es` and the next `attempt`.
+   - first attempt, or second attempt with `af_reentry` → FLOW `ask-field` (`replace`) with `kind`, `question`, `question_es`, `error`, `error_es` and the next `attempt`. So every field has two tries, and the card number three when its second answer was another card entry; a refusal, words or a short number there ends it after two.
    - default → `cargo.field = ''`, `cargo.fieldOutcome = 'failed'`.
 
 ### Ends
@@ -1325,12 +1326,13 @@ graph TD
     af_question --> af_keypad[SET: keypad bounds by kind]
     af_keypad --> af_ask[FLOW call: ask-choice, LINK or any answer]
     af_ask --> af_read[SET: af_value, checked by kind]
-    af_read --> af_forget["SET: cargo.choiceText = ''"]
+    af_read --> af_reentry["SET: af_reentry (card, 12+ digits)"]
+    af_reentry --> af_forget["SET: cargo.choiceText = ''"]
     af_forget --> af_route{result}
     af_route -->|LINK| af_link["SET: cargo.fieldOutcome = 'link'"]
     af_route -->|valid| af_ok["SET: cargo.field, cargo.fieldOutcome = 'ok'"]
-    af_route -->|invalid, first attempt| af_again[FLOW replace: ask-field + error]
-    af_route -->|invalid, second attempt| af_failed["SET: cargo.fieldOutcome = 'failed'"]
+    af_route -->|invalid: first attempt, or second with af_reentry| af_again[FLOW replace: ask-field + error]
+    af_route -->|invalid, otherwise| af_failed["SET: cargo.fieldOutcome = 'failed'"]
     af_link --> stop((Return to caller))
     af_ok --> stop
     af_failed --> stop
