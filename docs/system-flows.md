@@ -1045,7 +1045,9 @@ Declared: `ac_answer`, `ac_key`, `ac_other`, `ac_q_es`, `ac_retry`, `ac_retry_es
 
 **Strict words: the whole answer.** A choice's keys (one digit, `*` or `#`), its YES words, and on an `exact` choice every one of its words, pick it only as the whole answer, courtesy aside. Courtesy: please, por favor, thanks, thank you, thank you so much, thanks a lot, gracias, muchas gracias, um, umm, uh, uhm, hmm, oh, ah, well, so, like, este, pues, ma'am, madam, sir, miss, señor, señora, señorita, mija, mijo.
 - A non-key strict word picks when the answer is nothing but that choice's strict words and filler, at least one strict word. Filler is courtesy; on an `exact` choice it is also the **acknowledgements** (ok, okay, okey, está bien, bueno, fine, that's fine, alright, all right, perfect, perfecto, sounds good, great, excelente, muy bien), and on an `exact` choice not keyed `yes` also the confirm words and the articles and possessives "the", "my", "el", "la", "mi". So "Yeah, sure, thank you", "Sí, claro, por favor", "Sí, está bien" and "Yes, okay" are YES at an `exact` YES, while "ok" or "está bien" alone is not; "Yes, full balance", "Yes, the full balance", "okay, saldo completo" and "Sí, el saldo completo" pick an `exact` choice whose words are "full balance" / "saldo completo", while "the" or "yes the" alone picks nothing; "yes, pay it" is YES only where "pay it" is a word of that same choice.
+- On an `exact` choice an answer containing "?" or "¿" never picks it ("sure?", "1?"): a question is not a confirmation. Elsewhere "yes?" is still YES.
 - A key picks when the answer is exactly the key (surrounding spaces and punctuation trimmed), or holds the key once with nothing else but courtesy and, except for the NO-type choice's key, general YES words ("1 please", "um, 2", "yes 1", "sí, 1", "ok 1"). "yes 2", where 2 is the NO-type key, picks nothing. Any other word blocks the key ("no 1", "1 or 2", "I paid 1 already", "1 1").
+- A key said as a word is that key under the same rules: zero/cero … nine/nueve in English and Spanish ("dos", "two", "uno, por favor", "sí, uno"), never inside a sentence ("quiero pagar dos" picks nothing).
 - An answer that names an amount (`isAmountAnswer`: a `$`, dollar(s) / dólar(es) / buck(s) / cent(s) / centavo(s), or a number with one or two decimals after `.` or `,`) never matches a word that is all digits, so "$1" never picks key `1`, and `0` with an amount is not AGENT.
 
 **Other words: inside the answer.** On a choice that is not `exact`, a word that is not strict (named actions: LINK, RECEIPT, "keep it") matches inside a longer answer:
@@ -1126,7 +1128,7 @@ graph TD
 
 ### Known gaps
 - **A key beside a general YES word confirms an `exact` choice.** The key rule allows the general YES words around a key, not only confirm words: "ok 1", "bueno, 1", "está bien 1" and "continue 1" pick an `exact` choice keyed `1`, where "continue" alone would not.
-- **Question-like confirm words.** `CONFIRM_WORDS` leaves out "right", "seguro", "exactly" and "así es" because speech-to-text drops the "?" of a question, but keeps "sure", "claro", "correct" and "that's right", which can be questions the same way. A typed "sure?" also confirms, since punctuation is stripped.
+- **Question-like confirm words.** `CONFIRM_WORDS` leaves out "right", "seguro", "exactly" and "así es" because speech-to-text drops the "?" of a question, but keeps "sure", "claro", "correct" and "that's right", which can be questions the same way. A typed "sure?" no longer confirms an `exact` choice (the "?" rule above); a spoken one whose "?" speech-to-text dropped still does.
 
 ---
 
