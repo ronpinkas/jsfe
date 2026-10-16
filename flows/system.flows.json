@@ -238,7 +238,7 @@
   {
     "id": "authenticate-user",
     "name": "AuthenticateUser",
-    "version": "1.5.5",
+    "version": "1.5.7",
     "description": "Generic flow to authenticate user via OTP sent to cell or email",
     "parameters": [
       {
@@ -314,7 +314,7 @@
         "id": "remember_declined_caller",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(function() { if (typeof declined_caller !== 'undefined' && (declined_caller === true || declined_caller === 'true')) { cargo.callerDeclined = true; cargo.callerPreselected = false; cargo.otpHash = null; } else { /* the caller did not ask for another account */ } return true; })()"
+        "value": "(function() { if (typeof declined_caller !== 'undefined' && (declined_caller === true || declined_caller === 'true')) { cargo.callerDeclined = true; cargo.callerPreselected = false; cargo.otpHash = null; cargo.contactIntroSkip = true; if (cargo.callerNamed) { cargo.displayName = ''; cargo.displayNameSetBy = 'flow'; cargo.callerNamed = false; } else { /* no name from the caller ID */ } } else { /* the caller did not ask for another account */ } return true; })()"
       },
       {
         "id": "check_already_verified",
@@ -591,8 +591,8 @@
   {
     "id": "get-cell-or-email",
     "name": "GetCellOrEmail",
-    "version": "1.3.0",
-    "description": "Prompt user to provide either their cell phone number or email address for account lookup. Optional: account_pattern / account_name(_es) also accept the tenant's account number (sets acct_number); intro(_es) leads the question; retry_call_type is passed to the retry menu. Records cargo.contactKind ('caller' | 'phone' | 'email' | 'account') and cargo.contactValue.",
+    "version": "1.5.1",
+    "description": "Prompt user to provide either their cell phone number or email address for account lookup. Optional: account_pattern / account_name(_es) also accept the tenant's account number (sets acct_number); intro(_es) leads the question; retry_call_type is passed to the retry menu. Records cargo.contactKind ('caller' | 'phone' | 'email' | 'account') and cargo.contactValue. Optional validate_flow: a tenant flow called with the phone or email just given (cargo.contactKind / contactValue) that sets cargo.contactCheck; 'none' (no account for it) asks again at once, before any code is sent, and the third rejection in a row goes to the retry menu. Any other answer, or none, proceeds as before. With caller_on_file 'no' the caller ID is never used: not offered, not taken from YES, and not the fallback for an unclear answer. On voice, the keypad completes by shape (digits.complete: the phone shapes plus account_shape): a number is submitted when it is complete (after the 3 s pause when it could still grow) and waits otherwise; a caller who stops hears the idle prompt. After ANOTHER ACCOUNT (authenticate-user sets cargo.contactIntroSkip), the next question is asked without the intro, once: the caller has already heard it.",
     "parameters": [
       {
         "name": "retry_flow",
@@ -644,6 +644,24 @@
         "name": "caller_on_file",
         "type": "string",
         "description": "'yes': the tenant found an account for the caller ID, so the caller ID is used without asking (the code question then offers ANOTHER ACCOUNT); 'no': the caller-ID option is not offered; empty: ask as before."
+      },
+      {
+        "name": "validate_flow",
+        "type": "string",
+        "description": "Optional tenant flow that checks the given phone or email before any code is sent: sets cargo.contactCheck to 'none' (no account), anything else proceeds",
+        "required": false
+      },
+      {
+        "name": "gce_rejected",
+        "type": "boolean",
+        "description": "Internal: set when the flow asks again after validate_flow rejected the answer",
+        "required": false
+      },
+      {
+        "name": "account_shape",
+        "type": "array",
+        "description": "Optional, with account_pattern: the tenant's account number as keypad shapes for the relay ([{ first: '5', lengths: [7, 8] }]), added to the phone shapes so a keyed number is submitted when it is complete",
+        "required": false
       }
     ],
     "variables": {
@@ -723,19 +741,43 @@
         "id": "gce_lead",
         "type": "SET",
         "variable": "gce_intro",
-        "value": "typeof intro !== 'undefined' && intro ? intro + ' ' : ''"
+        "value": "cargo.contactIntroSkip ? '' : (typeof intro !== 'undefined' && intro ? intro + ' ' : '')"
       },
       {
         "id": "gce_lead_es",
         "type": "SET",
         "variable": "gce_intro_es",
-        "value": "typeof intro_es !== 'undefined' && intro_es ? intro_es + ' ' : gce_intro"
+        "value": "cargo.contactIntroSkip ? '' : (typeof intro_es !== 'undefined' && intro_es ? intro_es + ' ' : gce_intro)"
       },
       {
         "id": "gce_retry_call_type",
         "type": "SET",
         "variable": "gce_retry_type",
         "value": "typeof retry_call_type !== 'undefined' && retry_call_type ? retry_call_type : 'reboot'"
+      },
+      {
+        "id": "gce_caller_allowed",
+        "type": "SET",
+        "variable": "gce_caller_ok",
+        "value": "!!cargo.callerId && !callerIsInternational(cargo) && !(typeof caller_on_file !== 'undefined' && caller_on_file === 'no')"
+      },
+      {
+        "id": "gce_take_validator",
+        "type": "SET",
+        "variable": "gce_validator",
+        "value": "typeof validate_flow !== 'undefined' && validate_flow ? String(validate_flow) : ''"
+      },
+      {
+        "id": "gce_rejections_start",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "typeof gce_rejected !== 'undefined' && gce_rejected ? true : (cargo.gceRejects = 0, true)"
+      },
+      {
+        "id": "gce_keypad_shapes",
+        "type": "SET",
+        "variable": "gce_shapes",
+        "value": "[{ first: '23456789', lengths: [10] }, { first: '1', lengths: [11] }].concat(typeof account_shape !== 'undefined' && Array.isArray(account_shape) ? account_shape : [])"
       },
       {
         "id": "ask_cell_or_email_if_no_param",
@@ -759,7 +801,8 @@
               "autoSubmitChars": [
                 "1"
               ],
-              "autoSubmitMs": 2500
+              "autoSubmitMs": 3000,
+              "complete": "{{gce_shapes}}"
             }
           },
           "condition: !cell_number && !email && !acct_number": {
@@ -770,7 +813,9 @@
             "value_es": "{{gce_intro_es}}Por favor {{cargo.verb_es}} {{cargo.voice ? 'o ingrese' : ''}} el teléfono o correo electrónico asociado con su cuenta{{gce_or_es}}{{cargo.voice ? ' seguido de la tecla numeral si se ingresó usando el teclado de marcación' : ''}}. Para salir en cualquier momento, puede {{cargo.voice ? 'presionar la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
             "digits": {
               "min": 7,
-              "max": 12
+              "max": 12,
+              "autoSubmitMs": 3000,
+              "complete": "{{gce_shapes}}"
             }
           },
           "default": {
@@ -780,6 +825,12 @@
             "value": "acct_number || cell_number || email"
           }
         }
+      },
+      {
+        "id": "gce_intro_used",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(cargo.contactIntroSkip = false, true)"
       },
       {
         "id": "gce_mark_caller_preselected",
@@ -827,7 +878,7 @@
             "variable": "email",
             "value": "prospective_email"
           },
-          "condition: cargo.callerId && !callerIsInternational(cargo) && (cell_or_email === '1' || (isAnswer(cell_or_email, 'yes', ['thanks', 'thank you', 'gracias']) && !/[0-9@]/.test(cell_or_email)) || matchesChoice(cell_or_email, ['phone', 'cell', 'caller id', 'number', 'numero', 'número', 'telefono', 'teléfono', 'celular', 'identificador de llamadas']))": {
+          "condition: gce_caller_ok && (cell_or_email === '1' || (isAnswer(cell_or_email, 'yes', ['thanks', 'thank you', 'gracias']) && !/[0-9@]/.test(cell_or_email)) || matchesChoice(cell_or_email, ['phone', 'cell', 'caller id', 'number', 'numero', 'número', 'telefono', 'teléfono', 'celular', 'identificador de llamadas']))": {
             "id": "use_caller_id",
             "type": "SET",
             "variable": "cell_number",
@@ -859,7 +910,7 @@
             "value": "live-agent-requested",
             "callType": "reboot"
           },
-          "condition: cargo.callerId && !callerIsInternational(cargo) && prospective_cell_number && ! validatePhone(prospective_cell_number)": {
+          "condition: gce_caller_ok && prospective_cell_number && ! validatePhone(prospective_cell_number)": {
             "id": "fallback_to_caller_id_invalid_phone",
             "type": "SET",
             "variable": "cell_number",
@@ -879,7 +930,7 @@
               "retry_call_type": "{{gce_retry_type}}"
             }
           },
-          "condition: cargo.callerId && !callerIsInternational(cargo)": {
+          "condition: gce_caller_ok": {
             "id": "fallback_to_caller_id_unrecognized",
             "type": "SET",
             "variable": "cell_number",
@@ -912,14 +963,117 @@
         "type": "SET",
         "variable": "assignment_side_effect",
         "value": "(cargo.contactKind = acct_number ? 'account' : (email ? 'email' : (cell_number ? (String(cell_number).replace(/\\D/g, '').slice(-10) === String(cargo.callerId || '').replace(/\\D/g, '').slice(-10) ? 'caller' : 'phone') : '')), cargo.contactValue = String(acct_number || email || cell_number || ''), true)"
+      },
+      {
+        "id": "gce_validate",
+        "type": "CASE",
+        "branches": {
+          "condition: gce_validator && ['phone', 'email', 'caller'].indexOf(cargo.contactKind) > -1 && !cargo.callerPreselected": {
+            "id": "gce_run_validator",
+            "type": "FLOW",
+            "value": "{{gce_validator}}",
+            "callType": "call"
+          },
+          "default": {
+            "id": "gce_not_validated",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.contactCheck = '', true)"
+          }
+        }
+      },
+      {
+        "id": "gce_count_rejection",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.contactCheck === 'none' ? (cargo.gceRejects = (cargo.gceRejects || 0) + 1, true) : (cargo.gceRejects = 0, true)"
+      },
+      {
+        "id": "gce_reject_intro",
+        "type": "SET",
+        "variable": "gce_reject_intro",
+        "value": "cargo.contactKind === 'email' ? 'I could not find an account with that email.' : (cargo.contactKind === 'caller' ? 'I could not find an account with the number you are calling from.' : 'I could not find an account with that phone number.')"
+      },
+      {
+        "id": "gce_reject_intro_es",
+        "type": "SET",
+        "variable": "gce_reject_intro_es",
+        "value": "cargo.contactKind === 'email' ? 'No encontré una cuenta con ese correo.' : (cargo.contactKind === 'caller' ? 'No encontré una cuenta con el número desde el que llama.' : 'No encontré una cuenta con ese número de teléfono.')"
+      },
+      {
+        "id": "gce_reject_caller_option",
+        "type": "SET",
+        "variable": "gce_again_caller",
+        "value": "cargo.contactKind === 'caller' || (typeof caller_on_file !== 'undefined' && caller_on_file === 'no') ? 'no' : ''"
+      },
+      {
+        "id": "gce_reject_error",
+        "type": "SET",
+        "variable": "gce_reject_error",
+        "value": "cargo.contactKind === 'email' ? 'I could not find an account with that email.' : 'I could not find an account with that phone number.'"
+      },
+      {
+        "id": "gce_reject_error_es",
+        "type": "SET",
+        "variable": "gce_reject_error_es",
+        "value": "cargo.contactKind === 'email' ? 'No encontré una cuenta con ese correo.' : 'No encontré una cuenta con ese número de teléfono.'"
+      },
+      {
+        "id": "gce_rejected_route",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.contactCheck === 'none' && cargo.gceRejects <= 2": {
+            "id": "gce_ask_again",
+            "type": "FLOW",
+            "value": "get-cell-or-email",
+            "callType": "replace",
+            "parameters": {
+              "retry_flow": "{{retry_flow}}",
+              "cancel_flow": "{{cancel_flow}}",
+              "account_pattern": "{{account_pattern}}",
+              "account_name": "{{account_name}}",
+              "account_name_es": "{{account_name_es}}",
+              "retry_call_type": "{{retry_call_type}}",
+              "validate_flow": "{{validate_flow}}",
+              "cell_number": "",
+              "email": "",
+              "acct_number": "",
+              "gce_rejected": true,
+              "caller_on_file": "{{gce_again_caller}}",
+              "intro": "{{gce_reject_intro}}",
+              "intro_es": "{{gce_reject_intro_es}}",
+              "account_shape": "{{account_shape}}"
+            }
+          },
+          "condition: cargo.contactCheck === 'none'": {
+            "id": "gce_rejected_too_often",
+            "type": "FLOW",
+            "value": "generic-retry-with-options",
+            "callType": "replace",
+            "parameters": {
+              "error_message": "{{gce_reject_error}}",
+              "error_message_es": "{{gce_reject_error_es}}",
+              "retry_flow": "{{retry_flow}}",
+              "cancel_flow": "{{cancel_flow}}",
+              "capture_patterns": "{{cargo.authCapture}}",
+              "retry_call_type": "{{gce_retry_type}}"
+            }
+          },
+          "default": {
+            "id": "gce_accepted",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
       }
     ]
   },
   {
     "id": "get-and-validate-otp-code",
     "name": "GetAndValidateOtpCode",
-    "version": "1.0.5",
-    "description": "Get and validate OTP code from user",
+    "version": "1.0.6",
+    "description": "Get and validate OTP code from user When the code went to the caller ID and the tenant named the caller from it (cargo.callerNamed), the question leads with the first name.",
     "variables": {
       "otp_code": {
         "type": "string",
@@ -976,8 +1130,8 @@
         "id": "get_otp_from_user",
         "type": "SAY-GET",
         "variable": "otp_code",
-        "value": "Please {{cargo.verb}} {{cargo.voice ? 'or enter ' : ''}}the 6-digit verification code {{otp_where}}. You can also {{cargo.voice ? 'press * or ' : ''}}{{cargo.verb}} EXIT to cancel.{{cargo.callerPreselected ? ' To use another account, ' + cargo.verb + ' ANOTHER ACCOUNT.' : ''}}",
-        "value_es": "Por favor {{cargo.verb_es}} {{cargo.voice ? 'o ingrese ' : ''}}el código de verificación de 6 dígitos {{otp_where_es}}. También puede {{cargo.voice ? 'presionar * o decir' : 'escribir'}} SALIR para cancelar.{{cargo.callerPreselected ? ' Para usar otra cuenta, ' + cargo.verb_es + ' OTRA CUENTA.' : ''}}",
+        "value": "{{cargo.callerPreselected && cargo.callerNamed && cargo.displayName ? cargo.displayName + ', please' : 'Please'}} {{cargo.verb}} {{cargo.voice ? 'or enter ' : ''}}the 6-digit verification code {{otp_where}}. You can also {{cargo.voice ? 'press * or ' : ''}}{{cargo.verb}} EXIT to cancel.{{cargo.callerPreselected ? ' To use another account, ' + cargo.verb + ' ANOTHER ACCOUNT.' : ''}}",
+        "value_es": "{{cargo.callerPreselected && cargo.callerNamed && cargo.displayName ? cargo.displayName + ', por favor' : 'Por favor'}} {{cargo.verb_es}} {{cargo.voice ? 'o ingrese ' : ''}}el código de verificación de 6 dígitos {{otp_where_es}}. También puede {{cargo.voice ? 'presionar * o decir' : 'escribir'}} SALIR para cancelar.{{cargo.callerPreselected ? ' Para usar otra cuenta, ' + cargo.verb_es + ' OTRA CUENTA.' : ''}}",
         "digits": {
           "min": 6,
           "max": 6
@@ -2331,8 +2485,8 @@
   {
     "id": "ask-choice",
     "name": "AskChoice",
-    "version": "1.9.4",
-    "description": "Worker: ask one question; sets cargo.choice (the matched key, or 'other' with accept_other) and cargo.choiceText. AGENT / 0 reaches a person, EXIT / * ends, a new request is DISPATCHed. With amount: an answer naming an amount returns 'amount'. Params: question(_es), choices [{key, words, negative?, neutral?}], retry(_es), accept_other, expect ('number' | 'email' | 'contact'), amount, digits, exit_context(_es).",
+    "version": "1.10.0",
+    "description": "Worker: ask one question; sets cargo.choice (the matched key, or 'other' with accept_other) and cargo.choiceText. AGENT / 0 reaches a person, EXIT / * ends, a new request is DISPATCHed. With amount: an answer naming an amount returns 'amount' — one marked as money ($, dollars, cents, decimals), or, when it matched no choice, any answer amountInAnswer reads as one (\"109 con 47\"), except a lone digit, which is a key press. Params: question(_es), choices [{key, words, negative?, neutral?}], retry(_es), accept_other, expect ('number' | 'email' | 'contact'), amount, digits, exit_context(_es).",
     "parameters": [
       {
         "name": "question",
@@ -2546,7 +2700,7 @@
         "id": "ac_amount_check",
         "type": "SET",
         "variable": "ac_key",
-        "value": "ac_amount && isAmountAnswer(ac_answer) ? '__amount' : ac_key"
+        "value": "ac_amount && (isAmountAnswer(ac_answer) || (ac_key === '' && !/^\\D*\\d\\D*$/.test(String(ac_answer || '')) && !isNaN(amountInAnswer(ac_answer)))) ? '__amount' : ac_key"
       },
       {
         "id": "ac_keypad_again",
@@ -2584,7 +2738,7 @@
         "id": "ac_amount_check_again",
         "type": "SET",
         "variable": "ac_key",
-        "value": "ac_amount && isAmountAnswer(ac_answer) ? '__amount' : ac_key"
+        "value": "ac_amount && (isAmountAnswer(ac_answer) || (ac_key === '' && !/^\\D*\\d\\D*$/.test(String(ac_answer || '')) && !isNaN(amountInAnswer(ac_answer)))) ? '__amount' : ac_key"
       },
       {
         "id": "ac_other_request_check",
