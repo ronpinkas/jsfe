@@ -591,7 +591,7 @@
   {
     "id": "get-cell-or-email",
     "name": "GetCellOrEmail",
-    "version": "1.5.1",
+    "version": "1.5.2",
     "description": "Prompt user to provide either their cell phone number or email address for account lookup. Optional: account_pattern / account_name(_es) also accept the tenant's account number (sets acct_number); intro(_es) leads the question; retry_call_type is passed to the retry menu. Records cargo.contactKind ('caller' | 'phone' | 'email' | 'account') and cargo.contactValue. Optional validate_flow: a tenant flow called with the phone or email just given (cargo.contactKind / contactValue) that sets cargo.contactCheck; 'none' (no account for it) asks again at once, before any code is sent, and the third rejection in a row goes to the retry menu. Any other answer, or none, proceeds as before. With caller_on_file 'no' the caller ID is never used: not offered, not taken from YES, and not the fallback for an unclear answer. On voice, the keypad completes by shape (digits.complete: the phone shapes plus account_shape): a number is submitted when it is complete (after the 3 s pause when it could still grow) and waits otherwise; a caller who stops hears the idle prompt. After ANOTHER ACCOUNT (authenticate-user sets cargo.contactIntroSkip), the next question is asked without the intro, once: the caller has already heard it.",
     "parameters": [
       {
@@ -794,7 +794,7 @@
             "type": "SAY-GET",
             "variable": "cell_or_email",
             "value": "{{gce_intro}}To use your caller id, please {{cargo.verb}} yes. Otherwise, please {{cargo.verb}}{{cargo.voice ? ' or enter' : ''}} the phone or email associated with your account{{gce_or}}{{cargo.voice ? ' followed by the pound key' : ''}}. To exit anytime you can {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
-            "value_es": "{{gce_intro_es}}Para usar su identificador de llamadas, por favor {{cargo.verb_es}} sí. De lo contrario, por favor ingrese {{cargo.voice ? 'o ' : ''}}{{cargo.verb_es}} el teléfono o correo electrónico asociado con su cuenta{{gce_or_es}}{{cargo.voice ? ' seguido de la tecla numeral' : ''}}. Para salir en cualquier momento, puede {{cargo.voice ? 'presionar la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
+            "value_es": "{{gce_intro_es}}Para usar su identificador de llamadas, por favor {{cargo.verb_es}} sí. De lo contrario, por favor {{cargo.verb_es}}{{cargo.voice ? ' o ingrese' : ''}} el teléfono o correo electrónico asociado con su cuenta{{gce_or_es}}{{cargo.voice ? ' seguido de la tecla numeral' : ''}}. Para salir en cualquier momento, puede {{cargo.voice ? 'presionar la tecla de asterisco o decir' : 'escribir'}} SALIR.",
             "digits": {
               "min": 7,
               "max": 12,
@@ -809,8 +809,8 @@
             "id": "ask_cell_or_email",
             "type": "SAY-GET",
             "variable": "cell_or_email",
-            "value": "{{gce_intro}}Please {{cargo.verb}} {{cargo.voice ? 'or enter' : ''}} the phone or email associated with your account{{gce_or}}{{cargo.voice ? ' followed by the pound key if entered using the dial pad' : ''}}. To exit anytime you can {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
-            "value_es": "{{gce_intro_es}}Por favor {{cargo.verb_es}} {{cargo.voice ? 'o ingrese' : ''}} el teléfono o correo electrónico asociado con su cuenta{{gce_or_es}}{{cargo.voice ? ' seguido de la tecla numeral si se ingresó usando el teclado de marcación' : ''}}. Para salir en cualquier momento, puede {{cargo.voice ? 'presionar la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
+            "value": "{{gce_intro}}Please {{cargo.verb}}{{cargo.voice ? ' or enter' : ''}} the phone or email associated with your account{{gce_or}}{{cargo.voice ? ' followed by the pound key if entered using the dial pad' : ''}}. To exit anytime you can {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
+            "value_es": "{{gce_intro_es}}Por favor {{cargo.verb_es}}{{cargo.voice ? ' o ingrese' : ''}} el teléfono o correo electrónico asociado con su cuenta{{gce_or_es}}{{cargo.voice ? ' seguido de la tecla numeral si se ingresó usando el teclado de marcación' : ''}}. Para salir en cualquier momento, puede {{cargo.voice ? 'presionar la tecla de asterisco o decir' : 'escribir'}} SALIR.",
             "digits": {
               "min": 7,
               "max": 12,
@@ -909,6 +909,29 @@
             "type": "FLOW",
             "value": "live-agent-requested",
             "callType": "reboot"
+          },
+          "condition: gce_caller_ok && (isAnswer(cell_or_email, 'no') || /^\\s*(no|nope|nah)\\b/i.test(cell_or_email)) && !/[0-9@]/.test(cell_or_email)": {
+            "id": "declined_caller_id",
+            "type": "FLOW",
+            "value": "get-cell-or-email",
+            "callType": "replace",
+            "parameters": {
+              "retry_flow": "{{retry_flow}}",
+              "cancel_flow": "{{cancel_flow}}",
+              "account_pattern": "{{account_pattern}}",
+              "account_name": "{{account_name}}",
+              "account_name_es": "{{account_name_es}}",
+              "retry_call_type": "{{retry_call_type}}",
+              "validate_flow": "{{validate_flow}}",
+              "cell_number": "",
+              "email": "",
+              "acct_number": "",
+              "gce_rejected": "{{gce_rejected}}",
+              "caller_on_file": "no",
+              "intro": "",
+              "intro_es": "",
+              "account_shape": "{{account_shape}}"
+            }
           },
           "condition: gce_caller_ok && prospective_cell_number && ! validatePhone(prospective_cell_number)": {
             "id": "fallback_to_caller_id_invalid_phone",
@@ -2485,7 +2508,7 @@
   {
     "id": "ask-choice",
     "name": "AskChoice",
-    "version": "1.10.0",
+    "version": "1.10.1",
     "description": "Worker: ask one question; sets cargo.choice (the matched key, or 'other' with accept_other) and cargo.choiceText. AGENT / 0 reaches a person, EXIT / * ends, a new request is DISPATCHed. With amount: an answer naming an amount returns 'amount' — one marked as money ($, dollars, cents, decimals), or, when it matched no choice, any answer amountInAnswer reads as one (\"109 con 47\"), except a lone digit, which is a key press. Params: question(_es), choices [{key, words, negative?, neutral?}], retry(_es), accept_other, expect ('number' | 'email' | 'contact'), amount, digits, exit_context(_es).",
     "parameters": [
       {
@@ -2700,7 +2723,7 @@
         "id": "ac_amount_check",
         "type": "SET",
         "variable": "ac_key",
-        "value": "ac_amount && (isAmountAnswer(ac_answer) || (ac_key === '' && !/^\\D*\\d\\D*$/.test(String(ac_answer || '')) && !isNaN(amountInAnswer(ac_answer)))) ? '__amount' : ac_key"
+        "value": "ac_amount && (isAmountAnswer(ac_answer) || (ac_key === '' && !/^\\D*\\d\\D*$/.test(String(ac_answer || '')) && !/^[\\s,.;]*\\d(?:[\\s,.;]+\\d)+[\\s,.;]*$/.test(String(ac_answer || '')) && !isNaN(amountInAnswer(ac_answer)))) ? '__amount' : ac_key"
       },
       {
         "id": "ac_keypad_again",
@@ -2738,7 +2761,7 @@
         "id": "ac_amount_check_again",
         "type": "SET",
         "variable": "ac_key",
-        "value": "ac_amount && (isAmountAnswer(ac_answer) || (ac_key === '' && !/^\\D*\\d\\D*$/.test(String(ac_answer || '')) && !isNaN(amountInAnswer(ac_answer)))) ? '__amount' : ac_key"
+        "value": "ac_amount && (isAmountAnswer(ac_answer) || (ac_key === '' && !/^\\D*\\d\\D*$/.test(String(ac_answer || '')) && !/^[\\s,.;]*\\d(?:[\\s,.;]+\\d)+[\\s,.;]*$/.test(String(ac_answer || '')) && !isNaN(amountInAnswer(ac_answer)))) ? '__amount' : ac_key"
       },
       {
         "id": "ac_other_request_check",
