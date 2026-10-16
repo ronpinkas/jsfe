@@ -591,8 +591,8 @@
   {
     "id": "get-cell-or-email",
     "name": "GetCellOrEmail",
-    "version": "1.5.2",
-    "description": "Prompt user to provide either their cell phone number or email address for account lookup. Optional: account_pattern / account_name(_es) also accept the tenant's account number (sets acct_number); intro(_es) leads the question; retry_call_type is passed to the retry menu. Records cargo.contactKind ('caller' | 'phone' | 'email' | 'account') and cargo.contactValue. Optional validate_flow: a tenant flow called with the phone or email just given (cargo.contactKind / contactValue) that sets cargo.contactCheck; 'none' (no account for it) asks again at once, before any code is sent, and the third rejection in a row goes to the retry menu. Any other answer, or none, proceeds as before. With caller_on_file 'no' the caller ID is never used: not offered, not taken from YES, and not the fallback for an unclear answer. On voice, the keypad completes by shape (digits.complete: the phone shapes plus account_shape): a number is submitted when it is complete (after the 3 s pause when it could still grow) and waits otherwise; a caller who stops hears the idle prompt. After ANOTHER ACCOUNT (authenticate-user sets cargo.contactIntroSkip), the next question is asked without the intro, once: the caller has already heard it.",
+    "version": "1.5.3",
+    "description": "Prompt user to provide either their cell phone number or email address for account lookup. Optional: account_pattern / account_name(_es) also accept the tenant's account number (sets acct_number); intro(_es) leads the question; retry_call_type is passed to the retry menu. Records cargo.contactKind ('caller' | 'phone' | 'email' | 'account') and cargo.contactValue. Optional validate_flow: a tenant flow called with the phone or email just given (cargo.contactKind / contactValue) that sets cargo.contactCheck; 'none' (no account for it) asks again at once, before any code is sent, and the third rejection in a row goes to the retry menu. Any other answer, or none, proceeds as before. Each contact is validated once per session (cargo.gceChecks); a retry from this flow's own retry menu starts the rejection count again, without the intro. With caller_on_file 'no', or after ANOTHER ACCOUNT (cargo.callerDeclined), the caller ID is never used: not offered, not taken from YES, and not the fallback for an unclear answer. On voice, the keypad completes by shape (digits.complete: the phone shapes plus account_shape): a number is submitted when it is complete (after the 3 s pause when it could still grow) and waits otherwise; a caller who stops hears the idle prompt. After ANOTHER ACCOUNT (authenticate-user sets cargo.contactIntroSkip), the next question is asked without the intro, once: the caller has already heard it.",
     "parameters": [
       {
         "name": "retry_flow",
@@ -720,6 +720,24 @@
         "value": "typeof acct_number === 'undefined' ? '' : acct_number"
       },
       {
+        "id": "gce_caller_on_file",
+        "type": "SET",
+        "variable": "gce_caller_use",
+        "value": "cargo.callerDeclined ? 'no' : (typeof caller_on_file !== 'undefined' && caller_on_file ? String(caller_on_file) : '')"
+      },
+      {
+        "id": "gce_back_from_menu",
+        "type": "SET",
+        "variable": "gce_after_menu",
+        "value": "typeof gce_menu !== 'undefined' && (gce_menu === true || gce_menu === 'true')"
+      },
+      {
+        "id": "gce_menu_used",
+        "type": "SET",
+        "variable": "gce_menu",
+        "value": "false"
+      },
+      {
         "id": "gce_account_pattern",
         "type": "SET",
         "variable": "gce_pattern",
@@ -741,13 +759,13 @@
         "id": "gce_lead",
         "type": "SET",
         "variable": "gce_intro",
-        "value": "cargo.contactIntroSkip ? '' : (typeof intro !== 'undefined' && intro ? intro + ' ' : '')"
+        "value": "cargo.contactIntroSkip || gce_after_menu ? '' : (typeof intro !== 'undefined' && intro ? intro + ' ' : '')"
       },
       {
         "id": "gce_lead_es",
         "type": "SET",
         "variable": "gce_intro_es",
-        "value": "cargo.contactIntroSkip ? '' : (typeof intro_es !== 'undefined' && intro_es ? intro_es + ' ' : gce_intro)"
+        "value": "cargo.contactIntroSkip || gce_after_menu ? '' : (typeof intro_es !== 'undefined' && intro_es ? intro_es + ' ' : gce_intro)"
       },
       {
         "id": "gce_retry_call_type",
@@ -759,7 +777,7 @@
         "id": "gce_caller_allowed",
         "type": "SET",
         "variable": "gce_caller_ok",
-        "value": "!!cargo.callerId && !callerIsInternational(cargo) && !(typeof caller_on_file !== 'undefined' && caller_on_file === 'no')"
+        "value": "!!cargo.callerId && !callerIsInternational(cargo) && gce_caller_use !== 'no'"
       },
       {
         "id": "gce_take_validator",
@@ -771,7 +789,7 @@
         "id": "gce_rejections_start",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "typeof gce_rejected !== 'undefined' && gce_rejected ? true : (cargo.gceRejects = 0, true)"
+        "value": "!gce_after_menu && typeof gce_rejected !== 'undefined' && gce_rejected ? true : (cargo.gceRejects = 0, true)"
       },
       {
         "id": "gce_keypad_shapes",
@@ -783,13 +801,13 @@
         "id": "ask_cell_or_email_if_no_param",
         "type": "CASE",
         "branches": {
-          "condition: !cell_number && !email && !acct_number && cargo.callerId && !callerIsInternational(cargo) && typeof caller_on_file !== 'undefined' && caller_on_file === 'yes'": {
+          "condition: !cell_number && !email && !acct_number && cargo.callerId && !callerIsInternational(cargo) && gce_caller_use === 'yes'": {
             "id": "use_caller_on_file",
             "type": "SET",
             "variable": "cell_or_email",
             "value": "'yes'"
           },
-          "condition: !cell_number && !email && !acct_number && cargo.callerId && !callerIsInternational(cargo) && !(typeof caller_on_file !== 'undefined' && caller_on_file === 'no')": {
+          "condition: !cell_number && !email && !acct_number && cargo.callerId && !callerIsInternational(cargo) && gce_caller_use !== 'no'": {
             "id": "ask_cell_or_email_with_caller_id",
             "type": "SAY-GET",
             "variable": "cell_or_email",
@@ -836,7 +854,7 @@
         "id": "gce_mark_caller_preselected",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(function() { if (cell_number || email || acct_number) { /* a contact was passed in, nothing was asked here: unchanged */ } else if (cargo.callerId && !callerIsInternational(cargo) && typeof caller_on_file !== 'undefined' && caller_on_file === 'yes') { cargo.callerPreselected = true; } else { cargo.callerPreselected = false; } return true; })()"
+        "value": "(function() { if (cell_number || email || acct_number) { /* a contact was passed in, nothing was asked here: unchanged */ } else if (cargo.callerId && !callerIsInternational(cargo) && gce_caller_use === 'yes') { cargo.callerPreselected = true; } else { cargo.callerPreselected = false; } return true; })()"
       },
       {
         "id": "treat_as_phone_number",
@@ -895,7 +913,8 @@
               "retry_flow": "{{retry_flow}}",
               "cancel_flow": "{{cancel_flow}}",
               "capture_patterns": "{{cargo.authCapture}}",
-              "retry_call_type": "{{gce_retry_type}}"
+              "retry_call_type": "{{gce_retry_type}}",
+              "gce_menu": true
             }
           },
           "condition: isAnswer(cell_or_email, 'exit') && cell_or_email.trim().split(/\\s+/).length <= 2": {
@@ -950,7 +969,8 @@
               "retry_flow": "{{retry_flow}}",
               "cancel_flow": "{{cancel_flow}}",
               "capture_patterns": "{{cargo.authCapture}}",
-              "retry_call_type": "{{gce_retry_type}}"
+              "retry_call_type": "{{gce_retry_type}}",
+              "gce_menu": true
             }
           },
           "condition: gce_caller_ok": {
@@ -976,7 +996,8 @@
               "retry_flow": "{{retry_flow}}",
               "cancel_flow": "{{cancel_flow}}",
               "capture_patterns": "{{cargo.authCapture}}",
-              "retry_call_type": "{{gce_retry_type}}"
+              "retry_call_type": "{{gce_retry_type}}",
+              "gce_menu": true
             }
           }
         }
@@ -988,10 +1009,22 @@
         "value": "(cargo.contactKind = acct_number ? 'account' : (email ? 'email' : (cell_number ? (String(cell_number).replace(/\\D/g, '').slice(-10) === String(cargo.callerId || '').replace(/\\D/g, '').slice(-10) ? 'caller' : 'phone') : '')), cargo.contactValue = String(acct_number || email || cell_number || ''), true)"
       },
       {
+        "id": "gce_check_key",
+        "type": "SET",
+        "variable": "gce_check_key",
+        "value": "gce_validator && ['phone', 'email', 'caller'].indexOf(cargo.contactKind) > -1 && !cargo.callerPreselected ? gce_validator + '|' + (cargo.contactKind === 'email' ? 'email:' + String(cargo.contactValue || '').toLowerCase() : 'phone:' + String(cargo.contactValue || '').replace(/\\D/g, '').slice(-10)) : ''"
+      },
+      {
         "id": "gce_validate",
         "type": "CASE",
         "branches": {
-          "condition: gce_validator && ['phone', 'email', 'caller'].indexOf(cargo.contactKind) > -1 && !cargo.callerPreselected": {
+          "condition: gce_check_key && cargo.gceChecks && typeof cargo.gceChecks[gce_check_key] === 'string'": {
+            "id": "gce_already_validated",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.contactCheck = cargo.gceChecks[gce_check_key], true)"
+          },
+          "condition: gce_check_key": {
             "id": "gce_run_validator",
             "type": "FLOW",
             "value": "{{gce_validator}}",
@@ -1004,6 +1037,12 @@
             "value": "(cargo.contactCheck = '', true)"
           }
         }
+      },
+      {
+        "id": "gce_remember_check",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "gce_check_key ? (cargo.gceChecks = cargo.gceChecks && typeof cargo.gceChecks === 'object' ? cargo.gceChecks : {}, cargo.gceChecks[gce_check_key] = String(cargo.contactCheck || ''), true) : true"
       },
       {
         "id": "gce_count_rejection",
@@ -1027,7 +1066,7 @@
         "id": "gce_reject_caller_option",
         "type": "SET",
         "variable": "gce_again_caller",
-        "value": "cargo.contactKind === 'caller' || (typeof caller_on_file !== 'undefined' && caller_on_file === 'no') ? 'no' : ''"
+        "value": "cargo.contactKind === 'caller' || gce_caller_use === 'no' ? 'no' : ''"
       },
       {
         "id": "gce_reject_error",
@@ -1079,7 +1118,8 @@
               "retry_flow": "{{retry_flow}}",
               "cancel_flow": "{{cancel_flow}}",
               "capture_patterns": "{{cargo.authCapture}}",
-              "retry_call_type": "{{gce_retry_type}}"
+              "retry_call_type": "{{gce_retry_type}}",
+              "gce_menu": true
             }
           },
           "default": {
@@ -2508,8 +2548,8 @@
   {
     "id": "ask-choice",
     "name": "AskChoice",
-    "version": "1.10.1",
-    "description": "Worker: ask one question; sets cargo.choice (the matched key, or 'other' with accept_other) and cargo.choiceText. AGENT / 0 reaches a person, EXIT / * ends, a new request is DISPATCHed. With amount: an answer naming an amount returns 'amount' — one marked as money ($, dollars, cents, decimals), or, when it matched no choice, any answer amountInAnswer reads as one (\"109 con 47\"), except a lone digit, which is a key press. Params: question(_es), choices [{key, words, negative?, neutral?}], retry(_es), accept_other, expect ('number' | 'email' | 'contact'), amount, digits, exit_context(_es).",
+    "version": "1.10.2",
+    "description": "Worker: ask one question; sets cargo.choice (the matched key, or 'other' with accept_other) and cargo.choiceText. AGENT / 0 reaches a person, EXIT / * ends, a new request is DISPATCHed. With amount: an answer naming an amount returns 'amount' — one marked as money ($, dollars, cents, decimals), or, when it matched no choice, any answer amountInAnswer reads as one (\"109 con 47\"), except an answer with a single digit and no payment verb (\"5\", \"5 please\"), which is a key press (\"pay 5\" is an amount). An exact choice keyed no / decline / done / cancel (or negative) is picked only by its own words and keys, never by a refusal or a deferral. Params: question(_es), choices [{key, words, negative?, neutral?}], retry(_es), accept_other, expect ('number' | 'email' | 'contact'), amount, digits, exit_context(_es).",
     "parameters": [
       {
         "name": "question",
@@ -2608,6 +2648,10 @@
       "ac_exit_ctx_es": {
         "type": "string",
         "value": ""
+      },
+      "ac_missed": {
+        "type": "boolean",
+        "value": false
       }
     },
     "steps": [
@@ -2677,7 +2721,7 @@
         "id": "ac_repeat_1",
         "type": "CASE",
         "branches": {
-          "condition: /^\\s*(?:(?:por favor|please|a|que|me lo|me|lo|puede|can you|could you)\\s+)*(?:repetir|repite|rep[ií]t[ae](?:lo|la|me|melo|nos)?|rep[ií]tamelo|otra vez|de nuevo|repeat(?:\\s+(?:that|it))?|say (?:that|it) again|again|one more time)(?:\\s+(?:por favor|please|la pregunta|las opciones|eso|that|it))*[\\s.!?¿,]*$/i.test(String(ac_answer || '')) && pickChoice(ac_answer, choices, ac_other) === ''": {
+          "condition: /^[\\s¿¡]*(?:(?:por favor|please|a|que|me lo|me|lo|puede|can you|could you)\\s+)*(?:repetir|repite|rep[ií]t[ae](?:lo|la|me|melo|nos)?|rep[ií]tamelo|otra vez|de nuevo|repeat(?:\\s+(?:that|it))?|say (?:that|it) again|again|one more time)(?:\\s+(?:por favor|please|la pregunta|las opciones|eso|that|it))*[\\s.!?¿,]*$/i.test(String(ac_answer || '')) && pickChoice(ac_answer, choices, ac_other) === ''": {
             "id": "ac_repeat_ask_1",
             "type": "SAY-GET",
             "variable": "ac_answer",
@@ -2697,7 +2741,7 @@
         "id": "ac_repeat_2",
         "type": "CASE",
         "branches": {
-          "condition: /^\\s*(?:(?:por favor|please|a|que|me lo|me|lo|puede|can you|could you)\\s+)*(?:repetir|repite|rep[ií]t[ae](?:lo|la|me|melo|nos)?|rep[ií]tamelo|otra vez|de nuevo|repeat(?:\\s+(?:that|it))?|say (?:that|it) again|again|one more time)(?:\\s+(?:por favor|please|la pregunta|las opciones|eso|that|it))*[\\s.!?¿,]*$/i.test(String(ac_answer || '')) && pickChoice(ac_answer, choices, ac_other) === ''": {
+          "condition: /^[\\s¿¡]*(?:(?:por favor|please|a|que|me lo|me|lo|puede|can you|could you)\\s+)*(?:repetir|repite|rep[ií]t[ae](?:lo|la|me|melo|nos)?|rep[ií]tamelo|otra vez|de nuevo|repeat(?:\\s+(?:that|it))?|say (?:that|it) again|again|one more time)(?:\\s+(?:por favor|please|la pregunta|las opciones|eso|that|it))*[\\s.!?¿,]*$/i.test(String(ac_answer || '')) && pickChoice(ac_answer, choices, ac_other) === ''": {
             "id": "ac_repeat_ask_2",
             "type": "SAY-GET",
             "variable": "ac_answer",
@@ -2720,10 +2764,16 @@
         "value": "pickChoice(ac_answer, choices, ac_other)"
       },
       {
+        "id": "ac_exact_no_own_words",
+        "type": "SET",
+        "variable": "ac_key",
+        "value": "(function() { var cs = Array.isArray(choices) ? choices : []; var isExactNo = function(c) { return !!c && c.exact === true && (['no', 'decline', 'done', 'cancel'].indexOf(c.key) > -1 || c.negative === true); }; var c = cs.filter(function(x) { return !!x && x.key === ac_key; })[0]; if (!isExactNo(c)) { return ac_key; } else if (pickChoice(ac_answer, [{ key: 'ac_own', words: c.words, exact: true }], false) === 'ac_own') { return ac_key; } else { return pickChoice(ac_answer, cs.filter(function(x) { return !isExactNo(x); }), ac_other); } })()"
+      },
+      {
         "id": "ac_amount_check",
         "type": "SET",
         "variable": "ac_key",
-        "value": "ac_amount && (isAmountAnswer(ac_answer) || (ac_key === '' && !/^\\D*\\d\\D*$/.test(String(ac_answer || '')) && !/^[\\s,.;]*\\d(?:[\\s,.;]+\\d)+[\\s,.;]*$/.test(String(ac_answer || '')) && !isNaN(amountInAnswer(ac_answer)))) ? '__amount' : ac_key"
+        "value": "ac_amount && (isAmountAnswer(ac_answer) || (ac_key === '' && (!/^\\D*\\d\\D*$/.test(String(ac_answer || '')) || /\\b(?:pay|paying|pagar|pagarle|abonar)\\b/i.test(String(ac_answer || ''))) && !/^[\\s,.;]*\\d(?:[\\s,.;]+\\d)+[\\s,.;]*$/.test(String(ac_answer || '')) && !isNaN(amountInAnswer(ac_answer)))) ? '__amount' : ac_key"
       },
       {
         "id": "ac_keypad_again",
@@ -2732,10 +2782,16 @@
         "value": "(cargo.digits = typeof digits !== 'undefined' && digits && typeof digits === 'object' ? digits : undefined, true)"
       },
       {
+        "id": "ac_missed_once",
+        "type": "SET",
+        "variable": "ac_missed",
+        "value": "ac_key === '' && !ac_other && String(ac_answer || '').split(/\\s+/).filter(function(w) { return /[a-záéíóúüñ]/i.test(w); }).length < 3"
+      },
+      {
         "id": "ac_reask_on_miss",
         "type": "CASE",
         "branches": {
-          "condition: ac_key === '' && !ac_other && String(ac_answer || '').split(/\\s+/).filter(function(w) { return /[a-záéíóúüñ]/i.test(w); }).length < 3": {
+          "condition: ac_missed": {
             "id": "ac_reask",
             "type": "SAY-GET",
             "variable": "ac_answer",
@@ -2752,16 +2808,62 @@
         }
       },
       {
+        "id": "ac_repeat_after_miss_1",
+        "type": "CASE",
+        "branches": {
+          "condition: ac_missed && /^[\\s¿¡]*(?:(?:por favor|please|a|que|me lo|me|lo|puede|can you|could you)\\s+)*(?:repetir|repite|rep[ií]t[ae](?:lo|la|me|melo|nos)?|rep[ií]tamelo|otra vez|de nuevo|repeat(?:\\s+(?:that|it))?|say (?:that|it) again|again|one more time)(?:\\s+(?:por favor|please|la pregunta|las opciones|eso|that|it))*[\\s.!?¿,]*$/i.test(String(ac_answer || '')) && pickChoice(ac_answer, choices, ac_other) === ''": {
+            "id": "ac_repeat_after_miss_ask_1",
+            "type": "SAY-GET",
+            "variable": "ac_answer",
+            "asSpoken": "ac_amount === true",
+            "value": "{{question}}",
+            "value_es": "{{ac_q_es}}"
+          },
+          "default": {
+            "id": "ac_no_repeat_after_miss_1",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ac_repeat_after_miss_2",
+        "type": "CASE",
+        "branches": {
+          "condition: ac_missed && /^[\\s¿¡]*(?:(?:por favor|please|a|que|me lo|me|lo|puede|can you|could you)\\s+)*(?:repetir|repite|rep[ií]t[ae](?:lo|la|me|melo|nos)?|rep[ií]tamelo|otra vez|de nuevo|repeat(?:\\s+(?:that|it))?|say (?:that|it) again|again|one more time)(?:\\s+(?:por favor|please|la pregunta|las opciones|eso|that|it))*[\\s.!?¿,]*$/i.test(String(ac_answer || '')) && pickChoice(ac_answer, choices, ac_other) === ''": {
+            "id": "ac_repeat_after_miss_ask_2",
+            "type": "SAY-GET",
+            "variable": "ac_answer",
+            "asSpoken": "ac_amount === true",
+            "value": "{{question}}",
+            "value_es": "{{ac_q_es}}"
+          },
+          "default": {
+            "id": "ac_no_repeat_after_miss_2",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "ac_match_again",
         "type": "SET",
         "variable": "ac_key",
         "value": "ac_key === '' && !ac_other ? pickChoice(ac_answer, choices, ac_other) : ac_key"
       },
       {
+        "id": "ac_exact_no_own_words_again",
+        "type": "SET",
+        "variable": "ac_key",
+        "value": "ac_key === '' ? ac_key : (function() { var cs = Array.isArray(choices) ? choices : []; var isExactNo = function(c) { return !!c && c.exact === true && (['no', 'decline', 'done', 'cancel'].indexOf(c.key) > -1 || c.negative === true); }; var c = cs.filter(function(x) { return !!x && x.key === ac_key; })[0]; if (!isExactNo(c)) { return ac_key; } else if (pickChoice(ac_answer, [{ key: 'ac_own', words: c.words, exact: true }], false) === 'ac_own') { return ac_key; } else { return pickChoice(ac_answer, cs.filter(function(x) { return !isExactNo(x); }), ac_other); } })()"
+      },
+      {
         "id": "ac_amount_check_again",
         "type": "SET",
         "variable": "ac_key",
-        "value": "ac_amount && (isAmountAnswer(ac_answer) || (ac_key === '' && !/^\\D*\\d\\D*$/.test(String(ac_answer || '')) && !/^[\\s,.;]*\\d(?:[\\s,.;]+\\d)+[\\s,.;]*$/.test(String(ac_answer || '')) && !isNaN(amountInAnswer(ac_answer)))) ? '__amount' : ac_key"
+        "value": "ac_amount && (isAmountAnswer(ac_answer) || (ac_key === '' && (!/^\\D*\\d\\D*$/.test(String(ac_answer || '')) || /\\b(?:pay|paying|pagar|pagarle|abonar)\\b/i.test(String(ac_answer || ''))) && !/^[\\s,.;]*\\d(?:[\\s,.;]+\\d)+[\\s,.;]*$/.test(String(ac_answer || '')) && !isNaN(amountInAnswer(ac_answer)))) ? '__amount' : ac_key"
       },
       {
         "id": "ac_other_request_check",
