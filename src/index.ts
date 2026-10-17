@@ -572,6 +572,7 @@ export interface FlowStep {
   value?: string;
   digits?: unknown; // Digit collection configuration for SAY-GET steps (exposed to sessionContext.cargo for platform integration like Twilio ConversationRelay)
   asSpoken?: boolean | string; // SAY-GET only: store the answer exactly as given (no voice digit reduction, no AI voice cleanup). true, or a condition on the flow's variables
+  pii?: boolean | string; // SAY-GET only: its answer is sensitive (e.g. a card's security code). The engine never logs it, and the awaiting frame carries pendingVariablePii so the host can keep it out of its own logs. true, or a condition on the flow's variables
   [key: string]: unknown; // Allow for value-xx properties and future extensions
   name?: string;
   callType?: 'call' | 'replace' | 'reboot';
@@ -762,6 +763,7 @@ export interface FlowFrame {
   pendingVariable?: string;
   pendingVariableContext?: string; // Question context for AI voice cleanup
   pendingVariableAsSpoken?: boolean; // The awaited SAY-GET declared asSpoken: its answer is stored as given
+  pendingVariablePii?: boolean; // The awaited SAY-GET declared pii: the host keeps the next input out of its logs
   lastSayMessage?: string;
   pendingInterruption?: Record<string, unknown>;
   declaredOutcome?: { outcome: string; reason?: string }; // From a step's `outcome` attribute — applied when this frame terminates (see FlowOutcome)
@@ -2216,6 +2218,34 @@ function makeLogger(level: string = (typeof process !== 'undefined' && process.e
 
 let logger: Logger = makeLogger();
 
+// The answer to a SAY-GET declared `pii`, for the turn that processes it: every engine log line has it replaced by
+// ••• (the input is echoed in a dozen trace lines). Set and cleared by updateActivity; one turn runs at a time.
+let piiInputs: string[] = [];
+
+function redactPii(arg: unknown): unknown {
+  if (!piiInputs.length || typeof arg !== 'string') {
+    return arg;
+  } else {
+    let out = arg;
+    for (const secret of piiInputs) {
+      out = /^\d+$/.test(secret)
+        ? out.replace(new RegExp(`(?<!\\d)${secret}(?!\\d)`, 'g'), '•••')
+        : out.split(secret).join('•••');
+    }
+    return out;
+  }
+}
+
+function withPiiRedaction(target: Logger): Logger {
+  const wrap = (method: 'debug' | 'info' | 'warn' | 'error') => (...a: unknown[]) => (target as any)[method](...a.map(redactPii));
+  return { ...target, debug: wrap('debug'), info: wrap('info'), warn: wrap('warn'), error: wrap('error') } as Logger;
+}
+
+/** The answer a frame is waiting for is sensitive: some frame of the session awaits a SAY-GET declared `pii`. */
+function awaitingPii(stacks: unknown): boolean {
+  return Array.isArray(stacks) && stacks.flat().some((f: any) => f && f.pendingVariable && f.pendingVariablePii === true);
+}
+
 // Fallback for any remaining console calls (host-agnostic: globalThis works in Node, browser, CF Worker)
 if (!(globalThis as Record<string, unknown>).console) {
   (globalThis as Record<string, unknown>).console = {
@@ -2942,7 +2972,7 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
       const actualValue = typeof storedValue === 'object' && storedValue !== null && '__userInput' in storedValue
         ? (storedValue as any).value
         : storedValue;
-      logger.info(`Stored sanitized user input in variable '${currentFlowFrame.pendingVariable}': "${actualValue}"`);
+      logger.info(`Stored sanitized user input in variable '${currentFlowFrame.pendingVariable}': ${currentFlowFrame.pendingVariablePii ? '(pii, not logged)' : `"${actualValue}"`}`);
 
       // Clear digits setting from cargo since input has been collected
       if (engine.cargo && engine.cargo.digits) {
@@ -2953,6 +2983,7 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
       delete currentFlowFrame.pendingVariable;
       delete currentFlowFrame.pendingVariableContext; // Clean up context
       delete currentFlowFrame.pendingVariableAsSpoken;
+      delete currentFlowFrame.pendingVariablePii;
 
       // Pop the SAY-GET step now that variable assignment is complete
       currentFlowFrame.flowStepsStack.pop();
@@ -4409,6 +4440,12 @@ function handleSayGetStep(currentFlowFrame: FlowFrame, engine: Engine): string |
       } else {
         delete currentFlowFrame.pendingVariableAsSpoken;
       }
+      if (sayGetFlag(step, 'pii', currentFlowFrame, engine)) {
+        currentFlowFrame.pendingVariablePii = true;
+        logger.info(`SAY-GET step '${step.id}' awaits a sensitive answer (pii)`);
+      } else {
+        delete currentFlowFrame.pendingVariablePii;
+      }
       logger.info(`SAY-GET step will store next user input in variable '${step.variable}' (step will be popped after input)`);
 
       // Expose digits setting to sessionContext.cargo for Twilio ConversationRelay integration. A string value holding a
@@ -4439,13 +4476,22 @@ function handleSayGetStep(currentFlowFrame: FlowFrame, engine: Engine): string |
  * switch it with a parameter). Anything else — absent, false, a condition that is false or fails — is false.
  */
 function sayGetAsSpoken(step: FlowStep, frame: FlowFrame, engine: Engine): boolean {
-  if (step.asSpoken === true) {
+  return sayGetFlag(step, 'asSpoken', frame, engine);
+}
+
+/**
+ * A SAY-GET flag (`asSpoken`, `pii`): `true`, or a condition evaluated against the flow's variables (so a worker flow
+ * can switch it with a parameter). Anything else — absent, false, a condition that is false or fails — is false.
+ */
+function sayGetFlag(step: FlowStep, name: 'asSpoken' | 'pii', frame: FlowFrame, engine: Engine): boolean {
+  const flag = step[name];
+  if (flag === true) {
     return true;
-  } else if (typeof step.asSpoken === 'string' && step.asSpoken.trim() !== '') {
+  } else if (typeof flag === 'string' && flag.trim() !== '') {
     try {
-      return evaluateSafeCondition(step.asSpoken, frame.variables || {}, engine);
+      return evaluateSafeCondition(flag, frame.variables || {}, engine);
     } catch (error: any) {
-      logger.warn(`SAY-GET '${step.id}': asSpoken condition failed, answer cleaned as usual: ${error.message}`);
+      logger.warn(`SAY-GET '${step.id}': ${name} condition failed, treated as false: ${error.message}`);
       return false;
     }
   } else {
@@ -7199,7 +7245,7 @@ export class WorkflowEngine implements Engine {
   private sessionContext: EngineSessionContext | null = null;
 
   set logger(value: Logger) {
-    logger = value;
+    logger = withPiiRedaction(value);
   }
 
   get logger(): Logger {
@@ -7279,7 +7325,7 @@ export class WorkflowEngine implements Engine {
     }
 
     hostLogger = hostLogger || logger; // Fallback to global fake logger if none provided
-    logger = hostLogger; // Assign to global logger
+    logger = withPiiRedaction(hostLogger); // Assign to global logger (a SAY-GET's `pii` answer never reaches it)
 
     this.aiCallback = aiCallback;
     this.flowsMenu = flowsMenu;
@@ -7359,7 +7405,7 @@ export class WorkflowEngine implements Engine {
   async updateActivity(contextEntry: ContextEntry, engineSessionContext: EngineSessionContext): Promise<EngineSessionContext> {
     try {
       this.cargo = engineSessionContext.cargo || {};
-      logger.info(`Received Cargo: ${JSON.stringify(this.cargo)}`);
+      logger.info(`Received Cargo: ${JSON.stringify(this.cargo, (k, v) => (/^(cvv|cvc|cvv2|cardcode|securitycode)$/i.test(k) && v ? '•••' : v))}`);
       this.sessionId = engineSessionContext.sessionId;
       this.createdAt = engineSessionContext.createdAt;
 
@@ -7438,8 +7484,18 @@ export class WorkflowEngine implements Engine {
 
       // Role-based processing logic
       if (contextEntry.role === 'user') {
+        // A sensitive answer (SAY-GET `pii`) is kept out of every log line of this turn, raw and as its digits
+        const said = String(contextEntry.content);
+        piiInputs = awaitingPii(this.sessionContext.flowStacks)
+          ? [...new Set([said.trim(), said.replace(/\D+/g, '')])].filter((x) => x.length >= 2)
+          : [];
         // Detect intent to activate a flow or switch flows
-        const responseOrNull = await processActivity(String(contextEntry.content), userId, this);
+        let responseOrNull: string | null;
+        try {
+          responseOrNull = await processActivity(said, userId, this);
+        } finally {
+          piiInputs = [];
+        }
 
         // Anomaly guard: a flow is STILL ACTIVE but produced no response.
         // Detect activity by frame EXISTENCE, not by the response value: a frame

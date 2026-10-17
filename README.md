@@ -564,6 +564,11 @@ Two cargo fields connect the engine to a voice channel:
   such as an amount: without it, "$1" fitting `digits: { min: 1, max: 1 }` is stored as `1`. The value is
   `true`, or a condition on the flow's variables (`"ac_amount === true"`), so a worker flow can switch it
   with a parameter. Absent or false keeps the default behaviour.
+- **`pii`** (a `SAY-GET` attribute, opt-in, jsfe ≥ 1.3.5): the answer is sensitive, such as a card's security
+  code. The engine never writes it to its log, and while the question waits its frame carries
+  `pendingVariablePii: true`, so the host can keep the next input out of its own logs and records (the host
+  reads the active frame before the turn, as it reads `pendingVariable`). `true`, or a condition on the flow's
+  variables, as `asSpoken`. It changes nothing about how the answer is stored or used.
 
 #### Correct Session Update Pattern
 
