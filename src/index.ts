@@ -3620,6 +3620,7 @@ export async function detectFlowWithParameters(input: string, engine: Engine): P
     const rules = `- Return the exact flow name if a match is found
 - Return "None" if no workflow applies
 - Consider user intent and the chat context
+- Accepting the assistant's offer in the chat history to start or resume a flow chooses that flow (assistant: "¿Quiere intentar el pago otra vez?" → user: "sí")
 - Prioritize the most relevant flow considering all available flows
 - Flows should only be triggered in response to explicit user intent. A user prompt asking about available credit should trigger balance flows when available, but not payment flows. Complaints about a charge must not trigger a payment flow. Imagine the frustration of a user asking any question other than "Can I make a payment?" and being forwarded to a payment flow instead of receiving a direct answer.
 - The "parameters" object is always required in the response. Extract parameter values from the user input when explicitly present. Use null for every parameter that is not explicitly present, or that belongs to a flow other than the one you return.

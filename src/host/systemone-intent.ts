@@ -30,7 +30,7 @@ export const INTENT_YES_THRESHOLD = 0.5;
 
 const FLOW_QUESTION = 'Should `latest_message` start the workflow described in `flow`?';
 const FLOW_CRITERIA = {
-  true: "`latest_message`, read with `conversation`, is what `flow`'s description says should trigger it: the user asks for its action or information, or raises the problem it exists to handle.",
+  true: "`latest_message`, read with `conversation`, is what `flow`'s description says should trigger it: the user asks for its action or information, or raises the problem it exists to handle. Also when it accepts the assistant's offer in `conversation` to start or resume this workflow (assistant: \"¿Quiere intentar el pago otra vez?\" → user: \"sí\").",
   false: "It only shares a topic with `flow`, is something `flow`'s description does not cover, or is a greeting, acknowledgement or fragment that asks for nothing. A question about an available balance or credit is not a request to pay, and a complaint about a charge is not a request to pay.",
 };
 const ENUM_CRITERIA = (value: string) => ({
