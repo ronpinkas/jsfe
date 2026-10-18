@@ -31,7 +31,7 @@ Everything below is read from the JSON. The flows call the system flows (`no-act
 ## Flows
 
 ## ShopifyProductSearch
-**ID**: `shopify-product-search` · **Version**: 1.6.1 · **Primary** (prompt "product search" / "buscar producto")  
+**ID**: `shopify-product-search` · **Version**: 1.6.2 · **Primary** (prompt "product search" / "buscar producto")  
 **Description**: Customer asks to find a product, whether one is in stock (online or at a store near them), or what it costs ('do you have air fryers', 'is this TV in stock in Phoenix', 'how much is the iPhone 16', '¿tienen refrigeradores?', '¿cuánto cuesta?'). Not: general advice without asking for a product (None); an order already placed (ShopifyTrackOrder); returns, shipping or other store policies (ShopifyStorePolicies). The product number is read by pickChoice, so a number with courtesy or a YES around it ("Yes 1", "1 please") picks it. On a call: the results are spoken — up to three, each with its name, price and stock, no links — and TEXT / TEXTO texts the links (text-destination, send-text), then the question is asked again; with no phone that can receive texts the TEXT option is not offered. The text ends with how to continue: by replying, and on WhatsApp (get-whatsapp-link, the search pre-filled) when the tenant invites callers there.
 
 ### Parameters
@@ -62,7 +62,7 @@ Everything below is read from the JSON. The flows call the system flows (`no-act
    - `sps_send_links` (CASE) - when it does → FLOW [`send-text`](system-flows.md#sendtext) (`call`) with `message: {{sps_links}}`.
    - `sps_links_sent` (CASE) - sent (`cargo.textSent`) → SAY "Done, I texted the links to the phone ending in {cargo.textTo4}. You can continue your search on your cell responding to the text I sent." (Spanish "Listo, le envié los enlaces al teléfono que termina en {cargo.textTo4}. …"); not sent → SAY "Sorry, I couldn't text the links right now." / "Lo siento, no pude enviar los enlaces en este momento."
    - `sps_ask_again` (CASE) - after a TEXT answer → SAY-GET `product_choice` again: "[To check which stores near you have one, say its number. ]Or say DONE." (the store sentence as in step 6).
-8. `read_product_pick` (SET) - `product_pick = pickChoice(answer, [{ key: '1', words: ['1'] }, … up to N], false)`, so a product number with courtesy or a YES around it ("Yes 1", "1 please") picks it, under the [AskChoice matching rules](system-flows.md#matching-pickchoice).
+8. `read_product_pick` (SET) - when `global_store_locations` is a non-empty array, `product_pick = pickChoice(answer, [{ key: '1', words: ['1'] }, … up to N], false)`; otherwise `''` (no number was offered, so a number is another request, DISPATCHed in step 9). With a store list, a product number with courtesy or a YES around it ("Yes 1", "1 please") picks it, under the [AskChoice matching rules](system-flows.md#matching-pickchoice).
 9. `check_product_choice` (CASE, first match wins):
    - `user_prompt` set (the answer to "Anything else?") → **`DISPATCH`**: the answer goes to intent detection (another flow can start at once), else to the host.
    - `done | no | exit | listo | no gracias | salir` (whole answer, case-insensitive) → `RETURN` "Cool! If you need anything else, just ask." (Spanish: "¡Genial! Si necesitas algo más, solo pregunta.")

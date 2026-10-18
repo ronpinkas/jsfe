@@ -2,8 +2,8 @@
   {
     "id": "shopify-product-search",
     "name": "ShopifyProductSearch",
-    "version": "1.6.1",
-    "description": "Customer asks to find a product, whether one is in stock (online or at a store near them), or what it costs ('do you have air fryers', 'is this TV in stock in Phoenix', 'how much is the iPhone 16', '¿tienen refrigeradores?', '¿cuánto cuesta?'). Not: general advice without asking for a product (None); an order already placed (ShopifyTrackOrder); returns, shipping or other store policies (ShopifyStorePolicies). The product number is read by pickChoice, so a number with courtesy or a YES around it (\"Yes 1\", \"1 please\") picks it. On a call (owner 2026-10-17): the results are spoken — up to three, each with its name, price and stock, no links — and TEXT / TEXTO texts the links (text-destination, send-text), then the question is asked again; with no phone that can receive texts the TEXT option is not offered. The text ends with how to continue: by replying, and on WhatsApp (get-whatsapp-link, the search pre-filled) when the tenant invites callers there.",
+    "version": "1.6.2",
+    "description": "Customer asks to find a product, whether one is in stock (online or at a store near them), or what it costs ('do you have air fryers', 'is this TV in stock in Phoenix', 'how much is the iPhone 16', '¿tienen refrigeradores?', '¿cuánto cuesta?'). Not: general advice without asking for a product (None); an order already placed (ShopifyTrackOrder); returns, shipping or other store policies (ShopifyStorePolicies). The product number is read by pickChoice, so a number with courtesy or a YES around it (\"Yes 1\", \"1 please\") picks it. On a call (owner 2026-10-17): the results are spoken — up to three, each with its name, price and stock, no links — and TEXT / TEXTO texts the links (text-destination, send-text), then the question is asked again; with no phone that can receive texts the TEXT option is not offered. The text ends with how to continue: by replying, and on WhatsApp (get-whatsapp-link, the search pre-filled) when the tenant invites callers there. A product number is a pick only when the tenant has store locations (global_store_locations), as the question offers it only then; otherwise a number is another request.",
     "prompt": "product search",
     "prompt_es": "buscar producto",
     "primary": true,
@@ -301,7 +301,7 @@
         "id": "read_product_pick",
         "type": "SET",
         "variable": "product_pick",
-        "value": "pickChoice(String(product_choice?.value || product_choice || ''), (function() { var n = Math.min((search_result && search_result.products ? search_result.products.length : 0), cargo.voice ? 3 : 5); var c = []; for (var k = 1; k <= n; k++) { c.push({ key: String(k), words: [String(k)] }); } return c; })(), false)"
+        "value": "(typeof global_store_locations !== 'undefined' && Array.isArray(global_store_locations) && global_store_locations.length > 0) ? pickChoice(String(product_choice?.value || product_choice || ''), (function() { var n = Math.min((search_result && search_result.products ? search_result.products.length : 0), cargo.voice ? 3 : 5); var c = []; for (var k = 1; k <= n; k++) { c.push({ key: String(k), words: [String(k)] }); } return c; })(), false) : ''"
       },
       {
         "id": "check_product_choice",
