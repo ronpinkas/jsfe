@@ -2,8 +2,8 @@
   {
     "id": "shopify-product-search",
     "name": "ShopifyProductSearch",
-    "version": "1.1.5",
-    "description": "Customer asks to find a product, whether one is in stock (online or at a store near them), or what it costs ('do you have air fryers', 'is this TV in stock in Phoenix', 'how much is the iPhone 16', '¿tienen refrigeradores?', '¿cuánto cuesta?'). Not: general advice without asking for a product (None); an order already placed (ShopifyTrackOrder); returns, shipping or other store policies (ShopifyStorePolicies).",
+    "version": "1.6.1",
+    "description": "Customer asks to find a product, whether one is in stock (online or at a store near them), or what it costs ('do you have air fryers', 'is this TV in stock in Phoenix', 'how much is the iPhone 16', '¿tienen refrigeradores?', '¿cuánto cuesta?'). Not: general advice without asking for a product (None); an order already placed (ShopifyTrackOrder); returns, shipping or other store policies (ShopifyStorePolicies). The product number is read by pickChoice, so a number with courtesy or a YES around it (\"Yes 1\", \"1 please\") picks it. On a call (owner 2026-10-17): the results are spoken — up to three, each with its name, price and stock, no links — and TEXT / TEXTO texts the links (text-destination, send-text), then the question is asked again; with no phone that can receive texts the TEXT option is not offered. The text ends with how to continue: by replying, and on WhatsApp (get-whatsapp-link, the search pre-filled) when the tenant invites callers there.",
     "prompt": "product search",
     "prompt_es": "buscar producto",
     "primary": true,
@@ -11,6 +11,11 @@
       {
         "name": "search_query",
         "description": "The product name, brand, and/or features the user specified in the query prompt",
+        "type": "string"
+      },
+      {
+        "name": "user_city",
+        "description": "The city, or the store by its city, where the customer wants the product ('in Phoenix', 'your downtown store', 'en la tienda del centro'); empty when none is named",
         "type": "string"
       }
     ],
@@ -26,7 +31,8 @@
       },
       "product_choice": {
         "type": "string",
-        "description": "User's product selection (a listed product's number)"
+        "description": "User's product selection (a listed product's number)",
+        "value": ""
       },
       "product_idx": {
         "type": "number",
@@ -42,7 +48,8 @@
       },
       "user_city": {
         "type": "string",
-        "description": "User's city for finding nearest stores"
+        "description": "User's city for finding nearest stores",
+        "value": ""
       },
       "store_availability": {
         "type": "object",
@@ -65,6 +72,12 @@
       }
     },
     "steps": [
+      {
+        "id": "query_from_prompt",
+        "type": "SET",
+        "variable": "search_query",
+        "value": "search_query ? search_query : (typeof userInput !== 'undefined' && userInput && !/^START\\s/.test(String(userInput)) ? String(userInput).trim() : '')"
+      },
       {
         "id": "get-search-query-if-no-param",
         "type": "CASE",
@@ -97,8 +110,30 @@
         "onFail": {
           "id": "search_failed",
           "type": "FLOW",
-          "value": "no-action-needed",
-          "callType": "reboot"
+          "value": "give-up",
+          "callType": "reboot",
+          "parameters": {
+            "context": "the product search",
+            "context_es": "la búsqueda de productos"
+          }
+        }
+      },
+      {
+        "id": "sps_text_where",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.voice": {
+            "id": "sps_find_text_destination",
+            "type": "FLOW",
+            "value": "text-destination",
+            "callType": "call"
+          },
+          "default": {
+            "id": "sps_no_text_needed",
+            "type": "SET",
+            "variable": "noop_text_where",
+            "value": "true"
+          }
         }
       },
       {
@@ -106,16 +141,29 @@
         "type": "CASE",
         "branches": {
           "condition: search_result && search_result.products && search_result.products.length > 0": {
-            "id": "show_results",
-            "type": "SAY",
-            "value": "Great! Here's what I found for '{{search_query}}':\n\n{{search_result.products.slice(0, cargo?.voice ? 3 : 5).map((p, i) => { const pMin = p.price_range?.min?.amount != null ? (p.price_range.min.amount / 100).toFixed(2) : p.price_range?.min; const pMax = p.price_range?.max?.amount != null ? (p.price_range.max.amount / 100).toFixed(2) : p.price_range?.max; const priceDisplay = p.price_range ? (pMin === pMax ? `$${pMin}` : `$${pMin} - $${pMax}`) : (p.price ? `$${p.price?.amount != null ? (p.price.amount / 100).toFixed(2) : p.price}` : 'Price varies'); const availableVariants = p.variants ? p.variants.filter(v => v.availability?.available ?? v.available) : []; const totalVariants = p.variants ? p.variants.length : 0; const stockStatus = totalVariants === 0 ? '' : availableVariants.length === totalVariants ? 'In Stock' : availableVariants.length > 0 ? `Limited Stock (${availableVariants.length}/${totalVariants} options available)` : 'Out of Stock'; return `${i+1}. ${p.title}\\n   Price: ${priceDisplay}\\n   ${stockStatus}\\n   ${p.url ? 'View: ' + p.url : ''}`; }).join('\\n\\n')}}",
-            "value_es": "¡Genial! Esto es lo que encontré para '{{search_query}}':\n\n{{search_result.products.slice(0, cargo?.voice ? 3 : 5).map((p, i) => { const pMin = p.price_range?.min?.amount != null ? (p.price_range.min.amount / 100).toFixed(2) : p.price_range?.min; const pMax = p.price_range?.max?.amount != null ? (p.price_range.max.amount / 100).toFixed(2) : p.price_range?.max; const priceDisplay = p.price_range ? (pMin === pMax ? `$${pMin}` : `$${pMin} - $${pMax}`) : (p.price ? `$${p.price?.amount != null ? (p.price.amount / 100).toFixed(2) : p.price}` : 'Precio varía'); const availableVariants = p.variants ? p.variants.filter(v => v.availability?.available ?? v.available) : []; const totalVariants = p.variants ? p.variants.length : 0; const stockStatus = totalVariants === 0 ? '' : availableVariants.length === totalVariants ? 'Disponible' : availableVariants.length > 0 ? `Stock Limitado (${availableVariants.length}/${totalVariants} opciones disponibles)` : 'Agotado'; return `${i+1}. ${p.title}\\n   Precio: ${priceDisplay}\\n   ${stockStatus}\\n   ${p.url ? 'Ver: ' + p.url : ''}`; }).join('\\n\\n')}}"
+            "id": "show_results_by_channel",
+            "type": "CASE",
+            "branches": {
+              "condition: cargo.voice": {
+                "id": "say_results",
+                "type": "SAY",
+                "value": "{{'I found ' + Math.min((search_result && search_result.products ? search_result.products.length : 0), 3) + ' for \"' + search_query + '\". ' + search_result.products.slice(0, 3).map(function(p, i) { var amt = function(v) { return v && v.amount != null ? (v.amount / 100).toFixed(2) : (v != null ? String(v) : ''); }; var lo = p.price_range ? amt(p.price_range.min) : (p.price ? amt(p.price) : ''); var hi = p.price_range ? amt(p.price_range.max) : lo; var price = lo ? (hi && hi !== lo ? 'from ' : '') + amountToSpeech(lo, language, true) : ''; var total = p.variants ? p.variants.length : 0; var avail = p.variants ? p.variants.filter(function(v) { return v.availability ? v.availability.available : v.available; }).length : 0; return ['One', 'Two', 'Three'][i] + ': ' + p.title + (price ? ', ' + price : '') + (total === 0 ? '' : (avail === total ? ', in stock' : (avail > 0 ? ', some options in stock' : ', out of stock'))) + '.'; }).join(' ')}}",
+                "value_es": "{{'Encontré ' + Math.min((search_result && search_result.products ? search_result.products.length : 0), 3) + ' para \"' + search_query + '\". ' + search_result.products.slice(0, 3).map(function(p, i) { var amt = function(v) { return v && v.amount != null ? (v.amount / 100).toFixed(2) : (v != null ? String(v) : ''); }; var lo = p.price_range ? amt(p.price_range.min) : (p.price ? amt(p.price) : ''); var hi = p.price_range ? amt(p.price_range.max) : lo; var price = lo ? (hi && hi !== lo ? 'desde ' : '') + amountToSpeech(lo, language, true) : ''; var total = p.variants ? p.variants.length : 0; var avail = p.variants ? p.variants.filter(function(v) { return v.availability ? v.availability.available : v.available; }).length : 0; return ['Uno', 'Dos', 'Tres'][i] + ': ' + p.title + (price ? ', ' + price : '') + (total === 0 ? '' : (avail === total ? ', disponible' : (avail > 0 ? ', algunas opciones disponibles' : ', agotado'))) + '.'; }).join(' ')}}"
+              },
+              "default": {
+                "id": "show_results",
+                "type": "SAY",
+                "value": "Great! Here's what I found for '{{search_query}}':\n\n{{search_result.products.slice(0, cargo?.voice ? 3 : 5).map((p, i) => { const pMin = p.price_range?.min?.amount != null ? (p.price_range.min.amount / 100).toFixed(2) : p.price_range?.min; const pMax = p.price_range?.max?.amount != null ? (p.price_range.max.amount / 100).toFixed(2) : p.price_range?.max; const priceDisplay = p.price_range ? (pMin === pMax ? `$${pMin}` : `$${pMin} - $${pMax}`) : (p.price ? `$${p.price?.amount != null ? (p.price.amount / 100).toFixed(2) : p.price}` : 'Price varies'); const availableVariants = p.variants ? p.variants.filter(v => v.availability?.available ?? v.available) : []; const totalVariants = p.variants ? p.variants.length : 0; const stockStatus = totalVariants === 0 ? '' : availableVariants.length === totalVariants ? 'In Stock' : availableVariants.length > 0 ? `Limited Stock (${availableVariants.length}/${totalVariants} options available)` : 'Out of Stock'; return `${i+1}. ${p.title}\\n   Price: ${priceDisplay}\\n   ${stockStatus}\\n   ${p.url ? 'View: ' + p.url : ''}`; }).join('\\n\\n')}}",
+                "value_es": "¡Genial! Esto es lo que encontré para '{{search_query}}':\n\n{{search_result.products.slice(0, cargo?.voice ? 3 : 5).map((p, i) => { const pMin = p.price_range?.min?.amount != null ? (p.price_range.min.amount / 100).toFixed(2) : p.price_range?.min; const pMax = p.price_range?.max?.amount != null ? (p.price_range.max.amount / 100).toFixed(2) : p.price_range?.max; const priceDisplay = p.price_range ? (pMin === pMax ? `$${pMin}` : `$${pMin} - $${pMax}`) : (p.price ? `$${p.price?.amount != null ? (p.price.amount / 100).toFixed(2) : p.price}` : 'Precio varía'); const availableVariants = p.variants ? p.variants.filter(v => v.availability?.available ?? v.available) : []; const totalVariants = p.variants ? p.variants.length : 0; const stockStatus = totalVariants === 0 ? '' : availableVariants.length === totalVariants ? 'Disponible' : availableVariants.length > 0 ? `Stock Limitado (${availableVariants.length}/${totalVariants} opciones disponibles)` : 'Agotado'; return `${i+1}. ${p.title}\\n   Precio: ${priceDisplay}\\n   ${stockStatus}\\n   ${p.url ? 'Ver: ' + p.url : ''}`; }).join('\\n\\n')}}"
+              }
+            }
           },
           "default": {
             "id": "no_results",
-            "type": "FLOW",
-            "value": "no-action-needed",
-            "callType": "reboot"
+            "type": "RETURN",
+            "value": "language == 'es' ? 'No encontré productos para \\'' + String(search_query).trim().replace(/^[¿¡\\s]+|[.?!\\s]+$/g, '') + '\\' en nuestra tienda en línea. Puedes describirlo de otra forma o preguntarme cualquier otra cosa.' : 'I couldn\\'t find any products for \\'' + String(search_query).trim().replace(/^[¿¡\\s]+|[.?!\\s]+$/g, '') + '\\' in our online store. You can describe it another way, or ask me anything else.'",
+            "outcome": "unresolved",
+            "reason": "no_products_found"
           }
         }
       },
@@ -123,6 +171,13 @@
         "id": "check_global_store_locations",
         "type": "CASE",
         "branches": {
+          "condition: cargo.voice": {
+            "id": "ask_after_spoken_results",
+            "type": "SAY-GET",
+            "variable": "product_choice",
+            "value": "{{(cargo.textTo ? 'Say TEXT and I\\'ll text you the links. ' : '') + ((typeof global_store_locations !== 'undefined' && Array.isArray(global_store_locations) && global_store_locations.length > 0) ? 'To check which stores near you have one, say its number. ' : '') + 'Or say DONE.'}}",
+            "value_es": "{{(cargo.textTo ? 'Diga TEXTO y le envío los enlaces por mensaje. ' : '') + ((typeof global_store_locations !== 'undefined' && Array.isArray(global_store_locations) && global_store_locations.length > 0) ? 'Para ver qué tiendas cercanas lo tienen, diga su número. ' : '') + 'O diga LISTO.'}}"
+          },
           "condition: typeof global_store_locations !== 'undefined' && Array.isArray(global_store_locations) && global_store_locations.length > 0": {
             "id": "ask_store_check",
             "type": "SAY-GET",
@@ -140,6 +195,115 @@
         }
       },
       {
+        "id": "sps_wants_text",
+        "type": "SET",
+        "variable": "sps_wants_text",
+        "value": "!!cargo.voice && !!cargo.textTo && /\\b(?:text|texto|mensaje|message|send|env[ií]a(?:los|melos)?|m[aá]nda(?:los|melos)?)\\b/i.test(String(product_choice && product_choice.value || product_choice || ''))"
+      },
+      {
+        "id": "sps_whatsapp",
+        "type": "CASE",
+        "branches": {
+          "condition: sps_wants_text": {
+            "id": "sps_get_whatsapp_link",
+            "type": "CALL-TOOL",
+            "tool": "get-whatsapp-link",
+            "variable": "sps_wa",
+            "args": {
+              "notTemplateInvite": true
+            },
+            "onFail": {
+              "id": "sps_no_whatsapp_link",
+              "type": "SET",
+              "variable": "sps_wa",
+              "value": "''"
+            }
+          },
+          "default": {
+            "id": "sps_whatsapp_not_needed",
+            "type": "SET",
+            "variable": "sps_wa",
+            "value": "''"
+          }
+        }
+      },
+      {
+        "id": "sps_links",
+        "type": "SET",
+        "variable": "sps_links",
+        "value": "(language == 'es' ? 'Enlaces para \"' : 'Links for \"') + search_query + '\":\\n' + search_result.products.slice(0, 3).map(function(p, i) { return (i + 1) + '. ' + p.title + (p.url ? '\\n' + p.url : ''); }).join('\\n') + '\\n\\n' + (language == 'es' ? 'Puede continuar su búsqueda de productos aquí mismo enviándome un mensaje' + (sps_wa ? ', o por WhatsApp: ' + sps_wa + '?text=' + encodeURIComponent(search_query) : '.') : 'You can continue your product search right here by sending me a text' + (sps_wa ? ', or over WhatsApp: ' + sps_wa + '?text=' + encodeURIComponent(search_query) : '.'))"
+      },
+      {
+        "id": "sps_send_links",
+        "type": "CASE",
+        "branches": {
+          "condition: sps_wants_text": {
+            "id": "sps_text_links",
+            "type": "FLOW",
+            "value": "send-text",
+            "callType": "call",
+            "parameters": {
+              "message": "{{sps_links}}"
+            }
+          },
+          "default": {
+            "id": "sps_no_links",
+            "type": "SET",
+            "variable": "noop_links",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sps_links_sent",
+        "type": "CASE",
+        "branches": {
+          "condition: sps_wants_text && cargo.textSent": {
+            "id": "sps_say_links_sent",
+            "type": "SAY",
+            "value": "Done, I texted the links to the phone ending in {{cargo.textTo4}}. You can continue your search on your cell responding to the text I sent.",
+            "value_es": "Listo, le envié los enlaces al teléfono que termina en {{cargo.textTo4}}. Puede continuar su búsqueda en su celular respondiendo al mensaje que le envié."
+          },
+          "condition: sps_wants_text": {
+            "id": "sps_say_links_not_sent",
+            "type": "SAY",
+            "value": "Sorry, I couldn't text the links right now.",
+            "value_es": "Lo siento, no pude enviar los enlaces en este momento."
+          },
+          "default": {
+            "id": "sps_nothing_to_say",
+            "type": "SET",
+            "variable": "noop_links_said",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sps_ask_again",
+        "type": "CASE",
+        "branches": {
+          "condition: sps_wants_text": {
+            "id": "ask_after_links",
+            "type": "SAY-GET",
+            "variable": "product_choice",
+            "value": "{{'' + ((typeof global_store_locations !== 'undefined' && Array.isArray(global_store_locations) && global_store_locations.length > 0) ? 'To check which stores near you have one, say its number. ' : '') + 'Or say DONE.'}}",
+            "value_es": "{{'' + ((typeof global_store_locations !== 'undefined' && Array.isArray(global_store_locations) && global_store_locations.length > 0) ? 'Para ver qué tiendas cercanas lo tienen, diga su número. ' : '') + 'O diga LISTO.'}}"
+          },
+          "default": {
+            "id": "sps_no_ask_again",
+            "type": "SET",
+            "variable": "noop_ask_again",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "read_product_pick",
+        "type": "SET",
+        "variable": "product_pick",
+        "value": "pickChoice(String(product_choice?.value || product_choice || ''), (function() { var n = Math.min((search_result && search_result.products ? search_result.products.length : 0), cargo.voice ? 3 : 5); var c = []; for (var k = 1; k <= n; k++) { c.push({ key: String(k), words: [String(k)] }); } return c; })(), false)"
+      },
+      {
         "id": "check_product_choice",
         "type": "CASE",
         "branches": {
@@ -152,11 +316,11 @@
             "type": "RETURN",
             "value": "language == 'es' ? '¡Genial! Si necesitas algo más, solo pregunta.' : 'Cool! If you need anything else, just ask.'"
           },
-          "condition: /^[1-5]$/.test(String(product_choice?.value || product_choice || '').trim()) && parseInt(String(product_choice?.value || product_choice).trim(), 10) <= Math.min((search_result && search_result.products ? search_result.products.length : 0), cargo.voice ? 3 : 5)": {
+          "condition: /^[1-5]$/.test(String(product_pick || ''))": {
             "id": "set_product_idx",
             "type": "SET",
             "variable": "product_idx",
-            "value": "parseInt(String(product_choice?.value || product_choice || '').trim()) - 1"
+            "value": "parseInt(product_pick, 10) - 1"
           },
           "default": {
             "id": "invalid_choice",
@@ -171,11 +335,23 @@
         "value": "search_result.products[product_idx]"
       },
       {
-        "id": "ask_city",
-        "type": "SAY-GET",
-        "variable": "user_city",
-        "value": "What city are you near? I'll find stores with this item in stock.",
-        "value_es": "¿Cerca de qué ciudad estás? Buscaré tiendas con este artículo en stock."
+        "id": "ask_city_unless_given",
+        "type": "CASE",
+        "branches": {
+          "condition: typeof user_city === 'undefined' || !String(user_city?.value || user_city || '').trim()": {
+            "id": "ask_city",
+            "type": "SAY-GET",
+            "variable": "user_city",
+            "value": "What city are you near? I'll find stores with this item in stock.",
+            "value_es": "¿Cerca de qué ciudad estás? Buscaré tiendas con este artículo en stock."
+          },
+          "default": {
+            "id": "city_given",
+            "type": "SET",
+            "variable": "noop_city_given",
+            "value": "true"
+          }
+        }
       },
       {
         "id": "normalize_city",
@@ -814,7 +990,7 @@
   {
     "id": "shipstation-track-by-number-verified",
     "name": "ShipStationTrackByNumberVerified",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "description": "Collect a tracking number and read back real-time ShipStation tracking for verified customer",
     "variables": {
       "tracking_number": {
@@ -908,7 +1084,7 @@
           "condition: isAnswer(tn_input, 'exit') && tn_input.trim().split(/\\s+/).length <= 2": {
             "id": "abort_tracking",
             "type": "FLOW",
-            "value": "no-action-needed",
+            "value": "cancel-process",
             "callType": "reboot"
           },
           "condition: isAgentRequest(tn_input)": {
