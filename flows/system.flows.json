@@ -2768,8 +2768,8 @@
   {
     "id": "ask-choice",
     "name": "AskChoice",
-    "version": "1.16.0",
-    "description": "Worker: ask one question; sets cargo.choice (the matched key, or 'other' with accept_other) and cargo.choiceText. AGENT / 0 reaches a person, EXIT / * ends, a new request is DISPATCHed. With amount: an answer naming an amount returns 'amount' — one marked as money ($, dollars, cents, decimals), or, when it matched no choice, any answer amountInAnswer reads as one (\"109 con 47\"), except an answer with a single digit and no payment verb (\"5\", \"5 please\"), which is a key press (\"pay 5\" is an amount). An exact choice keyed no / decline / done / cancel (or negative) is picked only by its own words and keys, never by a refusal or a deferral. Optional answer_precheck: a caller flow run with { answer } BEFORE the choices are matched; an answer_key it sets wins (the answer_validator contract, which runs only when no choice matched). Optional reask_long: a long answer that matches nothing is asked again once before it is DISPATCHed. Params: question(_es), choices [{key, words, negative?, neutral?}], retry(_es), accept_other, expect ('number' | 'email' | 'contact'), amount, digits, exit_context(_es).",
+    "version": "1.17.0",
+    "description": "Worker: ask one question; sets cargo.choice (the matched key, or 'other' with accept_other) and cargo.choiceText. AGENT / 0 reaches a person, EXIT / * ends, a new request is DISPATCHed. With amount: an answer naming an amount returns 'amount' — one marked as money ($, dollars, cents, decimals), or, when it matched no choice, any answer amountInAnswer reads as one (\"109 con 47\"), except an answer with a single digit and no payment verb (\"5\", \"5 please\"), which is a key press (\"pay 5\" is an amount). An exact choice keyed no / decline / done / cancel (or negative) is picked only by its own words and keys, never by a refusal or a deferral. Optional answer_precheck: a caller flow run with { answer } BEFORE the choices are matched; an answer_key it sets wins (the answer_validator contract, which runs only when no choice matched). A caller-set one-time offer (cargo.switchOffer = { text, text_es, words, flow }) is added to the question and consumed by it: an answer in its words runs its flow (reboot) — e.g. ANOTHER ACCOUNT when the account question was skipped (owner 2026-10-17). Optional reask_long: a long answer that matches nothing is asked again once before it is DISPATCHed. Params: question(_es), choices [{key, words, negative?, neutral?}], retry(_es), accept_other, expect ('number' | 'email' | 'contact'), amount, digits, exit_context(_es).",
     "parameters": [
       {
         "name": "question",
@@ -2899,6 +2899,14 @@
         "type": "string",
         "description": "Set by answer_validator: the choice key the answer stands for, or empty",
         "value": ""
+      },
+      "ac_offer": {
+        "type": "object",
+        "value": null
+      },
+      "ac_q": {
+        "type": "string",
+        "value": ""
       }
     },
     "steps": [
@@ -2963,11 +2971,29 @@
         "value": "(cargo.digits = typeof digits !== 'undefined' && digits && typeof digits === 'object' ? digits : undefined, true)"
       },
       {
+        "id": "ac_take_offer",
+        "type": "SET",
+        "variable": "ac_offer",
+        "value": "(function() { var o = cargo.switchOffer && typeof cargo.switchOffer === 'object' && cargo.switchOffer.flow ? cargo.switchOffer : null; cargo.switchOffer = null; return o; })()"
+      },
+      {
+        "id": "ac_question_with_offer",
+        "type": "SET",
+        "variable": "ac_q",
+        "value": "question + (ac_offer && ac_offer.text ? ' ' + ac_offer.text : '')"
+      },
+      {
+        "id": "ac_question_with_offer_es",
+        "type": "SET",
+        "variable": "ac_q_es",
+        "value": "ac_q_es + (ac_offer && (ac_offer.text_es || ac_offer.text) ? ' ' + (ac_offer.text_es || ac_offer.text) : '')"
+      },
+      {
         "id": "ac_ask",
         "type": "SAY-GET",
         "variable": "ac_answer",
         "asSpoken": "ac_amount === true",
-        "value": "{{question}}",
+        "value": "{{ac_q}}",
         "value_es": "{{ac_q_es}}",
         "pii": "ac_pii === true"
       },
@@ -3051,6 +3077,12 @@
         "type": "SET",
         "variable": "ac_key",
         "value": "ac_prechecked ? ac_prechecked : pickChoice(ac_answer, choices, ac_other)"
+      },
+      {
+        "id": "ac_match_offer",
+        "type": "SET",
+        "variable": "ac_key",
+        "value": "ac_offer && (ac_key === '' || ac_key === 'other') && Array.isArray(ac_offer.words) && matchesChoice(ac_answer, ac_offer.words) ? '__switch' : ac_key"
       },
       {
         "id": "ac_exact_no_own_words",
@@ -3218,6 +3250,12 @@
         "value": "ac_prechecked ? ac_prechecked : (ac_key === '' && !ac_other ? pickChoice(ac_answer, choices, ac_other) : ac_key)"
       },
       {
+        "id": "ac_match_again_offer",
+        "type": "SET",
+        "variable": "ac_key",
+        "value": "ac_offer && (ac_key === '' || ac_key === 'other') && Array.isArray(ac_offer.words) && matchesChoice(ac_answer, ac_offer.words) ? '__switch' : ac_key"
+      },
+      {
         "id": "ac_exact_no_own_words_again",
         "type": "SET",
         "variable": "ac_key",
@@ -3284,6 +3322,12 @@
         "id": "ac_route",
         "type": "CASE",
         "branches": {
+          "condition: ac_key === '__switch'": {
+            "id": "ac_offer_taken",
+            "type": "FLOW",
+            "value": "{{ac_offer.flow}}",
+            "callType": "reboot"
+          },
           "condition: ac_key === '__agent'": {
             "id": "ac_agent",
             "type": "FLOW",
