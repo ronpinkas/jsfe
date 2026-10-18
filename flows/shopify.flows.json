@@ -990,8 +990,8 @@
   {
     "id": "shipstation-track-by-number-verified",
     "name": "ShipStationTrackByNumberVerified",
-    "version": "1.0.4",
-    "description": "Collect a tracking number and read back real-time ShipStation tracking for verified customer",
+    "version": "1.0.5",
+    "description": "Collect a tracking number and read back real-time ShipStation tracking for verified customer A question or another request at the tracking-number question ('where can I find my tracking number?', 'I'm trying to pay for it') is DISPATCHed, never refused as a bad number; a tracking number said inside a sentence is read from it.",
     "variables": {
       "tracking_number": {
         "type": "string",
@@ -1075,7 +1075,7 @@
         "id": "normalize_input",
         "type": "SET",
         "variable": "tn_clean",
-        "value": "tn_input.replace(/[^A-Za-z0-9]/g, '').toUpperCase()"
+        "value": "(function(t) { var toks = String(t || '').trim().split(/\\s+/).map(function(x) { return x.replace(/[^A-Za-z0-9]/g, ''); }); var tn = toks.filter(function(c) { return c.length >= 8 && c.length <= 40 && /[0-9]/.test(c); })[0]; return (tn || String(t || '').replace(/[^A-Za-z0-9]/g, '')).toUpperCase(); })(tn_input)"
       },
       {
         "id": "route_input",
@@ -1092,6 +1092,10 @@
             "type": "FLOW",
             "value": "live-agent-requested",
             "callType": "reboot"
+          },
+          "condition: (function(t) { var w = String(t || '').trim().split(/\\s+/); var hasTn = w.some(function(x) { var c = x.replace(/[^A-Za-z0-9]/g, ''); return c.length >= 8 && /[0-9]/.test(c); }); return !hasTn && (w.filter(function(x) { return /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,}/.test(x); }).length >= 3 || /[?¿]/.test(t)); })(tn_input)": {
+            "id": "another_request",
+            "type": "DISPATCH"
           },
           "condition: tn_clean.length >= 8 && tn_clean.length <= 40 && /[0-9]/.test(tn_clean)": {
             "id": "call_shipstation",

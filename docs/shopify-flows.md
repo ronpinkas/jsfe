@@ -291,7 +291,7 @@ graph TD
 ---
 
 ## ShipStationTrackByNumberVerified
-**ID**: `shipstation-track-by-number-verified` · **Version**: 1.0.4 · **Sub-flow**  
+**ID**: `shipstation-track-by-number-verified` · **Version**: 1.0.5 · **Sub-flow**  
 **Description**: Collect a tracking number and read back real-time ShipStation tracking for verified customer.
 
 Reached by `replace` from `shopify-get-orders-verified` when the verified customer has no Shopify orders. It retries into itself via `generic-retry-with-options` (an invalid number) and once directly (a number not found).
@@ -303,10 +303,11 @@ Reached by `replace` from `shopify-get-orders-verified` when the verified custom
 1. Guards - `tracking_number` (as a string), `intro_message` and `intro_message_es` default to `''` when undefined.
 2. `clean_param` - `tn_clean` = `tracking_number` with non-alphanumerics removed.
 3. `ask_if_missing` (CASE) - `tn_clean` is 8–40 characters → `tn_input = tracking_number` (no prompt). Otherwise → SAY-GET `tn_input` (`digits: {min 8, max 34}`): "[{intro_message} ]Please {verb} [or enter] your tracking number[, followed by the pound key if entered using the dial pad]. To exit anytime … EXIT."
-4. `normalize_input` - `tn_clean` = `tn_input`, alphanumerics only, upper-cased.
+4. `normalize_input` - `tn_clean` = the first word of `tn_input` that is 8–40 letters and digits with a digit (a tracking number said inside a sentence), else the whole of `tn_input`; alphanumerics only, upper-cased.
 5. `route_input` (CASE):
    - `isAnswer(…, 'exit')` (EXIT words or `*`) in an answer of at most two words → FLOW `cancel-process` (`reboot`).
    - `isAgentRequest` (the whole answer asks for a person, or is `0`) → FLOW `live-agent-requested` (`reboot`).
+   - no word of the answer is 8+ letters and digits with a digit, and the answer is a question (`?` or `¿`) or holds three or more words → **DISPATCH** (another request: "where can I find my tracking number?", "I'm trying to pay for it").
    - `tn_clean` is 8–40 characters and contains a digit → CALL-TOOL [`shipstation-get-tracking`](#shipstation-get-tracking) `{trackingNumber: tn_clean, container: cargo}` into `tracking_detail`. `onFail` (`shipstation_lookup_failed`) → FLOW [give-up](system-flows.md#giveup) (`reboot`), `context: "your tracking"` / `context_es: "el rastreo de su paquete"`.
    - default → FLOW `generic-retry-with-options` (`replace`): "That doesn't look like a valid tracking number. Tracking numbers are at least 8 letters and digits.", `retry_flow: "shipstation-track-by-number-verified"`, `cancel_flow: "contact-support"`, `capture_patterns: [{variable: "tracking_number", regex: "\b(?=[A-Za-z0-9]*[0-9])[A-Za-z0-9]{8,40}\b"}]`. The capture is the first whole word of 8 to 40 letters and digits that holds a digit (`normalizeAndFindCapture` returns the matched part), so "my tracking number is 1Z…" captures the `1Z…` number and reboots this flow with it. No `retry_call_type` is passed, so a YES or `1` at the menu reboots this flow afresh and asks for the number (see [GenericRetryWithOptions](system-flows.md#genericretrywithoptions)).
 6. `show_result` (CASE):
@@ -333,6 +334,7 @@ graph TD
     normalize_input --> route_input{input}
     route_input -->|EXIT or *| abort_tracking[FLOW reboot: cancel-process]
     route_input -->|agent request or 0| goto_live_agent[FLOW reboot: live-agent-requested]
+    route_input -->|a question or another request| another_request[DISPATCH]
     route_input -->|8-40 chars with a digit| call_shipstation[TOOL: shipstation-get-tracking]
     route_input -->|default| invalid_tracking_number[FLOW replace: generic-retry-with-options + capture]
     call_shipstation -.->|onFail| shipstation_lookup_failed[FLOW reboot: give-up]
