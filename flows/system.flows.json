@@ -791,6 +791,12 @@
         "value": "typeof account_pattern !== 'undefined' && account_pattern ? String(account_pattern) : ''"
       },
       {
+        "id": "gce_account_capture",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "gce_pattern ? (cargo.authCapture = [{ variable: 'cell_number', reader: 'phone' }, { variable: 'email', reader: 'email' }, { variable: 'acct_number', regex: gce_pattern, normalizer: '[^0-9]' }], true) : true"
+      },
+      {
         "id": "gce_account_or",
         "type": "SET",
         "variable": "gce_or",
@@ -3388,8 +3394,8 @@
   {
     "id": "ask-email",
     "name": "AskEmail",
-    "version": "1.3.1",
-    "description": "Worker: an email address. With on_file, the question offers it (OK keeps it) and any other address the caller gives replaces it. One re-ask when the answer is not an email. Sets cargo.email ('' when none).",
+    "version": "1.4.0",
+    "description": "Worker: an email address. With on_file, the question offers it (OK keeps it) and any other address the caller gives replaces it. A spelled address may come in several answers. One re-ask when the answer is not an email. Sets cargo.email ('' when none).",
     "parameters": [
       {
         "name": "question",
@@ -3418,7 +3424,7 @@
       {
         "name": "why",
         "type": "string",
-        "description": "Internal: 'invalid' (not an address) or 'retry' (the read-back was wrong)",
+        "description": "Internal: 'invalid' (not an address), 'retry' (the read-back was wrong) or 'more' (spelling continues)",
         "required": false
       },
       {
@@ -3456,9 +3462,23 @@
       "ae_why": {
         "type": "string",
         "value": "invalid"
+      },
+      "ae_spelling": {
+        "type": "boolean",
+        "value": false
+      },
+      "ae_same": {
+        "type": "string",
+        "value": ""
       }
     },
     "steps": [
+      {
+        "id": "ae_fresh_draft",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "typeof why !== 'undefined' && why === 'more' ? true : (cargo.emailDraft = '', true)"
+      },
       {
         "id": "ae_attempt",
         "type": "SET",
@@ -3469,13 +3489,13 @@
         "id": "ae_question",
         "type": "SET",
         "variable": "ae_q",
-        "value": "(ae_n > 0 ? (typeof why !== 'undefined' && why === 'retry' ? \"Okay, let's try again. \" : \"That doesn't look like an email address. \") : '') + question"
+        "value": "typeof why !== 'undefined' && why === 'more' ? 'Got it. Go on.' : (ae_n > 0 ? (typeof why !== 'undefined' && why === 'retry' ? \"Okay, let's try again. \" : \"That doesn't look like an email address. \") : '') + question"
       },
       {
         "id": "ae_question_es",
         "type": "SET",
         "variable": "ae_q_es",
-        "value": "(ae_n > 0 ? (typeof why !== 'undefined' && why === 'retry' ? 'De acuerdo, intentemos de nuevo. ' : 'Eso no parece un correo electrónico. ') : '') + (typeof question_es !== 'undefined' && question_es ? question_es : question)"
+        "value": "typeof why !== 'undefined' && why === 'more' ? 'Entendido. Continúe.' : (ae_n > 0 ? (typeof why !== 'undefined' && why === 'retry' ? 'De acuerdo, intentemos de nuevo. ' : 'Eso no parece un correo electrónico. ') : '') + (typeof question_es !== 'undefined' && question_es ? question_es : question)"
       },
       {
         "id": "ae_ask",
@@ -3517,7 +3537,51 @@
         "id": "ae_read",
         "type": "SET",
         "variable": "ae_found",
-        "value": "readEmail(cargo.choiceText) || (cargo.choice === 'ok' && typeof on_file !== 'undefined' && on_file ? String(on_file) : '')"
+        "value": "(cargo.choice === 'other' && cargo.emailDraft ? readEmail(String(cargo.emailDraft) + ' ' + cargo.choiceText) : '') || readEmail(cargo.choiceText) || (cargo.choice === 'ok' && typeof on_file !== 'undefined' && on_file ? String(on_file) : '')"
+      },
+      {
+        "id": "ae_more",
+        "type": "SET",
+        "variable": "ae_spelling",
+        "value": "!ae_found && cargo.choice === 'other' && isSpelledFragment(cargo.choiceText) && String(cargo.emailDraft || '').length < 200"
+      },
+      {
+        "id": "ae_keep_draft",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "ae_spelling ? (cargo.emailDraft = (String(cargo.emailDraft || '') + ' ' + cargo.choiceText).trim(), true) : true"
+      },
+      {
+        "id": "ae_same_attempt",
+        "type": "SET",
+        "variable": "ae_same",
+        "value": "String(ae_n)"
+      },
+      {
+        "id": "ae_keep_spelling",
+        "type": "CASE",
+        "branches": {
+          "condition: ae_spelling": {
+            "id": "ae_go_on",
+            "type": "FLOW",
+            "value": "ask-email",
+            "callType": "replace",
+            "parameters": {
+              "question": "{{question}}",
+              "question_es": "{{question_es}}",
+              "on_file": "{{on_file}}",
+              "attempt": "{{ae_same}}",
+              "why": "more",
+              "confirm": "{{confirm}}"
+            }
+          },
+          "default": {
+            "id": "ae_not_spelling",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
       },
       {
         "id": "ae_is_new",
@@ -3529,13 +3593,13 @@
         "id": "ae_readback",
         "type": "SET",
         "variable": "ae_q",
-        "value": "\"I have \" + (cargo.voice ? ae_found.split('').join(' ').replace(/ @ /, ' at ').replace(/ \\. /g, ' dot ') : ae_found) + '. Is that right? ' + (cargo.voice ? 'Press 1 or say' : 'Type') + ' YES, or ' + (cargo.voice ? 'press 2 or say' : 'type') + ' NO.'"
+        "value": "\"I have \" + (cargo.voice ? ae_found.split('').join(' ').replace(/ @ /, ' at ').replace(/ \\. /g, ' dot ').replace(/ _ /g, ' underscore ').replace(/ - /g, ' dash ') : ae_found) + '. Is that right? ' + (cargo.voice ? 'Press 1 or say' : 'Type') + ' YES, or ' + (cargo.voice ? 'press 2 or say' : 'type') + ' NO.'"
       },
       {
         "id": "ae_readback_es",
         "type": "SET",
         "variable": "ae_q_es",
-        "value": "'Tengo ' + (cargo.voice ? ae_found.split('').join(' ').replace(/ @ /, ' arroba ').replace(/ \\. /g, ' punto ') : ae_found) + '. ¿Es correcto? ' + (cargo.voice ? 'Presione 1 o diga' : 'Escriba') + ' SÍ, o ' + (cargo.voice ? 'presione 2 o diga' : 'escriba') + ' NO.'"
+        "value": "'Tengo ' + (cargo.voice ? ae_found.split('').join(' ').replace(/ @ /, ' arroba ').replace(/ \\. /g, ' punto ').replace(/ _ /g, ' guion bajo ').replace(/ - /g, ' guion ') : ae_found) + '. ¿Es correcto? ' + (cargo.voice ? 'Presione 1 o diga' : 'Escriba') + ' SÍ, o ' + (cargo.voice ? 'presione 2 o diga' : 'escriba') + ' NO.'"
       },
       {
         "id": "ae_confirm_new",
@@ -3608,7 +3672,7 @@
             "id": "ae_record",
             "type": "SET",
             "variable": "assignment_side_effect",
-            "value": "(cargo.email = ae_found, true)"
+            "value": "(cargo.email = ae_found, cargo.emailDraft = '', true)"
           },
           "condition: ae_n < 1": {
             "id": "ae_again",
@@ -3628,7 +3692,7 @@
             "id": "ae_none",
             "type": "SET",
             "variable": "assignment_side_effect",
-            "value": "(cargo.email = '', true)"
+            "value": "(cargo.email = '', cargo.emailDraft = '', true)"
           }
         }
       }
