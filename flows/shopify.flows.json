@@ -538,74 +538,86 @@
   {
     "id": "shopify-track-order",
     "name": "ShopifyTrackOrder",
-    "version": "1.0.2",
-    "description": "Customer asks about an order or purchase they placed: its status, when it will arrive or be ready for pickup, where it is, its tracking, a package that has not arrived, or a list of their orders ('where is my order', 'order status', 'my order', 'help with an order', 'track my package', 'when will my delivery arrive', 'order #1234', '¿dónde está mi pedido?', 'mi pedido', 'estado de mi orden', '¿cuándo llega mi pedido?', '¿ya está listo para recoger?', 'no me ha llegado mi pedido', 'rastrear mi pedido'). Not: finding a product (ShopifyProductSearch); a return, refund or shipping policy (ShopifyStorePolicies); cancelling an order (None).",
+    "version": "2.0.0",
+    "description": "Customer asks about an order or purchase they placed, or a package: its status, when it will arrive or be ready for pickup, where it is, its tracking or tracking number, what is in it, a package that has not arrived, or a list of their orders ('where is my order', 'order status', 'my order', 'help with an order', 'track my package', 'when will my delivery arrive', 'order #1234', 'track 1Z999AA10123456784', 'where do I find my tracking number', '¿dónde está mi pedido?', 'mi pedido', 'estado de mi orden', '¿cuándo llega mi pedido?', '¿ya está listo para recoger?', 'no me ha llegado mi pedido', 'rastrear mi pedido', 'rastrear mi paquete'). Not: finding a product (ShopifyProductSearch); a return, refund or shipping policy (ShopifyStorePolicies); cancelling an order (None).",
     "prompt": "track order",
     "prompt_es": "rastrear pedido",
     "primary": true,
     "parameters": [
       {
         "name": "order_number",
-        "description": "Order number in the message ('#1234').",
+        "description": "An order number in the message ('#1234', 'S1449567').",
         "type": "string"
+      },
+      {
+        "name": "tracking_number",
+        "description": "A carrier tracking number in the message (8 to 40 letters and digits, e.g. '1Z999AA10123456784').",
+        "type": "string"
+      },
+      {
+        "name": "ask",
+        "description": "What they want to know: 'track' (where it is, its tracking), 'delivery' (when it arrives, whether it was delivered), 'items' (what is in it), 'details' (its status or details), 'list' (their orders); else leave empty.",
+        "type": "string",
+        "enum": [
+          "track",
+          "delivery",
+          "items",
+          "details",
+          "list"
+        ]
       }
     ],
     "variables": {
       "order_number": {
         "type": "string",
-        "description": "Order number to track",
         "value": ""
       },
-      "cell_number": {
+      "tracking_number": {
         "type": "string",
-        "description": "Customer cell phone number",
         "value": ""
       },
-      "email": {
+      "ask": {
         "type": "string",
-        "description": "Customer email address",
         "value": ""
-      },
-      "order_detail": {
-        "type": "object",
-        "description": "Details of the order to display"
-      },
-      "validate_identifier": {
-        "type": "boolean",
-        "description": "Whether to validate email/phone identifier"
       }
     },
     "steps": [
       {
-        "id": "set_validate_if_from_param",
+        "id": "to_support_context",
         "type": "SET",
-        "variable": "validate_identifier",
-        "value": "!!order_number"
-      },
-      {
-        "id": "set_support_context",
-        "type": "SET",
-        "variable": "support_context_side_effect",
+        "variable": "assignment_side_effect",
         "value": "cargo.support_context = 'orders', cargo.support_context_es = 'pedidos'"
       },
       {
-        "id": "explain_verification",
+        "id": "to_request",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(function() { if (cargo.orderAuthPending) { cargo.orderAuthPending = false; return true; } else { cargo.orderAsk = ['track', 'delivery', 'items', 'details', 'list'].indexOf(String(typeof ask !== 'undefined' ? ask : '')) >= 0 ? String(ask) : ''; cargo.orderNumberAsked = String(typeof order_number !== 'undefined' && order_number ? order_number : '').trim(); cargo.trackingNumberAsked = String(typeof tracking_number !== 'undefined' && tracking_number ? tracking_number : '').replace(/[^A-Za-z0-9]/g, ''); return true; } })()"
+      },
+      {
+        "id": "to_auth_mark",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.orderAuthPending = !(cargo.otpVerified && (cargo.otp_email || cargo.otp_cell_number))"
+      },
+      {
+        "id": "to_explain",
         "type": "SAY",
         "value": "{{cargo.otpVerified && (cargo.otp_email || cargo.otp_cell_number) ? '' : \"I can help you track your order. For your security, I'll need to verify your identity first.\"}}",
         "value_es": "{{cargo.otpVerified && (cargo.otp_email || cargo.otp_cell_number) ? '' : \"Puedo ayudarte a rastrear tu pedido. Por tu seguridad, primero necesitaré verificar tu identidad.\"}}"
       },
       {
-        "id": "check_otp_status",
+        "id": "to_verify",
         "type": "CASE",
         "branches": {
           "condition: cargo.otpVerified && (cargo.otp_email || cargo.otp_cell_number)": {
-            "id": "already_verified",
-            "type": "FLOW",
-            "value": "shopify-get-orders-verified",
-            "callType": "replace"
+            "id": "to_verified",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
           },
           "default": {
-            "id": "perform_auth",
+            "id": "to_authenticate",
             "type": "FLOW",
             "value": "authenticate-user",
             "callType": "call",
@@ -617,73 +629,82 @@
         }
       },
       {
-        "id": "proceed_to_orders",
-        "type": "FLOW",
-        "value": "shopify-get-orders-verified",
-        "callType": "replace"
+        "id": "to_auth_done",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.orderAuthPending = false"
+      },
+      {
+        "id": "to_route",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.trackingNumberAsked.length >= 8 && cargo.trackingNumberAsked.length <= 40 && /[0-9]/.test(cargo.trackingNumberAsked)": {
+            "id": "to_by_number",
+            "type": "FLOW",
+            "value": "shipstation-track-by-number-verified",
+            "callType": "replace",
+            "parameters": {
+              "tracking_number": "{{cargo.trackingNumberAsked}}"
+            }
+          },
+          "default": {
+            "id": "to_desk",
+            "type": "FLOW",
+            "value": "shopify-order-desk",
+            "callType": "replace"
+          }
+        }
       }
     ]
   },
   {
-    "id": "shopify-get-orders-verified",
-    "name": "ShopifyGetOrdersVerified",
-    "version": "1.1.2",
-    "description": "Get order list for verified customer",
+    "id": "shopify-orders-fetch",
+    "name": "ShopifyOrdersFetch",
+    "version": "1.0.0",
+    "description": "Worker: the verified customer's Shopify orders (cargo.shopifyOrders), fetched once per conversation and reused while the verified contact is the same; a lookup that fails is the give-up.",
     "variables": {
-      "orders_result": {
-        "type": "object",
-        "description": "Orders lookup result"
-      },
-      "order_number": {
+      "of_id": {
         "type": "string",
-        "description": "Specific order number to track"
-      },
-      "user_choice": {
-        "type": "string",
-        "description": "User selection",
         "value": ""
       },
-      "shopify_identifier": {
-        "type": "string",
-        "description": "Email or phone for Shopify lookup"
-      },
-      "tracking_detail": {
-        "type": "object",
-        "description": "ShipStation real-time tracking result"
-      },
-      "number_from_customer": {
-        "type": "boolean",
-        "description": "The customer gave the order number (not picked from their list): only then is a miss worth listing their orders"
+      "of_result": {
+        "type": "object"
       }
     },
     "steps": [
       {
-        "id": "note_number_source",
+        "id": "of_clean",
         "type": "SET",
-        "variable": "number_from_customer",
-        "value": "typeof order_number !== 'undefined' && !!order_number"
+        "variable": "of_result",
+        "value": "null"
       },
       {
-        "id": "set_shopify_identifier",
+        "id": "of_identifier",
         "type": "SET",
-        "variable": "shopify_identifier",
-        "value": "cargo.otp_email || cargo.otp_cell_number"
+        "variable": "of_id",
+        "value": "String(cargo.otp_email || cargo.otp_cell_number || '')"
       },
       {
-        "id": "call_tool_if_no_param",
+        "id": "of_fetch_unless_held",
         "type": "CASE",
         "branches": {
-          "condition: !order_number": {
-            "id": "lookup_orders",
+          "condition: cargo.shopifyOrders && cargo.shopifyOrders.success && cargo.shopifyOrdersFor === of_id": {
+            "id": "of_held",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          },
+          "default": {
+            "id": "of_lookup",
             "type": "CALL-TOOL",
             "tool": "shopify-lookup-orders",
-            "variable": "orders_result",
+            "variable": "of_result",
             "args": {
-              "identifier": "{{shopify_identifier}}",
+              "identifier": "{{of_id}}",
               "container": "{{cargo}}"
             },
             "onFail": {
-              "id": "lookup_failed",
+              "id": "of_lookup_failed",
               "type": "FLOW",
               "value": "give-up",
               "callType": "reboot",
@@ -692,21 +713,27 @@
                 "context_es": "su pedido"
               }
             }
-          },
-          "default": {
-            "id": "skip_lookup",
-            "type": "SET",
-            "variable": "orders_result",
-            "value": "{success: true, orders: [{orderNumber: order_number}]}"
           }
         }
       },
       {
-        "id": "display_orders",
+        "id": "of_keep",
         "type": "CASE",
         "branches": {
-          "condition: !orders_result || !orders_result.success": {
-            "id": "lookup_error",
+          "condition: cargo.shopifyOrders && cargo.shopifyOrders.success && cargo.shopifyOrdersFor === of_id": {
+            "id": "of_kept",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          },
+          "condition: of_result && of_result.success": {
+            "id": "of_record",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.shopifyOrders = of_result, cargo.shopifyOrdersFor = of_id, true)"
+          },
+          "default": {
+            "id": "of_lookup_error",
             "type": "FLOW",
             "value": "give-up",
             "callType": "reboot",
@@ -714,9 +741,94 @@
               "context": "your order",
               "context_es": "su pedido"
             }
+          }
+        }
+      }
+    ]
+  },
+  {
+    "id": "shopify-order-desk",
+    "name": "ShopifyOrderDesk",
+    "version": "1.0.0",
+    "description": "Worker: answers about the verified customer's orders. Picks the order in question (an order number or a position the caller said; else the only order on its way, or the only order; else asks, showing the list), answers what was asked (cargo.orderAsk: track, delivery, items, details) with the answer workers, and keeps that order in focus for the next question. An order number that is not theirs lists their orders; no orders at all goes to the tracking-number question.",
+    "parameters": [
+      {
+        "name": "answer",
+        "type": "string",
+        "description": "Internal: the caller's last words, read for an order and a question",
+        "required": false
+      }
+    ],
+    "variables": {
+      "dk_read": {
+        "type": "object"
+      },
+      "dk_pick": {
+        "type": "string",
+        "value": ""
+      },
+      "dk_reply": {
+        "type": "string",
+        "value": ""
+      },
+      "dk_list_q": {
+        "type": "string",
+        "value": ""
+      },
+      "dk_list_q_es": {
+        "type": "string",
+        "value": ""
+      }
+    },
+    "steps": [
+      {
+        "id": "dk_clean_reply",
+        "type": "SET",
+        "variable": "dk_reply",
+        "value": "''"
+      },
+      {
+        "id": "dk_clean_pick",
+        "type": "SET",
+        "variable": "dk_pick",
+        "value": "''"
+      },
+      {
+        "id": "dk_orders",
+        "type": "FLOW",
+        "value": "shopify-orders-fetch",
+        "callType": "call"
+      },
+      {
+        "id": "dk_read_answer",
+        "type": "SET",
+        "variable": "dk_read",
+        "value": "typeof answer !== 'undefined' && answer ? (function(t) { t = String(t || '').replace(/\\\\(['\"\\\\])/g, '$1').trim(); var w = t.toLowerCase(); var list = (cargo.shopifyOrders && cargo.shopifyOrders.orders) || []; var asks = [{\"key\":\"track\",\"words\":[\"track\",\"tracking\",\"track it\",\"track package\",\"track my package\",\"track my order\",\"where is it\",\"where is my package\",\"where is my order\",\"wheres my order\",\"where's my order\",\"where's my package\",\"tracking number\",\"what is my tracking number\",\"where do i find my tracking number\",\"where can i find my tracking number\",\"rastrear\",\"rastreo\",\"rastrear paquete\",\"rastrear mi pedido\",\"seguimiento\",\"dónde está\",\"donde esta\",\"dónde está mi pedido\",\"donde esta mi pedido\",\"dónde está mi paquete\",\"donde esta mi paquete\",\"número de rastreo\",\"numero de rastreo\"]},{\"key\":\"delivery\",\"words\":[\"when will it arrive\",\"when does it arrive\",\"when will i get it\",\"when will it get here\",\"delivery date\",\"arrival\",\"eta\",\"delivered\",\"cuándo llega\",\"cuando llega\",\"cuándo me llega\",\"cuando me llega\",\"cuándo llegará\",\"cuando llegara\",\"fecha de entrega\",\"entregado\",\"llegó\",\"llego\"]},{\"key\":\"items\",\"words\":[\"items\",\"what is in it\",\"whats in it\",\"what's in it\",\"what did i order\",\"what did i buy\",\"products\",\"artículos\",\"articulos\",\"qué compré\",\"que compre\",\"qué pedí\",\"que pedi\",\"productos\",\"qué tiene\",\"que tiene\"]},{\"key\":\"details\",\"words\":[\"details\",\"order details\",\"more details\",\"status\",\"order status\",\"detalles\",\"detalles del pedido\",\"estado\",\"estado del pedido\"]}]; var ask = pickChoice(w, asks) || ''; var norm = function(s) { return String(s || '').replace(/^#/, '').replace(/\\s+/g, '').toUpperCase(); }; var number = ''; var index = -1; var said = (t.match(/#?\\b[A-Za-z]?\\d{4,}\\b/) || [''])[0]; if (said) { number = norm(said); var k = list.map(function(o) { return norm(o.orderNumber); }).indexOf(number); if (k < 0) { k = list.map(function(o) { return norm(o.orderNumber).replace(/^[A-Z]+/, ''); }).indexOf(number.replace(/^[A-Z]+/, '')); } else { /* exact */ } if (k >= 0) { index = k; number = list[k].orderNumber; } else { /* not in the list */ } } else { var d = (w.match(/^(?:order |pedido |number |número |numero |el |the )*([1-5])\\b/) || [])[1]; var o = { first: 1, second: 2, third: 3, fourth: 4, fifth: 5, primero: 1, primer: 1, segundo: 2, tercero: 3, tercer: 3, cuarto: 4, quinto: 5 }; var ow = Object.keys(o).filter(function(x) { return new RegExp('\\\\b' + x + '\\\\b').test(w); })[0]; var n = d ? parseInt(d, 10) : (ow ? o[ow] : 0); if (n >= 1 && n <= Math.min(5, list.length)) { index = n - 1; number = list[index].orderNumber; } else { /* no position */ } } var done = !ask && index < 0 && !number && pickChoice(w, [{ key: 'done', words: [\"no\",\"nope\",\"nothing\",\"nothing else\",\"no thanks\",\"no thank you\",\"that's all\",\"that is all\",\"done\",\"no gracias\",\"nada\",\"nada más\",\"nada mas\",\"eso es todo\",\"es todo\",\"listo\"] }], true) === 'done'; return { ask: ask, index: index, number: number, done: done }; })(answer) : { ask: '', index: -1, number: '', done: false }"
+      },
+      {
+        "id": "dk_take_answer",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(dk_read.ask ? (cargo.orderAsk = dk_read.ask) : null, dk_read.number ? (cargo.orderNumberAsked = dk_read.number) : null, true)"
+      },
+      {
+        "id": "dk_choose",
+        "type": "SET",
+        "variable": "dk_pick",
+        "value": "(function() { var list = (cargo.shopifyOrders && cargo.shopifyOrders.orders) || []; var norm = function(s) { return String(s || '').replace(/^#/, '').replace(/\\s+/g, '').toUpperCase(); }; var asked = String(cargo.orderNumberAsked || ''); if (asked) { var k = list.map(function(o) { return norm(o.orderNumber); }).indexOf(norm(asked)); if (k < 0) { k = list.map(function(o) { return norm(o.orderNumber).replace(/^[A-Z]+/, ''); }).indexOf(norm(asked).replace(/^[A-Z]+/, '')); } else { /* exact */ } cargo.orderNumberAsked = ''; if (k >= 0) { cargo.orderValidate = false; return list[k].orderNumber; } else { cargo.orderValidate = true; cargo.orderFromCaller = true; return asked; } } if (typeof answer !== 'undefined' && answer && cargo.orderFocus && !(cargo.orderAsk === 'list')) { return cargo.orderFocus; } if (list.length === 0) { return '!none'; } if (cargo.orderAsk === 'list') { return ''; } if (list.length === 1) { cargo.orderValidate = false; return list[0].orderNumber; } var moving = list.filter(function(o) { return !o.cancelled && ['FULFILLED', 'FULFILLMENT_NOT_REQUIRED', 'RESTOCKED'].indexOf(String(o.fulfillmentStatus || '')) < 0; }); if (cargo.orderAsk && moving.length === 1) { cargo.orderValidate = false; return moving[0].orderNumber; } return ''; })()"
+      },
+      {
+        "id": "dk_route",
+        "type": "CASE",
+        "branches": {
+          "condition: dk_read.done": {
+            "id": "dk_done",
+            "type": "SAY",
+            "value": "Okay. Is there anything else I can help you with?",
+            "value_es": "De acuerdo. ¿Hay algo más en lo que pueda ayudarle?"
           },
-          "condition: orders_result.orders.length === 0": {
-            "id": "no_orders",
+          "condition: dk_pick === '!none'": {
+            "id": "dk_no_orders",
             "type": "FLOW",
             "value": "shipstation-track-by-number-verified",
             "callType": "replace",
@@ -725,78 +837,220 @@
               "intro_message_es": "Disculpa, no pude encontrar ningún pedido asociado con tu cuenta. Si tienes un número de rastreo del paquete, puedo buscarlo directamente."
             }
           },
-          "condition: orders_result.orders.length === 1": {
-            "id": "single_order_auto",
-            "type": "SET",
-            "variable": "order_number",
-            "value": "orders_result.orders[0].orderNumber"
-          },
-          "default": {
-            "id": "show_orders",
-            "type": "SAY-GET",
-            "variable": "user_choice",
-            "value": "Hi {{orders_result.customer.firstName}}! Here are your recent orders:\n\n{{orders_result.orders.slice(0, 5).map((o, i) => `${i+1}. Order ${o.orderNumber}\\n   Date: ${o.createdAt ? new Date(o.createdAt).toLocaleDateString() : 'N/A'}\\n   Status: ${(() => { const st = o.cancelled ? 'Cancelled' : (o.fulfillmentStatus ? ({ UNFULFILLED: 'Not shipped yet', OPEN: 'Not shipped yet', RESTOCKED: 'Not shipped yet', PARTIALLY_FULFILLED: 'Partly shipped', FULFILLED: 'Shipped', IN_PROGRESS: 'Being prepared', PENDING_FULFILLMENT: 'Being prepared', ON_HOLD: 'On hold', SCHEDULED: 'Scheduled', REQUEST_DECLINED: 'Delayed', FULFILLMENT_NOT_REQUIRED: 'Nothing to ship' }[o.fulfillmentStatus] || String(o.fulfillmentStatus).toLowerCase().replace(/_/g, ' ')) : 'Processing'); return o.financialStatus ? st + '\\n   Payment: ' + ({ AUTHORIZED: 'Authorized', PAID: 'Paid', PARTIALLY_PAID: 'Partly paid', PENDING: 'Pending', REFUNDED: 'Refunded', PARTIALLY_REFUNDED: 'Partly refunded', VOIDED: 'Voided', EXPIRED: 'Expired' }[o.financialStatus] || String(o.financialStatus).toLowerCase().replace(/_/g, ' ')) : st; })()}\\n   Total: $${o.total?.amount || 'N/A'}`).join('\\n\\n')}}\n\nTo see details for a specific order, {{cargo.verb}} the order number (e.g., '1' for the first order). Or {{cargo.verb}} anything else if you're done.",
-            "value_es": "¡Hola {{orders_result.customer.firstName}}! Aquí están tus pedidos recientes:\n\n{{orders_result.orders.slice(0, 5).map((o, i) => `${i+1}. Pedido ${o.orderNumber}\\n   Fecha: ${o.createdAt ? new Date(o.createdAt).toLocaleDateString() : 'N/A'}\\n   Estado: ${(() => { const st = o.cancelled ? 'Cancelado' : (o.fulfillmentStatus ? ({ UNFULFILLED: 'Aún no enviado', OPEN: 'Aún no enviado', RESTOCKED: 'Aún no enviado', PARTIALLY_FULFILLED: 'Enviado en parte', FULFILLED: 'Enviado', IN_PROGRESS: 'En preparación', PENDING_FULFILLMENT: 'En preparación', ON_HOLD: 'En espera', SCHEDULED: 'Programado', REQUEST_DECLINED: 'Retrasado', FULFILLMENT_NOT_REQUIRED: 'Nada que enviar' }[o.fulfillmentStatus] || String(o.fulfillmentStatus).toLowerCase().replace(/_/g, ' ')) : 'Procesando'); return o.financialStatus ? st + '\\n   Pago: ' + ({ AUTHORIZED: 'Autorizado', PAID: 'Pagado', PARTIALLY_PAID: 'Pagado en parte', PENDING: 'Pendiente', REFUNDED: 'Reembolsado', PARTIALLY_REFUNDED: 'Reembolsado en parte', VOIDED: 'Anulado', EXPIRED: 'Vencido' }[o.financialStatus] || String(o.financialStatus).toLowerCase().replace(/_/g, ' ')) : st; })()}\\n   Total: $${o.total?.amount || 'N/A'}`).join('\\n\\n')}}\n\nPara ver detalles de un pedido específico, {{cargo.verb_es}} el número del pedido (ej., '1' para el primer pedido). O {{cargo.verb_es}} cualquier otra cosa si has terminado."
-          }
-        }
-      },
-      {
-        "id": "check_single_order",
-        "type": "CASE",
-        "branches": {
-          "condition: order_number": {
-            "id": "skip_to_details",
-            "type": "SET",
-            "variable": "go_to_details",
-            "value": "true"
-          },
-          "default": {
-            "id": "continue_selection",
-            "type": "SET",
-            "variable": "go_to_details",
-            "value": "false"
-          }
-        }
-      },
-      {
-        "id": "handle_selection",
-        "type": "CASE",
-        "branches": {
-          "condition: go_to_details": {
-            "id": "already_have_order",
-            "type": "SET",
-            "variable": "skip",
-            "value": "true"
-          },
-          "condition: /^[1-5]$/.test(user_choice.trim())": {
-            "id": "get_order_details",
-            "type": "SET",
-            "variable": "order_number",
-            "value": "orders_result.orders[parseInt(user_choice.trim()) - 1]?.orderNumber || ''"
-          },
-          "default": {
-            "id": "finished-forward-prompt-to-conversational-ai",
+          "condition: typeof answer !== 'undefined' && answer && !dk_read.ask && dk_read.index < 0 && !dk_read.number": {
+            "id": "dk_another_request",
             "type": "DISPATCH"
+          },
+          "condition: !dk_pick": {
+            "id": "dk_ask_which",
+            "type": "SAY-GET",
+            "variable": "dk_reply",
+            "value": "{{(cargo.orderAsk === 'track' ? 'Which order would you like to track? ' : cargo.orderAsk === 'delivery' ? 'Which order are you asking about? ' : cargo.orderAsk === 'items' ? 'Which order are you asking about? ' : 'Hi ' + ((cargo.shopifyOrders.customer || {}).firstName || '') + '! ') + 'Here are your recent orders:'}}\n\n{{cargo.shopifyOrders.orders.slice(0, cargo.voice ? 3 : 5).map((o, i) => `${i+1}. Order ${o.orderNumber}, ${o.createdAt ? new Date(o.createdAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' }) : ''}, ${o.cancelled ? 'cancelled' : ({ UNFULFILLED: 'not shipped yet', OPEN: 'not shipped yet', PARTIALLY_FULFILLED: 'partly shipped', FULFILLED: 'shipped', IN_PROGRESS: 'being prepared', PENDING_FULFILLMENT: 'being prepared', ON_HOLD: 'on hold', SCHEDULED: 'scheduled', REQUEST_DECLINED: 'delayed', FULFILLMENT_NOT_REQUIRED: 'nothing to ship' }[o.fulfillmentStatus] || 'processing')}, $${o.total?.amount || ''}`).join(cargo.voice ? '. ' : '\\n')}}\n\n{{cargo.verb.replace(/^./, c => c.toUpperCase())}} its number in the list, or ask what you would like to know: where it is, when it arrives, or what is in it.",
+            "value_es": "{{(cargo.orderAsk === 'track' ? '¿Qué pedido desea rastrear? ' : cargo.orderAsk ? '¿Sobre qué pedido pregunta? ' : '¡Hola ' + ((cargo.shopifyOrders.customer || {}).firstName || '') + '! ') + 'Estos son sus pedidos recientes:'}}\n\n{{cargo.shopifyOrders.orders.slice(0, cargo.voice ? 3 : 5).map((o, i) => `${i+1}. Pedido ${o.orderNumber}, ${o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-US', { month: 'long', day: 'numeric', timeZone: 'UTC' }) : ''}, ${o.cancelled ? 'cancelado' : ({ UNFULFILLED: 'aún no enviado', OPEN: 'aún no enviado', PARTIALLY_FULFILLED: 'enviado en parte', FULFILLED: 'enviado', IN_PROGRESS: 'en preparación', PENDING_FULFILLMENT: 'en preparación', ON_HOLD: 'en espera', SCHEDULED: 'programado', REQUEST_DECLINED: 'retrasado', FULFILLMENT_NOT_REQUIRED: 'nada que enviar' }[o.fulfillmentStatus] || 'procesando')}, $${o.total?.amount || ''}`).join(cargo.voice ? '. ' : '\\n')}}\n\n{{cargo.verb_es.replace(/^./, c => c.toUpperCase())}} su número en la lista, o pregunte lo que quiera saber: dónde está, cuándo llega o qué tiene.",
+            "digits": {
+              "min": 1,
+              "max": 1
+            }
+          },
+          "default": {
+            "id": "dk_focus",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.orderFocus = dk_pick, cargo.orderAsk === 'list' ? (cargo.orderAsk = '') : null, true)"
           }
         }
       },
       {
-        "id": "get_specific_order",
+        "id": "dk_stop_when_done",
         "type": "CASE",
         "branches": {
-          "condition: order_number": {
-            "id": "fetch_order_status",
+          "condition: dk_read.done": {
+            "id": "dk_end",
+            "type": "END"
+          },
+          "default": {
+            "id": "dk_not_done",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "dk_after_list",
+        "type": "CASE",
+        "branches": {
+          "condition: dk_reply": {
+            "id": "dk_read_reply",
+            "type": "FLOW",
+            "value": "shopify-order-desk",
+            "callType": "replace",
+            "parameters": {
+              "answer": "{{dk_reply}}"
+            }
+          },
+          "default": {
+            "id": "dk_no_list_reply",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "dk_detail",
+        "type": "FLOW",
+        "value": "shopify-order-detail",
+        "callType": "call"
+      },
+      {
+        "id": "dk_missing",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.orderMissing && cargo.orderFromCaller": {
+            "id": "dk_not_theirs_list",
+            "type": "FLOW",
+            "value": "shopify-order-desk",
+            "callType": "replace",
+            "parameters": {
+              "answer": ""
+            }
+          },
+          "condition: cargo.orderMissing": {
+            "id": "dk_not_found",
+            "type": "FLOW",
+            "value": "give-up",
+            "callType": "reboot",
+            "parameters": {
+              "context": "your order",
+              "context_es": "su pedido"
+            }
+          },
+          "default": {
+            "id": "dk_found",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.orderFromCaller = false, true)"
+          }
+        }
+      },
+      {
+        "id": "dk_answer",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.orderAsk === 'track'": {
+            "id": "dk_track",
+            "type": "FLOW",
+            "value": "shopify-order-track",
+            "callType": "call"
+          },
+          "condition: cargo.orderAsk === 'delivery'": {
+            "id": "dk_delivery",
+            "type": "FLOW",
+            "value": "shopify-order-delivery",
+            "callType": "call"
+          },
+          "condition: cargo.orderAsk === 'items'": {
+            "id": "dk_items",
+            "type": "FLOW",
+            "value": "shopify-order-items",
+            "callType": "call"
+          },
+          "default": {
+            "id": "dk_details",
+            "type": "FLOW",
+            "value": "shopify-order-details",
+            "callType": "call"
+          }
+        }
+      },
+      {
+        "id": "dk_follow_up",
+        "type": "SAY-GET",
+        "variable": "dk_reply",
+        "value": "Anything else about order {{cargo.orderFocus}}? You can ask where it is, when it arrives, or what is in it.",
+        "value_es": "¿Algo más sobre el pedido {{cargo.orderFocus}}? Puede preguntar dónde está, cuándo llega o qué tiene."
+      },
+      {
+        "id": "dk_next",
+        "type": "FLOW",
+        "value": "shopify-order-desk",
+        "callType": "replace",
+        "parameters": {
+          "answer": "{{dk_reply}}"
+        }
+      }
+    ]
+  },
+  {
+    "id": "shopify-order-detail",
+    "name": "ShopifyOrderDetail",
+    "version": "1.0.0",
+    "description": "Worker: the focused order's Shopify detail (cargo.orderDetails[cargo.orderFocus]) and, when it has a tracking number, its ShipStation tracking (cargo.orderTracking); each fetched once. Sets cargo.orderMissing when Shopify does not find it.",
+    "variables": {
+      "od_detail": {
+        "type": "object"
+      },
+      "od_track": {
+        "type": "object"
+      },
+      "od_id": {
+        "type": "string",
+        "value": ""
+      },
+      "od_tn": {
+        "type": "string",
+        "value": ""
+      }
+    },
+    "steps": [
+      {
+        "id": "od_clean_detail",
+        "type": "SET",
+        "variable": "od_detail",
+        "value": "null"
+      },
+      {
+        "id": "od_clean_track",
+        "type": "SET",
+        "variable": "od_track",
+        "value": "null"
+      },
+      {
+        "id": "od_reset",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(cargo.orderMissing = false, cargo.orderDetails = cargo.orderDetails || {}, cargo.orderTracking = cargo.orderTracking || {}, true)"
+      },
+      {
+        "id": "od_identifier",
+        "type": "SET",
+        "variable": "od_id",
+        "value": "String(cargo.otp_email || cargo.otp_cell_number || '')"
+      },
+      {
+        "id": "od_fetch_unless_held",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.orderDetails[cargo.orderFocus] && cargo.orderDetails[cargo.orderFocus].success": {
+            "id": "od_held",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          },
+          "default": {
+            "id": "od_lookup",
             "type": "CALL-TOOL",
             "tool": "shopify-get-order-status",
-            "variable": "order_detail",
+            "variable": "od_detail",
             "args": {
-              "orderNumber": "{{order_number}}",
-              "identifier": "{{shopify_identifier}}",
+              "orderNumber": "{{cargo.orderFocus}}",
+              "identifier": "{{od_id}}",
               "container": "{{cargo}}",
-              "validateIdentifier": "{{validate_identifier}}"
+              "validateIdentifier": "{{cargo.orderValidate}}"
             },
             "onFail": {
-              "id": "order_detail_failed",
+              "id": "od_lookup_failed",
               "type": "FLOW",
               "value": "give-up",
               "callType": "reboot",
@@ -805,71 +1059,315 @@
                 "context_es": "su pedido"
               }
             }
-          },
-          "default": {
-            "id": "unexpected_no_order",
-            "type": "FLOW",
-            "value": "contact-support",
-            "callType": "reboot"
           }
         }
       },
       {
-        "id": "fetch_shipstation_tracking",
+        "id": "od_keep",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "cargo.orderDetails[cargo.orderFocus] && cargo.orderDetails[cargo.orderFocus].success ? true : (od_detail && od_detail.success ? (cargo.orderDetails[cargo.orderFocus] = od_detail, true) : (cargo.orderMissing = true, cargo.orderFromCaller ? (cargo.orderAsk = 'list', cargo.orderFocus = '') : null, true))"
+      },
+      {
+        "id": "od_tracking_number",
+        "type": "SET",
+        "variable": "od_tn",
+        "value": "(function() { var o = (cargo.orderDetails[cargo.orderFocus] || {}).order || {}; var f = (o.fulfillments || []).filter(function(x) { return x.tracking && x.tracking.length && x.tracking[0] && x.tracking[0].number; })[0]; return f ? String(f.tracking[0].number) : ''; })()"
+      },
+      {
+        "id": "od_track_unless_held",
         "type": "CASE",
         "branches": {
-          "condition: order_detail && order_detail.success && order_detail.order && order_detail.order.fulfillments && order_detail.order.fulfillments.length > 0 && order_detail.order.fulfillments[0].tracking && order_detail.order.fulfillments[0].tracking.length > 0 && !!order_detail.order.fulfillments[0].tracking[0].number": {
+          "condition: od_tn && !cargo.orderTracking[cargo.orderFocus]": {
+            "id": "od_shipstation",
+            "type": "CALL-TOOL",
+            "tool": "shipstation-get-tracking",
+            "variable": "od_track",
+            "args": {
+              "trackingNumber": "{{od_tn}}",
+              "container": "{{cargo}}"
+            },
+            "onFail": {
+              "id": "od_shipstation_unavailable",
+              "type": "SET",
+              "variable": "od_track",
+              "value": "{ success: false }"
+            }
+          },
+          "default": {
+            "id": "od_no_tracking_call",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "od_track_keep",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "od_tn && !cargo.orderTracking[cargo.orderFocus] ? (cargo.orderTracking[cargo.orderFocus] = od_track || { success: false }, true) : true"
+      }
+    ]
+  },
+  {
+    "id": "shopify-order-track",
+    "name": "ShopifyOrderTrack",
+    "version": "1.0.0",
+    "description": "Worker: where the package is and its tracking of the focused order (cargo.orderFocus), from its Shopify detail and ShipStation tracking (shopify-order-detail).",
+    "steps": [
+      {
+        "id": "shopify_order_track_say",
+        "type": "SAY",
+        "value": "{{(function() { var es = false; var num = String(cargo.orderFocus || ''); var d = (cargo.orderDetails || {})[num] || {}; var o = d.order || {}; var tr = (cargo.orderTracking || {})[num] || {}; var STATE = es ? { UNFULFILLED: 'aún no se ha enviado', OPEN: 'aún no se ha enviado', IN_PROGRESS: 'se está preparando', PENDING_FULFILLMENT: 'se está preparando', ON_HOLD: 'está en espera', SCHEDULED: 'está programado', PARTIALLY_FULFILLED: 'se envió en parte', FULFILLED: 'se envió', REQUEST_DECLINED: 'está retrasado', FULFILLMENT_NOT_REQUIRED: 'no tiene nada que enviar' } : { UNFULFILLED: \"hasn't shipped yet\", OPEN: \"hasn't shipped yet\", IN_PROGRESS: 'is being prepared', PENDING_FULFILLMENT: 'is being prepared', ON_HOLD: 'is on hold', SCHEDULED: 'is scheduled', PARTIALLY_FULFILLED: 'has partly shipped', FULFILLED: 'has shipped', REQUEST_DECLINED: 'is delayed', FULFILLMENT_NOT_REQUIRED: 'has nothing to ship' }; var state = o.cancelled ? (es ? 'fue cancelado' : 'was cancelled') : (STATE[o.fulfillmentStatus] || (es ? 'se está procesando' : 'is being processed')); var day = function(x) { return x ? new Date(x).toLocaleDateString(es ? 'es-US' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }) : ''; }; var shipped = (o.fulfillments || []).filter(function(f) { return f.tracking && f.tracking.length && f.tracking[0] && f.tracking[0].number; }); var first = shipped[0] ? shipped[0].tracking[0] : null; var tn = function(n) { n = String(n || ''); return cargo.voice ? (es ? 'que termina en ' : 'ending in ') + n.slice(-4).split('').join(', ') : n; }; var label = (es ? 'Su pedido ' : 'Your order ') + num; if (o.cancelled) { return label + ' ' + state + '.'; } if (tr.success) { var s = es ? ({ AC: 'aceptado por la transportista', IT: 'en camino', DE: 'entregado', EX: 'con un problema de entrega', AT: 'con un intento de entrega', NY: 'aún sin movimiento en la transportista', SP: 'entregado en un punto de recogida', UN: 'sin estado conocido' })[tr.status] || tr.statusDescription : tr.statusDescription; var lines = [label + (es ? ' está ' : ' is ') + String(s || (es ? 'en camino' : 'on its way')).toLowerCase() + '.']; if (tr.exception) { lines.push((es ? 'Problema de entrega: ' : 'Delivery issue: ') + tr.exception + '.'); } else { /* none */ } if (es ? tr.lastEventEs : tr.lastEvent) { lines.push((es ? 'Última actualización: ' : 'Last update: ') + (es ? tr.lastEventEs : tr.lastEvent) + '.'); } else { /* none */ } if (tr.actualDelivery) { lines.push((es ? 'Se entregó el ' : 'It was delivered on ') + day(tr.actualDelivery) + '.'); } else if (tr.estimatedDelivery) { lines.push((es ? 'La entrega estimada es el ' : 'Estimated delivery is ') + day(tr.estimatedDelivery) + '.'); } else { /* no date */ } if (o.fulfillmentStatus === 'PARTIALLY_FULFILLED') { lines.push(es ? 'El resto del pedido aún no se ha enviado.' : 'The rest of the order has not shipped yet.'); } else { /* all of it */ } return lines.join(' '); } if (first) { var est = (shipped[0].estimatedDelivery ? (es ? ' La entrega estimada es el ' : ' Estimated delivery is ') + day(shipped[0].estimatedDelivery) + '.' : ''); return label + ' ' + state + (first.company ? (es ? ' con ' : ' with ') + first.company : '') + (es ? ', número de rastreo ' : ', tracking number ') + tn(first.number) + '.' + (first.url && !cargo.voice ? (es ? ' Puede seguirlo aquí: ' : ' You can follow it here: ') + first.url : '') + est + (o.fulfillmentStatus === 'PARTIALLY_FULFILLED' ? (es ? ' El resto del pedido aún no se ha enviado.' : ' The rest of the order has not shipped yet.') : ''); } if (['FULFILLED', 'PARTIALLY_FULFILLED'].indexOf(o.fulfillmentStatus) >= 0) { return label + ' ' + state + (es ? ', pero no tiene un número de rastreo registrado.' : ', but it has no tracking number on file.'); } if (o.fulfillmentStatus === 'FULFILLMENT_NOT_REQUIRED') { return label + ' ' + state + '.'; } return label + ' ' + state + (es ? ', así que todavía no tiene rastreo. Tendrá un número de rastreo cuando se envíe.' : ', so there is no tracking yet. It will get a tracking number when it ships.'); })()}}",
+        "value_es": "{{(function() { var es = true; var num = String(cargo.orderFocus || ''); var d = (cargo.orderDetails || {})[num] || {}; var o = d.order || {}; var tr = (cargo.orderTracking || {})[num] || {}; var STATE = es ? { UNFULFILLED: 'aún no se ha enviado', OPEN: 'aún no se ha enviado', IN_PROGRESS: 'se está preparando', PENDING_FULFILLMENT: 'se está preparando', ON_HOLD: 'está en espera', SCHEDULED: 'está programado', PARTIALLY_FULFILLED: 'se envió en parte', FULFILLED: 'se envió', REQUEST_DECLINED: 'está retrasado', FULFILLMENT_NOT_REQUIRED: 'no tiene nada que enviar' } : { UNFULFILLED: \"hasn't shipped yet\", OPEN: \"hasn't shipped yet\", IN_PROGRESS: 'is being prepared', PENDING_FULFILLMENT: 'is being prepared', ON_HOLD: 'is on hold', SCHEDULED: 'is scheduled', PARTIALLY_FULFILLED: 'has partly shipped', FULFILLED: 'has shipped', REQUEST_DECLINED: 'is delayed', FULFILLMENT_NOT_REQUIRED: 'has nothing to ship' }; var state = o.cancelled ? (es ? 'fue cancelado' : 'was cancelled') : (STATE[o.fulfillmentStatus] || (es ? 'se está procesando' : 'is being processed')); var day = function(x) { return x ? new Date(x).toLocaleDateString(es ? 'es-US' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }) : ''; }; var shipped = (o.fulfillments || []).filter(function(f) { return f.tracking && f.tracking.length && f.tracking[0] && f.tracking[0].number; }); var first = shipped[0] ? shipped[0].tracking[0] : null; var tn = function(n) { n = String(n || ''); return cargo.voice ? (es ? 'que termina en ' : 'ending in ') + n.slice(-4).split('').join(', ') : n; }; var label = (es ? 'Su pedido ' : 'Your order ') + num; if (o.cancelled) { return label + ' ' + state + '.'; } if (tr.success) { var s = es ? ({ AC: 'aceptado por la transportista', IT: 'en camino', DE: 'entregado', EX: 'con un problema de entrega', AT: 'con un intento de entrega', NY: 'aún sin movimiento en la transportista', SP: 'entregado en un punto de recogida', UN: 'sin estado conocido' })[tr.status] || tr.statusDescription : tr.statusDescription; var lines = [label + (es ? ' está ' : ' is ') + String(s || (es ? 'en camino' : 'on its way')).toLowerCase() + '.']; if (tr.exception) { lines.push((es ? 'Problema de entrega: ' : 'Delivery issue: ') + tr.exception + '.'); } else { /* none */ } if (es ? tr.lastEventEs : tr.lastEvent) { lines.push((es ? 'Última actualización: ' : 'Last update: ') + (es ? tr.lastEventEs : tr.lastEvent) + '.'); } else { /* none */ } if (tr.actualDelivery) { lines.push((es ? 'Se entregó el ' : 'It was delivered on ') + day(tr.actualDelivery) + '.'); } else if (tr.estimatedDelivery) { lines.push((es ? 'La entrega estimada es el ' : 'Estimated delivery is ') + day(tr.estimatedDelivery) + '.'); } else { /* no date */ } if (o.fulfillmentStatus === 'PARTIALLY_FULFILLED') { lines.push(es ? 'El resto del pedido aún no se ha enviado.' : 'The rest of the order has not shipped yet.'); } else { /* all of it */ } return lines.join(' '); } if (first) { var est = (shipped[0].estimatedDelivery ? (es ? ' La entrega estimada es el ' : ' Estimated delivery is ') + day(shipped[0].estimatedDelivery) + '.' : ''); return label + ' ' + state + (first.company ? (es ? ' con ' : ' with ') + first.company : '') + (es ? ', número de rastreo ' : ', tracking number ') + tn(first.number) + '.' + (first.url && !cargo.voice ? (es ? ' Puede seguirlo aquí: ' : ' You can follow it here: ') + first.url : '') + est + (o.fulfillmentStatus === 'PARTIALLY_FULFILLED' ? (es ? ' El resto del pedido aún no se ha enviado.' : ' The rest of the order has not shipped yet.') : ''); } if (['FULFILLED', 'PARTIALLY_FULFILLED'].indexOf(o.fulfillmentStatus) >= 0) { return label + ' ' + state + (es ? ', pero no tiene un número de rastreo registrado.' : ', but it has no tracking number on file.'); } if (o.fulfillmentStatus === 'FULFILLMENT_NOT_REQUIRED') { return label + ' ' + state + '.'; } return label + ' ' + state + (es ? ', así que todavía no tiene rastreo. Tendrá un número de rastreo cuando se envíe.' : ', so there is no tracking yet. It will get a tracking number when it ships.'); })()}}"
+      }
+    ]
+  },
+  {
+    "id": "shopify-order-delivery",
+    "name": "ShopifyOrderDelivery",
+    "version": "1.0.0",
+    "description": "Worker: when it arrives, or when it was delivered of the focused order (cargo.orderFocus), from its Shopify detail and ShipStation tracking (shopify-order-detail).",
+    "steps": [
+      {
+        "id": "shopify_order_delivery_say",
+        "type": "SAY",
+        "value": "{{(function() { var es = false; var num = String(cargo.orderFocus || ''); var d = (cargo.orderDetails || {})[num] || {}; var o = d.order || {}; var tr = (cargo.orderTracking || {})[num] || {}; var STATE = es ? { UNFULFILLED: 'aún no se ha enviado', OPEN: 'aún no se ha enviado', IN_PROGRESS: 'se está preparando', PENDING_FULFILLMENT: 'se está preparando', ON_HOLD: 'está en espera', SCHEDULED: 'está programado', PARTIALLY_FULFILLED: 'se envió en parte', FULFILLED: 'se envió', REQUEST_DECLINED: 'está retrasado', FULFILLMENT_NOT_REQUIRED: 'no tiene nada que enviar' } : { UNFULFILLED: \"hasn't shipped yet\", OPEN: \"hasn't shipped yet\", IN_PROGRESS: 'is being prepared', PENDING_FULFILLMENT: 'is being prepared', ON_HOLD: 'is on hold', SCHEDULED: 'is scheduled', PARTIALLY_FULFILLED: 'has partly shipped', FULFILLED: 'has shipped', REQUEST_DECLINED: 'is delayed', FULFILLMENT_NOT_REQUIRED: 'has nothing to ship' }; var state = o.cancelled ? (es ? 'fue cancelado' : 'was cancelled') : (STATE[o.fulfillmentStatus] || (es ? 'se está procesando' : 'is being processed')); var day = function(x) { return x ? new Date(x).toLocaleDateString(es ? 'es-US' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }) : ''; }; var shipped = (o.fulfillments || []).filter(function(f) { return f.tracking && f.tracking.length && f.tracking[0] && f.tracking[0].number; }); var first = shipped[0] ? shipped[0].tracking[0] : null; var tn = function(n) { n = String(n || ''); return cargo.voice ? (es ? 'que termina en ' : 'ending in ') + n.slice(-4).split('').join(', ') : n; }; var label = (es ? 'Su pedido ' : 'Your order ') + num; if (o.cancelled) { return label + ' ' + state + '.'; } if (tr.success && tr.actualDelivery) { return label + (es ? ' se entregó el ' : ' was delivered on ') + day(tr.actualDelivery) + '.'; } var est = (tr.success && tr.estimatedDelivery) || (shipped[0] && shipped[0].estimatedDelivery); if (est) { return label + (es ? ' debería llegar el ' : ' should arrive on ') + day(est) + '.'; } if (first) { return label + ' ' + state + (es ? '; la transportista aún no da una fecha de entrega.' : '; the carrier has not given a delivery date yet.'); } return label + ' ' + state + (es ? ', así que todavía no tiene fecha de entrega.' : ', so there is no delivery date yet.'); })()}}",
+        "value_es": "{{(function() { var es = true; var num = String(cargo.orderFocus || ''); var d = (cargo.orderDetails || {})[num] || {}; var o = d.order || {}; var tr = (cargo.orderTracking || {})[num] || {}; var STATE = es ? { UNFULFILLED: 'aún no se ha enviado', OPEN: 'aún no se ha enviado', IN_PROGRESS: 'se está preparando', PENDING_FULFILLMENT: 'se está preparando', ON_HOLD: 'está en espera', SCHEDULED: 'está programado', PARTIALLY_FULFILLED: 'se envió en parte', FULFILLED: 'se envió', REQUEST_DECLINED: 'está retrasado', FULFILLMENT_NOT_REQUIRED: 'no tiene nada que enviar' } : { UNFULFILLED: \"hasn't shipped yet\", OPEN: \"hasn't shipped yet\", IN_PROGRESS: 'is being prepared', PENDING_FULFILLMENT: 'is being prepared', ON_HOLD: 'is on hold', SCHEDULED: 'is scheduled', PARTIALLY_FULFILLED: 'has partly shipped', FULFILLED: 'has shipped', REQUEST_DECLINED: 'is delayed', FULFILLMENT_NOT_REQUIRED: 'has nothing to ship' }; var state = o.cancelled ? (es ? 'fue cancelado' : 'was cancelled') : (STATE[o.fulfillmentStatus] || (es ? 'se está procesando' : 'is being processed')); var day = function(x) { return x ? new Date(x).toLocaleDateString(es ? 'es-US' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }) : ''; }; var shipped = (o.fulfillments || []).filter(function(f) { return f.tracking && f.tracking.length && f.tracking[0] && f.tracking[0].number; }); var first = shipped[0] ? shipped[0].tracking[0] : null; var tn = function(n) { n = String(n || ''); return cargo.voice ? (es ? 'que termina en ' : 'ending in ') + n.slice(-4).split('').join(', ') : n; }; var label = (es ? 'Su pedido ' : 'Your order ') + num; if (o.cancelled) { return label + ' ' + state + '.'; } if (tr.success && tr.actualDelivery) { return label + (es ? ' se entregó el ' : ' was delivered on ') + day(tr.actualDelivery) + '.'; } var est = (tr.success && tr.estimatedDelivery) || (shipped[0] && shipped[0].estimatedDelivery); if (est) { return label + (es ? ' debería llegar el ' : ' should arrive on ') + day(est) + '.'; } if (first) { return label + ' ' + state + (es ? '; la transportista aún no da una fecha de entrega.' : '; the carrier has not given a delivery date yet.'); } return label + ' ' + state + (es ? ', así que todavía no tiene fecha de entrega.' : ', so there is no delivery date yet.'); })()}}"
+      }
+    ]
+  },
+  {
+    "id": "shopify-order-items",
+    "name": "ShopifyOrderItems",
+    "version": "1.0.0",
+    "description": "Worker: what is in it of the focused order (cargo.orderFocus), from its Shopify detail and ShipStation tracking (shopify-order-detail).",
+    "steps": [
+      {
+        "id": "shopify_order_items_say",
+        "type": "SAY",
+        "value": "{{(function() { var es = false; var num = String(cargo.orderFocus || ''); var d = (cargo.orderDetails || {})[num] || {}; var o = d.order || {}; var tr = (cargo.orderTracking || {})[num] || {}; var STATE = es ? { UNFULFILLED: 'aún no se ha enviado', OPEN: 'aún no se ha enviado', IN_PROGRESS: 'se está preparando', PENDING_FULFILLMENT: 'se está preparando', ON_HOLD: 'está en espera', SCHEDULED: 'está programado', PARTIALLY_FULFILLED: 'se envió en parte', FULFILLED: 'se envió', REQUEST_DECLINED: 'está retrasado', FULFILLMENT_NOT_REQUIRED: 'no tiene nada que enviar' } : { UNFULFILLED: \"hasn't shipped yet\", OPEN: \"hasn't shipped yet\", IN_PROGRESS: 'is being prepared', PENDING_FULFILLMENT: 'is being prepared', ON_HOLD: 'is on hold', SCHEDULED: 'is scheduled', PARTIALLY_FULFILLED: 'has partly shipped', FULFILLED: 'has shipped', REQUEST_DECLINED: 'is delayed', FULFILLMENT_NOT_REQUIRED: 'has nothing to ship' }; var state = o.cancelled ? (es ? 'fue cancelado' : 'was cancelled') : (STATE[o.fulfillmentStatus] || (es ? 'se está procesando' : 'is being processed')); var day = function(x) { return x ? new Date(x).toLocaleDateString(es ? 'es-US' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }) : ''; }; var shipped = (o.fulfillments || []).filter(function(f) { return f.tracking && f.tracking.length && f.tracking[0] && f.tracking[0].number; }); var first = shipped[0] ? shipped[0].tracking[0] : null; var tn = function(n) { n = String(n || ''); return cargo.voice ? (es ? 'que termina en ' : 'ending in ') + n.slice(-4).split('').join(', ') : n; }; var label = (es ? 'Su pedido ' : 'Your order ') + num; var items = o.items || []; if (!items.length) { return es ? 'No veo los artículos del pedido ' + num + '.' : 'I do not see the items of order ' + num + '.'; } var show = cargo.voice ? items.slice(0, 3) : items; var said = show.map(function(i) { return (i.quantity > 1 ? i.quantity + ' x ' : '') + i.title; }); return (es ? 'El pedido ' + num + ' tiene: ' : 'Order ' + num + ' has: ') + said.join(cargo.voice ? '; ' : ', ') + (items.length > show.length ? (es ? '; y ' + (items.length - show.length) + ' más' : '; and ' + (items.length - show.length) + ' more') : '') + '.'; })()}}",
+        "value_es": "{{(function() { var es = true; var num = String(cargo.orderFocus || ''); var d = (cargo.orderDetails || {})[num] || {}; var o = d.order || {}; var tr = (cargo.orderTracking || {})[num] || {}; var STATE = es ? { UNFULFILLED: 'aún no se ha enviado', OPEN: 'aún no se ha enviado', IN_PROGRESS: 'se está preparando', PENDING_FULFILLMENT: 'se está preparando', ON_HOLD: 'está en espera', SCHEDULED: 'está programado', PARTIALLY_FULFILLED: 'se envió en parte', FULFILLED: 'se envió', REQUEST_DECLINED: 'está retrasado', FULFILLMENT_NOT_REQUIRED: 'no tiene nada que enviar' } : { UNFULFILLED: \"hasn't shipped yet\", OPEN: \"hasn't shipped yet\", IN_PROGRESS: 'is being prepared', PENDING_FULFILLMENT: 'is being prepared', ON_HOLD: 'is on hold', SCHEDULED: 'is scheduled', PARTIALLY_FULFILLED: 'has partly shipped', FULFILLED: 'has shipped', REQUEST_DECLINED: 'is delayed', FULFILLMENT_NOT_REQUIRED: 'has nothing to ship' }; var state = o.cancelled ? (es ? 'fue cancelado' : 'was cancelled') : (STATE[o.fulfillmentStatus] || (es ? 'se está procesando' : 'is being processed')); var day = function(x) { return x ? new Date(x).toLocaleDateString(es ? 'es-US' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }) : ''; }; var shipped = (o.fulfillments || []).filter(function(f) { return f.tracking && f.tracking.length && f.tracking[0] && f.tracking[0].number; }); var first = shipped[0] ? shipped[0].tracking[0] : null; var tn = function(n) { n = String(n || ''); return cargo.voice ? (es ? 'que termina en ' : 'ending in ') + n.slice(-4).split('').join(', ') : n; }; var label = (es ? 'Su pedido ' : 'Your order ') + num; var items = o.items || []; if (!items.length) { return es ? 'No veo los artículos del pedido ' + num + '.' : 'I do not see the items of order ' + num + '.'; } var show = cargo.voice ? items.slice(0, 3) : items; var said = show.map(function(i) { return (i.quantity > 1 ? i.quantity + ' x ' : '') + i.title; }); return (es ? 'El pedido ' + num + ' tiene: ' : 'Order ' + num + ' has: ') + said.join(cargo.voice ? '; ' : ', ') + (items.length > show.length ? (es ? '; y ' + (items.length - show.length) + ' más' : '; and ' + (items.length - show.length) + ' more') : '') + '.'; })()}}"
+      }
+    ]
+  },
+  {
+    "id": "shopify-order-details",
+    "name": "ShopifyOrderDetails",
+    "version": "1.0.0",
+    "description": "Worker: its state, total, items and shipping address of the focused order (cargo.orderFocus), from its Shopify detail and ShipStation tracking (shopify-order-detail).",
+    "steps": [
+      {
+        "id": "shopify_order_details_say",
+        "type": "SAY",
+        "value": "{{(function() { var es = false; var num = String(cargo.orderFocus || ''); var d = (cargo.orderDetails || {})[num] || {}; var o = d.order || {}; var tr = (cargo.orderTracking || {})[num] || {}; var STATE = es ? { UNFULFILLED: 'aún no se ha enviado', OPEN: 'aún no se ha enviado', IN_PROGRESS: 'se está preparando', PENDING_FULFILLMENT: 'se está preparando', ON_HOLD: 'está en espera', SCHEDULED: 'está programado', PARTIALLY_FULFILLED: 'se envió en parte', FULFILLED: 'se envió', REQUEST_DECLINED: 'está retrasado', FULFILLMENT_NOT_REQUIRED: 'no tiene nada que enviar' } : { UNFULFILLED: \"hasn't shipped yet\", OPEN: \"hasn't shipped yet\", IN_PROGRESS: 'is being prepared', PENDING_FULFILLMENT: 'is being prepared', ON_HOLD: 'is on hold', SCHEDULED: 'is scheduled', PARTIALLY_FULFILLED: 'has partly shipped', FULFILLED: 'has shipped', REQUEST_DECLINED: 'is delayed', FULFILLMENT_NOT_REQUIRED: 'has nothing to ship' }; var state = o.cancelled ? (es ? 'fue cancelado' : 'was cancelled') : (STATE[o.fulfillmentStatus] || (es ? 'se está procesando' : 'is being processed')); var day = function(x) { return x ? new Date(x).toLocaleDateString(es ? 'es-US' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }) : ''; }; var shipped = (o.fulfillments || []).filter(function(f) { return f.tracking && f.tracking.length && f.tracking[0] && f.tracking[0].number; }); var first = shipped[0] ? shipped[0].tracking[0] : null; var tn = function(n) { n = String(n || ''); return cargo.voice ? (es ? 'que termina en ' : 'ending in ') + n.slice(-4).split('').join(', ') : n; }; var label = (es ? 'Su pedido ' : 'Your order ') + num; var lines = [(es ? 'El pedido ' : 'Order ') + num + ' ' + state + '.']; if (o.total && o.total.amount) { lines.push('Total: $' + o.total.amount + '.'); } else { /* no total */ } var items = o.items || []; if (items.length) { lines.push((es ? 'Artículos: ' : 'Items: ') + items.map(function(i) { return i.title + (i.quantity > 1 ? ' (x' + i.quantity + ')' : ''); }).join(', ') + '.'); } else { /* none */ } var sa = o.shippingAddress; if (sa && (sa.address1 || sa.city)) { lines.push((es ? 'Envío a: ' : 'Shipping to: ') + [sa.address1, [sa.city, sa.province].filter(Boolean).join(', '), sa.zip].filter(Boolean).join(', ') + '.'); } else { /* none */ } return lines.join(cargo.voice ? ' ' : '\\n'); })()}}",
+        "value_es": "{{(function() { var es = true; var num = String(cargo.orderFocus || ''); var d = (cargo.orderDetails || {})[num] || {}; var o = d.order || {}; var tr = (cargo.orderTracking || {})[num] || {}; var STATE = es ? { UNFULFILLED: 'aún no se ha enviado', OPEN: 'aún no se ha enviado', IN_PROGRESS: 'se está preparando', PENDING_FULFILLMENT: 'se está preparando', ON_HOLD: 'está en espera', SCHEDULED: 'está programado', PARTIALLY_FULFILLED: 'se envió en parte', FULFILLED: 'se envió', REQUEST_DECLINED: 'está retrasado', FULFILLMENT_NOT_REQUIRED: 'no tiene nada que enviar' } : { UNFULFILLED: \"hasn't shipped yet\", OPEN: \"hasn't shipped yet\", IN_PROGRESS: 'is being prepared', PENDING_FULFILLMENT: 'is being prepared', ON_HOLD: 'is on hold', SCHEDULED: 'is scheduled', PARTIALLY_FULFILLED: 'has partly shipped', FULFILLED: 'has shipped', REQUEST_DECLINED: 'is delayed', FULFILLMENT_NOT_REQUIRED: 'has nothing to ship' }; var state = o.cancelled ? (es ? 'fue cancelado' : 'was cancelled') : (STATE[o.fulfillmentStatus] || (es ? 'se está procesando' : 'is being processed')); var day = function(x) { return x ? new Date(x).toLocaleDateString(es ? 'es-US' : 'en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' }) : ''; }; var shipped = (o.fulfillments || []).filter(function(f) { return f.tracking && f.tracking.length && f.tracking[0] && f.tracking[0].number; }); var first = shipped[0] ? shipped[0].tracking[0] : null; var tn = function(n) { n = String(n || ''); return cargo.voice ? (es ? 'que termina en ' : 'ending in ') + n.slice(-4).split('').join(', ') : n; }; var label = (es ? 'Su pedido ' : 'Your order ') + num; var lines = [(es ? 'El pedido ' : 'Order ') + num + ' ' + state + '.']; if (o.total && o.total.amount) { lines.push('Total: $' + o.total.amount + '.'); } else { /* no total */ } var items = o.items || []; if (items.length) { lines.push((es ? 'Artículos: ' : 'Items: ') + items.map(function(i) { return i.title + (i.quantity > 1 ? ' (x' + i.quantity + ')' : ''); }).join(', ') + '.'); } else { /* none */ } var sa = o.shippingAddress; if (sa && (sa.address1 || sa.city)) { lines.push((es ? 'Envío a: ' : 'Shipping to: ') + [sa.address1, [sa.city, sa.province].filter(Boolean).join(', '), sa.zip].filter(Boolean).join(', ') + '.'); } else { /* none */ } return lines.join(cargo.voice ? ' ' : '\\n'); })()}}"
+      }
+    ]
+  },
+  {
+    "id": "shipstation-track-by-number-verified",
+    "name": "ShipStationTrackByNumberVerified",
+    "version": "1.1.0",
+    "description": "Worker: collect a tracking number and read back real-time ShipStation tracking for a verified customer. 'Where do I find my tracking number?' is answered (the shipping confirmation) and the question asked again; another question or request is DISPATCHed, never refused as a bad number; a tracking number said inside a sentence is read from it.",
+    "variables": {
+      "tracking_number": {
+        "type": "string",
+        "description": "Carrier tracking number",
+        "value": ""
+      },
+      "tn_input": {
+        "type": "string",
+        "description": "Raw tracking number input",
+        "value": ""
+      },
+      "tn_clean": {
+        "type": "string",
+        "description": "Normalized tracking number",
+        "value": ""
+      },
+      "intro_message": {
+        "type": "string",
+        "description": "Optional intro spoken before asking",
+        "value": ""
+      },
+      "intro_message_es": {
+        "type": "string",
+        "description": "Optional Spanish intro",
+        "value": ""
+      },
+      "tracking_detail": {
+        "type": "object",
+        "description": "ShipStation tracking result"
+      }
+    },
+    "steps": [
+      {
+        "id": "guard_tracking_number",
+        "type": "SET",
+        "variable": "tracking_number",
+        "value": "typeof tracking_number === 'undefined' ? '' : String(tracking_number)"
+      },
+      {
+        "id": "guard_intro_message",
+        "type": "SET",
+        "variable": "intro_message",
+        "value": "typeof intro_message === 'undefined' ? '' : intro_message"
+      },
+      {
+        "id": "guard_intro_message_es",
+        "type": "SET",
+        "variable": "intro_message_es",
+        "value": "typeof intro_message_es === 'undefined' ? '' : intro_message_es"
+      },
+      {
+        "id": "clean_param",
+        "type": "SET",
+        "variable": "tn_clean",
+        "value": "tracking_number.replace(/[^A-Za-z0-9]/g, '')"
+      },
+      {
+        "id": "ask_if_missing",
+        "type": "CASE",
+        "branches": {
+          "condition: tn_clean.length >= 8 && tn_clean.length <= 40": {
+            "id": "use_param",
+            "type": "SET",
+            "variable": "tn_input",
+            "value": "tracking_number"
+          },
+          "default": {
+            "id": "ask_tracking_number",
+            "type": "SAY-GET",
+            "variable": "tn_input",
+            "value": "{{intro_message ? intro_message + ' ' : ''}}Please {{cargo.verb}}{{cargo.voice ? ' or enter' : ''}} your tracking number{{cargo.voice ? ', followed by the pound key if entered using the dial pad' : ''}}. To exit anytime you can {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
+            "value_es": "{{intro_message_es ? intro_message_es + ' ' : ''}}Por favor {{cargo.verb_es}}{{cargo.voice ? ' o ingrese' : ''}} su número de rastreo{{cargo.voice ? ', seguido de la tecla numeral si se ingresó usando el teclado de marcación' : ''}}. Para salir en cualquier momento, puede {{cargo.voice ? 'presionar la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
+            "digits": {
+              "min": 8,
+              "max": 34
+            }
+          }
+        }
+      },
+      {
+        "id": "normalize_input",
+        "type": "SET",
+        "variable": "tn_clean",
+        "value": "(function(t) { var toks = String(t || '').trim().split(/\\s+/).map(function(x) { return x.replace(/[^A-Za-z0-9]/g, ''); }); var tn = toks.filter(function(c) { return c.length >= 8 && c.length <= 40 && /[0-9]/.test(c); })[0]; return (tn || String(t || '').replace(/[^A-Za-z0-9]/g, '')).toUpperCase(); })(tn_input)"
+      },
+      {
+        "id": "route_input",
+        "type": "CASE",
+        "branches": {
+          "condition: isAnswer(tn_input, 'exit') && tn_input.trim().split(/\\s+/).length <= 2": {
+            "id": "abort_tracking",
+            "type": "FLOW",
+            "value": "cancel-process",
+            "callType": "reboot"
+          },
+          "condition: isAgentRequest(tn_input)": {
+            "id": "goto_live_agent",
+            "type": "FLOW",
+            "value": "live-agent-requested",
+            "callType": "reboot"
+          },
+          "condition: !/[0-9]{6,}/.test(tn_input) && matchesChoice(String(tn_input || '').toLowerCase(), [\"where do i find\",\"where can i find\",\"where is the tracking number\",\"where is that number\",\"what is a tracking number\",\"don't have\",\"do not have\",\"dónde encuentro\",\"donde encuentro\",\"dónde está ese número\",\"donde esta ese numero\",\"dónde está el número\",\"donde esta el numero\",\"qué es el número\",\"que es el numero\",\"no tengo\",\"cómo encuentro\",\"como encuentro\"])": {
+            "id": "explain_tracking_number",
+            "type": "FLOW",
+            "value": "shipstation-track-by-number-verified",
+            "callType": "replace",
+            "parameters": {
+              "tracking_number": "",
+              "intro_message": "Your tracking number is in the shipping confirmation we sent by email or text when your order shipped. It is 8 to 40 letters and digits.",
+              "intro_message_es": "Su número de rastreo está en la confirmación de envío que le mandamos por correo o mensaje de texto cuando se envió su pedido. Tiene de 8 a 40 letras y números."
+            }
+          },
+          "condition: (function(t) { var w = String(t || '').trim().split(/\\s+/); var hasTn = w.some(function(x) { var c = x.replace(/[^A-Za-z0-9]/g, ''); return c.length >= 8 && /[0-9]/.test(c); }); return !hasTn && (w.filter(function(x) { return /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,}/.test(x); }).length >= 3 || /[?¿]/.test(t)); })(tn_input)": {
+            "id": "another_request",
+            "type": "DISPATCH"
+          },
+          "condition: tn_clean.length >= 8 && tn_clean.length <= 40 && /[0-9]/.test(tn_clean)": {
             "id": "call_shipstation",
             "type": "CALL-TOOL",
             "tool": "shipstation-get-tracking",
             "variable": "tracking_detail",
             "args": {
-              "trackingNumber": "{{order_detail.order.fulfillments[0].tracking[0].number}}",
+              "trackingNumber": "{{tn_clean}}",
               "container": "{{cargo}}"
             },
             "onFail": {
-              "id": "shipstation_unavailable",
-              "type": "SET",
-              "variable": "tracking_detail",
-              "value": "{success: false}"
+              "id": "shipstation_lookup_failed",
+              "type": "FLOW",
+              "value": "give-up",
+              "callType": "reboot",
+              "parameters": {
+                "context": "your tracking",
+                "context_es": "el rastreo de su paquete"
+              }
             }
           },
           "default": {
-            "id": "no_tracking_number",
-            "type": "SET",
-            "variable": "tracking_detail",
-            "value": "{success: false}"
+            "id": "invalid_tracking_number",
+            "type": "FLOW",
+            "value": "generic-retry-with-options",
+            "callType": "replace",
+            "parameters": {
+              "error_message": "That doesn't look like a valid tracking number. Tracking numbers are at least 8 letters and digits.",
+              "error_message_es": "Eso no parece un número de rastreo válido. Los números de rastreo tienen al menos 8 letras y dígitos.",
+              "retry_flow": "shipstation-track-by-number-verified",
+              "cancel_flow": "contact-support",
+              "capture_patterns": [
+                {
+                  "variable": "tracking_number",
+                  "regex": "\\b(?=[A-Za-z0-9]*[0-9])[A-Za-z0-9]{8,40}\\b"
+                }
+              ]
+            }
           }
         }
       },
       {
-        "id": "show_order_detail",
+        "id": "show_result",
         "type": "CASE",
         "branches": {
-          "condition: order_detail && order_detail.success && order_detail.order": {
-            "id": "display_detail",
+          "condition: tracking_detail && tracking_detail.success": {
+            "id": "display_tracking",
             "type": "SAY",
             "variable": "continue_choice",
-            "value": "Order {{order_detail.order.orderNumber}}\n\nStatus: {{(() => { const o = order_detail.order; if (o.cancelled) return 'Cancelled'; const m = { UNFULFILLED: 'Not shipped yet', OPEN: 'Not shipped yet', RESTOCKED: 'Not shipped yet', PARTIALLY_FULFILLED: 'Partly shipped', FULFILLED: 'Shipped', IN_PROGRESS: 'Being prepared', PENDING_FULFILLMENT: 'Being prepared', ON_HOLD: 'On hold', SCHEDULED: 'Scheduled', REQUEST_DECLINED: 'Delayed', FULFILLMENT_NOT_REQUIRED: 'Nothing to ship' }; const v = o.fulfillmentStatus; return v ? (m[v] || String(v).toLowerCase().replace(/_/g, ' ')) : 'Processing'; })()}}\nPayment: {{(() => { const m = { AUTHORIZED: 'Authorized', PAID: 'Paid', PARTIALLY_PAID: 'Partly paid', PENDING: 'Pending', REFUNDED: 'Refunded', PARTIALLY_REFUNDED: 'Partly refunded', VOIDED: 'Voided', EXPIRED: 'Expired' }; const v = order_detail.order.financialStatus; return v ? (m[v] || String(v).toLowerCase().replace(/_/g, ' ')) : ''; })()}}\nTotal: ${{order_detail.order.total?.amount}}\n\nItems:\n{{order_detail.order.items.map(item => `- ${item.title} (x${item.quantity})`).join('\\n')}}\n\n{{order_detail.order.fulfillments && order_detail.order.fulfillments.length > 0 && order_detail.order.fulfillments[0].tracking ? 'Tracking: ' + (order_detail.order.fulfillments[0].tracking[0]?.company || '') + ' - ' + (order_detail.order.fulfillments[0].tracking[0]?.number || 'N/A') + (order_detail.order.fulfillments[0].tracking[0]?.url ? '\\nTrack: ' + order_detail.order.fulfillments[0].tracking[0].url : '') : ''}}{{(() => { const t = tracking_detail; if (!t || !t.success) return ''; const lines = []; lines.push('Delivery status: ' + (t.statusDescription || 'Unknown')); if (t.exception) lines.push('Delivery issue: ' + t.exception); if (t.lastEvent) lines.push('Last update: ' + t.lastEvent); if (t.actualDelivery) lines.push('Delivered on: ' + new Date(t.actualDelivery).toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })); else if (t.estimatedDelivery) lines.push('Estimated delivery: ' + new Date(t.estimatedDelivery).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })); return '\\n' + lines.join('\\n'); })()}}\n\nShipping to:\n{{(() => { const sa = order_detail.order.shippingAddress; if (!sa) return 'N/A'; const line1 = [sa.firstName, sa.lastName].filter(Boolean).join(' '); const line2 = sa.address1 || ''; const cityProv = [sa.city, sa.province].filter(Boolean).join(', '); const line3 = [cityProv, sa.zip].filter(Boolean).join(' '); const lines = [line1, line2, line3].filter(s => s && s.trim()); return lines.length ? lines.join('\\n') : 'N/A'; })()}}\n\nAnything else I can help with?",
-            "value_es": "Pedido {{order_detail.order.orderNumber}}\n\nEstado: {{(() => { const o = order_detail.order; if (o.cancelled) return 'Cancelado'; const m = { UNFULFILLED: 'Aún no enviado', OPEN: 'Aún no enviado', RESTOCKED: 'Aún no enviado', PARTIALLY_FULFILLED: 'Enviado en parte', FULFILLED: 'Enviado', IN_PROGRESS: 'En preparación', PENDING_FULFILLMENT: 'En preparación', ON_HOLD: 'En espera', SCHEDULED: 'Programado', REQUEST_DECLINED: 'Retrasado', FULFILLMENT_NOT_REQUIRED: 'Nada que enviar' }; const v = o.fulfillmentStatus; return v ? (m[v] || String(v).toLowerCase().replace(/_/g, ' ')) : 'Procesando'; })()}}\nPago: {{(() => { const m = { AUTHORIZED: 'Autorizado', PAID: 'Pagado', PARTIALLY_PAID: 'Pagado en parte', PENDING: 'Pendiente', REFUNDED: 'Reembolsado', PARTIALLY_REFUNDED: 'Reembolsado en parte', VOIDED: 'Anulado', EXPIRED: 'Vencido' }; const v = order_detail.order.financialStatus; return v ? (m[v] || String(v).toLowerCase().replace(/_/g, ' ')) : ''; })()}}\nTotal: ${{order_detail.order.total?.amount}}\n\nArtículos:\n{{order_detail.order.items.map(item => `- ${item.title} (x${item.quantity})`).join('\\n')}}\n\n{{order_detail.order.fulfillments && order_detail.order.fulfillments.length > 0 && order_detail.order.fulfillments[0].tracking ? 'Rastreo: ' + (order_detail.order.fulfillments[0].tracking[0]?.company || '') + ' - ' + (order_detail.order.fulfillments[0].tracking[0]?.number || 'N/A') + (order_detail.order.fulfillments[0].tracking[0]?.url ? '\\nRastrear: ' + order_detail.order.fulfillments[0].tracking[0].url : '') : ''}}{{(() => { const t = tracking_detail; if (!t || !t.success) return ''; const map = { AC: 'Aceptado', IT: 'En tránsito', DE: 'Entregado', EX: 'Excepción', AT: 'Intento de entrega', NY: 'Aún no en el sistema', SP: 'Entregado en punto de recogida', UN: 'Desconocido' }; const lines = []; lines.push('Estado de entrega: ' + (map[t.status] || t.statusDescription || 'Desconocido')); if (t.exception) lines.push('Problema de entrega: ' + t.exception); if (t.lastEventEs) lines.push('Última actualización: ' + t.lastEventEs); if (t.actualDelivery) lines.push('Entregado el: ' + new Date(t.actualDelivery).toLocaleString('es-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })); else if (t.estimatedDelivery) lines.push('Entrega estimada: ' + new Date(t.estimatedDelivery).toLocaleDateString('es-US', { weekday: 'long', month: 'short', day: 'numeric' })); return '\\n' + lines.join('\\n'); })()}}\n\nEnvío a:\n{{(() => { const sa = order_detail.order.shippingAddress; if (!sa) return 'N/A'; const line1 = [sa.firstName, sa.lastName].filter(Boolean).join(' '); const line2 = sa.address1 || ''; const cityProv = [sa.city, sa.province].filter(Boolean).join(', '); const line3 = [cityProv, sa.zip].filter(Boolean).join(' '); const lines = [line1, line2, line3].filter(s => s && s.trim()); return lines.length ? lines.join('\\n') : 'N/A'; })()}}\n\n¿Hay algo más en lo que pueda ayudarte?"
+            "value": "Here's the latest on tracking number {{cargo.voice ? 'ending in ' + tn_clean.slice(-4).split('').join(', ') : tn_clean}}:{{(() => { const t = tracking_detail; if (!t || !t.success) return ''; const lines = []; lines.push('Delivery status: ' + (t.statusDescription || 'Unknown')); if (t.exception) lines.push('Delivery issue: ' + t.exception); if (t.lastEvent) lines.push('Last update: ' + t.lastEvent); if (t.actualDelivery) lines.push('Delivered on: ' + new Date(t.actualDelivery).toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })); else if (t.estimatedDelivery) lines.push('Estimated delivery: ' + new Date(t.estimatedDelivery).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })); return '\\n' + lines.join('\\n'); })()}}\n\nAnything else I can help with?",
+            "value_es": "Esto es lo último sobre el número de rastreo {{cargo.voice ? 'terminando en ' + tn_clean.slice(-4).split('').join(', ') : tn_clean}}:{{(() => { const t = tracking_detail; if (!t || !t.success) return ''; const map = { AC: 'Aceptado', IT: 'En tránsito', DE: 'Entregado', EX: 'Excepción', AT: 'Intento de entrega', NY: 'Aún no en el sistema', SP: 'Entregado en punto de recogida', UN: 'Desconocido' }; const lines = []; lines.push('Estado de entrega: ' + (map[t.status] || t.statusDescription || 'Desconocido')); if (t.exception) lines.push('Problema de entrega: ' + t.exception); if (t.lastEventEs) lines.push('Última actualización: ' + t.lastEventEs); if (t.actualDelivery) lines.push('Entregado el: ' + new Date(t.actualDelivery).toLocaleString('es-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })); else if (t.estimatedDelivery) lines.push('Entrega estimada: ' + new Date(t.estimatedDelivery).toLocaleDateString('es-US', { weekday: 'long', month: 'short', day: 'numeric' })); return '\\n' + lines.join('\\n'); })()}}\n\n¿Hay algo más en lo que pueda ayudarte?"
           },
-          "condition: number_from_customer": {
-            "id": "order_not_found_list_orders",
+          "condition: tracking_detail && tracking_detail.notFound && !(typeof tn_attempt !== 'undefined' && tn_attempt)": {
+            "id": "tracking_not_found",
             "type": "FLOW",
-            "value": "shopify-get-orders-verified",
+            "value": "shipstation-track-by-number-verified",
             "callType": "replace",
             "parameters": {
-              "order_number": ""
+              "tracking_number": "",
+              "tn_attempt": "1",
+              "intro_message": "I couldn't find that tracking number in our shipping system.",
+              "intro_message_es": "No encontré ese número de rastreo en nuestro sistema de envíos."
             }
           },
-          "default": {
-            "id": "order_not_found",
+          "condition: tracking_detail && tracking_detail.notFound": {
+            "id": "tracking_not_found_again",
             "type": "FLOW",
             "value": "give-up",
             "callType": "reboot",
             "parameters": {
-              "context": "your order",
-              "context_es": "su pedido"
+              "context": "your tracking",
+              "context_es": "el rastreo de su paquete"
+            }
+          },
+          "default": {
+            "id": "tracking_error",
+            "type": "FLOW",
+            "value": "give-up",
+            "callType": "reboot",
+            "parameters": {
+              "context": "your tracking",
+              "context_es": "el rastreo de su paquete"
             }
           }
         }
@@ -982,203 +1480,6 @@
             "type": "FLOW",
             "value": "no-action-needed",
             "callType": "reboot"
-          }
-        }
-      }
-    ]
-  },
-  {
-    "id": "shipstation-track-by-number-verified",
-    "name": "ShipStationTrackByNumberVerified",
-    "version": "1.0.5",
-    "description": "Collect a tracking number and read back real-time ShipStation tracking for verified customer A question or another request at the tracking-number question ('where can I find my tracking number?', 'I'm trying to pay for it') is DISPATCHed, never refused as a bad number; a tracking number said inside a sentence is read from it.",
-    "variables": {
-      "tracking_number": {
-        "type": "string",
-        "description": "Carrier tracking number",
-        "value": ""
-      },
-      "tn_input": {
-        "type": "string",
-        "description": "Raw tracking number input",
-        "value": ""
-      },
-      "tn_clean": {
-        "type": "string",
-        "description": "Normalized tracking number",
-        "value": ""
-      },
-      "intro_message": {
-        "type": "string",
-        "description": "Optional intro spoken before asking",
-        "value": ""
-      },
-      "intro_message_es": {
-        "type": "string",
-        "description": "Optional Spanish intro",
-        "value": ""
-      },
-      "tracking_detail": {
-        "type": "object",
-        "description": "ShipStation tracking result"
-      }
-    },
-    "steps": [
-      {
-        "id": "guard_tracking_number",
-        "type": "SET",
-        "variable": "tracking_number",
-        "value": "typeof tracking_number === 'undefined' ? '' : String(tracking_number)"
-      },
-      {
-        "id": "guard_intro_message",
-        "type": "SET",
-        "variable": "intro_message",
-        "value": "typeof intro_message === 'undefined' ? '' : intro_message"
-      },
-      {
-        "id": "guard_intro_message_es",
-        "type": "SET",
-        "variable": "intro_message_es",
-        "value": "typeof intro_message_es === 'undefined' ? '' : intro_message_es"
-      },
-      {
-        "id": "clean_param",
-        "type": "SET",
-        "variable": "tn_clean",
-        "value": "tracking_number.replace(/[^A-Za-z0-9]/g, '')"
-      },
-      {
-        "id": "ask_if_missing",
-        "type": "CASE",
-        "branches": {
-          "condition: tn_clean.length >= 8 && tn_clean.length <= 40": {
-            "id": "use_param",
-            "type": "SET",
-            "variable": "tn_input",
-            "value": "tracking_number"
-          },
-          "default": {
-            "id": "ask_tracking_number",
-            "type": "SAY-GET",
-            "variable": "tn_input",
-            "value": "{{intro_message ? intro_message + ' ' : ''}}Please {{cargo.verb}}{{cargo.voice ? ' or enter' : ''}} your tracking number{{cargo.voice ? ', followed by the pound key if entered using the dial pad' : ''}}. To exit anytime you can {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
-            "value_es": "{{intro_message_es ? intro_message_es + ' ' : ''}}Por favor {{cargo.verb_es}}{{cargo.voice ? ' o ingrese' : ''}} su número de rastreo{{cargo.voice ? ', seguido de la tecla numeral si se ingresó usando el teclado de marcación' : ''}}. Para salir en cualquier momento, puede {{cargo.voice ? 'presionar la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
-            "digits": {
-              "min": 8,
-              "max": 34
-            }
-          }
-        }
-      },
-      {
-        "id": "normalize_input",
-        "type": "SET",
-        "variable": "tn_clean",
-        "value": "(function(t) { var toks = String(t || '').trim().split(/\\s+/).map(function(x) { return x.replace(/[^A-Za-z0-9]/g, ''); }); var tn = toks.filter(function(c) { return c.length >= 8 && c.length <= 40 && /[0-9]/.test(c); })[0]; return (tn || String(t || '').replace(/[^A-Za-z0-9]/g, '')).toUpperCase(); })(tn_input)"
-      },
-      {
-        "id": "route_input",
-        "type": "CASE",
-        "branches": {
-          "condition: isAnswer(tn_input, 'exit') && tn_input.trim().split(/\\s+/).length <= 2": {
-            "id": "abort_tracking",
-            "type": "FLOW",
-            "value": "cancel-process",
-            "callType": "reboot"
-          },
-          "condition: isAgentRequest(tn_input)": {
-            "id": "goto_live_agent",
-            "type": "FLOW",
-            "value": "live-agent-requested",
-            "callType": "reboot"
-          },
-          "condition: (function(t) { var w = String(t || '').trim().split(/\\s+/); var hasTn = w.some(function(x) { var c = x.replace(/[^A-Za-z0-9]/g, ''); return c.length >= 8 && /[0-9]/.test(c); }); return !hasTn && (w.filter(function(x) { return /[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]{2,}/.test(x); }).length >= 3 || /[?¿]/.test(t)); })(tn_input)": {
-            "id": "another_request",
-            "type": "DISPATCH"
-          },
-          "condition: tn_clean.length >= 8 && tn_clean.length <= 40 && /[0-9]/.test(tn_clean)": {
-            "id": "call_shipstation",
-            "type": "CALL-TOOL",
-            "tool": "shipstation-get-tracking",
-            "variable": "tracking_detail",
-            "args": {
-              "trackingNumber": "{{tn_clean}}",
-              "container": "{{cargo}}"
-            },
-            "onFail": {
-              "id": "shipstation_lookup_failed",
-              "type": "FLOW",
-              "value": "give-up",
-              "callType": "reboot",
-              "parameters": {
-                "context": "your tracking",
-                "context_es": "el rastreo de su paquete"
-              }
-            }
-          },
-          "default": {
-            "id": "invalid_tracking_number",
-            "type": "FLOW",
-            "value": "generic-retry-with-options",
-            "callType": "replace",
-            "parameters": {
-              "error_message": "That doesn't look like a valid tracking number. Tracking numbers are at least 8 letters and digits.",
-              "error_message_es": "Eso no parece un número de rastreo válido. Los números de rastreo tienen al menos 8 letras y dígitos.",
-              "retry_flow": "shipstation-track-by-number-verified",
-              "cancel_flow": "contact-support",
-              "capture_patterns": [
-                {
-                  "variable": "tracking_number",
-                  "regex": "\\b(?=[A-Za-z0-9]*[0-9])[A-Za-z0-9]{8,40}\\b"
-                }
-              ]
-            }
-          }
-        }
-      },
-      {
-        "id": "show_result",
-        "type": "CASE",
-        "branches": {
-          "condition: tracking_detail && tracking_detail.success": {
-            "id": "display_tracking",
-            "type": "SAY",
-            "variable": "continue_choice",
-            "value": "Here's the latest on tracking number {{cargo.voice ? 'ending in ' + tn_clean.slice(-4).split('').join(', ') : tn_clean}}:{{(() => { const t = tracking_detail; if (!t || !t.success) return ''; const lines = []; lines.push('Delivery status: ' + (t.statusDescription || 'Unknown')); if (t.exception) lines.push('Delivery issue: ' + t.exception); if (t.lastEvent) lines.push('Last update: ' + t.lastEvent); if (t.actualDelivery) lines.push('Delivered on: ' + new Date(t.actualDelivery).toLocaleString('en-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })); else if (t.estimatedDelivery) lines.push('Estimated delivery: ' + new Date(t.estimatedDelivery).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })); return '\\n' + lines.join('\\n'); })()}}\n\nAnything else I can help with?",
-            "value_es": "Esto es lo último sobre el número de rastreo {{cargo.voice ? 'terminando en ' + tn_clean.slice(-4).split('').join(', ') : tn_clean}}:{{(() => { const t = tracking_detail; if (!t || !t.success) return ''; const map = { AC: 'Aceptado', IT: 'En tránsito', DE: 'Entregado', EX: 'Excepción', AT: 'Intento de entrega', NY: 'Aún no en el sistema', SP: 'Entregado en punto de recogida', UN: 'Desconocido' }; const lines = []; lines.push('Estado de entrega: ' + (map[t.status] || t.statusDescription || 'Desconocido')); if (t.exception) lines.push('Problema de entrega: ' + t.exception); if (t.lastEventEs) lines.push('Última actualización: ' + t.lastEventEs); if (t.actualDelivery) lines.push('Entregado el: ' + new Date(t.actualDelivery).toLocaleString('es-US', { weekday: 'long', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })); else if (t.estimatedDelivery) lines.push('Entrega estimada: ' + new Date(t.estimatedDelivery).toLocaleDateString('es-US', { weekday: 'long', month: 'short', day: 'numeric' })); return '\\n' + lines.join('\\n'); })()}}\n\n¿Hay algo más en lo que pueda ayudarte?"
-          },
-          "condition: tracking_detail && tracking_detail.notFound && !(typeof tn_attempt !== 'undefined' && tn_attempt)": {
-            "id": "tracking_not_found",
-            "type": "FLOW",
-            "value": "shipstation-track-by-number-verified",
-            "callType": "replace",
-            "parameters": {
-              "tracking_number": "",
-              "tn_attempt": "1",
-              "intro_message": "I couldn't find that tracking number in our shipping system.",
-              "intro_message_es": "No encontré ese número de rastreo en nuestro sistema de envíos."
-            }
-          },
-          "condition: tracking_detail && tracking_detail.notFound": {
-            "id": "tracking_not_found_again",
-            "type": "FLOW",
-            "value": "give-up",
-            "callType": "reboot",
-            "parameters": {
-              "context": "your tracking",
-              "context_es": "el rastreo de su paquete"
-            }
-          },
-          "default": {
-            "id": "tracking_error",
-            "type": "FLOW",
-            "value": "give-up",
-            "callType": "reboot",
-            "parameters": {
-              "context": "your tracking",
-              "context_es": "el rastreo de su paquete"
-            }
           }
         }
       }
