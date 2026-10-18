@@ -1703,7 +1703,7 @@
             "id": "otp_success",
             "type": "SET",
             "variable": "otp_validated",
-            "value": "true"
+            "value": "(cargo.otpLateCode = String(typeof normalized_otp_code !== 'undefined' ? normalized_otp_code : '').replace(/\\D/g, ''), true)"
           },
           "condition: cargo.otpFailure === 'expired'": {
             "id": "otp_expired_fresh_code",
@@ -2774,7 +2774,7 @@
   {
     "id": "ask-choice",
     "name": "AskChoice",
-    "version": "1.17.1",
+    "version": "1.18.0",
     "description": "Worker: ask one question; sets cargo.choice (the matched key, or 'other' with accept_other) and cargo.choiceText. AGENT / 0 reaches a person, EXIT / * ends, a new request is DISPATCHed. With amount: an answer naming an amount returns 'amount' — one marked as money ($, dollars, cents, decimals), or, when it matched no choice, any answer amountInAnswer reads as one (\"109 con 47\"), except an answer with a single digit and no payment verb (\"5\", \"5 please\"), which is a key press (\"pay 5\" is an amount). An exact choice keyed no / decline / done / cancel (or negative) is picked only by its own words and keys, never by a refusal or a deferral. Optional answer_precheck: a caller flow run with { answer } BEFORE the choices are matched; an answer_key it sets wins (the answer_validator contract, which runs only when no choice matched). A caller-set one-time offer (cargo.switchOffer = { text, text_es, words, flow }) is added to the question and consumed by it: an answer in its words runs its flow (reboot) — e.g. ANOTHER ACCOUNT when the account question was skipped (owner 2026-10-17). Optional reask_long: a long answer that matches nothing is asked again once before it is DISPATCHed. Params: question(_es), choices [{key, words, negative?, neutral?}], retry(_es), accept_other, expect ('number' | 'email' | 'contact'), amount, digits, exit_context(_es).",
     "parameters": [
       {
@@ -2913,6 +2913,14 @@
       "ac_q": {
         "type": "string",
         "value": ""
+      },
+      "ac_code": {
+        "type": "string",
+        "value": ""
+      },
+      "ac_late": {
+        "type": "boolean",
+        "value": false
       }
     },
     "steps": [
@@ -2977,6 +2985,12 @@
         "value": "(cargo.digits = typeof digits !== 'undefined' && digits && typeof digits === 'object' ? digits : undefined, true)"
       },
       {
+        "id": "ac_late_code_take",
+        "type": "SET",
+        "variable": "ac_code",
+        "value": "(function(d) { cargo.otpLateCode = ''; return d.length === 6 && !(typeof expect !== 'undefined' && expect) && !ac_amount ? d : ''; })(String(cargo.otpLateCode || ''))"
+      },
+      {
         "id": "ac_take_offer",
         "type": "SET",
         "variable": "ac_offer",
@@ -3002,6 +3016,47 @@
         "value": "{{ac_q}}",
         "value_es": "{{ac_q_es}}",
         "pii": "ac_pii === true"
+      },
+      {
+        "id": "ac_late_code_check",
+        "type": "SET",
+        "variable": "ac_late",
+        "value": "(function(t, c) { t = String(t || '').trim(); c = String(c || ''); if (c.length !== 6) { return false; } var rest = t.replace(/^(?:(?:el|mi|the|my)\\s+)?(?:c[oó]digo|code)(?:\\s+(?:es|is|era|was))?\\s*[:,.-]?\\s*/i, ''); if (!/^[\\d\\s.,-]+$/.test(rest)) { return false; } var d = rest.replace(/\\D/g, ''); return d.length >= 2 && d.length <= 6 && c.indexOf(d) >= 0; })(ac_answer, ac_code)"
+      },
+      {
+        "id": "ac_late_code_reask",
+        "type": "CASE",
+        "branches": {
+          "condition: ac_late": {
+            "id": "ac_late_code_again",
+            "type": "FLOW",
+            "value": "late-code-reask",
+            "callType": "call",
+            "parameters": {
+              "question": "{{ac_q}}",
+              "question_es": "{{ac_q_es}}",
+              "code": "{{ac_code}}"
+            }
+          },
+          "default": {
+            "id": "ac_late_code_none",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ac_late_code_answer",
+        "type": "SET",
+        "variable": "ac_answer",
+        "value": "ac_late ? String(cargo.lateCodeAnswer || '') : ac_answer"
+      },
+      {
+        "id": "ac_late_code_clear",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(cargo.lateCodeAnswer = '', true)"
       },
       {
         "id": "ac_repeat_1",
@@ -3390,6 +3445,77 @@
       }
     ],
     "scope": "isolated"
+  },
+  {
+    "id": "late-code-reask",
+    "name": "LateCodeReask",
+    "version": "1.0.0",
+    "description": "Worker (ask-choice, at the first question after a code was accepted): says the code was already verified and asks the question again, for as long as the answer is only digits found, in a row, in that code; leaves the first other answer in cargo.lateCodeAnswer.",
+    "parameters": [
+      {
+        "name": "question",
+        "type": "string",
+        "required": true
+      },
+      {
+        "name": "question_es",
+        "type": "string",
+        "required": false
+      },
+      {
+        "name": "code",
+        "type": "string",
+        "required": true
+      }
+    ],
+    "variables": {
+      "lc_answer": {
+        "type": "string",
+        "value": ""
+      },
+      "lc_late": {
+        "type": "boolean",
+        "value": false
+      }
+    },
+    "steps": [
+      {
+        "id": "lc_ask",
+        "type": "SAY-GET",
+        "variable": "lc_answer",
+        "value": "Your code was already verified. {{question}}",
+        "value_es": "Su código ya fue verificado. {{typeof question_es !== \"undefined\" && question_es ? question_es : question}}"
+      },
+      {
+        "id": "lc_check",
+        "type": "SET",
+        "variable": "lc_late",
+        "value": "(function(t, c) { t = String(t || '').trim(); c = String(c || ''); if (c.length !== 6) { return false; } var rest = t.replace(/^(?:(?:el|mi|the|my)\\s+)?(?:c[oó]digo|code)(?:\\s+(?:es|is|era|was))?\\s*[:,.-]?\\s*/i, ''); if (!/^[\\d\\s.,-]+$/.test(rest)) { return false; } var d = rest.replace(/\\D/g, ''); return d.length >= 2 && d.length <= 6 && c.indexOf(d) >= 0; })(lc_answer, code)"
+      },
+      {
+        "id": "lc_route",
+        "type": "CASE",
+        "branches": {
+          "condition: lc_late": {
+            "id": "lc_again",
+            "type": "FLOW",
+            "value": "late-code-reask",
+            "callType": "replace",
+            "parameters": {
+              "question": "{{question}}",
+              "question_es": "{{question_es}}",
+              "code": "{{code}}"
+            }
+          },
+          "default": {
+            "id": "lc_answer_taken",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.lateCodeAnswer = String(lc_answer || ''), true)"
+          }
+        }
+      }
+    ]
   },
   {
     "id": "ask-email",
