@@ -1089,11 +1089,11 @@ The question primitive the other generic workers are built on: ask-email, ask-ad
 *   `exit_context` / `exit_context_es` (string): What EXIT abandons, passed to contact-support as `support_context` / `support_context_es`. Empty or absent = "your request" / "su solicitud". An exit context of `payment` also makes the `DISPATCH`es declare `outcome: "unresolved"`, `reason: "payment_incomplete"`.
 
 ### Variables
-Declared: `ac_answer`, `ac_key`, `ac_other`, `ac_q_es`, `ac_retry`, `ac_retry_es`, `ac_exit_ctx`, `ac_exit_ctx_es`, `ac_missed` (true when the first answer was re-asked), `answer_key` (set by `answer_precheck` / `answer_validator`, `''` before each run). `ac_amount`, `ac_pii` and `ac_prechecked` are set without a declaration.
+Declared: `ac_answer`, `ac_key`, `ac_other`, `ac_q_es`, `ac_retry`, `ac_retry_es`, `ac_exit_ctx`, `ac_exit_ctx_es`, `ac_missed` (true when the first answer was re-asked), `answer_key` (set by `answer_precheck` / `answer_validator`, `''` before each run), `ac_offer` (the one-time offer taken from `cargo.switchOffer`, or `null`), `ac_q` (the question with the offer). `ac_amount`, `ac_pii` and `ac_prechecked` are set without a declaration.
 
 The answer flows are run with `call`. A shared-scope answer flow works on ask-choice's own variables, so the `answer_key` it sets is read here; the variables of the flow that called ask-choice are not visible to it.
 
-**Cargo written:** `cargo.choice` / `cargo.choiceText` (both `''` at the start), `cargo.digits` (while an answer is awaited), and, when the answer leaves through AGENT, EXIT or `DISPATCH`, `null` at each path listed in `cargo.sensitive`. **Cargo read:** `cargo.sensitive`.
+**Cargo written:** `cargo.choice` / `cargo.choiceText` (both `''` at the start), `cargo.switchOffer` (`null` once taken), `cargo.digits` (while an answer is awaited), and, when the answer leaves through AGENT, EXIT or `DISPATCH`, `null` at each path listed in `cargo.sensitive`. **Cargo read:** `cargo.sensitive`, `cargo.switchOffer`.
 
 ### Matching (`pickChoice`)
 `pickChoice(answer, choices, accept_other)` decides, in the host (reference: hy-rag-lambdas `foundation/text/answer.js`). It returns a choice's key, `__agent`, `__exit`, or `''`.
@@ -1131,20 +1131,21 @@ The answer flows are run with `call`. A shared-scope answer flow works on ask-ch
 ### Steps
 1. `ac_reset` (SET, side effect) - `cargo.choice = ''`, `cargo.choiceText = ''`.
 2. `ac_accepts_other`, `ac_takes_amount`, `ac_takes_pii`, `ac_question_es`, `ac_retry_en`, `ac_retry_spanish`, `ac_exit_context`, `ac_exit_context_es` (SET) - `ac_other`, `ac_amount`, `ac_pii`, and the defaults above.
-3. `ac_keypad` (SET, side effect) - `cargo.digits = digits` when it is an object, else `undefined`.
-4. `ac_ask` (SAY-GET `ac_answer`, `asSpoken: "ac_amount === true"`, `pii: "ac_pii === true"`) - `{{question}}` / `{{ac_q_es}}`. Every SAY-GET below carries the same `asSpoken` and `pii`.
-5. `ac_repeat_1` / `ac_repeat_2` (CASE) - an answer that only asks to hear the question again and picks no choice → the same SAY-GET again, at most twice; not a miss. The answer may start with `¿` or `¡` and be led by por favor / please / a / que / me lo / me / lo / puede / can you / could you, must then be repetir, repite, repita / repite + lo, la, me, melo or nos, repítamelo, otra vez, de nuevo, repeat (that / it), say that / it again, again or one more time, and may end with por favor / please / la pregunta / las opciones / eso / that / it.
+3. `ac_keypad` (SET, side effect) - `cargo.digits = digits` when it is an object, else `undefined`. Then `ac_take_offer` (SET) - `ac_offer` = `cargo.switchOffer` when it is an object with a `flow`, else `null`, and `cargo.switchOffer = null` (the offer is consumed whatever the answer); `ac_question_with_offer` / `_es` (SET) - `ac_q` = `question` + " " + `ac_offer.text`, and `ac_q_es` + " " + `ac_offer.text_es` (or `text`), when there is an offer.
+4. `ac_ask` (SAY-GET `ac_answer`, `asSpoken: "ac_amount === true"`, `pii: "ac_pii === true"`) - `{{ac_q}}` / `{{ac_q_es}}` (the question with the offer). Every SAY-GET below carries the same `asSpoken` and `pii`.
+5. `ac_repeat_1` / `ac_repeat_2` (CASE) - an answer that only asks to hear the question again and picks no choice → the question again (`{{question}}` / `{{ac_q_es}}`: the English repeat leaves the offer's text out, the Spanish one keeps it), at most twice; not a miss. The answer may start with `¿` or `¡` and be led by por favor / please / a / que / me lo / me / lo / puede / can you / could you, must then be repetir, repite, repita / repite + lo, la, me, melo or nos, repítamelo, otra vez, de nuevo, repeat (that / it), say that / it again, again or one more time, and may end with por favor / please / la pregunta / las opciones / eso / that / it.
 6. `ac_init_precheck_key`, `ac_precheck`, `ac_precheck_key` - `answer_key = ''`; with `answer_precheck` and a non-blank answer, FLOW `{{answer_precheck}}` (`call`, `{ answer }`); `ac_prechecked` = the `answer_key` it set, else `''`.
-7. `ac_match` (SET) - `ac_key` = `ac_prechecked`, else `pickChoice(ac_answer, choices, ac_other)`; then `ac_exact_no_own_words` ([an `exact` NO-type choice](#askchoice-exact-no)); then `answer_key = ''` and, when `ac_key` is `''`, `answer_validator` is set and the answer is not blank, FLOW `{{answer_validator}}` (`call`, `{ answer }`), whose `answer_key` becomes `ac_key` (`ac_take_answer_key`); then `ac_amount_check` (the amount gate); then `ac_switch_to_text_key` ([a lone `9`](#askchoice-nine)).
+7. `ac_match` (SET) - `ac_key` = `ac_prechecked`, else `pickChoice(ac_answer, choices, ac_other)`; then `ac_match_offer`: with an offer, when `ac_key` is `''` or `'other'` and `matchesChoice(ac_answer, ac_offer.words)`, `ac_key = '__switch'`; then `ac_exact_no_own_words` ([an `exact` NO-type choice](#askchoice-exact-no)); then `answer_key = ''` and, when `ac_key` is `''`, `answer_validator` is set and the answer is not blank, FLOW `{{answer_validator}}` (`call`, `{ answer }`), whose `answer_key` becomes `ac_key` (`ac_take_answer_key`); then `ac_amount_check` (the amount gate); then `ac_switch_to_text_key` ([a lone `9`](#askchoice-nine)).
 8. `ac_keypad_again` (SET, side effect) - `cargo.digits` as in step 3, for a re-ask.
 9. `ac_missed_once` (SET) - `ac_missed` = `ac_key === ''`, no `accept_other`, and fewer than three words that contain a letter (any number of words with `reask_long`).
 10. `ac_reask_on_miss` (CASE) - `ac_missed` → SAY-GET `ac_answer` with `{{ac_retry}}` / `{{ac_retry_es}}`. This is the only re-ask; a longer miss is not re-asked unless `reask_long` is set.
 11. `ac_repeat_after_miss_1` / `_2` (CASE) - after the re-ask (`ac_missed`), a request to repeat that picks no choice, read as in step 5 → the question (`{{question}}` / `{{ac_q_es}}`) again, at most twice; not a miss.
-12. `ac_precheck_again` and `ac_match_again` (SET) - `answer_precheck` runs again on the (new) answer as in step 6; `ac_key` = its key, else, with `ac_key === ''` and no `accept_other`, `pickChoice` on the answer; then `ac_exact_no_own_words_again`, `ac_validate_answer_again` / `ac_take_answer_key_again` (as in step 7) and `ac_amount_check_again`.
+12. `ac_precheck_again` and `ac_match_again` (SET) - `answer_precheck` runs again on the (new) answer as in step 6; `ac_key` = its key, else, with `ac_key === ''` and no `accept_other`, `pickChoice` on the answer; then `ac_match_again_offer` (as `ac_match_offer`), `ac_exact_no_own_words_again`, `ac_validate_answer_again` / `ac_take_answer_key_again` (as in step 7) and `ac_amount_check_again`.
 13. `ac_other_request_check` (SET) - `ac_key === ''`, `accept_other` and `expect`, and `isOtherRequest(ac_answer, expect)` → `ac_key = '__elsewhere'`.
 14. `ac_switch_to_text_key_again` (SET) - a lone `9`, as in step 7.
 15. `ac_keypad_done` (SET, side effect) - `cargo.digits = undefined`; when `ac_key` is `__agent`, `__exit`, `__elsewhere`, or `''` without `accept_other`, and `cargo.sensitive` is an array, each dotted path in it is set to `null` inside the cargo.
 16. `ac_route` (CASE, first match wins):
+    - `__switch` → FLOW `{{ac_offer.flow}}` (`reboot`). `cargo.sensitive` is not cleared on this path (step 15 does not list `__switch`).
     - `__agent` → FLOW `live-agent-requested` (`reboot`).
     - `__exit` → FLOW `contact-support` (`reboot`), `support_context` / `support_context_es` = the exit context.
     - `__text` → FLOW `switch-to-text` (`reboot`).
@@ -1157,7 +1158,7 @@ The answer flows are run with `call`. A shared-scope answer flow works on ask-ch
 "Unescaped": the engine's `\'`, `\"` and `\\` escapes removed.
 
 ### Ends
-By completion with `cargo.choice` set (a key, an answer flow's key, `amount` or `other`), by `reboot` into `live-agent-requested`, `contact-support` or `switch-to-text`, or by `DISPATCH`.
+By completion with `cargo.choice` set (a key, an answer flow's key, `amount` or `other`), by `reboot` into the one-time offer's flow, `live-agent-requested`, `contact-support` or `switch-to-text`, or by `DISPATCH`.
 
 ### Flowchart
 ```mermaid
@@ -1165,22 +1166,24 @@ graph TD
     start((Start)) --> ac_reset["SET: cargo.choice = '', cargo.choiceText = ''"]
     ac_reset --> defaults[SET: accept_other, amount, Spanish question, retry wording, exit context]
     defaults --> ac_keypad[SET: cargo.digits]
-    ac_keypad --> ac_ask[SAY-GET: question, asSpoken with amount, pii with pii]
+    ac_keypad --> ac_offer["SET: take cargo.switchOffer, add its text to the question"]
+    ac_offer --> ac_ask[SAY-GET: question, asSpoken with amount, pii with pii]
     ac_ask --> repeat{only asks to repeat?}
     repeat -->|yes, at most twice| ac_repeat[SAY-GET: question again]
     ac_repeat --> repeat
     repeat -->|no| ac_precheck["FLOW call: answer_precheck, when set"]
-    ac_precheck --> ac_match["SET: ac_key = the precheck's key or pickChoice, exact NO-type own words only, answer_validator on a miss, the amount gate, a lone 9 on a call"]
+    ac_precheck --> ac_match["SET: ac_key = the precheck's key or pickChoice, the offer's words, exact NO-type own words only, answer_validator on a miss, the amount gate, a lone 9 on a call"]
     ac_match --> reask{"no key, no accept_other, under 3 words or reask_long?"}
     reask -->|yes| ac_reask[SAY-GET: retry wording]
     reask -->|no| match_again
     ac_reask --> repeat_after{only asks to repeat?}
     repeat_after -->|yes, at most twice| ac_repeat_after[SAY-GET: question again]
     ac_repeat_after --> repeat_after
-    repeat_after -->|no| match_again["SET: answer_precheck again; ac_key = its key or pickChoice again when none, exact NO-type own words only, answer_validator on a miss, the amount gate"]
+    repeat_after -->|no| match_again["SET: answer_precheck again; ac_key = its key or pickChoice again when none, the offer's words, exact NO-type own words only, answer_validator on a miss, the amount gate"]
     match_again --> other_check["SET: __elsewhere when accept_other, expect and isOtherRequest; a lone 9 on a call"]
     other_check --> keypad_done["SET: cargo.digits removed; cargo.sensitive paths = null on AGENT, EXIT, DISPATCH"]
     keypad_done --> route{ac_key}
+    route -->|__switch| ac_offer_taken["FLOW reboot: the offer's flow"]
     route -->|__agent| ac_agent[FLOW reboot: live-agent-requested]
     route -->|__exit| ac_exit[FLOW reboot: contact-support + exit context]
     route -->|__text| ac_switch_to_text[FLOW reboot: switch-to-text]
