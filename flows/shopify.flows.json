@@ -538,7 +538,7 @@
   {
     "id": "shopify-track-order",
     "name": "ShopifyTrackOrder",
-    "version": "2.2.0",
+    "version": "2.3.0",
     "description": "Customer asks about an order or purchase they placed, or a package: its status, when it will arrive or be ready for pickup, where it is, its tracking or tracking number, what is in it, a package that has not arrived, or a list of their orders ('where is my order', 'order status', 'my order', 'help with an order', 'track my package', 'when will my delivery arrive', 'order #1234', 'track 1Z999AA10123456784', 'where do I find my tracking number', '¿dónde está mi pedido?', 'mi pedido', 'estado de mi orden', '¿cuándo llega mi pedido?', '¿ya está listo para recoger?', 'no me ha llegado mi pedido', 'rastrear mi pedido', 'rastrear mi paquete'). Not: finding a product (ShopifyProductSearch); a return, refund or shipping policy (ShopifyStorePolicies); cancelling an order (None).",
     "prompt": "track order",
     "prompt_es": "rastrear pedido",
@@ -552,6 +552,11 @@
       {
         "name": "tracking_number",
         "description": "A carrier tracking number in the message (8 to 40 letters and digits, e.g. '1Z999AA10123456784').",
+        "type": "string"
+      },
+      {
+        "name": "caller_name",
+        "description": "Internal: the caller's first name for the opening, from a tenant's thin wrapper (wraps) that looked the caller up first; empty for none.",
         "type": "string"
       },
       {
@@ -581,7 +586,7 @@
         "type": "string",
         "value": ""
       },
-      "to_name": {
+      "caller_name": {
         "type": "string",
         "value": ""
       }
@@ -606,34 +611,10 @@
         "value": "cargo.orderAuthPending = !(cargo.otpVerified && (cargo.otp_email || cargo.otp_cell_number))"
       },
       {
-        "id": "to_caller_first",
-        "type": "CASE",
-        "branches": {
-          "condition: !(cargo.otpVerified && (cargo.otp_email || cargo.otp_cell_number)) && typeof global_caller_lookup_flow !== 'undefined' && global_caller_lookup_flow": {
-            "id": "to_caller_lookup",
-            "type": "FLOW",
-            "value": "{{global_caller_lookup_flow}}",
-            "callType": "call"
-          },
-          "default": {
-            "id": "to_no_caller_lookup",
-            "type": "SET",
-            "variable": "noop",
-            "value": "true"
-          }
-        }
-      },
-      {
-        "id": "to_caller_name",
-        "type": "SET",
-        "variable": "to_name",
-        "value": "(function(n) { n = String(n || '').trim(); return n && n === n.toUpperCase() && /[A-ZÁÉÍÓÚÑ]/.test(n) ? n.toLowerCase().replace(/(^|[\\s'-])([a-záéíóúñ])/g, function(m, s, c) { return s + c.toUpperCase(); }) : n; })(cargo.displayNameSetBy === 'flow' ? cargo.displayName : '')"
-      },
-      {
         "id": "to_explain",
         "type": "SAY",
-        "value": "{{cargo.otpVerified && (cargo.otp_email || cargo.otp_cell_number) ? '' : (to_name ? to_name + ', I' : 'I') + \" can help you track your order. For your security, I'll need to verify your identity first.\"}}",
-        "value_es": "{{cargo.otpVerified && (cargo.otp_email || cargo.otp_cell_number) ? '' : (to_name ? to_name + ', p' : 'P') + \"uedo ayudarte a rastrear tu pedido. Por tu seguridad, primero necesitaré verificar tu identidad.\"}}"
+        "value": "{{cargo.otpVerified && (cargo.otp_email || cargo.otp_cell_number) ? '' : (typeof caller_name !== 'undefined' && caller_name ? caller_name + ', I' : 'I') + \" can help you track your order. For your security, I'll need to verify your identity first.\"}}",
+        "value_es": "{{cargo.otpVerified && (cargo.otp_email || cargo.otp_cell_number) ? '' : (typeof caller_name !== 'undefined' && caller_name ? caller_name + ', p' : 'P') + \"uedo ayudarte a rastrear tu pedido. Por tu seguridad, primero necesitaré verificar tu identidad.\"}}"
       },
       {
         "id": "to_verify",
