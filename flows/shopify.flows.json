@@ -749,8 +749,8 @@
   {
     "id": "shopify-order-desk",
     "name": "ShopifyOrderDesk",
-    "version": "1.0.0",
-    "description": "Worker: answers about the verified customer's orders. Picks the order in question (an order number or a position the caller said; else the only order on its way, or the only order; else asks, showing the list), answers what was asked (cargo.orderAsk: track, delivery, items, details) with the answer workers, and keeps that order in focus for the next question. An order number that is not theirs lists their orders; no orders at all goes to the tracking-number question.",
+    "version": "1.1.0",
+    "description": "Worker: answers about the verified customer's orders. Picks the order in question (an order number or a position the caller said; else the only order on its way, or the only order; else asks, showing the list), answers what was asked (cargo.orderAsk: track, delivery, items, details) with the answer workers, and keeps that order in focus for the next question. An order number that is not theirs lists their orders; no orders at all goes to the tracking-number question. An answer it cannot read is passed on; if it comes straight back to the order flows (within a minute), it gives up to a person instead of showing the list again.",
     "parameters": [
       {
         "name": "answer",
@@ -812,6 +812,12 @@
         "value": "(dk_read.ask ? (cargo.orderAsk = dk_read.ask) : null, dk_read.number ? (cargo.orderNumberAsked = dk_read.number) : null, true)"
       },
       {
+        "id": "dk_mark_unread",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(typeof answer !== 'undefined' && answer && !dk_read.ask && dk_read.index < 0 && !dk_read.number && !dk_read.done ? (cargo.orderUnreadAt = Date.now()) : (dk_read.ask || dk_read.index >= 0 || dk_read.number ? (cargo.orderUnreadAt = 0) : null), true)"
+      },
+      {
         "id": "dk_choose",
         "type": "SET",
         "variable": "dk_pick",
@@ -840,6 +846,16 @@
           "condition: typeof answer !== 'undefined' && answer && !dk_read.ask && dk_read.index < 0 && !dk_read.number": {
             "id": "dk_another_request",
             "type": "DISPATCH"
+          },
+          "condition: !dk_pick && !(typeof answer !== 'undefined' && answer) && cargo.orderUnreadAt && Date.now() - cargo.orderUnreadAt < 60000": {
+            "id": "dk_cannot_tell",
+            "type": "FLOW",
+            "value": "give-up",
+            "callType": "reboot",
+            "parameters": {
+              "context": "your order",
+              "context_es": "su pedido"
+            }
           },
           "condition: !dk_pick": {
             "id": "dk_ask_which",
