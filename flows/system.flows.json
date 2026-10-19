@@ -1301,7 +1301,7 @@
   {
     "id": "get-and-validate-otp-code",
     "name": "GetAndValidateOtpCode",
-    "version": "1.0.6",
+    "version": "1.1.0",
     "description": "Get and validate OTP code from user When the code went to the caller ID and the tenant named the caller from it (cargo.callerNamed), the question leads with the first name.",
     "variables": {
       "otp_code": {
@@ -1376,7 +1376,7 @@
         "id": "set_otp_code",
         "type": "SET",
         "variable": "normalized_otp_code",
-        "value": "otp_code.replace(/\\D/g, '')"
+        "value": "(function(t) { var m = { cero: '0', zero: '0', uno: '1', one: '1', dos: '2', two: '2', tres: '3', three: '3', cuatro: '4', four: '4', cinco: '5', five: '5', seis: '6', six: '6', siete: '7', seven: '7', ocho: '8', eight: '8', nueve: '9', nine: '9' }; var filler = ['el', 'mi', 'es', 'codigo', 'code', 'is', 'my', 'the', 'numero', 'number', 'a', 'ver']; var w = String(t || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, ''); var toks = w.split(/[\\s,.;:!?-]+/).filter(Boolean).filter(function(x) { return filler.indexOf(x) < 0; }); var said = toks.length > 0 && toks.some(function(x) { return m.hasOwnProperty(x); }) && toks.every(function(x) { return /^\\d+$/.test(x) || m.hasOwnProperty(x); }) ? toks.map(function(x) { return /^\\d+$/.test(x) ? x : m[x]; }).join('') : ''; return said.length === 6 ? said : String(t || '').replace(/\\D/g, ''); })(otp_code)"
       },
       {
         "id": "proceed_to_validation",
@@ -3520,7 +3520,7 @@
   {
     "id": "ask-email",
     "name": "AskEmail",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "description": "Worker: an email address. With on_file, the question offers it (OK keeps it) and any other address the caller gives replaces it. A spelled address may come in several answers. One re-ask when the answer is not an email. Sets cargo.email ('' when none).",
     "parameters": [
       {
@@ -3646,6 +3646,24 @@
                 "enviar",
                 "envíalo",
                 "correcto"
+              ]
+            },
+            {
+              "key": "another",
+              "words": [
+                "otro correo",
+                "otro correo electrónico",
+                "otro correo electronico",
+                "otro email",
+                "otra dirección",
+                "otra direccion",
+                "a otro correo",
+                "another email",
+                "a different email",
+                "different email",
+                "other email",
+                "another address",
+                "a different address"
               ]
             }
           ],
@@ -3799,6 +3817,18 @@
             "type": "SET",
             "variable": "assignment_side_effect",
             "value": "(cargo.email = ae_found, cargo.emailDraft = '', true)"
+          },
+          "condition: cargo.choice === 'another' && typeof on_file !== 'undefined' && on_file": {
+            "id": "ae_ask_other",
+            "type": "FLOW",
+            "value": "ask-email",
+            "callType": "replace",
+            "parameters": {
+              "question": "What email address should I send it to?",
+              "question_es": "¿A qué correo electrónico se lo envío?",
+              "on_file": "",
+              "confirm": ""
+            }
           },
           "condition: ae_n < 1": {
             "id": "ae_again",
