@@ -13,6 +13,7 @@
     "strict": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
+    "allowJs": true,          // src/helpers are plain ES modules (JSDoc-typed), emitted with declarations
     "esModuleInterop": true
   },
   "include": ["src/**/*"],
