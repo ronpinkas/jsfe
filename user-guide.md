@@ -511,6 +511,7 @@ interface FlowDefinition {
   version: string;                     // Flow version for compatibility
   steps: FlowStep[];                   // Array of executable flow steps
   primary?: boolean;                   // Optional: Marks this as a primary (user-facing) flow
+  wraps?: string;                      // Optional: id or name of a shared flow this one is the entry point for (Wrapper Flows)
   
   // Localization Support
   prompt?: string;                     // Default prompt for the flow
@@ -545,6 +546,17 @@ interface FlowDefinition {
   - `primary: false` or omitted: Helper/sub-flows called by other flows, not directly accessible
   - **Validation Impact**: Only primary flows are validated as top-level workflows during initialization
   - **AI Detection**: Only primary flows are considered for intent detection and user interaction
+- **Wrapper Flows** (`wraps`, jsfe 1.4.0): a tenant's thin entry point over a shared flow, without copying it.
+  - A flow with `wraps: "<id or name>"` takes the wrapped flow's place in intent detection: the wrapped flow loses
+    `primary` and stays callable as a worker (a FLOW step, or its exact name).
+  - The wrapper takes the wrapped flow's `description`, `parameters`, prompts and `primary` flag unless it declares its
+    own, so intent detection reads one description, kept in one place.
+  - The wrapper's steps do the tenant's own work, then call the wrapped flow with arguments of their own. Example:
+    Curacao's `curacao-track-order` wraps `shopify-track-order`, looks the caller up by caller ID, and passes the first
+    name as `caller_name` for the opening.
+  - The engine applies wraps once, at construction, on copies (the host's flow objects are not changed). A `wraps` that
+    names no flow in the menu is logged and ignored; without `wraps` nothing changes. A config that lacks the wrapped flow
+    (e.g. no Shopify flows loaded) leaves the wrapper inert: no description, not primary.
 - **Parameters**: `parameters` lists the values intent detection may extract from the triggering input
   and inject as flow variables. Each is `{ name, description, type?, enum? }`:
   - `type` defaults to `"string"`.
