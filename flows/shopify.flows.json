@@ -2,7 +2,7 @@
   {
     "id": "shopify-product-search",
     "name": "ShopifyProductSearch",
-    "version": "1.6.2",
+    "version": "1.7.0",
     "description": "Customer asks to find a product, whether one is in stock (online or at a store near them), or what it costs ('do you have air fryers', 'is this TV in stock in Phoenix', 'how much is the iPhone 16', '¿tienen refrigeradores?', '¿cuánto cuesta?'). Not: general advice without asking for a product (None); an order already placed (ShopifyTrackOrder); returns, shipping or other store policies (ShopifyStorePolicies). The product number is read by pickChoice, so a number with courtesy or a YES around it (\"Yes 1\", \"1 please\") picks it. On a call (owner 2026-10-17): the results are spoken — up to three, each with its name, price and stock, no links — and TEXT / TEXTO texts the links (text-destination, send-text), then the question is asked again; with no phone that can receive texts the TEXT option is not offered. The text ends with how to continue: by replying, and on WhatsApp (get-whatsapp-link, the search pre-filled) when the tenant invites callers there. A product number is a pick only when the tenant has store locations (global_store_locations), as the question offers it only then; otherwise a number is another request.",
     "prompt": "product search",
     "prompt_es": "buscar producto",
@@ -15,7 +15,7 @@
       },
       {
         "name": "user_city",
-        "description": "The city, or the store by its city, where the customer wants the product ('in Phoenix', 'your downtown store', 'en la tienda del centro'); empty when none is named",
+        "description": "Where the customer wants the product, in their words: a city with or without its state ('Omaha, Nebraska', 'Phoenix AZ'), a state alone ('in Nevada'), a ZIP code, or the store by its city ('your downtown store', 'en la tienda del centro'); empty when none is named",
         "type": "string"
       }
     ],
@@ -76,7 +76,7 @@
         "id": "query_from_prompt",
         "type": "SET",
         "variable": "search_query",
-        "value": "search_query ? search_query : (typeof userInput !== 'undefined' && userInput && !/^START\\s/.test(String(userInput)) ? String(userInput).trim() : '')"
+        "value": "search_query ? search_query : ((cargo.lastProductQuery && ((typeof user_city !== 'undefined' && String(user_city?.value || user_city || '').trim()) || /\\b(those|these|them|it|that one|this one|that|esos|esas|esos productos|eso|ese|esa|ese producto|esa unidad)\\b/i.test(String(typeof userInput !== 'undefined' ? userInput : '')))) ? cargo.lastProductQuery : (typeof userInput !== 'undefined' && userInput && !/^START\\s/.test(String(userInput)) ? String(userInput).trim() : ''))"
       },
       {
         "id": "get-search-query-if-no-param",
@@ -117,6 +117,12 @@
             "context_es": "la búsqueda de productos"
           }
         }
+      },
+      {
+        "id": "remember_query",
+        "type": "SET",
+        "variable": "noop_remember_query",
+        "value": "(search_result && search_result.products && search_result.products.length > 0) ? (cargo.lastProductQuery = search_query, true) : false"
       },
       {
         "id": "sps_text_where",
@@ -171,6 +177,12 @@
         "id": "check_global_store_locations",
         "type": "CASE",
         "branches": {
+          "condition: (typeof global_store_locations !== 'undefined' && Array.isArray(global_store_locations) && global_store_locations.length > 0) && (typeof user_city !== 'undefined' && String(user_city?.value || user_city || '').trim()) && search_result && search_result.products && search_result.products.length === 1": {
+            "id": "one_product_place_named",
+            "type": "SET",
+            "variable": "product_choice",
+            "value": "'1'"
+          },
           "condition: cargo.voice": {
             "id": "ask_after_spoken_results",
             "type": "SAY-GET",
@@ -301,7 +313,7 @@
         "id": "read_product_pick",
         "type": "SET",
         "variable": "product_pick",
-        "value": "(typeof global_store_locations !== 'undefined' && Array.isArray(global_store_locations) && global_store_locations.length > 0) ? pickChoice(String(product_choice?.value || product_choice || ''), (function() { var n = Math.min((search_result && search_result.products ? search_result.products.length : 0), cargo.voice ? 3 : 5); var c = []; for (var k = 1; k <= n; k++) { c.push({ key: String(k), words: [String(k)] }); } return c; })(), false) : ''"
+        "value": "(typeof global_store_locations !== 'undefined' && Array.isArray(global_store_locations) && global_store_locations.length > 0) ? pickChoice(String(product_choice?.value || product_choice || ''), (function() { var n = Math.min((search_result && search_result.products ? search_result.products.length : 0), cargo.voice ? 3 : 5); var c = []; for (var k = 1; k <= n; k++) { c.push({ key: String(k), words: [String(k)].concat(n === 1 ? ['yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'please', 'yes please', 'si', 'sí', 'claro', 'por favor', 'si por favor', 'sí por favor', 'dale', 'ese', 'esa', 'that one', 'this one', 'it'] : []) }); } return c; })(), false) : ''"
       },
       {
         "id": "check_product_choice",
@@ -342,8 +354,8 @@
             "id": "ask_city",
             "type": "SAY-GET",
             "variable": "user_city",
-            "value": "What city are you near? I'll find stores with this item in stock.",
-            "value_es": "¿Cerca de qué ciudad estás? Buscaré tiendas con este artículo en stock."
+            "value": "What city and state, or ZIP code, are you near? I'll find stores with this item in stock.",
+            "value_es": "¿Cerca de qué ciudad y estado, o código postal, está? Buscaré tiendas con este artículo en stock."
           },
           "default": {
             "id": "city_given",
