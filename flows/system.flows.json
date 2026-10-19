@@ -4604,7 +4604,7 @@
   {
     "id": "card-entry",
     "name": "CardEntry",
-    "version": "1.3.0",
+    "version": "1.4.0",
     "description": "Worker: a new card's number, expiration, security code and billing zip (each through ask-field), and whether to save it. Every field the caller gives is kept in cargo.cardDraft and asked only while it is missing, so a card half entered is resumed, never asked again (owner decision 2026-10-16: payment input is never lost). A complete card is PENDING: first in cargo.pendingCards { kind: 'card', card, save, last4, label, label_es, pending: true }, kept for the session (never erased; the session's expiry ends it), and the payment uses it without asking which card. Sets cargo.payMethod to it, or cargo.payNext 'link' / 'card_failed'. The save question is skipped when the caller already said (cargo.saveCardPick 'yes'/'no'), and an answer is kept there.",
     "variables": {
       "ce_number_value": {
@@ -4640,6 +4640,18 @@
         "value": "(cargo.sensitive = ['field'], cargo.cardDraft = cargo.cardDraft && typeof cargo.cardDraft === 'object' ? cargo.cardDraft : {}, true)"
       },
       {
+        "id": "ce_number_question",
+        "type": "SET",
+        "variable": "ce_q",
+        "value": "'Please ' + (cargo.voice ? cargo.verb + ' or enter' : cargo.verb) + ' the card number.'"
+      },
+      {
+        "id": "ce_number_question_es",
+        "type": "SET",
+        "variable": "ce_q_es",
+        "value": "'Por favor ' + (cargo.voice ? cargo.verb_es + ' o ingrese' : cargo.verb_es) + ' el número de la tarjeta.'"
+      },
+      {
         "id": "ce_number_unless_kept",
         "type": "CASE",
         "branches": {
@@ -4650,8 +4662,8 @@
             "callType": "call",
             "parameters": {
               "kind": "card",
-              "question": "Please say or enter the card number.",
-              "question_es": "Por favor diga o ingrese el número de la tarjeta.",
+              "question": "{{ce_q}}",
+              "question_es": "{{ce_q_es}}",
               "error": "That doesn't look like a valid card number.",
               "error_es": "Ese número de tarjeta no parece válido."
             }
@@ -4705,6 +4717,18 @@
         "value": "(cargo.cardDraft.number = String(cargo.field), cargo.field)"
       },
       {
+        "id": "ce_exp_question",
+        "type": "SET",
+        "variable": "ce_q",
+        "value": "'Please ' + (cargo.voice ? cargo.verb + ' or enter' : cargo.verb) + ' the expiration month and year, for example ' + (cargo.voice ? '0 4 2 8' : '04/28') + ' for April 2028.'"
+      },
+      {
+        "id": "ce_exp_question_es",
+        "type": "SET",
+        "variable": "ce_q_es",
+        "value": "(cargo.voice ? cargo.verb_es + ' o ingrese' : cargo.verb_es).charAt(0).toUpperCase() + (cargo.voice ? cargo.verb_es + ' o ingrese' : cargo.verb_es).slice(1) + ' el mes y año de vencimiento, por ejemplo ' + (cargo.voice ? '0 4 2 8' : '04/28') + ' para abril de 2028.'"
+      },
+      {
         "id": "ce_exp_unless_kept",
         "type": "CASE",
         "branches": {
@@ -4715,8 +4739,8 @@
             "callType": "call",
             "parameters": {
               "kind": "exp",
-              "question": "Please say or enter the expiration month and year, for example 0 4 2 8 for April 2028.",
-              "question_es": "Diga o ingrese el mes y año de vencimiento, por ejemplo 0 4 2 8 para abril de 2028.",
+              "question": "{{ce_q}}",
+              "question_es": "{{ce_q_es}}",
               "error": "That isn't a valid, unexpired date.",
               "error_es": "Esa fecha no es válida o ya venció."
             }
@@ -4770,6 +4794,18 @@
         "value": "(cargo.cardDraft.exp = String(cargo.field), cargo.field)"
       },
       {
+        "id": "ce_cvv_question",
+        "type": "SET",
+        "variable": "ce_q",
+        "value": "'Please ' + (cargo.voice ? cargo.verb + ' or enter' : cargo.verb) + ' the 3 or 4 digit security code on the card.'"
+      },
+      {
+        "id": "ce_cvv_question_es",
+        "type": "SET",
+        "variable": "ce_q_es",
+        "value": "(cargo.voice ? cargo.verb_es + ' o ingrese' : cargo.verb_es).charAt(0).toUpperCase() + (cargo.voice ? cargo.verb_es + ' o ingrese' : cargo.verb_es).slice(1) + ' el código de seguridad de 3 o 4 dígitos de la tarjeta.'"
+      },
+      {
         "id": "ce_cvv_unless_kept",
         "type": "CASE",
         "branches": {
@@ -4780,8 +4816,8 @@
             "callType": "call",
             "parameters": {
               "kind": "cvv",
-              "question": "Please say or enter the 3 or 4 digit security code on the card.",
-              "question_es": "Diga o ingrese el código de seguridad de 3 o 4 dígitos de la tarjeta.",
+              "question": "{{ce_q}}",
+              "question_es": "{{ce_q_es}}",
               "error": "That isn't a valid security code.",
               "error_es": "Ese código de seguridad no es válido."
             }
@@ -4835,6 +4871,18 @@
         "value": "(cargo.cardDraft.cvv = String(cargo.field), cargo.field)"
       },
       {
+        "id": "ce_zip_question",
+        "type": "SET",
+        "variable": "ce_q",
+        "value": "'Please ' + (cargo.voice ? cargo.verb + ' or enter' : cargo.verb) + \" the card's 5 digit billing zip code.\""
+      },
+      {
+        "id": "ce_zip_question_es",
+        "type": "SET",
+        "variable": "ce_q_es",
+        "value": "(cargo.voice ? cargo.verb_es + ' o ingrese' : cargo.verb_es).charAt(0).toUpperCase() + (cargo.voice ? cargo.verb_es + ' o ingrese' : cargo.verb_es).slice(1) + ' el código postal de facturación de 5 dígitos.'"
+      },
+      {
         "id": "ce_zip_unless_kept",
         "type": "CASE",
         "branches": {
@@ -4845,8 +4893,8 @@
             "callType": "call",
             "parameters": {
               "kind": "zip",
-              "question": "Please say or enter the card's 5 digit billing zip code.",
-              "question_es": "Diga o ingrese el código postal de facturación de 5 dígitos.",
+              "question": "{{ce_q}}",
+              "question_es": "{{ce_q_es}}",
               "error": "The zip code must be 5 digits.",
               "error_es": "El código postal debe tener 5 dígitos."
             }
