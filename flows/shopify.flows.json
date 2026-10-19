@@ -538,7 +538,7 @@
   {
     "id": "shopify-track-order",
     "name": "ShopifyTrackOrder",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "description": "Customer asks about an order or purchase they placed, or a package: its status, when it will arrive or be ready for pickup, where it is, its tracking or tracking number, what is in it, a package that has not arrived, or a list of their orders ('where is my order', 'order status', 'my order', 'help with an order', 'track my package', 'when will my delivery arrive', 'order #1234', 'track 1Z999AA10123456784', 'where do I find my tracking number', '¿dónde está mi pedido?', 'mi pedido', 'estado de mi orden', '¿cuándo llega mi pedido?', '¿ya está listo para recoger?', 'no me ha llegado mi pedido', 'rastrear mi pedido', 'rastrear mi paquete'). Not: finding a product (ShopifyProductSearch); a return, refund or shipping policy (ShopifyStorePolicies); cancelling an order (None).",
     "prompt": "track order",
     "prompt_es": "rastrear pedido",
@@ -556,14 +556,15 @@
       },
       {
         "name": "ask",
-        "description": "What they want to know: 'track' (where it is, its tracking), 'delivery' (when it arrives, whether it was delivered), 'items' (what is in it), 'details' (its status or details), 'list' (their orders); else leave empty.",
+        "description": "What they want to know: 'track' (where it is, its tracking), 'delivery' (when it arrives, whether it was delivered), 'items' (what is in it), 'details' (its status or details), 'list' (their orders), 'pickup' (a will call or store pickup order); else leave empty.",
         "type": "string",
         "enum": [
           "track",
           "delivery",
           "items",
           "details",
-          "list"
+          "list",
+          "pickup"
         ]
       }
     ],
@@ -592,7 +593,7 @@
         "id": "to_request",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(function() { if (cargo.orderAuthPending) { cargo.orderAuthPending = false; return true; } else { cargo.orderAsk = ['track', 'delivery', 'items', 'details', 'list'].indexOf(String(typeof ask !== 'undefined' ? ask : '')) >= 0 ? String(ask) : ''; cargo.orderNumberAsked = String(typeof order_number !== 'undefined' && order_number ? order_number : '').trim(); cargo.trackingNumberAsked = String(typeof tracking_number !== 'undefined' && tracking_number ? tracking_number : '').replace(/[^A-Za-z0-9]/g, ''); return true; } })()"
+        "value": "(function() { if (cargo.orderAuthPending) { cargo.orderAuthPending = false; return true; } else { cargo.orderAsk = ['track', 'delivery', 'items', 'details', 'list', 'pickup'].indexOf(String(typeof ask !== 'undefined' ? ask : '')) >= 0 ? String(ask) : ''; cargo.orderNumberAsked = String(typeof order_number !== 'undefined' && order_number ? order_number : '').trim(); cargo.trackingNumberAsked = String(typeof tracking_number !== 'undefined' && tracking_number ? tracking_number : '').replace(/[^A-Za-z0-9]/g, ''); return true; } })()"
       },
       {
         "id": "to_auth_mark",
@@ -750,7 +751,7 @@
     "id": "shopify-order-desk",
     "name": "ShopifyOrderDesk",
     "version": "1.1.0",
-    "description": "Worker: answers about the verified customer's orders. Picks the order in question (an order number or a position the caller said; else the only order on its way, or the only order; else asks, showing the list), answers what was asked (cargo.orderAsk: track, delivery, items, details) with the answer workers, and keeps that order in focus for the next question. An order number that is not theirs lists their orders; no orders at all goes to the tracking-number question. An answer it cannot read is passed on; if it comes straight back to the order flows (within a minute), it gives up to a person instead of showing the list again.",
+    "description": "Worker: answers about the verified customer's orders. Picks the order in question (an order number or a position the caller said; else the only order on its way, or the only order; else asks, showing the list), answers what was asked (cargo.orderAsk: track, delivery, items, details) with the answer workers, and keeps that order in focus for the next question. An order number that is not theirs lists their orders; no orders at all goes to the tracking-number question. A will call or store pickup question is answered with what the desk cannot check, and the desk ends.",
     "parameters": [
       {
         "name": "answer",
@@ -778,6 +779,10 @@
       "dk_list_q_es": {
         "type": "string",
         "value": ""
+      },
+      "dk_pickup": {
+        "type": "boolean",
+        "value": false
       }
     },
     "steps": [
@@ -803,19 +808,13 @@
         "id": "dk_read_answer",
         "type": "SET",
         "variable": "dk_read",
-        "value": "typeof answer !== 'undefined' && answer ? (function(t) { t = String(t || '').replace(/\\\\(['\"\\\\])/g, '$1').trim(); var w = t.toLowerCase(); var list = (cargo.shopifyOrders && cargo.shopifyOrders.orders) || []; var asks = [{\"key\":\"track\",\"words\":[\"track\",\"tracking\",\"track it\",\"track package\",\"track my package\",\"track my order\",\"where is it\",\"where is my package\",\"where is my order\",\"wheres my order\",\"where's my order\",\"where's my package\",\"tracking number\",\"what is my tracking number\",\"where do i find my tracking number\",\"where can i find my tracking number\",\"rastrear\",\"rastreo\",\"rastrear paquete\",\"rastrear mi pedido\",\"seguimiento\",\"dónde está\",\"donde esta\",\"dónde está mi pedido\",\"donde esta mi pedido\",\"dónde está mi paquete\",\"donde esta mi paquete\",\"número de rastreo\",\"numero de rastreo\"]},{\"key\":\"delivery\",\"words\":[\"when will it arrive\",\"when does it arrive\",\"when will i get it\",\"when will it get here\",\"delivery date\",\"arrival\",\"eta\",\"delivered\",\"cuándo llega\",\"cuando llega\",\"cuándo me llega\",\"cuando me llega\",\"cuándo llegará\",\"cuando llegara\",\"fecha de entrega\",\"entregado\",\"llegó\",\"llego\"]},{\"key\":\"items\",\"words\":[\"items\",\"what is in it\",\"whats in it\",\"what's in it\",\"what did i order\",\"what did i buy\",\"products\",\"artículos\",\"articulos\",\"qué compré\",\"que compre\",\"qué pedí\",\"que pedi\",\"productos\",\"qué tiene\",\"que tiene\"]},{\"key\":\"details\",\"words\":[\"details\",\"order details\",\"more details\",\"status\",\"order status\",\"detalles\",\"detalles del pedido\",\"estado\",\"estado del pedido\"]}]; var ask = pickChoice(w, asks) || ''; var norm = function(s) { return String(s || '').replace(/^#/, '').replace(/\\s+/g, '').toUpperCase(); }; var number = ''; var index = -1; var said = (t.match(/#?\\b[A-Za-z]?\\d{4,}\\b/) || [''])[0]; if (said) { number = norm(said); var k = list.map(function(o) { return norm(o.orderNumber); }).indexOf(number); if (k < 0) { k = list.map(function(o) { return norm(o.orderNumber).replace(/^[A-Z]+/, ''); }).indexOf(number.replace(/^[A-Z]+/, '')); } else { /* exact */ } if (k >= 0) { index = k; number = list[k].orderNumber; } else { /* not in the list */ } } else { var d = (w.match(/^(?:order |pedido |number |número |numero |el |the )*([1-5])\\b/) || [])[1]; var o = { first: 1, second: 2, third: 3, fourth: 4, fifth: 5, primero: 1, primer: 1, segundo: 2, tercero: 3, tercer: 3, cuarto: 4, quinto: 5 }; var ow = Object.keys(o).filter(function(x) { return new RegExp('\\\\b' + x + '\\\\b').test(w); })[0]; var n = d ? parseInt(d, 10) : (ow ? o[ow] : 0); if (n >= 1 && n <= Math.min(5, list.length)) { index = n - 1; number = list[index].orderNumber; } else { /* no position */ } } var done = !ask && index < 0 && !number && pickChoice(w, [{ key: 'done', words: [\"no\",\"nope\",\"nothing\",\"nothing else\",\"no thanks\",\"no thank you\",\"that's all\",\"that is all\",\"done\",\"no gracias\",\"nada\",\"nada más\",\"nada mas\",\"eso es todo\",\"es todo\",\"listo\"] }], true) === 'done'; return { ask: ask, index: index, number: number, done: done }; })(answer) : { ask: '', index: -1, number: '', done: false }"
+        "value": "typeof answer !== 'undefined' && answer ? (function(t) { t = String(t || '').replace(/\\\\(['\"\\\\])/g, '$1').trim(); var w = t.toLowerCase(); var list = (cargo.shopifyOrders && cargo.shopifyOrders.orders) || []; var asks = [{\"key\":\"track\",\"words\":[\"track\",\"tracking\",\"track it\",\"track package\",\"track my package\",\"track my order\",\"where is it\",\"where is my package\",\"where is my order\",\"wheres my order\",\"where's my order\",\"where's my package\",\"tracking number\",\"what is my tracking number\",\"where do i find my tracking number\",\"where can i find my tracking number\",\"rastrear\",\"rastreo\",\"rastrear paquete\",\"rastrear mi pedido\",\"seguimiento\",\"dónde está\",\"donde esta\",\"dónde está mi pedido\",\"donde esta mi pedido\",\"dónde está mi paquete\",\"donde esta mi paquete\",\"número de rastreo\",\"numero de rastreo\"]},{\"key\":\"delivery\",\"words\":[\"when will it arrive\",\"when does it arrive\",\"when will i get it\",\"when will it get here\",\"delivery date\",\"arrival\",\"eta\",\"delivered\",\"cuándo llega\",\"cuando llega\",\"cuándo me llega\",\"cuando me llega\",\"cuándo llegará\",\"cuando llegara\",\"fecha de entrega\",\"entregado\",\"llegó\",\"llego\"]},{\"key\":\"items\",\"words\":[\"items\",\"what is in it\",\"whats in it\",\"what's in it\",\"what did i order\",\"what did i buy\",\"products\",\"artículos\",\"articulos\",\"qué compré\",\"que compre\",\"qué pedí\",\"que pedi\",\"productos\",\"qué tiene\",\"que tiene\"]},{\"key\":\"details\",\"words\":[\"details\",\"order details\",\"more details\",\"status\",\"order status\",\"detalles\",\"detalles del pedido\",\"estado\",\"estado del pedido\"]},{\"key\":\"pickup\",\"words\":[\"will call\",\"will-call\",\"willcall\",\"will call order\",\"pick up\",\"pickup\",\"pick it up\",\"pick-up\",\"store pickup\",\"in store pickup\",\"ready for pickup\",\"ready to pick up\",\"recoger\",\"recogerlo\",\"recogerla\",\"para recoger\",\"listo para recoger\",\"lista para recoger\",\"recoger en tienda\",\"recogida\",\"recogida en tienda\"]}]; var ask = pickChoice(w, asks) || ''; var norm = function(s) { return String(s || '').replace(/^#/, '').replace(/\\s+/g, '').toUpperCase(); }; var number = ''; var index = -1; var said = (t.match(/#?\\b[A-Za-z]?\\d{4,}\\b/) || [''])[0]; if (said) { number = norm(said); var k = list.map(function(o) { return norm(o.orderNumber); }).indexOf(number); if (k < 0) { k = list.map(function(o) { return norm(o.orderNumber).replace(/^[A-Z]+/, ''); }).indexOf(number.replace(/^[A-Z]+/, '')); } else { /* exact */ } if (k >= 0) { index = k; number = list[k].orderNumber; } else { /* not in the list */ } } else { var d = (w.match(/^(?:order |pedido |number |número |numero |el |the )*([1-5])\\b/) || [])[1]; var o = { first: 1, second: 2, third: 3, fourth: 4, fifth: 5, primero: 1, primer: 1, segundo: 2, tercero: 3, tercer: 3, cuarto: 4, quinto: 5 }; var ow = Object.keys(o).filter(function(x) { return new RegExp('\\\\b' + x + '\\\\b').test(w); })[0]; var n = d ? parseInt(d, 10) : (ow ? o[ow] : 0); if (n >= 1 && n <= Math.min(5, list.length)) { index = n - 1; number = list[index].orderNumber; } else { /* no position */ } } var done = !ask && index < 0 && !number && pickChoice(w, [{ key: 'done', words: [\"no\",\"nope\",\"nothing\",\"nothing else\",\"no thanks\",\"no thank you\",\"that's all\",\"that is all\",\"done\",\"no gracias\",\"nada\",\"nada más\",\"nada mas\",\"eso es todo\",\"es todo\",\"listo\"] }], true) === 'done'; return { ask: ask, index: index, number: number, done: done }; })(answer) : { ask: '', index: -1, number: '', done: false }"
       },
       {
         "id": "dk_take_answer",
         "type": "SET",
         "variable": "assignment_side_effect",
         "value": "(dk_read.ask ? (cargo.orderAsk = dk_read.ask) : null, dk_read.number ? (cargo.orderNumberAsked = dk_read.number) : null, true)"
-      },
-      {
-        "id": "dk_mark_unread",
-        "type": "SET",
-        "variable": "assignment_side_effect",
-        "value": "(typeof answer !== 'undefined' && answer && !dk_read.ask && dk_read.index < 0 && !dk_read.number && !dk_read.done ? (cargo.orderUnreadAt = Date.now()) : (dk_read.ask || dk_read.index >= 0 || dk_read.number ? (cargo.orderUnreadAt = 0) : null), true)"
       },
       {
         "id": "dk_choose",
@@ -833,6 +832,12 @@
             "value": "Okay. Is there anything else I can help you with?",
             "value_es": "De acuerdo. ¿Hay algo más en lo que pueda ayudarle?"
           },
+          "condition: cargo.orderAsk === 'pickup'": {
+            "id": "dk_pickup_sorry",
+            "type": "SAY",
+            "value": "Sorry, I can't check will call or store pickup orders here. For a pickup order, please contact the store where you made the purchase. Is there anything else I can help you with?",
+            "value_es": "Lo siento, aquí no puedo revisar pedidos para recoger en tienda. Para un pedido para recoger, comuníquese con la tienda donde hizo la compra. ¿Hay algo más en lo que pueda ayudarle?"
+          },
           "condition: dk_pick === '!none'": {
             "id": "dk_no_orders",
             "type": "FLOW",
@@ -846,16 +851,6 @@
           "condition: typeof answer !== 'undefined' && answer && !dk_read.ask && dk_read.index < 0 && !dk_read.number": {
             "id": "dk_another_request",
             "type": "DISPATCH"
-          },
-          "condition: !dk_pick && !(typeof answer !== 'undefined' && answer) && cargo.orderUnreadAt && Date.now() - cargo.orderUnreadAt < 60000": {
-            "id": "dk_cannot_tell",
-            "type": "FLOW",
-            "value": "give-up",
-            "callType": "reboot",
-            "parameters": {
-              "context": "your order",
-              "context_es": "su pedido"
-            }
           },
           "condition: !dk_pick": {
             "id": "dk_ask_which",
@@ -877,10 +872,16 @@
         }
       },
       {
+        "id": "dk_pickup_said",
+        "type": "SET",
+        "variable": "dk_pickup",
+        "value": "cargo.orderAsk === 'pickup' ? (cargo.orderAsk = '', true) : false"
+      },
+      {
         "id": "dk_stop_when_done",
         "type": "CASE",
         "branches": {
-          "condition: dk_read.done": {
+          "condition: dk_read.done || dk_pickup": {
             "id": "dk_end",
             "type": "END"
           },
