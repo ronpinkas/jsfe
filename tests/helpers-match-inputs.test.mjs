@@ -9,7 +9,7 @@ const eq = (got, want, what) => { assert.deepEqual(got, want, what); checks++; }
 const names = (r) => r.hits.map((h) => `${h.name}=${h.value}`).sort();
 const amb = (r) => r.ambiguous.map((h) => `${h.name}=${h.value}`).sort();
 
-// A return/exchange form (Shopify) and a payment form (Curacao), as collect-input passes them: the inputs that apply now.
+// A return/exchange form (Shopify) and a payment form, as collect-input passes them: the inputs that apply now.
 const order = { form: 'return', name: 'order_number', profile: { kind: 'digits', min: 4, max: 6 } };
 const action = { form: 'return', name: 'action', profile: { kind: 'choice', choices: [{ key: 'refund', words: ['refund', 'reembolso', 'money back'] }, { key: 'exchange', words: ['exchange', 'cambiar', 'cambio', 'swap'] }] } };
 const item = { form: 'return', name: 'item', profile: { kind: 'choice', choices: [{ key: 'shirt_blue', words: ['blue shirt', 'camisa azul'] }, { key: 'shirt_white', words: ['white shirt', 'camisa blanca'] }] } };

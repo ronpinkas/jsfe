@@ -342,6 +342,31 @@ const body = buildAiRequest(
   - `mergeTextParameters` adds a text model's free-text parameters only when the text model chose
     the same flow. The classifier's enum and boolean values always win.
 
+**Flow helpers — `jsfe/helpers`:**
+The functions the bundled system flows (`ask-choice`, `collect-input`, `authenticate-user`…) call from
+expressions, so every host runs the same ones. Pure: no credentials, no network. The engine does not
+register them by itself; a host lists them among its approved functions:
+
+```javascript
+import { STANDARD_FUNCTIONS } from 'jsfe/helpers';
+
+const engine = new WorkflowEngine(logger, aiCallback, flows, tools,
+  { ...STANDARD_FUNCTIONS, sendSMSOTP, sendEmail /* the host's own, credentialed functions */ });
+```
+
+- Reading answers: `matchesChoice`, `pickChoice`, `isAnswer`, `isAgentRequest`, `isOtherRequest`,
+  `isSpelledFragment`, `isAmountAnswer`, `amountInAnswer`, `readEmail`, `readPhone`,
+  `readInternationalPhone`, `readIdentifier`, `normalizeAndFindCapture`, and `matchInputs` (which of a
+  form's inputs an answer fills; ties between inputs of the same form are returned for the flow to ask).
+- Saying values: `amountToSpeech`, `dateToWords`, `last4`, `maskEmail`, `urlToSpeech`,
+  `textWithUrlToSpeech`, `anythingElse`, `goodbye`.
+- Checks: `validateDigits`, `validatePhone`, `validateEmail`, `validateCardNumber`,
+  `validateExpiration`, and `validateOTP(code, container)`, which accepts a code whose SHA-256 matches
+  `container.otpHash` within 10 minutes of `container.otpTimestamp` and leaves the reason for a refusal
+  in `container.otpFailure` (`missing`, `expired` or `mismatch`). Sending the code is the host's job.
+- Session-aware helpers read only the cargo a caller passes: `callerTextNumber`, `textDestination`,
+  `callerIsInternational`.
+
 **Alternative AI Services:**
 You can integrate any AI service (Claude, Gemini, local LLMs, etc.) by implementing this same interface. The engine only requires a function that takes system instructions and user input, then returns an AI response.
 

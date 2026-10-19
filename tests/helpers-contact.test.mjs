@@ -39,7 +39,7 @@ eq(last4(56035214, false), '5214', 'a number');
 eq(last4('', true), '', 'empty');
 eq(last4(undefined, false), '', 'undefined');
 // maskEmail: said back without reading it all out
-eq(maskEmail('Ron.Pinkas@Gmail.com', true), 'starting with r, o, at gmail.com', 'voice, English');
+eq(maskEmail('Ann.Lee@Gmail.com', true), 'starting with a, n, at gmail.com', 'voice, English');
 eq(maskEmail('ann@gmail.com', true, 'es'), 'que empieza con a, n, arroba gmail.com', 'voice, Spanish');
 eq(maskEmail('ann@gmail.com', false), 'an***@gmail.com', 'written');
 eq(maskEmail('a@x.com', true), 'starting with a, at x.com', 'a one-letter name');
