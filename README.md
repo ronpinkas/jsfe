@@ -414,6 +414,27 @@ The `primary` property enables a clean separation between:
 - Validated only when called from primary flows, ensuring proper variable context
 
 This architecture prevents validation errors for sub-flows that depend on variables from their calling flows, while ensuring complete validation coverage during the engine's deep validation process.
+
+##### Thin wrappers: `wraps`
+
+A shared flow file (one set of flows loaded by many tenants) can be given a tenant-specific entry point without copying it.
+A flow with `wraps: "<id or name>"` becomes the entry point in the wrapped flow's place:
+
+- the wrapped flow is no longer primary, and stays callable as a worker (a FLOW step, or its exact name);
+- the wrapper takes the wrapped flow's `description`, `parameters`, prompts and `primary` flag unless it declares its own,
+  so intent detection reads one description, kept in one place;
+- the wrapper's steps do the tenant's own work, then call the wrapped flow with arguments of their own.
+
+```json
+{ "id": "curacao-track-order", "name": "CuracaoTrackOrder", "version": "1.0.0", "wraps": "shopify-track-order",
+  "steps": [
+    { "id": "lookup", "type": "FLOW", "value": "caller-on-file", "callType": "call" },
+    { "id": "track", "type": "FLOW", "value": "shopify-track-order", "callType": "replace",
+      "parameters": { "caller_name": "{{caller_name}}", "order_number": "{{order_number}}" } }
+  ] }
+```
+
+A `wraps` that names no flow in the menu is logged and ignored. Without `wraps`, nothing changes.
 #### Referencing Tool Results in Later Steps
 When a CALL-TOOL step finishes, it can store the returned data into a variable you name via the variable property. That variable will hold the entire return object from the tool.
 

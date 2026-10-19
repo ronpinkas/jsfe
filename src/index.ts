@@ -789,6 +789,10 @@ export interface FlowDefinition {
   description: string;
   version: string;
   primary?: boolean; // Whether this flow is a primary entry point for users (default: false)
+  // A tenant's thin entry point over a shared flow (by id or name): when present, the wrapped flow is no longer primary
+  // (it stays callable as a worker), and the wrapper takes its description, parameters, prompts and primary flag unless
+  // it declares its own. Absent: nothing changes. See applyWraps().
+  wraps?: string;
   interruptable?: boolean; // Whether this flow can be interrupted by AI intent detection (default: false)
   // 'isolated': a call (or replace) starts the flow with ONLY its declared variables and the parameters actually
   // passed — an omitted parameter is undefined, never the caller's or a previous call's value — and its variables never
@@ -7208,6 +7212,49 @@ export function templateExpressionNames(expression: string): string[] {
   return names;
 }
 
+/**
+ * Thin wrappers (flow attribute `wraps`). A flow that wraps another (named by id or name) becomes the entry point in its
+ * place: the wrapped flow loses `primary` and stays callable as a worker, and the wrapper takes the wrapped flow's
+ * description, parameters, prompts and primary flag unless it declares its own, so intent detection reads one
+ * description kept in one place. Copies are returned; the host's flow objects are not changed. A `wraps` that names no
+ * flow in the menu is logged and ignored. Without any `wraps`, the menu is returned as given.
+ */
+export function applyWraps(flowsMenu: FlowDefinition[]): FlowDefinition[] {
+  if (!Array.isArray(flowsMenu) || !flowsMenu.some(f => f && typeof f.wraps === 'string' && f.wraps)) {
+    return flowsMenu;
+  } else {
+    const menu = flowsMenu.map(f => (f ? { ...f } : f));
+    const find = (ref: string) => menu.find(f => f && (f.id === ref || f.name === ref));
+    for (const wrapper of menu) {
+      if (!wrapper || typeof wrapper.wraps !== 'string' || !wrapper.wraps) {
+        continue;
+      } else {
+        const target = find(wrapper.wraps);
+        if (!target || target === wrapper) {
+          logger.warn(`Flow ${wrapper.id} wraps "${wrapper.wraps}", which is not in the flows menu: ignored`);
+        } else {
+          const inherit = <K extends keyof FlowDefinition>(k: K) => {
+            if (wrapper[k] === undefined || wrapper[k] === '') {
+              (wrapper as any)[k] = target[k];
+            } else {
+              // the wrapper's own value stands
+            }
+          };
+          inherit('description');
+          inherit('parameters');
+          inherit('primary');
+          for (const k of Object.keys(target).filter(k => /^prompt(_|$)/.test(k))) {
+            inherit(k as keyof FlowDefinition);
+          }
+          target.primary = false;
+          logger.info(`Flow ${wrapper.id} wraps ${target.id}: ${target.id} is a worker, ${wrapper.id} the entry point`);
+        }
+      }
+    }
+    return menu;
+  }
+}
+
 export class WorkflowEngine implements Engine {
   public cargo: Record<string, unknown> | undefined;
   public flowsMenu: FlowDefinition[];
@@ -7329,7 +7376,7 @@ export class WorkflowEngine implements Engine {
     logger = withPiiRedaction(hostLogger); // Assign to global logger (a SAY-GET's `pii` answer never reaches it)
 
     this.aiCallback = aiCallback;
-    this.flowsMenu = flowsMenu;
+    this.flowsMenu = applyWraps(flowsMenu);
     this.toolsRegistry = toolsRegistry;
     this.APPROVED_FUNCTIONS = APPROVED_FUNCTIONS;
     this.globalVariables = globalVariables ? { ...globalVariables } : {}; // Copy global variables to prevent external mutations
