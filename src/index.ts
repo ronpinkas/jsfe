@@ -5231,7 +5231,8 @@ async function generateToolArgs(schema: any, input: any, contextStack: ContextEn
     logger.info(`Generating tool arguments for schema: ${schema.name || schema.title || 'unknown'}`);
 
     if (typeof input === 'object') {
-      logger.warn(`Using input object directly for args:`, input);
+      // the caller passed the arguments already built: used as given (keys only, never the values: they can be personal data)
+      logger.info(`Using input object directly for args: ${Object.keys(input || {}).join(', ')}`);
       return input;
     }
 
