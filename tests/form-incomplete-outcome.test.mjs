@@ -22,8 +22,8 @@ const outcome=session=>({outcome:session.lastFlowOutcome?.outcome,reason:session
 await test('leaving an optional follow-up on the next turn preserves the completed result',async()=>{
  const t=fixture({incomplete_outcome:RESULT});await t.say('complete',{flow:'completed'});const s=await t.say('I need different assistance');assert.deepEqual(outcome(s),RESULT);assert.equal(s.lastFlowOutcome.endedBy,'dispatch');
 });
-await test('an ordinary required form stays unresolved after unmatched input',async()=>{
- const t=fixture();await t.say('start',{flow:'follow-up'});const s=await t.say('I need different assistance');assert.equal(s.lastFlowOutcome.outcome,'unresolved');assert.match(s.lastFlowOutcome.reason,/follow-up:\d+_incomplete/);
+await test('an ordinary required form yields a resumable pending task after unmatched input',async()=>{
+ const t=fixture();await t.say('start',{flow:'follow-up'});const s=await t.say('I need different assistance');assert.equal(s.lastFlowOutcome.outcome,'pending');assert.equal(s.lastFlowOutcome.reason,'input_not_matched');assert.equal(s.lastFlowRecovery.mode,'resume');
 });
 await test('dependency and replay limits preserve optional fallback and exact required defaults',async()=>{
  for(const optional of [false,true])for(const route of ['blocked','runaway']) {
@@ -32,13 +32,14 @@ await test('dependency and replay limits preserve optional fallback and exact re
  }
 });
 await test('input retry exhaustion preserves only a declared fallback',async()=>{
- for(const optional of [false,true]) {const t=fixture(optional?{incomplete_outcome:RESULT}:{});await t.say('start',{flow:'follow-up'});const s=await t.say('zzz');assert.deepEqual(outcome(s),optional?RESULT:{outcome:'unresolved',reason:'fixture_give_up'});}
+ const reject={id:'reject',name:'Reject',version:'1',steps:[set('reject_value','(cargo.inputCheck={ok:false},true)')]};
+ for(const optional of [false,true]) {const t=fixture({inputs:[{...field,validator:'reject'}],...(optional?{incomplete_outcome:RESULT}:{})},[reject]);await t.say('start',{flow:'follow-up'});const s=await t.say('ok');assert.deepEqual(outcome(s),optional?RESULT:{outcome:'unresolved',reason:'fixture_give_up'});}
 });
 await test('confirmation unmatched and retry exhaustion share the owned outcome policy',async()=>{
  for(const optional of [false,true])for(const unmatched of [false,true]) {
   const t=fixture({inputs:[],confirm:{question:'Proceed? YES or NO.'},...(optional?{incomplete_outcome:RESULT}:{})});await t.say('start',{flow:'follow-up'});
-  let s;if(unmatched)s=await t.say('I need different assistance');else for(let i=0;i<3;i++)s=await t.say('zzz');
-  if(optional)assert.deepEqual(outcome(s),RESULT);else {assert.equal(s.lastFlowOutcome.outcome,'unresolved');assert.match(s.lastFlowOutcome.reason,unmatched?/_unconfirmed$/:/^fixture_give_up$/);}
+  let s;if(unmatched)s=await t.say('I need different assistance');else for(let i=0;i<2;i++)s=await t.say('zzz');
+  if(optional)assert.deepEqual(outcome(s),RESULT);else {assert.equal(s.lastFlowOutcome.outcome,'pending');assert.equal(s.lastFlowOutcome.reason,unmatched?'confirmation_not_matched':'confirmation_misses_exhausted');assert.equal(s.lastFlowRecovery.mode,'resume');}
  }
 });
 await test('missing specification and failed form validation honor optional policy',async()=>{
@@ -56,6 +57,9 @@ await test('only the nearest owned ancestor supplies a fallback, never another t
  const cargo={};const root=openFormInstance(cargo,'optional',[],{incomplete_outcome:RESULT}),child=openFormInstance(cargo,'child',[],{parent:root,input:'child'}),grandchild=openFormInstance(cargo,'grandchild',[],{parent:child,input:'grandchild'});
  assert.deepEqual(formIncompleteOutcome(cargo,grandchild),{...RESULT,owner:root});cargo.forms[child].incomplete_outcome={outcome:'deflected',reason:'child_left'};assert.deepEqual(formIncompleteOutcome(cargo,grandchild),{outcome:'deflected',reason:'child_left',owner:child});
  const unrelated=openFormInstance(cargo,'required',[]);assert.deepEqual(formIncompleteOutcome(cargo,unrelated),{outcome:'unresolved',reason:'form_incomplete',owner:''});
+});
+await test('an explicit incomplete business result remains authoritative on a contextual yield',async()=>{
+ const declared={outcome:'unresolved',reason:'caller_declared_incomplete'};const t=fixture({incomplete_outcome:declared});await t.say('start',{flow:'follow-up'});const s=await t.say('I need different assistance');assert.deepEqual(outcome(s),declared);assert.equal(s.lastFlowRecovery.mode,'resume');
 });
 await test('malformed declarations cannot claim a completed task',async()=>{
  for(const incomplete_outcome of [{outcome:'success',reason:'bad'},{outcome:'resolved',reason:''},{outcome:'resolved',reason:'ok',extra:true},{from:'unknown'},{from:'completed_result',outcome:'resolved'}])assert.throws(()=>fixture({incomplete_outcome}),/incomplete_outcome/);

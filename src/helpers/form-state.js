@@ -27,6 +27,7 @@ export function resolveFormInputs(inputs, presets = {}) {
       const input = { ...(raw.field ? presets[raw.field] : {}), ...raw };
       if(input.profile?.money!==undefined){if(input.profile.kind!=='amount')throw new Error('FORM money options require amount profile');validateMoneyOptions(input.profile.money);}
       validateFormExhaustion(input.on_exhausted);
+      if(input.max_misses!==undefined&&(!Number.isInteger(input.max_misses)||input.max_misses<1))throw new Error('FORM max_misses must be a positive integer');
       if (input.max_attempts !== undefined && (!Number.isInteger(input.max_attempts) || input.max_attempts < 1)) throw new Error('FORM max_attempts must be a positive integer');
       if (input.any_of) input.any_of = input.any_of.map(member=>resolve({...member,
          depends_on:[...new Set([...(input.depends_on || []),...(member.depends_on || [])])],
@@ -219,7 +220,7 @@ export function openFormInstance(cargo, definition, specs, { parent = null, inpu
    cargo.formSequence = Number(cargo.formSequence || 0) + 1;
    const id = `${definition}:${cargo.formSequence}`;
    cargo.forms[id] = { id, definition, task: owner?.task || task || id, parent, result_input: input,
-      on_exhausted:on_exhausted || '', incomplete_outcome:incomplete, context_only:!!context, parent_revision:owner?.revision ?? null, specs, values: {}, accepted: {}, errors: {}, pending: {}, seeds:{}, attempts: {}, prepared: {}, data:{}, arguments:{}, contexts:{}, children: {}, childResults:{}, revision: 0,
+      on_exhausted:on_exhausted || '', incomplete_outcome:incomplete, context_only:!!context, parent_revision:owner?.revision ?? null, specs, values: {}, accepted: {}, errors: {}, pending: {}, seeds:{}, attempts: {}, misses:{}, feedback:{}, prepared: {}, data:{}, arguments:{}, contexts:{}, children: {}, childResults:{}, revision: 0,
       providers: providers || owner?.providers || null, questions: questions?.length ? questions : owner?.questions || [], status: 'collecting' };
    if (owner) {if(context){owner.contexts ||= {};owner.contexts[definition]=id;}else owner.children[input]=id;}
    return id;

@@ -98,7 +98,7 @@ export function definePerformer({performs,contract,prepare,present,project=[],..
       set('request','pf_request','cargo.actionRequest'),
       set('select','pf_action','selectFormAction(cargo, form_instance, performs)'),
       when('bad_request',"!(pf_action === null || pf_action && typeof pf_action === 'object' && pf_action.action) || pf_action !== null && (!pf_request || typeof pf_request !== 'object')",
-         {id:`${spec.id}_prepare_failed`,type:'FLOW',value:'give-up',callType:'reboot',parameters:{context:'{{exit_context}}',context_es:'{{exit_context_es}}'}}),
+         {id:`${spec.id}_prepare_failed`,type:'FLOW',value:'give-up',callType:'reboot',recovery:{version:1,mode:'none',reason:'performer_request_invalid'},parameters:{context:'{{exit_context}}',context_es:'{{exit_context_es}}'}}),
       set('proposal','pf_record',"pf_action ? prepareFormAction(cargo, form_instance, pf_action, pf_request) : null"),
    ];
    const flow=formFlow({...spec,confirm,confirmation_condition:"pf_action !== null && pf_action && typeof pf_action === 'object'",

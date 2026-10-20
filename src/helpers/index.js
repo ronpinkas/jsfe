@@ -1,3 +1,4 @@
+import {clearFormMisses,missFormInput,formInputPrompt,consumeFormFeedback,formConversationOutcome} from './form-conversation.js';
 import { takeChoiceOffer } from './choice-offer.js';
 import { consumeActionReceipt, authorizeFormActionRetry, formSignature, selectFormAction, confirmFormRevision, prepareFormAction, actionConfirmationValid, beginFormAction, finishFormAction, actionGateVerified } from './form-actions.js';
 /**
@@ -31,6 +32,7 @@ import { validateDigits, validatePhone, validateEmail } from './validators.js';
 import { urlToSpeech, textWithUrlToSpeech } from './url-speech.js';
 
 export {
+   clearFormMisses,missFormInput,formInputPrompt,consumeFormFeedback,formConversationOutcome,
    readMoneyAmount, isMoneyAmount, moneyIntentAllows, validateMoneyOptions, takeChoiceOffer, matchesChoice, ANSWER_WORDS, CONFIRM_WORDS, isAnswer, isAgentRequest, isOtherRequest, isSpelledFragment, isAmountAnswer, amountInAnswer,
    pickChoice, readEmail, readPhone, readInternationalPhone, readIdentifier, last4, maskEmail, callerTextNumber, textDestination,
    callerIsInternational, normalizeAndFindCapture, anythingElse, goodbye, sayName, dateToWords, amountToSpeech, validateCardNumber,
@@ -40,6 +42,7 @@ export {
 
 /** The functions flows call by name, ready to spread into a host's approved functions. */
 export const STANDARD_FUNCTIONS = {
+   clearFormMisses,missFormInput,formInputPrompt,consumeFormFeedback,formConversationOutcome,
    readMoneyAmount, isMoneyAmount, moneyIntentAllows, validateMoneyOptions, takeChoiceOffer, matchesChoice, isAnswer, isAgentRequest, isOtherRequest, isSpelledFragment, isAmountAnswer, amountInAnswer, pickChoice,
    readEmail, readPhone, readInternationalPhone, readIdentifier, last4, maskEmail, callerTextNumber, textDestination, callerIsInternational,
    normalizeAndFindCapture, anythingElse, goodbye, sayName, dateToWords, amountToSpeech, validateCardNumber, validateExpiration, consumeActionReceipt, authorizeFormActionRetry, formSignature, selectFormAction, confirmFormRevision, prepareFormAction, actionConfirmationValid, beginFormAction, finishFormAction, actionGateVerified, sourceNeedsLoad, beginSourceRefresh, completeSourceRefresh, pickProviderQuestion, matchInputs, readFormAnswer, readInputProfile, resolveFormInputs, formInputApplies, formInputFilled, nextFormInput, formInputChain, openFormInstance, validateFormIncompleteOutcome, formIncompleteOutcome, validateFormExhaustion, exhaustFormInput, formInitialReadings, orderFormReadings, proposedFormValues, applyFormValidation, formReadingDependencies, exclusiveFormReadings, enrichFormMatches, expandFormActivations, settleFormActivations, rememberFormArguments, resetFormInputs, hasFormValue, formPath, formValuesEqual, formReadingReady, formReadingRelevant, formPreparation, queueFormReadings, pendingFormReadings, formWorkLimit, rejectFormReadings, invalidateFormInputs, acceptFormReadings, formInstanceApplies, closeFormInstance,

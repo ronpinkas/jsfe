@@ -6,6 +6,8 @@
  *   import { buildAiRequest, isDetectFlowRequest, toFlowRequest } from 'jsfe/host';
  */
 export * from './request.js';
+export {validateFlowRecovery,flowHandoffInfo,renderFlowRecovery} from './flow-recovery.js';
+export type {FlowRecovery} from './flow-recovery.js';
 export * from './systemone-intent.js';
 export * from './intent-stages.js';
 

@@ -29,7 +29,10 @@ const FLOW = (id, value, callType = 'call', parameters) => ({ id, type: 'FLOW', 
 const WHEN = (id, condition, step) => ({ id, type: 'CASE', branches: { [`condition: ${condition}`]: step, default: NOOP(`${id}_skip`) } });
 const vars = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [k, { type: Array.isArray(v) ? 'array' : v === null || typeof v === 'object' ? 'object' : typeof v, value: v }]));
 const incompleteAttrs=(form,reason)=>({outcome:`{{formIncompleteOutcome(cargo,${form},{outcome:'unresolved',reason:${reason}}).outcome}}`,reason:`{{formIncompleteOutcome(cargo,${form},{outcome:'unresolved',reason:${reason}}).reason}}`});
-const incompleteDispatch=(id,form,reason)=>({id,type:'DISPATCH',...incompleteAttrs(form,reason)});
+const recoveryAttrs=(form,reason,failure=false,mode='resume')=>{const call=`formConversationOutcome(cargo,${form},${reason},${failure},${JSON.stringify(mode)})`;return {outcome:`{{${call}.outcome}}`,reason:`{{${call}.reason}}`,recovery:{version:1,mode:`{{${call}.recovery.mode}}`,reason:`{{${call}.recovery.reason}}`,form:`{{${call}.recovery.form || ''}}`,flow:`{{${call}.recovery.flow || ''}}`}};};
+const incompleteDispatch=(id,form,reason)=>({id,type:'DISPATCH',...recoveryAttrs(form,reason,true,'none')});
+const yieldDispatch=(id,form,reason)=>({id,type:'DISPATCH',...recoveryAttrs(form,reason)});
+const recoveryStamp=(id,form,reason,mode='resume')=>({...SET(id,'noop','true'),recovery:recoveryAttrs(form,reason,true,mode).recovery});
 const optionalIncomplete=(id,condition,form,reason)=>WHEN(id,`(${condition}) && !!formIncompleteOutcome(cargo,${form},{outcome:'unresolved',reason:${reason}}).owner`,incompleteDispatch(id+'_dispatch',form,reason));
 
 
@@ -117,7 +120,7 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
          SET(`${id}_open`, 'form_instance', `openFormInstance(cargo, ${JSON.stringify(id)}, inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[${JSON.stringify(id)}] || '' : ''), providers: provides, questions: questions, incomplete_outcome: ${incompleteExpression}, on_exhausted: form_on_exhausted })`),
          SIDE(`${id}_task`, `(!parent_form ? (cargo.formTasks = cargo.formTasks || {}, cargo.formTasks[${JSON.stringify(id)}] = form_instance) : true, true)`),
          SIDE(`${id}_provider_reset`, '(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].providerGateActive, true)'),
-         SIDE(`${id}_pass_reset`, '(cargo.forms[form_instance].replays = 0, form_internal_resume ? true : (cargo.forms[form_instance].attempts = {}), true)'),
+         SIDE(`${id}_pass_reset`, '(cargo.forms[form_instance].replays = 0, form_internal_resume ? true : (cargo.forms[form_instance].attempts = {},cargo.forms[form_instance].misses={},cargo.forms[form_instance].feedback={}), true)'),
          SET(`${id}_arguments`,'form_arguments',`rememberFormArguments(cargo.forms[form_instance], currentContext, ${JSON.stringify(parameters.filter(p=>!p.internal&&!/^internal\b/i.test(p.description || '')).map(p=>p.name))}, form_internal_resume)`),
          ...parameters.filter(p=>!p.internal&&!/^internal\b/i.test(p.description || '')).map(p=>SET(`${id}_restore_${p.name}`,p.name,`form_internal_resume ? form_arguments[${JSON.stringify(p.name)}] : currentContext[${JSON.stringify(p.name)}]`)),
          ...before,
@@ -139,6 +142,7 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
             WHEN(`${id}_resolve_validation_exhausted`,"form_validation === 'failed'",SET(`${id}_validation_exhaustion`,'form_exhaustion',"exhaustFormInput(cargo,form_instance,((cargo.formCheck || {}).invalid || [])[0] ? cargo.formCheck.invalid[0].name : '')")),
             WHEN(`${id}_recover_validation_exhausted`,'form_exhaustion',FLOW(`${id}_validation_recovery`,'{{form_exhaustion.flow}}','reboot',{form:'{{form_exhaustion.form}}',failed_form:'{{form_exhaustion.failed_form}}',input:'{{form_exhaustion.input}}',failed_input:'{{form_exhaustion.failed_input}}',reason:'{{form_exhaustion.reason}}'})),
             optionalIncomplete(`${id}_optional_validation_failed`,"form_validation === 'failed'",'form_instance',"form_instance+'_incomplete'"),
+            WHEN(`${id}_validation_failed_recovery`,"form_validation === 'failed'",recoveryStamp(`${id}_validation_stamp`,'form_instance',"'validation_exhausted'",'none')),
             WHEN(`${id}_validation_failed`, "form_validation === 'failed'", FLOW(`${id}_validation_give_up`, 'give-up', 'reboot', { context: '{{exit_context}}', context_es: '{{exit_context_es}}' })),
             WHEN(`${id}_validation_message`, "form_validation === 'retry' && cargo.formCheck.message", SAY(`${id}_validation_say`, '{{cargo.formCheck.message}}', '{{cargo.formCheck.message_es}}')),
             WHEN(`${id}_validation_retry`, "form_validation === 'retry'", FLOW(`${id}_validate_again`, id, 'replace', { parent_form: '{{parent_form}}', result_input: '{{result_input}}', form_instance: '{{form_instance}}' })),
@@ -201,26 +205,31 @@ const collectInput = {
    id: 'collect-input', name: 'CollectInput', version: '1.0.0', scope: 'isolated',
    description: "Worker: ask the form's current input once and file the answer wherever it belongs in the form chain (matchInputs, decided by scope; a declared confirm_against pair is asked). One reading → collect-input-accept; ambiguous → disambiguate-input; a question about the form's data → provide-data; a short miss → counted, the loop re-asks; 3+ words that fit nothing → DISPATCH. Params: form, current, questions, provides, exit_context(_es).",
    parameters: ['form', 'current', 'questions', 'provides', 'exit_context', 'exit_context_es'].map((n) => ({ name: n, type: ['questions'].includes(n) ? 'array' : n === 'provides' ? 'object' : 'string', description: n })),
-   variables: vars({ ci_exhaustion:null, ci_d: {}, ci_pre: '', ci_val: '', ci_routed: '', ci_names: [], ci_chain: [], ci_spec: null, ci_choices: [], ci_q: '', ci_q_es: '', ci_missed: 0, ci_max: 3, ci_m: null, ci_qkey: '', ci_skip_gate:'', ci_words: 0, ci_digits: null, ci_amount: false, ci_as_spoken:false, ci_reader:{}, ci_pii: false, ci_ctx: '', ci_ctx_es: '' }),
+   variables: vars({ ci_exhaustion:null, ci_d: {}, ci_pre: '', ci_val: '', ci_routed: '', ci_names: [], ci_chain: [], ci_spec: null, ci_choices: [], ci_q: '', ci_q_es: '', ci_missed: 0, ci_max: 3, ci_misses:0,ci_miss_limit:2, ci_m: null, ci_qkey: '', ci_skip_gate:'', ci_words: 0, ci_digits: null, ci_amount: false, ci_as_spoken:false, ci_reader:{}, ci_pii: false, ci_ctx: '', ci_ctx_es: '' }),
    steps: [
       SET('ci_find_spec', 'ci_spec', "(function () { var s = ((cargo.forms[form] || {}).specs || []).filter(function (s) { return s.name === current; })[0]; return s ? (Array.isArray(s.any_of) ? Object.assign({}, s, { profile: { kind: 'group' } }) : s) : null; })()"),
       SET('ci_current_names', 'ci_names', "Array.isArray(ci_spec && ci_spec.any_of) ? ci_spec.any_of.map(function (m) { return m.name; }) : [current]"),
-      WHEN('ci_no_spec', '!ci_spec', END('ci_no_spec_end', incompleteAttrs('form',"'collect_input_spec'"))),
+      WHEN('ci_no_spec', '!ci_spec', END('ci_no_spec_end', recoveryAttrs('form',"'collect_input_spec'",true,'none'))),
       SET('ci_count_missed', 'ci_missed', "Number(((cargo.forms[form] || {}).attempts || {})[current] || 0)"),
       SET('ci_max_attempts', 'ci_max', 'Number(ci_spec.max_attempts || 3)'),
+      SET('ci_context_misses','ci_misses','Number(((cargo.forms[form] || {}).misses || {})[current] || 0)'),
+      SET('ci_context_limit','ci_miss_limit','Number(ci_spec.max_misses || 2)'),
+      WHEN('ci_context_yield','ci_misses >= ci_miss_limit',yieldDispatch('ci_misses_dispatch','form',"'input_misses_exhausted'")),
       SET('ci_context', 'ci_ctx', "typeof exit_context !== 'undefined' && exit_context ? exit_context : 'your request'"),
       SET('ci_context_es', 'ci_ctx_es', "typeof exit_context_es !== 'undefined' && exit_context_es ? exit_context_es : 'su solicitud'"),
       WHEN('ci_resolve_exhausted','ci_missed >= ci_max',SET('ci_exhausted_policy','ci_exhaustion','exhaustFormInput(cargo,form,current)')),
       WHEN('ci_declared_exhausted','ci_exhaustion',FLOW('ci_exhausted_recovery','{{ci_exhaustion.flow}}','reboot',{form:'{{ci_exhaustion.form}}',failed_form:'{{ci_exhaustion.failed_form}}',input:'{{ci_exhaustion.input}}',failed_input:'{{ci_exhaustion.failed_input}}',reason:'{{ci_exhaustion.reason}}'})),
       optionalIncomplete('ci_optional_exhausted','ci_missed >= ci_max','form',"form+'_incomplete'"),
+      WHEN('ci_failure_recovery','ci_missed >= ci_max',recoveryStamp('ci_failure_stamp','form',"'validation_exhausted'")),
       WHEN('ci_give_up', 'ci_missed >= ci_max', FLOW('ci_give_up_flow', 'give-up', 'reboot', { context: '{{ci_ctx}}', context_es: '{{ci_ctx_es}}' })),
       FLOW('ci_prepare','prepare-input','call',{form:'{{form}}',input:'{{current}}'}),
       // `refresh`: a flow run before EVERY ask, which computes what the question shows into cargo.forms[form].data
       WHEN('ci_refresh', 'ci_spec.refresh', FLOW('ci_refresh_flow', '{{ci_spec.refresh}}', 'call', { form: '{{form}}', input: '{{current}}' })),
       SET('ci_refetch_spec','ci_spec',"(function(){var spec=cargo.forms[form].specs.filter(function(s){return s.name===current;})[0];return spec&&spec.any_of?Object.assign({},spec,{profile:{kind:'group'}}):spec;})()"),
       SET('ci_data', 'ci_d', '(cargo.forms[form] || {}).data || {}'),
-      SET('ci_question', 'ci_q', "ci_spec.question_from && ci_d[ci_spec.question_from] ? ci_d[ci_spec.question_from] : (ci_missed > 0 && ci_spec.retry ? ci_spec.retry : ci_spec.question)"),
-      SET('ci_question_es', 'ci_q_es', "ci_spec.question_from && (ci_d[ci_spec.question_from + '_es'] || ci_d[ci_spec.question_from]) ? (ci_d[ci_spec.question_from + '_es'] || ci_d[ci_spec.question_from]) : (ci_missed > 0 && (ci_spec.retry_es || ci_spec.retry) ? (ci_spec.retry_es || ci_spec.retry) : (ci_spec.question_es || ci_spec.question))"),
+      SET('ci_question','ci_q',"formInputPrompt(cargo,form,current,ci_spec,ci_d,'en')"),
+      SET('ci_question_es','ci_q_es',"formInputPrompt(cargo,form,current,ci_spec,ci_d,'es')"),
+      SIDE('ci_feedback_consumed','consumeFormFeedback(cargo,form,current)'),
       SET('ci_own_choices', 'ci_choices', "ci_spec.choices_from && Array.isArray(ci_d[ci_spec.choices_from]) ? ci_d[ci_spec.choices_from] : (ci_spec.profile.kind === 'choice' && Array.isArray(ci_spec.profile.choices) ? ci_spec.profile.choices : [])"),
       SET('ci_keypad', 'ci_digits', 'ci_spec.digits || null'),
       SET('ci_is_amount', 'ci_amount', "ci_spec.amount === 'marked' ? 'marked' : (ci_spec.amount === true || ci_spec.profile.kind === 'amount')"),
@@ -239,6 +248,7 @@ const collectInput = {
       // The labels and validators ride on each reading, so the presets stay in this one flow.
       SET('ci_enrich','ci_m','enrichFormMatches(ci_m, ci_chain, form, ci_names, current)'),
       SET('ci_question_key', 'ci_qkey', "ci_m.questions.length ? ci_m.questions[0] : !ci_m.hits.length && !ci_m.ambiguous.length && Array.isArray(questions) && questions.length && provides ? pickChoice(cargo.choiceText, questions, false) : ''"),
+      WHEN('ci_understood','ci_m.hits.length || ci_m.ambiguous.length || ci_m.questions.length || ci_qkey && ci_qkey.indexOf("__") !== 0',SIDE('ci_clear_misses','clearFormMisses(cargo,form,current)')),
       SET('ci_count_words', 'ci_words', "String(cargo.choiceText || '').split(/\\s+/).filter(function (w) { return /[a-záéíóúüñ]/i.test(w); }).length"),
       // Independent field clauses are committed before a provider can suspend on its gate.
       WHEN('ci_question_ambiguity','ci_m.questions.length > 0 && ci_m.ambiguous.length > 0',FLOW('ci_question_clarify','disambiguate-input','call',{readings:'{{ci_m.ambiguous}}',hits:'{{ci_m.hits}}',remaining:'{{ci_m.remaining}}'})),
@@ -251,8 +261,8 @@ const collectInput = {
          'condition: ci_m.hits.length > 0': FLOW('ci_accept', 'collect-input-accept', 'call', { hits: '{{ci_m.hits}}' }),
          "condition: ci_m.questions.length > 0": END('ci_question_handled'),
          "condition: ci_qkey && ci_qkey.indexOf('__') !== 0": FLOW('ci_question_asked', 'provide-data', 'call', { form:'{{form}}', provides: '{{provides}}', asked: '{{ci_qkey}}', no_menu: 'true',no_gate:'{{ci_skip_gate}}' }),
-         'condition: ci_words >= 3': incompleteDispatch('ci_elsewhere','form',"form+'_incomplete'"),
-         default: SIDE('ci_miss', "(cargo.forms[form].attempts = cargo.forms[form].attempts || {}, cargo.forms[form].attempts[current] = ci_missed + 1, true)") } },
+         'condition: ci_words >= 3': yieldDispatch('ci_elsewhere','form',"'input_not_matched'"),
+         default: SIDE('ci_miss', "(missFormInput(cargo,form,current),true)") } },
    ],
 };
 
@@ -320,7 +330,7 @@ const acceptedEffects = {
       SET('ie_first','ca_h','readings.length ? readings[0] : null'),
       WHEN('ie_none','!ca_h',END('ie_end')),
       SET('ie_rest','ca_rest','readings.slice(1)'),
-      WHEN('ie_reject',"ca_h.outcome === 'rejected'",SIDE('ie_attempt',"(cargo.forms[ca_h.form].attempts[ca_h.asked || ca_h.name] = Number(cargo.forms[ca_h.form].attempts[ca_h.asked || ca_h.name] || 0) + 1, true)")),
+      WHEN('ie_reject',"ca_h.outcome === 'rejected'",SIDE('ie_attempt',"(cargo.forms[ca_h.form].attempts[ca_h.asked || ca_h.name] = Number(cargo.forms[ca_h.form].attempts[ca_h.asked || ca_h.name] || 0) + 1, cargo.forms[ca_h.form].feedback=cargo.forms[ca_h.form].feedback || {}, cargo.forms[ca_h.form].feedback[ca_h.asked || ca_h.name]='invalid', true)")),
       SET('ie_say_en','ca_ack',"ca_h.outcome === 'rejected' ? (ca_h.message || ('That ' + (ca_h.label || ca_h.name) + \" doesn't look right.\")) : ca_h.silent === true || ca_h.fromPending ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Thank you, I already have your ' + ca_h.label + '.') : ca_h.outcome === 'changed' ? ('Okay, I updated your ' + ca_h.label + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Got it, your ' + ca_h.label + '.') : ''"),
       SET('ie_say_es','ca_ack_es',"ca_h.outcome === 'rejected' ? (ca_h.message_es || ca_h.message || ('Ese ' + (ca_h.label_es || ca_h.label || ca_h.name) + ' no parece correcto.')) : ca_h.silent === true || ca_h.fromPending ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Gracias, ya tengo su ' + ca_h.label_es + '.') : ca_h.outcome === 'changed' ? ('Listo, actualicé su ' + ca_h.label_es + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Entendido, su ' + ca_h.label_es + '.') : ''"),
       WHEN('ie_say','ca_ack',SAY('ie_ack','{{ca_ack}}','{{ca_ack_es}}')),
@@ -334,7 +344,7 @@ const disambiguate = {
    id: 'disambiguate-input', name: 'DisambiguateInput', version: '1.0.0', scope: 'isolated',
    description: "Worker: the answer fits two or more inputs at the same scope (or a declared confirm_against pair). Stores the unambiguous readings, asks which input the rest was for (keys 1..n, never 8), stores the pick. No pick: nothing stored, not a miss. Params: readings, hits.",
    parameters: [{ name: 'readings', type: 'array', description: 'The ambiguous readings' }, { name: 'hits', type: 'array', description: 'Readings to store as they are' }, {name:'remaining',type:'array'}],
-   variables: vars({ di_keys: [], di_choices: [], di_q: '', di_q_es: '', di_pick: null, di_value: '', remaining:[], di_next:[], di_rest:[] }),
+   variables: vars({ di_form:'',di_input:'',di_prompt:'',di_prompt_es:'',di_words:0,di_misses:0, di_keys: [], di_choices: [], di_q: '', di_q_es: '', di_pick: null, di_value: '', remaining:[], di_next:[], di_rest:[] }),
    steps: [
       WHEN('di_store_clear', 'Array.isArray(hits) && hits.length > 0', FLOW('di_store_hits', 'collect-input-accept', 'call', { hits: '{{hits}}' })),
       SET('di_number', 'di_keys', `${KEYS_JS}(readings.length)`),
@@ -342,8 +352,19 @@ const disambiguate = {
       SET('di_said', 'di_value', "readings[0].pii ? '' : String(readings[0].value)"),
       SET('di_question', 'di_q', "(di_value ? 'Is ' + di_value + ' your ' : 'Is that your ') + readings.map(function (r) { return r.label; }).join(' or your ') + '? ' + readings.map(function (r, i) { return (cargo.voice ? 'Press ' + di_keys[i] + ' or say ' : 'Say ') + r.label.toUpperCase(); }).join(', ') + '.'"),
       SET('di_question_es', 'di_q_es', "(di_value ? '¿' + di_value + ' es su ' : '¿Eso es su ') + readings.map(function (r) { return r.label_es; }).join(' o su ') + '? ' + readings.map(function (r, i) { return (cargo.voice ? 'Presione ' + di_keys[i] + ' o diga ' : 'Diga ') + r.label_es.toUpperCase(); }).join(', ') + '.'"),
-      FLOW('di_ask', 'ask-choice', 'call', { question: '{{di_q}}', question_es: '{{di_q_es}}', choices: '{{di_choices}}', accept_other: true, digits: { min: 1, max: 1 } }),
+      SET('di_owner','di_form','readings[0].form'),
+      SET('di_counter','di_input',"'__ambiguity:'+readings.map(function(r){return r.form+':'+r.name;}).sort().join('|')"),
+      SET('di_prompt','di_prompt',"formInputPrompt(cargo,di_form,di_input,{question:di_q,question_es:di_q_es},{},'en')"),
+      SET('di_prompt_es','di_prompt_es',"formInputPrompt(cargo,di_form,di_input,{question:di_q,question_es:di_q_es},{},'es')"),
+      SIDE('di_feedback_consumed','consumeFormFeedback(cargo,di_form,di_input)'),
+      FLOW('di_ask', 'ask-choice', 'call', { question: '{{di_prompt}}', question_es: '{{di_prompt_es}}', choices: '{{di_choices}}', accept_other: true, digits: { min: 1, max: 1 } }),
       SET('di_picked', 'di_pick', "/^r\\d+$/.test(String(cargo.choice || '')) ? [readings[Number(String(cargo.choice).slice(1))]] : null"),
+      WHEN('di_understood','di_pick',SIDE('di_clear_misses','clearFormMisses(cargo,di_form,di_input)')),
+      SET('di_word_count','di_words',"String(cargo.choiceText || '').split(/\\s+/).filter(function(w){return /[a-záéíóúüñ]/i.test(w);}).length"),
+      WHEN('di_context','!di_pick && di_words >= 3',yieldDispatch('di_context_yield','di_form',"'ambiguity_not_resolved'")),
+      WHEN('di_miss','!di_pick',SET('di_miss_count','di_misses','missFormInput(cargo,di_form,di_input)')),
+      WHEN('di_exhausted','!di_pick && di_misses >= 2',yieldDispatch('di_misses_yield','di_form',"'ambiguity_misses_exhausted'")),
+      WHEN('di_retry','!di_pick',FLOW('di_retry_question','disambiguate-input','replace',{readings:'{{readings}}',hits:[],remaining:'{{remaining}}'})),
       WHEN('di_store_pick', 'di_pick', FLOW('di_store_pick_flow', 'collect-input-accept', 'call', { hits: '{{di_pick}}' })),
       SET('di_remaining_first','di_next','Array.isArray(remaining) && remaining.length ? remaining[0] : []'),
       SET('di_remaining_rest','di_rest','Array.isArray(remaining) ? remaining.slice(1) : []'),
@@ -356,13 +377,16 @@ const confirmForm = {
    id: 'confirm-form', name: 'ConfirmForm', version: '1.0.0', scope: 'isolated',
    description: "Worker: ask a form's confirmation (exact YES / NO; keys 1 and 2). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an unclear short answer is asked again, a long unrelated one is DISPATCHed. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
    parameters: ['form', 'question', 'question_es', 'exit_context', 'exit_context_es','words','interrupts','no_keys','clarifications'].map((n) => ({ name: n, type: ['words','interrupts','no_keys','clarifications'].includes(n)?'array':'string', description: n })),
-   variables: vars({ cf_presets: FIELD_PRESETS, cf_chain: [], cf_m: null, cf_result: '', cf_words: 0, cf_tries: 0, words:[], clarifications:[], no_keys:['2'], interrupts:[], cf_choices:[], cf_event:'', cf_amount:false, cf_questions:[],cf_provides:null,cf_skip_gate:'' }),
+   variables: vars({ cf_presets: FIELD_PRESETS, cf_chain: [], cf_m: null, cf_result: '',cf_prompt:'',cf_prompt_es:'', cf_words: 0, cf_tries: 0, words:[], clarifications:[], no_keys:['2'], interrupts:[], cf_choices:[], cf_event:'', cf_amount:false, cf_questions:[],cf_provides:null,cf_skip_gate:'' }),
    steps: [
       SIDE('cf_reset', "(cargo.formConfirm = cargo.formConfirm || {}, cargo.formConfirm[form] = '', true)"),
       SET('cf_choices','cf_choices',"[{key:'yes',words:['1'].concat(Array.isArray(words)?words:[]),exact:true},{key:'no',words:Array.isArray(no_keys)?no_keys:['2']}].concat((Array.isArray(interrupts)?interrupts:[]).map(function(event){return {key:'event:'+event.key,words:event.words,exact:event.exact!==false};}))"),
       SET('cf_initial_chain','cf_chain',CHAIN_JS),
       SET('cf_amount_context','cf_amount',"cf_chain.some(function(input){return input.profile && input.profile.kind==='amount';})"),
-      FLOW('cf_ask', 'ask-choice', 'call', { amount:'{{cf_amount}}', question: '{{question}}', question_es: '{{question_es}}', choices: '{{cf_choices}}', accept_other: true, reask_long: true, digits: { min: 1, max: 1 }, exit_context: '{{exit_context}}', exit_context_es: '{{exit_context_es}}' }),
+      SET('cf_prompt','cf_prompt',"formInputPrompt(cargo,form,'__confirm',{question:question,question_es:question_es},{},'en')"),
+      SET('cf_prompt_es','cf_prompt_es',"formInputPrompt(cargo,form,'__confirm',{question:question,question_es:question_es},{},'es')"),
+      SIDE('cf_feedback_consumed',"consumeFormFeedback(cargo,form,'__confirm')"),
+      FLOW('cf_ask', 'ask-choice', 'call', { amount:'{{cf_amount}}', question: '{{cf_prompt}}', question_es: '{{cf_prompt_es}}', choices: '{{cf_choices}}', accept_other: true, reask_long: true, digits: { min: 1, max: 1 }, exit_context: '{{exit_context}}', exit_context_es: '{{exit_context_es}}' }),
       SET('cf_event','cf_event',"(Array.isArray(interrupts)?interrupts:[]).filter(function(event){return cargo.choice==='event:'+event.key;}).map(function(event){return event.flow;})[0] || ''"),
       WHEN('cf_interrupt','cf_event',FLOW('cf_event_flow','{{cf_event}}','reboot',{form:'{{form}}',event:'{{cargo.choice}}',text:'{{cargo.choiceText}}'})),
       SET('cf_build_chain', 'cf_chain', CHAIN_JS),
@@ -381,16 +405,15 @@ const confirmForm = {
          'condition: cf_m.ambiguous.length > 0': FLOW('cf_ambiguous', 'disambiguate-input', 'call', { readings: '{{cf_m.ambiguous}}', hits: '{{cf_m.hits}}', remaining:'{{cf_m.remaining}}' }),
          'condition: cf_m.hits.length > 0': FLOW('cf_accept', 'collect-input-accept', 'call', { hits: '{{cf_m.hits}}' }),
          "condition: cargo.choice === 'no'": SET('cf_declined', 'cf_result', "'no'"),
-         "condition: Array.isArray(clarifications) && pickChoice(String(cargo.choiceText || '').replace(/[?¿]/g,''),[{key:'clarify',words:clarifications,exact:true}],false)==='clarify'": SET('cf_clarification','cf_result',"'unclear'"),
-         'condition: cf_words >= 3': incompleteDispatch('cf_elsewhere','form',"form+'_unconfirmed'"),
+         "condition: Array.isArray(clarifications) && pickChoice(String(cargo.choiceText || '').replace(/[?¿]/g,''),[{key:'clarify',words:clarifications,exact:true}],false)==='clarify'": SET('cf_clarification','cf_result',"'clarification'"),
+         'condition: cf_words >= 3': yieldDispatch('cf_elsewhere','form',"'confirmation_not_matched'"),
          default: SET('cf_unclear', 'cf_result', "'unclear'") } },
       SET('cf_changed', 'cf_result', "cf_result ? cf_result : 'changed'"),
       // an unclear short answer is asked again (the form runs again and reaches this question), at most twice
-      SET('cf_tries_count', 'cf_tries', "cf_result === 'unclear' ? (cargo.forms[form] ? ((cargo.forms[form].attempts = cargo.forms[form].attempts || {}).__confirm = Number(cargo.forms[form].attempts.__confirm || 0) + 1) : 9) : 0"),
-      optionalIncomplete('cf_optional_exhausted','cf_tries > 2','form',"form+'_unconfirmed'"),
-      WHEN('cf_give_up', 'cf_tries > 2', FLOW('cf_give_up_flow', 'give-up', 'reboot', { context: '{{exit_context}}', context_es: '{{exit_context_es}}' })),
+      SET('cf_tries_count', 'cf_tries', "cf_result === 'unclear' ? missFormInput(cargo,form,'__confirm') : (clearFormMisses(cargo,form,'__confirm'),0)"),
+      WHEN('cf_misses_exhausted','cf_tries >= 2',yieldDispatch('cf_misses_dispatch','form',"'confirmation_misses_exhausted'")),
       WHEN('cf_bind_revision', "cf_result === 'yes'", SIDE('cf_bind', 'confirmFormRevision(cargo, form)')),
-      SIDE('cf_store', "(cargo.formConfirm[form] = cf_result === 'unclear' ? 'changed' : cf_result, true)"),
+      SIDE('cf_store', "(cargo.formConfirm[form] = cf_result === 'unclear' || cf_result === 'clarification' ? 'changed' : cf_result, true)"),
    ],
 };
 
@@ -491,7 +514,7 @@ const provideData = {
    parameters: [{name:'form',type:'string',description:'Originating FORM instance for task-owned deferred questions'}, { name: 'provides', type: 'object', description: 'The provider catalog' }, { name: 'asked', type: 'string', description: 'Fact or set key' }, {name:'asked_keys',type:'array',description:'Independent requested facts or sets'}, { name: 'no_menu', type: 'string', description: "'true': answer only (a question asked inside a form)" }, { name: 'gate_params', type: 'object', description: 'Identifiers the caller already gave, passed to the gate flow as gate_params' }, { name: 'no_gate', type: 'string', description: "'true': the caller is inside a task on the verified account; the gate flow is not run (the verified paths are still checked)" }],
    variables: vars({form:'',pd_request:null,pd_deferred:null,pd_ready:[],asked_keys:[], no_gate: '', pd_close: false, pd_who: '', no_menu: '', gate_params: null, pd_keys: [], pd_menu: [], pd_mkeys: [], pd_q: '', pd_q_es: '', pd_gated: false, pd_ok: false }),
    steps: [
-      WHEN('pd_no_catalog', "!provides || typeof provides !== 'object' || !Array.isArray(provides.facts)", END('pd_no_catalog_end', { outcome: 'unresolved', reason: 'provide_data_catalog' })),
+      WHEN('pd_no_catalog', "!provides || typeof provides !== 'object' || !Array.isArray(provides.facts)", END('pd_no_catalog_end', { outcome: 'unresolved', reason: 'provide_data_catalog',recovery:{version:1,mode:'none',reason:'provide_data_catalog'} })),
       SET('pd_resolve', 'pd_keys', "(function () { var requested=Array.isArray(asked_keys)&&asked_keys.length?asked_keys:[typeof asked!=='undefined'?String(asked||''):''];return requested.reduce(function(keys,a){var set=(provides.sets||[]).filter(function(x){return x.key===a;})[0];var facts=set?set.facts:provides.facts.some(function(f){return f.key===a;})?[a]:[];return keys.concat(facts.filter(function(key){return keys.indexOf(key)<0;}));},[]); })()"),
       // Nothing specific asked: offer the sets and facts as a menu (keys 1..n, never 8; at most 7 options shown).
       SET('pd_menu_items', 'pd_menu', "(provides.sets || []).concat(provides.facts).slice(0, 7)"),
@@ -509,7 +532,7 @@ const provideData = {
       SET('pd_deferred','pd_deferred',`(${finishProviderRequest.toString()})(cargo,pd_request.owner,provides,pd_keys)`),
       SET('pd_merged_keys','pd_keys','pd_deferred.keys'),
       SET('pd_gate_check', 'pd_ok', `!pd_gated || [].concat(provides.gate.verified).every(function (p) { return !!${PATH_JS}(p); })`),
-      WHEN('pd_not_verified', '!pd_ok', END('pd_not_verified_end', { outcome: 'unresolved', reason: 'provide_data_not_verified' })),
+      WHEN('pd_not_verified', '!pd_ok', END('pd_not_verified_end', { outcome: 'unresolved', reason: 'provide_data_not_verified',recovery:{version:1,mode:'none',reason:'provide_data_not_verified'} })),
       WHEN('pd_load', 'provides.source && provides.source.flow', FLOW('pd_load_flow', 'load-source', 'call', { source: '{{provides.source}}' })),
       FLOW('pd_answer', 'answer-facts', 'call', { provides: '{{provides}}', keys: '{{pd_keys}}' }),
       WHEN('pd_deferred_more','pd_deferred.remaining.length > 0',FLOW('pd_answer_deferred','provide-queued-data','call',{form:'{{form}}',requests:'{{pd_deferred.remaining}}'})),
@@ -580,7 +603,7 @@ const loadSource = {
       WHEN('ls_begin', 'ls_stale', SIDE('ls_clear_old', 'beginSourceRefresh(cargo, source)')),
       WHEN('ls_load', 'ls_stale', FLOW('ls_loader', '{{source.flow}}', 'call')),
       SET('ls_loaded', 'ls_have', 'ls_stale ? completeSourceRefresh(cargo, source) : true'),
-      WHEN('ls_failed', '!ls_have', FLOW('ls_give_up', 'give-up', 'reboot', { context: 'your request', context_es: 'su solicitud' })),
+      WHEN('ls_failed', '!ls_have', {...FLOW('ls_give_up', 'give-up', 'reboot', { context: 'your request', context_es: 'su solicitud' }),recovery:{version:1,mode:'none',reason:'source_unavailable'}}),
    ],
 };
 

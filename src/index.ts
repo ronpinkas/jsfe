@@ -1,3 +1,6 @@
+import {validateFlowRecovery} from './host/flow-recovery.js';
+import type {FlowRecovery} from './host/flow-recovery.js';
+export type {FlowRecovery} from './host/flow-recovery.js';
 import {ACTION_TOOLS} from './forms/action-tools.js';
 import {claimSessionAction,completeSessionAction} from './forms/session-actions.js';
 import {actionPersistenceMode} from './host/capabilities.js';
@@ -531,6 +534,7 @@ export interface EngineSessionContext {
   cargo: Record<string, unknown> | undefined; // Additional session data
   language?: string; // Language for this session
   hasTentativeFlowInit?: boolean; // Flag to track if tentative flow_init message should be dropped by SAY-GET
+  lastFlowRecovery?: FlowRecovery; // Explicit, one-shot recovery guidance; absent retains legacy behavior.
   lastFlowOutcome?: FlowOutcome; // Declared outcome of a flow that terminated THIS turn (one-shot)
   lastTurnToolCalls?: ToolCallRecord[]; // Tool calls ATTEMPTED during the most recent updateActivity (one-shot)
   lastTurnDispatch?: DispatchRecord; // Set when a DISPATCH step re-routed THIS turn's input (one-shot)
@@ -589,6 +593,7 @@ export interface FlowOutcome {
 export interface FlowStep {
   id?: string;
   type: StepType;
+  recovery?: {version:1;mode:string;reason:string;form?:string;flow?:string};
   tool?: string;
   args?: Record<string, unknown>;
   variable?: string;
@@ -649,7 +654,7 @@ export interface TransactionData {
   initiator: string;
   userId: string;
   steps: TransactionStep[];
-  state: 'active' | 'completed' | 'failed' | 'rolled_back';
+  state: 'active' | 'completed' | 'failed' | 'rolled_back' | 'yielded';
   createdAt: Date;
   completedAt?: Date;
   failedAt?: Date;
@@ -719,6 +724,8 @@ export class TransactionManager {
     transaction.completedAt = new Date();
   }
 
+  static yield(transaction: TransactionData): void { transaction.state = 'yielded'; }
+
   static fail(transaction: TransactionData, reason: string): void {
     transaction.state = 'failed';
     transaction.failedAt = new Date();
@@ -736,6 +743,8 @@ function finalizeFlowTransaction(engine: Engine, frame: FlowFrame, endedBy: Flow
   if (declared) {
     if (declared.outcome === 'unresolved') {
       TransactionManager.fail(frame.transaction, declared.reason || 'unresolved');
+    } else if (declared.outcome === 'pending') {
+      TransactionManager.yield(frame.transaction);
     } else {
       TransactionManager.complete(frame.transaction);
     }
@@ -3147,6 +3156,12 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
     const startTime = Date.now();
 
     try {
+      if (step.recovery !== undefined) {
+        const declaration = step.recovery;
+        const resolved = Object.fromEntries(Object.entries(declaration).map(([key,value]) => [key,typeof value === 'string' && value.includes('{{') ? interpolateMessage(value,currentFlowFrame.contextStack,currentFlowFrame.variables,engine).trim() : value]));
+        if(resolved.form===''&&resolved.flow===''){delete resolved.form;delete resolved.flow;}
+        engine.stampFlowRecovery(validateFlowRecovery(resolved));
+      }
       const result = await playStep(currentFlowFrame, engine);
       const duration = Date.now() - startTime;
 
@@ -5020,6 +5035,8 @@ function handleDispatchStep(currentFlowFrame: FlowFrame, engine: Engine): string
     for (const flow of stack) {
       if (flow.declaredOutcome) {
         finalizeFlowTransaction(engine, flow, 'dispatch');
+      } else if (currentFlowFrame.declaredOutcome?.outcome === 'pending') {
+        TransactionManager.yield(flow.transaction);
       } else {
         TransactionManager.fail(flow.transaction, `Dispatched: flow ended by DISPATCH in ${fromFlow}`);
       }
@@ -7641,6 +7658,7 @@ export class WorkflowEngine implements Engine {
       // the flow terminated — drop any stale stamp from a prior turn before
       // processing (finalizeFlowTransaction re-stamps if a flow ends this turn).
       delete this.sessionContext.lastFlowOutcome;
+      delete this.sessionContext.lastFlowRecovery;
 
       // Same one-shot semantics for tool calls: the record describes THIS call only, so a
       // host deciding whether this turn's session may be discarded is not misled by a tool
@@ -7727,6 +7745,7 @@ export class WorkflowEngine implements Engine {
           if (!actionRecoveryIdentityMatches(recoveryIdentity,recovery.session.actionRecoveryIdentity)) {
             engineSessionContext.lastTurnToolCalls = [];
             delete engineSessionContext.lastFlowOutcome;
+          delete engineSessionContext.lastFlowRecovery;
             delete engineSessionContext.lastTurnDispatch;
             this.hostStart = null;
             engineSessionContext.lastTurnRecovery = {key:record.key,sequence:record.sequence,status:record.status,hold:true,reason:'incompatible_recovery_identity',deferredInput:contextEntry};
@@ -7748,6 +7767,7 @@ export class WorkflowEngine implements Engine {
           this.reconstructVariableReferences();
           engineSessionContext.lastTurnToolCalls = [];
           delete engineSessionContext.lastFlowOutcome;
+          delete engineSessionContext.lastFlowRecovery;
           delete engineSessionContext.lastTurnDispatch;
           this.hostStart = null;
           recoveredAction = true;
@@ -8108,6 +8128,12 @@ export class WorkflowEngine implements Engine {
 
   // Stamp the one-shot host-facing outcome for a flow that terminated this turn
   // (sessionContext is private; finalizeFlowTransaction goes through this).
+  stampFlowRecovery(recovery: FlowRecovery): void {
+    const value=validateFlowRecovery(recovery);
+    if(value.form && (this.cargo?.forms as any)?.[value.form]?.definition!==value.flow)throw new Error('Recovery form ownership mismatch');
+    if(!this.sessionContext)throw new Error('Flow recovery requires an active session');
+    this.sessionContext.lastFlowRecovery=value;
+  }
   stampFlowOutcome(outcome: FlowOutcome): void {
     if (this.sessionContext) {
       this.sessionContext.lastFlowOutcome = outcome;
@@ -8146,6 +8172,7 @@ export class WorkflowEngine implements Engine {
   clearFlowOutcome(): void {
     if (this.sessionContext) {
       delete this.sessionContext.lastFlowOutcome;
+      delete this.sessionContext.lastFlowRecovery;
     } else {
       logger.warn('No session context available for clearFlowOutcome');
     }
@@ -8582,9 +8609,9 @@ export class WorkflowEngine implements Engine {
       case 'DISPATCH': {
         // DISPATCH always routes the turn's own input — no value. It may declare the ending of the
         // flows it ends (`outcome` / `reason`, kept only when no flow matches).
-        const extra = Object.keys(step).filter(k => !['id', 'type', 'outcome', 'reason'].includes(k));
+        const extra = Object.keys(step).filter(k => !['id', 'type', 'outcome', 'reason', 'recovery'].includes(k));
         if (extra.length > 0) {
-          state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" has invalid attribute(s) ${extra.map(k => `"${k}"`).join(', ')} - DISPATCH takes only "id", "outcome" and "reason"`);
+          state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" has invalid attribute(s) ${extra.map(k => `"${k}"`).join(', ')} - DISPATCH takes only "id", "outcome", "reason" and "recovery"`);
         } else {
           // well-formed
         }

@@ -8,14 +8,15 @@ const call=(id,value,parameters,callType='call')=>({id,type:'FLOW',value,paramet
 const W=id=>defineWorker({id,name:id,description:id,contract:{role:'worker',summary:id},steps:[]});
 const callback={id:'recovery',name:'Recovery',version:'1',scope:'isolated',parameters:['form','failed_form','input','failed_input','reason'].map(name=>({name,type:'string'})),steps:[S('capture',"(cargo.recovered={form,failed_form,input,failed_input,reason},true)"),call('collect','recovery-form',{parent_form:'{{form}}'},'reboot')]};
 const fallback=formFlow({id:'recovery-form',name:'RecoveryForm',version:'1',resume_on_parent_change:true,inputs:[{name:'retry',profile:{kind:'choice',choices:[{key:'retry',words:['retry'],exact:true}]},question:'RECOVERY: say RETRY or correct the amount.'}],after:[S('owner','cargo.recovered.form','owner'),call('close','form-done',{form:'{{form_instance}}'}),call('resume','owner',{form_instance:'{{owner}}'},'reboot')]});
-const nested=formFlow({id:'details',name:'Details',version:'1',inputs:[{name:'zip',field:'zip',max_attempts:2}]});
+const nested=formFlow({id:'details',name:'Details',version:'1',inputs:[{name:'zip',field:'zip',validator:'check-zip',max_attempts:2}]});
+const zipValidator={id:'check-zip',name:'CheckZip',version:'1',parameters:[{name:'value',type:'string'}],steps:[S('zip-valid',"(cargo.inputCheck={ok:String(value)==='90001',value:value},true)")]};
 const owner=formFlow({id:'owner',name:'Owner',version:'1',inputs:[{name:'amount',field:'amount'},{name:'details',form:'details',on_exhausted:'recovery'}],confirm:{question:'QUOTE {{cargo.forms[form_instance].values.amount}} {{cargo.forms[form_instance].values.details.zip}}'},after:[S('effect','(cargo.effects=Number(cargo.effects||0)+1,true)')]});
 const warnings=[];const quiet={info(){},debug(){},error(){},warn(...args){warnings.push(args.join(' '));}};
-const engine=new WorkflowEngine(quiet,async()=>'{"flowName":"None"}',linkFormSchemas([...FLOWS,owner,nested,callback,fallback]),[],STANDARD_FUNCTIONS,{},false,'en');engine.disableCommands();
+const engine=new WorkflowEngine(quiet,async()=>'{"flowName":"None"}',linkFormSchemas([...FLOWS,owner,nested,callback,fallback,zipValidator]),[],STANDARD_FUNCTIONS,{},false,'en');engine.disableCommands();
 let session=engine.initSession('test','exhaustion','en');session.cargo.voice=false;
 const say=async(content,start)=>{session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start:{flow:start}}:{})},JSON.parse(JSON.stringify(session)))));return session.response;};
 await say('begin','owner');await say('$25');const id=session.cargo.formTasks.owner;
-await say('bad');let response=await say('wrong');
+await say('00000');let response=await say('11111');
 check(()=>{assert.match(response,/RECOVERY/);assert.equal(session.cargo.effects,undefined);assert.equal(session.cargo.formTasks.owner,id);});
 check(()=>{assert.deepEqual(session.cargo.recovered,{form:id,failed_form:'details:2',input:'details',failed_input:'zip',reason:'attempts_exhausted'});});
 check(()=>{assert.equal(session.cargo.forms[id].values.amount,'25');assert.equal(session.cargo.forms[id].values.details,undefined);assert.equal(session.cargo.forms['details:2'],undefined);});
@@ -23,7 +24,7 @@ response=await say('retry');check(()=>{assert.match(response,/ZIP/);assert.equal
 response=await say('90001');check(()=>{assert.match(response,/QUOTE 25 90001/);assert.equal(session.cargo.effects,undefined);});
 await say('yes');check(()=>assert.equal(session.cargo.effects,1));
 // A parent correction at recovery closes the context and returns to the same owner, not the old collector tail.
-await say('begin','owner');await say('$30');const id2=session.cargo.formTasks.owner;await say('bad');await say('wrong');response=await say('$40');
+await say('begin','owner');await say('$30');const id2=session.cargo.formTasks.owner;await say('00000');await say('11111');response=await say('$40');
 check(()=>{assert.equal(session.cargo.formTasks.owner,id2);assert.equal(session.cargo.forms[id2].values.amount,'40');assert.match(response,/ZIP/);assert.equal(session.cargo.effects,1);assert.equal(Object.values(session.cargo.forms).some(f=>f.definition==='recovery-form'),false);});
 // Nearest input policy takes priority over form policies; sibling and unrelated tasks cannot recover this branch.
 const cargo={};const a=openFormInstance(cargo,'a',[{name:'child',form:'b',on_exhausted:'slot-recovery'},{name:'other',profile:{kind:'text'}}],{on_exhausted:'outer-recovery'});const b=openFormInstance(cargo,'b',[{name:'zip',profile:{kind:'digits',min:5,max:5}}],{parent:a,input:'child'});cargo.forms[a].values.other='keep';

@@ -769,6 +769,11 @@ return aiResponse;
   is already repaired: the next turn starts with fresh intent detection. Log or record the error;
   no rollback is needed. A deliberate `RETURN ''` (which ends every flow) is not flagged.
 
+Native FORM collection in 1.7.2 acknowledges an unreadable answer once, then yields the current
+utterance while retaining its draft. Explicit recovery metadata distinguishes resumption, required
+restart, unknown-action hold and no promised recovery; business completion remains independent.
+See the [retry/yield/recovery contract](docs/forms.md#retry-yield-and-recovery-contract-172).
+
 ### Host Responsibilities: Tool Calls, Cancellation and Concurrency
 
 A flow can take actions in the outside world through `CALL-TOOL` — charge a card, send an SMS,
