@@ -7,3 +7,4 @@
  */
 export * from './request.js';
 export * from './systemone-intent.js';
+export * from './intent-stages.js';

@@ -342,6 +342,24 @@ const body = buildAiRequest(
   - `mergeTextParameters` adds a text model's free-text parameters only when the text model chose
     the same flow. The classifier's enum and boolean values always win.
 
+**Two-stage intent detection (opt-in: `engine.intentDetection = 'two-stage'`):**
+Stage 1 picks which PRIMARY flow, if any, the message starts, reading only each primary's `description`.
+Stage 2 extracts the selected flow's parameters, reading each parameter's name, type, `enum` and `description`,
+plus the flow's optional `parameterInstructions` (rules that span its parameters). A parameter marked
+`internal: true` is the flow's own and is never asked. Each stage is ONE aiCallback call: the positional
+arguments are the LLM instructions, and the 4th argument (`task: 'detect_flow'` with `stage: 1`, or
+`task: 'extract_parameters'` with `stage: 2`) carries both executors' instructions, `llm` and `systemOne`.
+The host runs either, or both as a hedge, and replies with the canonical JSON: `{ "flowName": … }` for
+stage 1, `{ "parameters": { … } }` for stage 2. `jsfe/host` exports `buildFlowStage`, `buildParameterStage`
+and the decoders (`decodeFlowLlm`, `decodeFlowSystemOne`, `decodeParametersLlm`, `decodeParametersSystemOne`,
+`isNearMiss`), so a host never interprets an answer itself. Only primaries are ever activated by detection;
+a stage-2 failure starts the flow without its parameters (it asks for them). The default, `'single-call'`,
+is the original single call.
+
+**Host start (`ContextEntry.start`):** `{ role: 'user', content, start: { flow, arguments } }` starts that
+flow (any flow, by id or name) with those arguments on this turn, without asking the AI. Only the host sets it;
+it is never derived from what the user typed.
+
 **Flow helpers — `jsfe/helpers`:**
 The functions the bundled system flows (`ask-choice`, `collect-input`, `authenticate-user`…) call from
 expressions, so every host runs the same ones. Pure: no credentials, no network. The engine does not

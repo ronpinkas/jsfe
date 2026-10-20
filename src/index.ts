@@ -16,6 +16,8 @@ NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FO
 DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 **/
+import { buildFlowStage, buildParameterStage, hasStageParameters } from './host/intent-stages.js';
+import type { IntentStageRequest } from './host/intent-stages.js';
 
 /*
   // Deploy new version to NPM:
@@ -441,6 +443,9 @@ export interface ContextEntry {
   stepId?: string;
   toolName?: string;
   metadata?: Record<string, unknown>;
+  // HOST ONLY — never derived from what the user typed: start this flow (any flow, by id or name) with these arguments
+  // on this turn. It answers intent detection for the turn (activation or interruption) without asking the AI.
+  start?: { flow: string; arguments?: Record<string, unknown> };
 }
 
 // AI Intelligence Callback Interface - (can be null for demo/test mode)
@@ -459,6 +464,7 @@ export interface FlowParameterDefinition {
   description: string; // Description for the AI to understand what to extract
   type?: string; // Type of the parameter (string, number, boolean, etc.)
   enum?: string[]; // Allowed values (string parameters only). Any other value is dropped, so the flow asks.
+  internal?: boolean; // The flow's own (set by its callers), never asked of the user; two-stage detection leaves it out.
 }
 
 /** Structured form of the intent-detection call; see AiCallbackFunction. */
@@ -474,7 +480,7 @@ export interface DetectFlowRequest {
   }[];
 }
 
-export type AiCallbackRequest = DetectFlowRequest;
+export type AiCallbackRequest = DetectFlowRequest | IntentStageRequest;
 
 // Engine Session Context - Encapsulates all session-specific state
 // This object should be maintained by the host application for each user session
@@ -799,6 +805,9 @@ export interface FlowDefinition {
   // reach the caller. Default 'shared': the caller's variables, by reference (the original contract).
   scope?: 'shared' | 'isolated';
   parameters?: FlowParameterDefinition[];
+  // Two-stage intent detection, stage 2 only: rules for extracting this flow's parameters that span more than one
+  // of them (e.g. "a phone given to find the account is not the number to send to"). Never read to pick the flow.
+  parameterInstructions?: string;
   steps: FlowStep[];
   variables?: Record<string, {
     type: string;
@@ -3573,6 +3582,50 @@ function buildDetectFlowRequest(input: string, lastChatTurn: { user?: ContextEnt
   };
 }
 
+/**
+ * Two-stage intent detection (engine.intentDetection = 'two-stage'): stage 1 picks the flow, stage 2 extracts the
+ * selected flow's parameters. Each stage is ONE aiCallback call whose positional arguments are the LLM instructions and
+ * whose 4th argument carries both executors' (jsfe/host intent-stages); the host replies with the canonical JSON
+ * ({ flowName } / { parameters }). A stage-1 failure reaches the host as before; a stage-2 failure starts the flow
+ * without its parameters (it asks for them) rather than losing the turn.
+ */
+async function detectFlowInTwoStages(input: string, engine: Engine, flows: FlowDefinition[]): Promise<{ flow: FlowDefinition, parameters?: Record<string, any> } | null> {
+  const { input: cleanInput, conversation } = buildDetectFlowRequest(input, engine.lastChatTurn, []);
+  const stage1 = buildFlowStage(cleanInput, conversation, flows.map(f => ({ id: f.id, name: f.name, description: String(f.description ?? '') })));
+  const reply1 = parseStageReply(await fetchAiResponse(stage1.llm.system, stage1.llm.user, engine.aiCallback, engine.aiTimeOut, stageSchema('detect_flow', stage1.llm.schema), stage1));
+  const said = String(reply1.flowName ?? 'None');
+  // only an offered (primary) flow is ever activated; it calls its workers with the arguments it holds
+  const flow = /^(none|null)$/i.test(said) ? null : flows.find(f => f.name.toLowerCase() === said.toLowerCase()) || null;
+  if (!flow) {
+    if (!/^(none|null)$/i.test(said)) logger.error(`Flow "${said}" not found in flows menu`); else logger.info(`No flow activated for input: "${input}"`);
+    return null;
+  } else if (!hasStageParameters(flow.parameters)) {
+    return { flow, parameters: {} };
+  } else {
+    try {
+      const stage2 = buildParameterStage(cleanInput, conversation, flow);
+      const reply2 = parseStageReply(await fetchAiResponse(stage2.llm.system, stage2.llm.user, engine.aiCallback, engine.aiTimeOut, stageSchema('extract_parameters', stage2.llm.schema), stage2));
+      const given = reply2.parameters && typeof reply2.parameters === 'object' ? reply2.parameters as Record<string, any> : {};
+      return { flow, parameters: enforceParameterEnums(flow, enforceParameterTypes(flow, ownParametersOnly(flow, given))) };
+    } catch (error: any) {
+      logger.warn(`detectFlowWithParameters: stage 2 failed for "${flow.name}" (${error.message}) - the flow starts without its parameters`);
+      return { flow, parameters: {} };
+    }
+  }
+}
+
+/** The OpenAI-compatible response_format wrapper a host already reads from the 3rd argument. */
+function stageSchema(name: string, schema: Record<string, unknown>): string {
+  return JSON.stringify({ type: 'json_schema', json_schema: { name, strict: true, schema } });
+}
+
+function parseStageReply(text: string): Record<string, unknown> {
+  const t = String(text ?? '').replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  const parsed = JSON.parse((t.match(/\{[\s\S]*\}/) || [t])[0]);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('intent stage: the reply is not a JSON object');
+  return parsed;
+}
+
 export async function getFlowForInput(input: string, engine: Engine): Promise<FlowDefinition | null> {
   const result = await detectFlowWithParameters(input, engine);
   return result ? result.flow : null;
@@ -3603,6 +3656,21 @@ export async function detectFlowWithParameters(input: string, engine: Engine): P
 
     logger.debug(`Using ${flowsForIntentDetection.length} flows for intent detection (${primaryFlows.length} primary flows available)`);
 
+    // A host start (ContextEntry.start) answers detection for this turn: that flow, with its arguments.
+    if (engine.hostStart) {
+      const wanted = engine.hostStart;
+      const flow = flowsMenu.find(f => f.id === wanted.flow || f.name === wanted.flow);
+      if (!flow) {
+        logger.warn(`Host start: flow "${wanted.flow}" is not in the flows menu`);
+        return null;
+      } else {
+        const given = wanted.arguments && typeof wanted.arguments === 'object' ? wanted.arguments as Record<string, any> : {};
+        return { flow, parameters: enforceParameterEnums(flow, enforceParameterTypes(flow, ownParametersOnly(flow, given))) };
+      }
+    } else {
+      // no host start: intent detection decides
+    }
+
     // First try direct name or id matching (case-insensitive) - check all flows
     const directMatch = flowsMenu.find(flow =>
       flow.name.toLowerCase() === input.toLowerCase() || (flow.id.toLowerCase() === input.toLowerCase())
@@ -3616,6 +3684,12 @@ export async function detectFlowWithParameters(input: string, engine: Engine): P
     if (!engine.aiCallback) {
       logger.info(`No flow matched for input: "${input}" (no AI)`);
       return null;
+    }
+
+    if (engine.intentDetection === 'two-stage') {
+      return await detectFlowInTwoStages(input, engine, flowsForIntentDetection);
+    } else {
+      // the original single call, below
     }
 
     // If AI callback is present, use AI for intent detection with primary flows only
@@ -7276,6 +7350,15 @@ export class WorkflowEngine implements Engine {
    */
   public validateToolReturns: boolean = false;
   /**
+   * Opt-in (default 'single-call'): how intent detection asks aiCallback. 'two-stage': stage 1 picks the flow
+   * (from the primaries' descriptions only), stage 2 extracts the SELECTED flow's parameters; each call carries
+   * both executors' instructions (`llm`, `systemOne`) as its 4th argument — see jsfe/host intent-stages.
+   * 'single-call': the original one call that picks a flow and extracts parameters for every flow at once.
+   */
+  public intentDetection: 'single-call' | 'two-stage' = 'single-call';
+  /** This turn's host start (ContextEntry.start), or null. */
+  public hostStart: { flow: string; arguments?: Record<string, unknown> } | null = null;
+  /**
    * Opt-in (default false): log one warning when a tool returns a failure (`success: false` or a
    * non-zero `error`), with the tool and its message, digit runs masked. Diagnostic only.
    */
@@ -7454,7 +7537,8 @@ export class WorkflowEngine implements Engine {
   async updateActivity(contextEntry: ContextEntry, engineSessionContext: EngineSessionContext): Promise<EngineSessionContext> {
     try {
       this.cargo = engineSessionContext.cargo || {};
-      logger.info(`Received Cargo: ${JSON.stringify(this.cargo, (k, v) => (/^(cvv|cvc|cvv2|cardcode|securitycode)$/i.test(k) && v ? '•••' : v))}`);
+      // a security code under any key that names one (a form stores it as `card_cvv`)
+      logger.info(`Received Cargo: ${JSON.stringify(this.cargo, (k, v) => (/(cvv|cvc|card_?code|security_?code)/i.test(k) && v ? '•••' : v))}`);
       this.sessionId = engineSessionContext.sessionId;
       this.createdAt = engineSessionContext.createdAt;
 
@@ -7473,6 +7557,9 @@ export class WorkflowEngine implements Engine {
 
       // Same one-shot semantics for a DISPATCH record (see recordDispatch).
       delete this.sessionContext.lastTurnDispatch;
+
+      // A host start belongs to this turn only (ContextEntry.start).
+      this.hostStart = contextEntry && contextEntry.role === 'user' && contextEntry.start && typeof contextEntry.start.flow === 'string' ? contextEntry.start : null;
 
       // DIAGNOSTIC: Log flowStepsStack state from loaded session (before any processing)
       if (engineSessionContext.flowStacks) {
