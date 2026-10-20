@@ -1,3 +1,4 @@
+import {validateFormProposalPolicy} from './proposal-contract.js';
 /** Shared FORM semantics. Pure readers plus explicit mutations of the supplied session container; no host I/O. */
 import { readInputProfile } from './match-inputs.js';
 import {validateMoneyOptions} from './money.js';
@@ -27,6 +28,10 @@ export function resolveFormInputs(inputs, presets = {}) {
       const input = { ...(raw.field ? presets[raw.field] : {}), ...raw };
       if(input.profile?.money!==undefined){if(input.profile.kind!=='amount')throw new Error('FORM money options require amount profile');validateMoneyOptions(input.profile.money);}
       validateFormExhaustion(input.on_exhausted);
+      if(input.proposal!==undefined){
+         if(!input.profile || input.form || input.any_of || input.bind)throw new Error('FORM proposal requires a readable leaf input; declare it on each group member or inside the subform');
+         validateFormProposalPolicy(input.proposal);
+      }
       if(input.max_misses!==undefined&&(!Number.isInteger(input.max_misses)||input.max_misses<1))throw new Error('FORM max_misses must be a positive integer');
       if (input.max_attempts !== undefined && (!Number.isInteger(input.max_attempts) || input.max_attempts < 1)) throw new Error('FORM max_attempts must be a positive integer');
       if (input.any_of) input.any_of = input.any_of.map(member=>resolve({...member,
@@ -190,7 +195,7 @@ export function settleFormActivations(batch={},cargo=null) {
       else if(pending.some(h=>h.activation_group===key))held.add(key);
    }
    if(cargo&&discarded.size)for(const state of Object.values(cargo.forms||{}))for(const [name,hit] of Object.entries(state.pending||{}))if(discarded.has(hit.activation_group))delete state.pending[name];
-   return {accepted:accepted.filter(h=>!held.has(h.activation_group)&&!discarded.has(h.activation_group)),
+   return {ignored:[...(batch.ignored||[])],accepted:accepted.filter(h=>!held.has(h.activation_group)&&!discarded.has(h.activation_group)),
       rejected:rejected.map(h=>h.activation_inferred?{...h,...h.activation_entry,activation_inferred:false}:h),pending:pending.concat(accepted.filter(h=>held.has(h.activation_group))).filter(h=>!discarded.has(h.activation_group)).map(h=>held.has(h.activation_group)?{...h,ok:undefined,outcome:'pending',silent:true}:h)};
 }
 /** Explicit ownership: unrelated tasks and sibling inputs never share an instance by definition id. */

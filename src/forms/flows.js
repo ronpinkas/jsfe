@@ -16,6 +16,7 @@
  * state that survives DISPATCH and reboot, so a caller who leaves a form resumes it. Results of finished forms:
  * cargo.formResults[<form id>].
  */
+import {INPUT_PROPOSALS_REQUIREMENT,hasInputProposals,proposalRuntimeSteps} from './proposal-runtime.js';
 import { resolveFormInputs, validateFormIncompleteOutcome, validateFormExhaustion } from '../helpers/form-state.js';
 
 // ── step helpers ────────────────────────────────────────────────────────────────────────────────────────────────
@@ -116,6 +117,7 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
       id, name, version, description, scope, metadata:{formProtocol:2}, parameters: [...parameters, { name: 'form_instance', type: 'string', internal: true, description: 'Internal instance to resume' }], ...(primary ? { primary: true } : {}), ...(prompt ? { prompt, prompt_es } : {}),
       variables: vars({ form_on_exhausted:on_exhausted, form_incomplete_outcome:incompleteFrom?null:incomplete_outcome, form_instance: '', form_internal_resume: false, form_resume_owner:'', form_arguments:{}, form_exhaustion:null, form_values: {}, form_validation: '', initial_readings: [], inputs: resolveFormInputs(inputs, FIELD_PRESETS), parent_form: '', result_input: '', questions: [], provides: null, exit_context: '', exit_context_es: '', form_confirm_q: '', form_confirm_q_es: '', form_confirmation:confirm || {}, form_should_confirm:false, ...extraVars }),
       steps: [
+         ...proposalRuntimeSteps(id,[],hasInputProposals(inputs)?[INPUT_PROPOSALS_REQUIREMENT]:[]),
          SET(`${id}_resume_kind`, 'form_internal_resume', '!!form_instance'),
          SET(`${id}_open`, 'form_instance', `openFormInstance(cargo, ${JSON.stringify(id)}, inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[${JSON.stringify(id)}] || '' : ''), providers: provides, questions: questions, incomplete_outcome: ${incompleteExpression}, on_exhausted: form_on_exhausted })`),
          SIDE(`${id}_task`, `(!parent_form ? (cargo.formTasks = cargo.formTasks || {}, cargo.formTasks[${JSON.stringify(id)}] = form_instance) : true, true)`),
@@ -133,7 +135,7 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
             WHEN(`${id}_parent_resume`, "rf_status === 'parent_changed'", FLOW(`${id}_parent_reenter`,'resume-form','reboot',{form:'{{form_resume_owner}}'})),
          ] : []),
          ...(close_on_stop ? [WHEN(`${id}_close_stopped`, "rf_status === 'stopped'", SIDE(`${id}_stop_close`, '(closeFormInstance(cargo, form_instance, false), true)'))] : []),
-         WHEN(`${id}_left`, "rf_status !== 'complete'", END(`${id}_left_end`)),
+         WHEN(`${id}_left`, "rf_status !== 'complete' || !cargo.forms[form_instance]", END(`${id}_left_end`)),
          ...(validator ? [
             SET(`${id}_values`, 'form_values', 'cargo.forms[form_instance].values'),
             SIDE(`${id}_validation_reset`, '(cargo.formCheck = null, true)'),
@@ -169,7 +171,7 @@ const runForm = {
    id: 'run-form', name: 'RunForm', version: '1.0.0',
    description: "Worker (shared scope, called by a form flow): the FORM loop. Merges the form's activation parameters into cargo.forms[rf_form] once, then each pass finds the first missing input whose `when` holds, collects it (collect-input) or runs its sub-form, and replaces itself until nothing is missing. Sets rf_status: 'complete' | 'stopped' (a path in rf_stop was set) | 'unwound'. Reads the form's `inputs`, `parent_form`, `result_input`, `questions`, `provides`, `exit_context(_es)`.",
    parameters: [{name:'rf_resume_parent',type:'boolean',description:'Yield a context collector when its owning form accepts a change'}, { name: 'rf_form', type: 'string', description: 'The form id (the calling form flow id)' }, { name: 'rf_resume', type: 'string', description: "'true' on the loop's own replays" }, { name: 'rf_stop', type: 'string', description: 'A cargo path (or list) that ends the form when set' }],
-   variables: vars({ rf_stop: '', rf_resume: '', rf_resume_parent:false, rf_status: '', rf_next: '', rf_next_form: '', rf_questions: [], rf_provides: null, rf_max: 0, rf_pending: [], rf_deferred:[] }),
+   variables: vars({ rf_stop: '', rf_resume: '', rf_resume_parent:false, rf_status: '', rf_next: '', rf_next_form: '', rf_questions: [], rf_provides: null, rf_max: 0, rf_pending: [], rf_deferred:[],rf_proposal:null,rf_proposal_readings:[] }),
    steps: [
       SIDE('rf_pass_count', '(cargo.forms[rf_form] ? (cargo.forms[rf_form].replays = Number(cargo.forms[rf_form].replays || 0) + 1) : true, true)'),
       SET('rf_pass', 'rf_status', "formInstanceApplies(cargo, rf_form) ? '' : (closeFormInstance(cargo, rf_form, false), 'unwound')"),
@@ -185,6 +187,12 @@ const runForm = {
       SET('rf_pending','rf_pending','pendingFormReadings(cargo, rf_form)'),
       WHEN('rf_pending_accept','rf_pending.length > 0',FLOW('rf_pending_batch','collect-input-accept','call',{hits:'{{rf_pending}}'})),
       WHEN('rf_pending_repeat','rf_pending.length > 0',FLOW('rf_pending_again','run-form','replace',{rf_form:'{{rf_form}}',rf_resume:'true',rf_stop:'{{rf_stop}}'})),
+      SET('rf_proposal_readings','rf_proposal_readings','formProposalReadings(cargo,rf_form)'),
+      WHEN('rf_proposal_revalidate','rf_proposal_readings.length > 0',FLOW('rf_proposal_batch','collect-input-accept','call',{hits:'{{rf_proposal_readings}}'})),
+      WHEN('rf_proposal_owner_closed','!cargo.forms[rf_form]',END('rf_proposal_closed_end')),
+      SET('rf_proposal','rf_proposal','nextFormProposal(cargo,rf_form)'),
+      WHEN('rf_proposal_ask','rf_proposal',FLOW('rf_proposal_confirm','confirm-input-proposal','call',{parent_form:'{{rf_form}}',input:'{{rf_proposal.input}}'})),
+      WHEN('rf_proposal_repeat','rf_proposal || rf_proposal_readings.length > 0',FLOW('rf_proposal_again','run-form','replace',{rf_form:'{{rf_form}}',rf_resume:'true',rf_stop:'{{rf_stop}}',rf_resume_parent:'{{rf_resume_parent}}'})),
       SET('rf_find', 'rf_next', 'nextFormInput(cargo.forms[rf_form], cargo)'),
       WHEN('rf_blocked', "rf_next === '__blocked__'", incompleteDispatch('rf_blocked_end','rf_form',"'form_dependencies_blocked'")),
       SET('rf_find_form', 'rf_next_form', "rf_next ? ((cargo.forms[rf_form].specs || []).filter(function (i) { return i.name === rf_next; })[0] || {}).form || '' : ''"),
@@ -278,14 +286,15 @@ const prepareInput={
 const validateBatch = {
    id: 'validate-input-batch', name: 'ValidateInputBatch', version: '2.0.0', scope: 'isolated',
    description: 'Worker: validate dependency-ordered candidates; return accepted, rejected and pending readings before a single commit.',
-   parameters: ['hits','accepted','rejected','pending'].map(name=>({name,type:'array'})),
-   variables: vars({ accepted: [], rejected: [], pending:[], vb_h: null, vb_rest: [], vb_values: {}, vb_known: false, vb_ready: false, vb_relevant:false, vb_outcome: '' }),
+   parameters: ['hits','accepted','rejected','pending','ignored'].map(name=>({name,type:'array'})),
+   variables: vars({ accepted: [], rejected: [], pending:[], ignored:[], vb_h: null, vb_rest: [], vb_values: {}, vb_known: false, vb_ready: false, vb_relevant:false, vb_outcome: '',vb_candidate:null,vb_proposal_values:{},vb_proposal:null,vb_proposal_ok:true }),
    steps: [
       SET('vb_init_accepted','accepted','Array.isArray(accepted) ? accepted : []'),
       SET('vb_init_rejected','rejected','Array.isArray(rejected) ? rejected : []'),
       SET('vb_init_pending','pending','Array.isArray(pending) ? pending : []'),
+      SET('vb_init_ignored','ignored','Array.isArray(ignored) ? ignored : []'),
       SET('vb_first','vb_h','hits.length ? hits[0] : null'),
-      WHEN('vb_done','!vb_h',SIDE('vb_result','(cargo.inputBatch = { accepted: accepted, rejected: rejected, pending: pending }, true)')),
+      WHEN('vb_done','!vb_h',SIDE('vb_result','(cargo.inputBatch = { accepted: accepted, rejected: rejected, pending: pending, ignored: ignored }, true)')),
       WHEN('vb_end','!vb_h',END('vb_end_done')),
       SET('vb_rest','vb_rest','hits.slice(1)'),
       SET('vb_relevant','vb_relevant','formReadingRelevant(cargo, vb_h, accepted)'),
@@ -297,8 +306,16 @@ const validateBatch = {
       SIDE('vb_reset',"(cargo.inputCheck = vb_h.invalid ? { ok: false } : (vb_h.validator && !vb_known ? null : { ok: true, value: vb_h.value }), true)"),
       WHEN('vb_validator','vb_ready === true && vb_h.validator && !vb_known && !vb_h.invalid',FLOW('vb_validate','{{vb_h.validator}}','call',{form:'{{vb_h.form}}',input:'{{vb_h.name}}',value:'{{vb_h.value}}',values:'{{vb_values}}',reading:'{{vb_h}}'})),
       WHEN('vb_refused','vb_h.refused === true',SIDE('vb_withhold_refusal',"(cargo.inputCheck=Object.assign({},cargo.inputCheck || {},{ok:false}),true)")),
-      SIDE('vb_take',"(vb_relevant !== true ? true : vb_ready !== true ? pending.push(Object.assign({}, vb_h, {outcome:'pending'})) : cargo.inputCheck && cargo.inputCheck.ok === true ? accepted.push(Object.assign({}, vb_h, { ok: true, value: cargo.inputCheck.value !== undefined && cargo.inputCheck.value !== null ? cargo.inputCheck.value : vb_h.value, outcome: vb_outcome })) : rejected.push(Object.assign({}, vb_h, { outcome: 'rejected', message: cargo.inputCheck && cargo.inputCheck.message, message_es: cargo.inputCheck && cargo.inputCheck.message_es })), true)"),
-      FLOW('vb_next','validate-input-batch','replace',{hits:'{{vb_rest}}',accepted:'{{accepted}}',rejected:'{{rejected}}',pending:'{{pending}}'}),
+      SET('vb_candidate','vb_candidate',"Object.assign({},vb_h,{ok:!!(cargo.inputCheck && cargo.inputCheck.ok === true),value:cargo.inputCheck && cargo.inputCheck.value !== undefined && cargo.inputCheck.value !== null ? cargo.inputCheck.value : vb_h.value,message:cargo.inputCheck && cargo.inputCheck.message,message_es:cargo.inputCheck && cargo.inputCheck.message_es})"),
+      SET('vb_proposal_policy','vb_proposal','vb_relevant === true && vb_ready === true && vb_candidate.ok && !vb_known ? formProposalPolicy(cargo,vb_candidate,cargo.inputCheck,accepted) : null'),
+      SET('vb_proposal_values','vb_proposal_values','proposedFormValues(cargo,vb_h.form,accepted.concat([vb_candidate]))'),
+      SIDE('vb_proposal_reset','(cargo.proposalCheck=undefined,true)'),
+      WHEN('vb_proposal_prepare','vb_proposal && vb_proposal.prepare',FLOW('vb_proposal_formatter','{{vb_proposal.prepare}}','call',{form:'{{vb_candidate.form}}',input:'{{vb_candidate.name}}',value:'{{vb_candidate.value}}',values:'{{vb_proposal_values}}',reading:'{{vb_candidate}}'})),
+      SET('vb_proposal_gate','vb_proposal_ok','vb_relevant !== true || vb_ready !== true || !vb_candidate.ok || vb_known ? true : stageFormProposal(cargo,vb_candidate,formProposalDescriptor(vb_proposal,vb_proposal && vb_proposal.prepare ? cargo.proposalCheck : undefined))'),
+
+      {...SET('vb_proposal_gate_valid','noop',"typeof vb_proposal_ok === 'boolean'"),requireTrue:true},
+      SIDE('vb_take',"(vb_relevant !== true ? ignored.push(vb_h) : vb_ready !== true ? pending.push(Object.assign({}, vb_h, {outcome:'pending'})) : vb_candidate.ok === true ? (vb_proposal_ok === true ? accepted.push(Object.assign({}, vb_candidate, { outcome: vb_outcome })) : null) : rejected.push(Object.assign({}, vb_candidate, { outcome: 'rejected' })), true)"),
+      FLOW('vb_next','validate-input-batch','replace',{hits:'{{vb_rest}}',accepted:'{{accepted}}',rejected:'{{rejected}}',pending:'{{pending}}',ignored:'{{ignored}}'}),
    ],
 };
 const accept = {
@@ -314,7 +331,9 @@ const accept = {
       SET('ca_order','ca_ordered','orderFormReadings(cargo, hits)'),
       FLOW('ca_validate','validate-input-batch','call',{hits:'{{ca_ordered}}'}),
       SIDE('ca_settle','(cargo.inputBatch = settleFormActivations(cargo.inputBatch, cargo), true)'),
+      {...SIDE('ca_proposal_validation','(settleFormProposalValidation(cargo,cargo.inputBatch),true)'),requireTrue:true},
       SIDE('ca_rejections','rejectFormReadings(cargo, cargo.inputBatch.rejected)'),
+      {...SIDE('ca_proposal_commit','commitFormProposals(cargo,cargo.inputBatch.accepted)'),requireTrue:true},
       SIDE('ca_commit','acceptFormReadings(cargo, cargo.inputBatch.accepted, cargo.inputBatch.pending)'),
       SIDE('ca_pending','queueFormReadings(cargo, cargo.inputBatch.pending)'),
       SET('ca_results','ca_results','cargo.inputBatch.accepted.concat(cargo.inputBatch.rejected, cargo.inputBatch.pending)'),
@@ -377,7 +396,7 @@ const confirmForm = {
    id: 'confirm-form', name: 'ConfirmForm', version: '1.0.0', scope: 'isolated',
    description: "Worker: ask a form's confirmation (exact YES / NO; keys 1 and 2). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an unclear short answer is asked again, a long unrelated one is DISPATCHed. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
    parameters: ['form', 'question', 'question_es', 'exit_context', 'exit_context_es','words','interrupts','no_keys','clarifications'].map((n) => ({ name: n, type: ['words','interrupts','no_keys','clarifications'].includes(n)?'array':'string', description: n })),
-   variables: vars({ cf_presets: FIELD_PRESETS, cf_chain: [], cf_m: null, cf_result: '',cf_prompt:'',cf_prompt_es:'', cf_words: 0, cf_tries: 0, words:[], clarifications:[], no_keys:['2'], interrupts:[], cf_choices:[], cf_event:'', cf_amount:false, cf_questions:[],cf_provides:null,cf_skip_gate:'' }),
+   variables: vars({ cf_presets: FIELD_PRESETS, cf_chain: [], cf_m: null, cf_current:null, cf_result: '',cf_prompt:'',cf_prompt_es:'', cf_words: 0, cf_tries: 0, words:[], clarifications:[], no_keys:['2'], interrupts:[], cf_choices:[], cf_event:'', cf_amount:false, cf_questions:[],cf_provides:null,cf_skip_gate:'' }),
    steps: [
       SIDE('cf_reset', "(cargo.formConfirm = cargo.formConfirm || {}, cargo.formConfirm[form] = '', true)"),
       SET('cf_choices','cf_choices',"[{key:'yes',words:['1'].concat(Array.isArray(words)?words:[]),exact:true},{key:'no',words:Array.isArray(no_keys)?no_keys:['2']}].concat((Array.isArray(interrupts)?interrupts:[]).map(function(event){return {key:'event:'+event.key,words:event.words,exact:event.exact!==false};}))"),
@@ -394,7 +413,8 @@ const confirmForm = {
       SET('cf_question_catalog','cf_questions','cargo.forms[form].questions || []'),
       SET('cf_provider_catalog','cf_provides','cargo.forms[form].providers'),
       SET('cf_gate_policy','cf_skip_gate',"!cf_provides || !cf_provides.gate || [].concat(cf_provides.gate.verified || []).every(function(p){return !!formPath({cargo:cargo},p);}) ? 'true' : ''"),
-      SET('cf_match', 'cf_m', "cargo.choice === 'yes' || cargo.choice === 'no' && pickChoice(cargo.choiceText, [{key:'no',words:Array.isArray(no_keys)?no_keys:['2'],exact:true}], false) === 'no' ? { hits: [], ambiguous: [], questions:[] } : readFormAnswer(cargo.choiceText, cf_chain, { form: form, name: '' }, '',cf_questions)"),
+      SET('cf_current','cf_current',"cargo.forms[form].proposalPrompt ? {form:cargo.forms[form].parent,name:cargo.forms[form].proposalPrompt.input} : {form:form,name:''}"),
+      SET('cf_match', 'cf_m', "cargo.choice === 'yes' || cargo.choice === 'no' && pickChoice(cargo.choiceText, [{key:'no',words:Array.isArray(no_keys)?no_keys:['2'],exact:true}], false) === 'no' ? { hits: [], ambiguous: [], questions:[] } : readFormAnswer(cargo.choiceText, cf_chain, cf_current, '',cf_questions)"),
       SET('cf_enrich','cf_m',"(function(m){m.hits=m.hits.map(function(h){return Object.assign({},h,{silent:true});});return m;})(enrichFormMatches(cf_m, cf_chain, form))"),
       SET('cf_count_words', 'cf_words', "String(cargo.choiceText || '').split(/\\s+/).filter(function (w) { return /[a-záéíóúüñ]/i.test(w); }).length"),
       WHEN('cf_question_fields','cf_m.questions.length > 0 && cf_m.hits.length > 0',FLOW('cf_question_accept','collect-input-accept','call',{hits:'{{cf_m.hits}}'})),
@@ -416,6 +436,30 @@ const confirmForm = {
       SIDE('cf_store', "(cargo.formConfirm[form] = cf_result === 'unclear' || cf_result === 'clarification' ? 'changed' : cf_result, true)"),
    ],
 };
+
+// ── proposed input: owned confirmation before canonical acceptance or callbacks ────────────────────────────
+const confirmInputProposal=formFlow({id:'confirm-input-proposal',name:'ConfirmInputProposal',version:'1.0.0',description:'Confirm an owned validated input candidate; retain it on yield and authorize only normal input acceptance.',
+   parameters:[{name:'input',type:'string',description:'Owning input awaiting proposal confirmation'}],extraVars:{input:'',proposal:null,proposal_readings:[]},inputs:[],
+   before:[
+      SET('proposal_refresh_readings','proposal_readings','formProposalReadings(cargo,parent_form,input,false)'),
+      WHEN('proposal_refresh','proposal_readings.length > 0',FLOW('proposal_refresh_batch','collect-input-accept','call',{hits:'{{proposal_readings}}'})),
+      SET('proposal_current','proposal','cargo.forms[parent_form] && cargo.forms[parent_form].inputProposals && cargo.forms[parent_form].inputProposals[input] || null'),
+      WHEN('proposal_missing',"!proposal || !['pending','confirmed'].includes(proposal.status) || proposal.committed",FLOW('proposal_missing_close','form-done','replace',{form:'{{form_instance}}'})),
+      {...SIDE('proposal_bind','(bindFormProposal(cargo,parent_form,input,form_instance),true)'),requireTrue:true},
+      SET('proposal_confirmation','form_confirmation','Object.assign({},proposal.descriptor)'),
+   ],
+   confirm:{question:'{{proposal.descriptor.question}}',question_es:'{{proposal.descriptor.question_es || proposal.descriptor.question}}'},
+   after:[{...SIDE('proposal_confirmed',"decideFormProposal(cargo,parent_form,input,form_instance,'confirmed')"),requireTrue:true}],
+   declined:[NOOP('proposal_declined_marker')],
+});
+const proposalDeclined={id:'confirm-input-proposal-declined',name:'ConfirmInputProposalDeclined',version:'1.0.0',scope:'isolated',description:'Reject an owned input proposal without accepting its candidate or handing incomplete data to its parent.',parameters:[{name:'form_instance',type:'string'}],variables:vars({owner:'',input:'',proposal:null}),steps:[
+   SET('proposal_decline_owner','owner','cargo.forms[form_instance].parent'),
+   SET('proposal_decline_input','input','cargo.forms[form_instance].proposalPrompt.input'),
+   SET('proposal_decline_record','proposal','cargo.forms[owner].inputProposals[input]'),
+   {...SIDE('proposal_decline_decision',"decideFormProposal(cargo,owner,input,form_instance,'declined')"),requireTrue:true},
+   SIDE('proposal_decline_close','(closeFormInstance(cargo,form_instance,false),true)'),
+   WHEN('proposal_decline_callback','proposal.descriptor.on_declined',FLOW('proposal_decline_invoke','{{proposal.descriptor.on_declined}}','call',{form:'{{owner}}',input:'{{input}}',value:'{{proposal.value}}',reading:'{{proposal.reading}}'})),
+]};
 
 // ── form-done: the result goes to the parent (or cargo.formResults); the form is cleared ─────────────────────────────
 const formDone = {
@@ -665,8 +709,9 @@ const resumeForm={id:'resume-form',name:'ResumeForm',version:'1.0.0',scope:'isol
       SET('resume_definition','target','cargo.forms[form].definition'),SET('resume_parent','parent',"cargo.forms[form].parent || ''"),SET('resume_slot','slot',"cargo.forms[form].result_input || ''"),
       FLOW('resume_owned_form','{{target}}','replace',{form_instance:'{{form}}',parent_form:'{{parent}}',result_input:'{{slot}}'})
    ]};
-const LIBRARY_FLOWS = [resumeForm,performAction, sendTextAction, prepareInput, runForm, collectInput, validateBatch, accept, acceptedEffects, disambiguate, confirmForm, formDone, providerMenu, ...validators, ...fieldCollectors, ...subForms, provideData, provideQueuedData, loadSource, answerFacts];
+const LIBRARY_FLOWS = [confirmInputProposal,proposalDeclined,resumeForm,performAction, sendTextAction, prepareInput, runForm, collectInput, validateBatch, accept, acceptedEffects, disambiguate, confirmForm, formDone, providerMenu, ...validators, ...fieldCollectors, ...subForms, provideData, provideQueuedData, loadSource, answerFacts];
 const LIBRARY_CONTRACTS={
+   'confirm-input-proposal':{role:'collector',requires:[INPUT_PROPOSALS_REQUIREMENT]},'confirm-input-proposal-declined':{role:'worker',requires:[INPUT_PROPOSALS_REQUIREMENT]},
    'resume-form':{role:'worker'},
    'perform-action':{role:'worker',tools:['jsfe:action-claim','jsfe:action-complete'],result:{path:'cargo.actionResult',type:'object'}},
    'send-text-action':{role:'worker',result:{path:'cargo.actionOutcome',type:'object'}},
@@ -688,6 +733,6 @@ export const FLOWS=LIBRARY_FLOWS.map(flow=>{
    const declaration=LIBRARY_CONTRACTS[flow.id];
    if(!declaration)throw new Error('Shared worker needs an explicit contract: '+flow.id);
    if((declaration.role==='collector')!==(flow.metadata?.formProtocol===2))throw new Error('Shared collector contract mismatch: '+flow.id);
-   return {...flow,variables:{...flow.variables,contract:{type:'object',value:{version:1,summary:flow.description,
+   return {...flow,steps:proposalRuntimeSteps(flow.id,flow.steps,declaration.requires),variables:{...flow.variables,contract:{type:'object',value:{version:1,summary:flow.description,
       parametersFrom:'parameters',...declaration,...(declaration.role==='collector'?{form:{inputs:'inputs'}}:{})}}}};
 });

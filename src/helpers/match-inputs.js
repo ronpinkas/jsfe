@@ -206,7 +206,7 @@ export function readFormAnswer(answer,candidates,current,choiceKey,questions=[])
    let consumed=false;
    const remaining=parts.map(part=>{
       const text=part.trim();
-      if(!/^[¿\s]*(?:how\b|what\b|when\b|where\b|which\b|why\b|who\b|cu[aá]nt[oa]s?\b|qu[eé]\b|cu[aá]ndo\b|d[oó]nde\b|c[oó]mo\b|(?:can|could) you (?:tell|show)\b|(?:i (?:want|would like) to know|tell me|show me|quiero saber|quisiera saber|me gustar[ií]a saber|d[ií]game|dime|mu[eé]strame)\b)/i.test(text))return part;
+      if(!/^[¿\s]*(?:how\b|what\b|when\b|where\b|which\b|why\b|who\b|cu[aá]nt[oa]s?\b|cu[aá]l(?:es)?\b|qu[eé](?=$|[^\p{L}\p{N}_])|cu[aá]ndo\b|d[oó]nde\b|c[oó]mo\b|(?:can|could) you (?:tell|show)\b|(?:i (?:want|would like) to know|tell me|show me|quiero saber|quisiera saber|me gustar[ií]a saber|d[ií]game|dime|mu[eé]strame)\b)/iu.test(text))return part;
       const key=pickProviderQuestion(text,questions);
       if(!key||key.startsWith('__'))return part;
       consumed=true;asked.push(key);return ' '.repeat(part.length);

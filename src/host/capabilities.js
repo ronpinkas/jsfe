@@ -1,3 +1,4 @@
+import {INPUT_PROPOSALS_REQUIREMENT} from '../forms/proposal-runtime.js';
 /** Declarative flow admission. No engine imports, I/O, or implicit host capability activation. */
 export class JSFEHostCapabilityError extends Error {
    constructor(flowId, capability, reason) {
@@ -40,6 +41,9 @@ export function assertFlowHostCapabilities(flows, capabilities = {}) {
    for (const flow of flows) {
       const requirements = normalizeHostRequirements(flow?.variables?.contract?.value?.requires, flow?.id);
       for (const capability of requirements) {
+         // Intrinsic runtime support, not a host option or an implicit host permission.
+         if (capability === INPUT_PROPOSALS_REQUIREMENT) continue;
+         if (capability.startsWith('jsfe:')) throw new JSFEHostCapabilityError(flow?.id, capability, 'unsupported intrinsic runtime contract');
          if (!capabilities || typeof capabilities !== 'object' || Array.isArray(capabilities)) {
             throw new JSFEHostCapabilityError(flow?.id, capability, 'explicit host capabilities must be an object');
          }

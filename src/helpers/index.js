@@ -1,3 +1,5 @@
+import {formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation} from './form-proposals.js';
+import {formProposalProtocol,validateFormProposalPolicy,validateFormProposalDescriptor,formProposalDescriptor} from './proposal-contract.js';
 import {clearFormMisses,missFormInput,formInputPrompt,consumeFormFeedback,formConversationOutcome} from './form-conversation.js';
 import { takeChoiceOffer } from './choice-offer.js';
 import { consumeActionReceipt, authorizeFormActionRetry, formSignature, selectFormAction, confirmFormRevision, prepareFormAction, actionConfirmationValid, beginFormAction, finishFormAction, actionGateVerified } from './form-actions.js';
@@ -32,6 +34,7 @@ import { validateDigits, validatePhone, validateEmail } from './validators.js';
 import { urlToSpeech, textWithUrlToSpeech } from './url-speech.js';
 
 export {
+   formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation,formProposalProtocol,validateFormProposalPolicy,validateFormProposalDescriptor,formProposalDescriptor,
    clearFormMisses,missFormInput,formInputPrompt,consumeFormFeedback,formConversationOutcome,
    readMoneyAmount, isMoneyAmount, moneyIntentAllows, validateMoneyOptions, takeChoiceOffer, matchesChoice, ANSWER_WORDS, CONFIRM_WORDS, isAnswer, isAgentRequest, isOtherRequest, isSpelledFragment, isAmountAnswer, amountInAnswer,
    pickChoice, readEmail, readPhone, readInternationalPhone, readIdentifier, last4, maskEmail, callerTextNumber, textDestination,
@@ -42,6 +45,7 @@ export {
 
 /** The functions flows call by name, ready to spread into a host's approved functions. */
 export const STANDARD_FUNCTIONS = {
+   formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation,formProposalProtocol,validateFormProposalPolicy,validateFormProposalDescriptor,formProposalDescriptor,
    clearFormMisses,missFormInput,formInputPrompt,consumeFormFeedback,formConversationOutcome,
    readMoneyAmount, isMoneyAmount, moneyIntentAllows, validateMoneyOptions, takeChoiceOffer, matchesChoice, isAnswer, isAgentRequest, isOtherRequest, isSpelledFragment, isAmountAnswer, amountInAnswer, pickChoice,
    readEmail, readPhone, readInternationalPhone, readIdentifier, last4, maskEmail, callerTextNumber, textDestination, callerIsInternational,

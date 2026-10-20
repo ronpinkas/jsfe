@@ -1,4 +1,5 @@
 /** Build-time contracts for conversational flows. Transport operations remain registered tools. */
+import {INPUT_PROPOSALS_REQUIREMENT,hasInputProposals,proposalRuntimeSteps} from './proposal-runtime.js';
 import {ACTION_TOOLS} from './action-tools.js';
 import {normalizeHostRequirements} from '../host/capabilities.js';
 import {validateActionProjection,actionProjectionExpression} from './action-projection.js';
@@ -53,7 +54,9 @@ export function linkFormSchemas(flows,{externalFlows=[]}={}) {
          parameters.push(input.schema?{name:input.name,type:'object',jsonSchema:objectSchema(input.schema.inputs),description:input.description || input.label || input.name}
             :{name:input.name,type:'string',...(input.profile.kind==='choice'&&!input.profile.accept_other?{enum:input.profile.choices.map(c=>c.key)}:{}),description:input.description || input.label || input.name});
       }
-      return {...flow,parameters,variables:{...flow.variables,inputs:{...flow.variables.inputs,value:inputs}}};
+      const linked={...flow,parameters,variables:{...flow.variables,inputs:{...flow.variables.inputs,value:inputs}}};
+      // Descendant schemas are linked after declaration; propagate their runtime requirement to the root entry.
+      return flow.variables?.contract ? declared(linked,flow.variables.contract.value) : {...linked,steps:proposalRuntimeSteps(flow.id,linked.steps,hasInputProposals(inputs)?[INPUT_PROPOSALS_REQUIREMENT]:[])};
    });
 }
 function declared(flow, contract) {
@@ -64,11 +67,12 @@ function declared(flow, contract) {
       ...(step.type==='FLOW'&&step.callType==='replace'?{initializeDefaults:step.initializeDefaults ?? true}:{}),
       ...(step.branches?{branches:Object.fromEntries(Object.entries(step.branches).map(([key,branch])=>[key,replacementDefaults(branch)]))}:{}),
       ...(step.onFail?{onFail:replacementDefaults(step.onFail)}:{})});
+   const requirements=[...normalizeHostRequirements(contract.requires,flow.id),...(hasInputProposals(flow.variables?.inputs?.value)?[INPUT_PROPOSALS_REQUIREMENT]:[])];
    const metadata={version:1,...contract,parametersFrom:'parameters'};
-   if(contract.requires!==undefined)Object.defineProperty(metadata,'requires',{
-      value:normalizeHostRequirements(contract.requires,flow.id),enumerable:true,writable:false,configurable:false,
+   if(requirements.length || contract.requires!==undefined)Object.defineProperty(metadata,'requires',{
+      value:normalizeHostRequirements(requirements,flow.id),enumerable:true,writable:false,configurable:false,
    });
-   return {...flow,steps:flow.steps.map(replacementDefaults),variables:{...flow.variables,contract:value(metadata)}};
+   return {...flow,steps:proposalRuntimeSteps(flow.id,flow.steps.map(replacementDefaults),requirements),variables:{...flow.variables,contract:value(metadata)}};
 }
 export function defineWorker({contract,...flow}) {
    return declared({scope:'isolated',version:'1.0.0',...flow},contract);
@@ -161,8 +165,10 @@ export function validateFlowContracts(flows, tools=[], {externalFlows=[],require
          for (const spec of specs.flatMap(i=>[i,...(i.any_of || [])])) {
             const deps=[...(spec.reset_on || []),...(spec.depends_on || []),...Object.keys({...spec.when,...spec.required_when}).filter(k=>!k.startsWith('cargo.')&&!k.startsWith('form.'))];
             for (const name of deps) if(!name.startsWith('cargo.')&&!name.startsWith('form.')&&!fieldNames.has(name)) fail(flow.id,`unknown dependency ${name}`);
+            for(const name of [...Object.keys(spec.proposal?.when || {}),...(spec.proposal?.unless || [])])if(!name.startsWith('cargo.')&&!name.startsWith('form.')&&!fieldNames.has(name))fail(flow.id,`unknown proposal condition ${name}`);
             graph.set(spec.name,deps);
             for (const key of ['form','validator','prepare','refresh','after','answer_precheck','answer_validator','on_exhausted']) if(spec[key]&&!ids.has(spec[key])) fail(flow.id,`unknown ${key} worker ${spec[key]}`);
+            for(const reference of [spec.proposal?.prepare,spec.proposal?.on_declined,...(spec.proposal?.interrupts || []).map(event=>event.flow)])if(reference&&!ids.has(reference))fail(flow.id,`unknown proposal worker ${reference}`);
          }
          const visited=new Set(),active=new Set();
          const visit=name=>{if(active.has(name)) fail(flow.id,`cyclic input dependency ${name}`);if(visited.has(name))return;active.add(name);for(const dep of graph.get(name)||[])visit(dep);active.delete(name);visited.add(name);};

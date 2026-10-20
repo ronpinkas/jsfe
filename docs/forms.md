@@ -51,6 +51,29 @@ The common collector passes `form_context:{form,current,names,questions}` to `as
 
 Private provider questions during collection preserve the owner and pending verification. Repeated questions join the pending provider request instead of stacking another authentication flow. Independent field clauses are accepted before a provider suspends for verification. Questions cannot become invalid OTP attempts or arbitrary text answers.
 
+## Input proposal confirmation (unpublished candidate)
+
+Use `input.proposal` when an inferred or ambiguous **field value** needs the caller's approval before acceptance. This is independent of a performer's final action confirmation: accepting a payment option never authorizes a charge. Declare it on readable leaf inputs, including members of an `any_of` group; group, bound-value and subform declarations reject this attribute instead of silently ignoring it. Ordinary inputs without this declaration retain their existing path.
+
+```js
+{
+  name:'reason', profile:{kind:'choice',choices:[/* canonical choices */]},
+  proposal:{prepare:'describe-reason',origins:['activation'],when:{reason:['lost','stolen']}}
+}
+```
+
+An optional pure `prepare` worker receives `{form,input,value,values,reading}`. `value` is validator-normalized; `values` includes validated peers and this candidate. It writes `cargo.proposalCheck={question,question_es,binding?,on_declined?,words?,no_keys?,clarifications?,interrupts?}`, or explicitly `null` when no proposal is required. A static policy may supply the question directly. An ordinary validator can independently return `cargo.inputCheck={ok:true,value,proposal:{question,question_es,binding,...}}`. Missing or malformed descriptors fail closed. Declare dynamic proposal workers with `contract.requires:['jsfe:input-proposals:v1']`; static policies and linked descendant schemas derive that requirement automatically.
+
+Formatters must be pure apart from their output slot: no authentication, business updates or external effects. Bind the semantic subject and facts that make the question true (account, option, plan, prior receipt). Avoid volatile unrelated history. `origins` restricts initial triggering to `activation` or `answer`; corrections to a pending proposal still require a fresh applicable decision. `when`/`unless` use normal form conditions against candidate values.
+
+JSFE owns `owner.inputProposals[input]`, separate from canonical `values` and the existing **action** `proposal`. Candidates survive contextual yield and bare reentry. An owned `confirm-input-proposal` context uses ordinary exact confirmation and treats the proposed field as current for corrections. Independent inputs commit normally. Accepting a member of an exclusive `any_of` group withdraws pending or confirmed proposals for its peer members. YES is provisional proof bound to owner identity, revision, candidate, prompt and business binding; ordinary validation reruns before canonical acceptance and post-commit callbacks. A changed candidate, policy, subject or binding revokes old proof. Rejected/inapplicable candidates are withdrawn; unmet prerequisites defer them. Approval is consumed once. Do not set proposal state or approval tokens in tenant expressions.
+
+NO never commits the candidate or hands an incomplete value to a parent. It closes the confirmation context and optionally calls `on_declined` with `{form,input,value,reading}` once; this worker chooses the business alternative and may close its owner. Yield retains the proposal and has no decline effect. Do not add separate yes/no collector children, cargo permission flags or ad hoc stack restoration.
+
+The versioned intrinsic requirement is supported by JSFE itself, with no host feature switch. Unknown `jsfe:*` versions reject admission even if a caller supplies a matching boolean. Compiled proposal entries also include a strict `formProposalProtocol() === 1` guard, so an older direct engine cannot silently skip consent. Deploy matched runtime, shared workers and tenant declarations; these candidate artifacts must not be activated with published 1.7.2.
+
+Test actual EN/ES voice/text conversations: activation, unreadable-answer yield, no-argument root reentry, explicit NO, mixed YES plus correction, provider detours, independent fields, nested/foreign owners, stale bindings and consumed proof. Assert canonical values, callbacks, authentication and effects, then run the complete engine and tenant acceptance matrices against installed package bytes.
+
 ## Providers
 
 Declare a `provides` catalog: subject, gate (`flow`, verified paths), source (`flow`, result path, subject/freshness policy), facts and fact sets. Each fact has a key, phrasings, source path or dedicated worker, rendering rules and explicit missing-data text. A private catalog requires an explicit gate. Derive `asked` and mid-form question choices with the builder; do not maintain another list.
