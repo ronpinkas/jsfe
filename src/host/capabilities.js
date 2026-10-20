@@ -1,0 +1,42 @@
+/** Declarative flow admission. No engine imports, I/O, or implicit host capability activation. */
+export class JSFEHostCapabilityError extends Error {
+   constructor(flowId, capability, reason) {
+      super(`Flow ${flowId || '<unknown>'} host capability ${capability || '<declaration>'}: ${reason}`);
+      this.name = 'JSFEHostCapabilityError';
+      this.code = 'JSFE_HOST_CAPABILITY_REQUIRED';
+      this.flowId = flowId || '';
+      this.capability = capability || '';
+   }
+}
+
+/** Copy/normalize declaration data so subsequent caller mutations cannot change admission. */
+export function normalizeHostRequirements(requirements, flowId) {
+   if (requirements === undefined) return Object.freeze([]);
+   if (!Array.isArray(requirements)) throw new JSFEHostCapabilityError(flowId, '', 'contract.requires must be an array of nonempty capability names');
+   for (const name of requirements) {
+      if (typeof name !== 'string' || !name || name.trim() !== name) {
+         throw new JSFEHostCapabilityError(flowId, '', 'contract.requires must contain nonempty, unpadded strings');
+      }
+   }
+   return Object.freeze([...new Set(requirements)]);
+}
+
+/** Every declared requirement needs an explicitly supplied own boolean true. Legacy flows declare none. */
+export function assertFlowHostCapabilities(flows, capabilities = {}) {
+   if (!Array.isArray(flows)) throw new JSFEHostCapabilityError('', '', 'flows must be an array');
+   for (const flow of flows) {
+      const requirements = normalizeHostRequirements(flow?.variables?.contract?.value?.requires, flow?.id);
+      for (const capability of requirements) {
+         if (!capabilities || typeof capabilities !== 'object' || Array.isArray(capabilities)) {
+            throw new JSFEHostCapabilityError(flow?.id, capability, 'explicit host capabilities must be an object');
+         }
+         if (!Object.prototype.hasOwnProperty.call(capabilities, capability)) {
+            throw new JSFEHostCapabilityError(flow?.id, capability, 'requires explicit boolean true; capability is missing');
+         }
+         if (capabilities[capability] !== true) {
+            throw new JSFEHostCapabilityError(flow?.id, capability, `requires explicit boolean true; received ${typeof capabilities[capability]}`);
+         }
+      }
+   }
+   return true;
+}

@@ -1,0 +1,24 @@
+import assert from 'node:assert/strict';
+import {readInputProfile,matchInputs} from '../src/helpers/match-inputs.js';
+let checks=0;const test=(name,fn)=>{fn();checks++;console.log('PASS '+name);};
+const card={kind:'choice',choices:[{key:'card95',words:['9552','MasterCard'],keys:['1'],neutral:true},{key:'card11',words:['1111','Visa'],keys:['2'],neutral:true}]};
+const sample='La tarjeta es88 termina en95 52.';
+test('grouped card digits retain their exact source span despite an unrelated earlier number',()=>{const value=readInputProfile(card,sample,false);assert.equal(value.value,'card95');assert.deepEqual(value.spans,[[sample.indexOf('95 52'),sample.indexOf('95 52')+5]]);});
+test('a grouped multi-digit semantic subaccount value works out of order',()=>assert.equal(readInputProfile({kind:'choice',choices:[{key:'sub50',words:['50'],neutral:true}]},'sub account 5 0',false).value,'sub50'));
+test('separate matching numeric options remain alternatives rather than choosing the first run',()=>{const value=readInputProfile(card,'95 52 or 11 11',true);assert.deepEqual(value.alternatives.map(x=>x.value),['card95','card11']);assert.deepEqual(value.alternatives.map(x=>x.spans),[[[0,5]],[[9,14]]]);});
+test('same-field numeric alternatives reach the ordinary ambiguity protocol',()=>{const result=matchInputs('95 52 or 11 11',[{form:'pay',name:'card',profile:card}],{form:'pay',name:'card'});assert.deepEqual(result.hits,[]);assert.deepEqual(result.ambiguous.map(x=>x.value),['card95','card11']);});
+test('numeric menu aliases remain current-only',()=>{const profile={kind:'choice',choices:[{key:'link',words:['link'],keys:['12']}]};assert.equal(readInputProfile(profile,'12',false),null);assert.equal(readInputProfile(profile,'12',true).value,'link');});
+test('grouping never turns numeric keypad aliases into semantic values',()=>{const profile={kind:'choice',choices:[{key:'link',words:['link'],keys:['12']}]};assert.equal(readInputProfile(profile,'1 2',false),null);assert.equal(readInputProfile(profile,'1 2',true),null);});
+test('one-digit semantic words keep their existing current-only policy',()=>{const profile={kind:'choice',choices:[{key:'one',words:['1']}]};assert.equal(readInputProfile(profile,'1',false),null);assert.equal(readInputProfile({...profile,numeric_values:true},'1',false).value,'one');});
+test('a longer numeric identifier cannot impersonate a declared last-four value',()=>assert.equal(readInputProfile(card,'19552',false),null));
+test('currency and decimal amounts cannot select a numeric card choice',()=>{for(const text of ['$9552','$95.52','95.52','9552 dollars','95 52 centavos'])assert.equal(readInputProfile(card,text,false),null,text);});
+test('negation applies to the grouped numeric value through the shared choice policy',()=>assert.equal(readInputProfile(card,'not 95 52; use 11 11',true).value,'card11'));
+test('exact choices retain whole-answer consent semantics after grouping',()=>{const profile={kind:'choice',choices:[{key:'reference',words:['9552'],exact:true}]};assert.equal(readInputProfile(profile,'use 95 52',true),null);assert.equal(readInputProfile(profile,'95 52',true).value,'reference');});
+test('current-only semantic choices are not exposed to ancestor or sibling fields',()=>{const profile={kind:'choice',choices:[{key:'reference',words:['9552'],current_only:true}]};assert.equal(readInputProfile(profile,'95 52',false),null);});
+test('an explicit current group keypad key selects its declared choice rather than a bare amount',()=>{
+   const candidates=[{form:'pay',name:'amount',profile:{kind:'amount',min:1}},{form:'pay',name:'option',profile:{kind:'choice',choices:[{key:'due',words:['due'],keys:['1']}]}}];
+   assert.deepEqual(matchInputs('1',candidates,{form:'pay',names:['amount','option']}).hits.map(h=>[h.name,h.value]),[['option','due']]);
+   assert.deepEqual(matchInputs('$1',candidates,{form:'pay',names:['amount','option']}).hits.map(h=>[h.name,h.value]),[['amount','1']]);
+   assert.equal(matchInputs('1',candidates.map(c=>c.name==='amount'?{...c,confirm_against:['option']}:c),{form:'pay',names:['amount','option']}).ambiguous.length,2);
+});
+console.log(`Grouped numeric choices: all checks passed (${checks})`);

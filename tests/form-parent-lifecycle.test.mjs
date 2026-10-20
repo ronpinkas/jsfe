@@ -1,0 +1,27 @@
+import assert from 'node:assert/strict';
+import {WorkflowEngine} from '../dist/index.js';
+import {FLOWS,formFlow,linkFormSchemas,providerQuestions} from '../dist/forms/index.js';
+import {STANDARD_FUNCTIONS} from '../dist/helpers/index.js';
+let checks=0;const warnings=[];
+const S=(id,value)=>({id,type:'SET',variable:'noop',value});
+const catalog={source:{flow:'fact-load',result:'cargo.demoFact',refresh:'per_turn'},facts:[{key:'balance',words:['balance','saldo'],path:'value',say:'BALANCE {value}',public:true}]};
+const root=formFlow({extraVars:{provides:catalog,questions:providerQuestions(catalog)},id:'owner',name:'Owner',version:'1',inputs:[{name:'zip',field:'zip'}],confirm:{question:'Confirm {{cargo.forms[form_instance].values.zip}}?',clarifications:['which address is this','qué dirección es esta']},declined:[S('placeholder','true')],after:[S('effect','(cargo.effects=Number(cargo.effects || 0)+1,true)')]});
+const decline={id:'owner-declined',name:'OwnerDeclined',version:'1',description:'Open recovery without losing the owner',scope:'isolated',parameters:[{name:'form_instance',type:'string'}],steps:[{id:'recover',type:'FLOW',value:'recovery',callType:'reboot',parameters:{parent_form:'{{form_instance}}'}}]};
+const recovery=formFlow({id:'recovery',name:'Recovery',version:'1',resume_on_parent_change:true,inputs:[{name:'again',profile:{kind:'choice',choices:[{key:'again',words:['again']}]},question:'Say AGAIN or correct the address.'}],after:[S('recovery-complete','(cargo.recoveryCompleted=true,true)')]});
+const quiet={info(){},debug(){},error(){},warn(...args){warnings.push(args.join(' '));}};
+const engine=new WorkflowEngine(quiet,async()=>'{"flowName":"None"}',linkFormSchemas([...FLOWS,root,decline,recovery,{id:'fact-load',name:'FactLoad',version:'1',description:'test fact source',steps:[S('fact-value',"(cargo.demoFact={value:'17'},true)")]}]),[],STANDARD_FUNCTIONS,{},false,'en');engine.disableCommands();
+let session=engine.initSession('test','parent-resume','en');session.cargo.voice=false;
+const say=async(content,start)=>{session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start:{flow:start}}:{})},JSON.parse(JSON.stringify(session)))));return session.response;};
+await say('begin','owner');await say('90001');const owner=session.cargo.formTasks.owner;
+for(const phrase of ['which address is this?','¿qué dirección es esta?']){assert.match(await say(phrase),/Confirm 90001/);assert.equal(session.cargo.effects,undefined);checks++;}
+const question=await say("what's my balance?");assert.match(question,/BALANCE 17/);assert.match(question,/Confirm 90001/);assert.equal(session.cargo.effects,undefined);checks++;
+const indirect=await say('Quiero saber el saldo');assert.match(indirect,/BALANCE 17/);assert.match(indirect,/Confirm 90001/);checks++;
+assert.match(await say('no'),/Say AGAIN/);checks++;
+assert.ok(Object.values(session.cargo.forms).some(f=>f.context_only&&f.parent===owner));checks++;
+assert.match(await say('90002'),/Confirm 90002/);checks++;
+assert.equal(session.cargo.formTasks.owner,owner);assert.equal(session.cargo.effects,undefined);checks++;
+assert.equal(Object.values(session.cargo.forms).some(f=>f.definition==='recovery'),false);checks++;
+await say('yes');assert.equal(session.cargo.effects,1);assert.equal(session.cargo.recoveryCompleted,undefined);checks++;
+await say('begin','owner');await say('90003');await say('which address is this and cancel my order');assert.equal(session.flowStacks.flat().length,0);assert.equal(session.cargo.effects,1);checks++;
+assert.ok(!warnings.some(s=>/not defined|expression.*fail/i.test(s)));checks++;
+console.log(`form parent lifecycle: all ${checks} checks passed`);

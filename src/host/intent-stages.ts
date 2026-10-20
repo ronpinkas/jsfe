@@ -30,7 +30,7 @@ export const STAGE_PAIR_SUM = 0.7;
 
 export interface StageTurn { role: 'user' | 'assistant'; content: string }
 export interface StageFlow { id: string; name: string; description: string }
-export interface StageParameter { name: string; type?: string; enum?: string[]; description?: string; internal?: boolean }
+export interface StageParameter { name: string; type?: string; enum?: string[]; description?: string; internal?: boolean; jsonSchema?: Record<string, unknown> }
 export interface StageLlm { system: string; user: string; schema: Record<string, unknown> }
 export interface StageSystemOne<I> { state: Record<string, unknown>; questions: Record<string, unknown>; index: I[] }
 export interface FlowQuestionRef { id: string; flow: number }
@@ -186,13 +186,13 @@ export function buildParameterStage(
   flow: { id: string; name: string; parameterInstructions?: string; parameters?: (StageParameter | FlowParameterDefinition)[] }
 ): ParameterStageRequest {
   const params: StageParameter[] = (flow.parameters || []).filter(p => p && p.name && !isInternalParameter(p))
-    .map(p => ({ name: p.name, ...(p.type ? { type: p.type } : {}), ...(Array.isArray(p.enum) ? { enum: [...p.enum] } : {}), description: String(p.description ?? '') }));
+    .map(p => ({ name: p.name, ...(p.type ? { type: p.type } : {}), ...(Array.isArray(p.enum) ? { enum: [...p.enum] } : {}), description: String(p.description ?? ''), ...(p.jsonSchema ? {jsonSchema:structuredClone(p.jsonSchema)} : {}) }));
   const typeOf = (p: StageParameter) => (p.type === 'boolean' ? 'boolean' : p.type === 'number' || p.type === 'integer' ? 'number' : 'string');
   const schema = {
     type: 'object', additionalProperties: false, required: params.map(p => p.name),
-    properties: Object.fromEntries(params.map(p => [p.name, isEnum(p) ? { type: ['string', 'null'], enum: [...(p.enum as string[]), null] } : { type: [typeOf(p), 'null'] }])),
+    properties: Object.fromEntries(params.map(p => [p.name, p.jsonSchema ? {anyOf:[p.jsonSchema,{type:'null'}]} : isEnum(p) ? { type: ['string', 'null'], enum: [...(p.enum as string[]), null] } : { type: [typeOf(p), 'null'] }])),
   };
-  const line = (p: StageParameter) => `- ${p.name} (${isEnum(p) ? `one of: ${(p.enum as string[]).join(' | ')}` : typeOf(p)}): ${p.description}`;
+  const line = (p: StageParameter) => `- ${p.name} (${isEnum(p) ? `one of: ${(p.enum as string[]).join(' | ')}` : p.jsonSchema ? p.type || 'object' : typeOf(p)}): ${p.description}`;
   const instructions = String(flow.parameterInstructions ?? '').trim();
   const rules = [
     `The workflow ${flow.name} was chosen. Extract the values the user gave for its parameters.`,

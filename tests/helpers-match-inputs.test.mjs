@@ -111,4 +111,11 @@ r = matchInputs('abc', [{ form: 'v', name: 'x', profile: { kind: 'pattern', rege
 eq(r, { hits: [], ambiguous: [] }, 'an invalid pattern reads nothing');
 eq(matchInputs('', null, null), { hits: [], ambiguous: [] }, 'no candidates');
 
+// Fully consumed question punctuation cannot become a text fallback or consume a protocol attempt.
+const {readFormAnswer}=await import('../dist/helpers/match-inputs.js');
+const questionCatalog=[{key:'balance',words:['balance']}];
+let answer=readFormAnswer('what is my balance?', [reason], {form:'return',name:'reason'},'',questionCatalog);
+eq(answer.hits,[],'question punctuation is not a text answer');eq(answer.questions,['balance'],'the question remains requested');
+answer=readFormAnswer('what is my balance? and 123456',[{form:'return',name:'code',profile:{kind:'digits',min:6,max:6}}],{form:'return',name:'code'},'',questionCatalog);
+eq(answer.hits.map(h=>h.value),['123456'],'an independent OTP clause remains collected');
 console.log(`match-inputs: ${checks} checks passed`);

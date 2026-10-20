@@ -13,6 +13,8 @@ npm i jsfe
 - Comprehensive tutorials, examples, and best practices
 - **[README.md](README.md)** - Technical API reference (this document)
 - **[Flow author reference](docs/copilot-reference.md)** - the engine in one page, for flow authors and AI flow generators (shipped in the package; the Flow Designer's CoPilot reads it from the published version, so change it with the engine)
+- **[Native forms, providers and performers](docs/forms.md)** - owned reentrant collection, fact catalogs, confirmed effects and durable recovery
+- **[Development candidate acceptance](docs/development-release.md)** - reproducible package and cross-repository verification
 - **[System Flows](docs/system-flows.md)** and **[Shopify Flows](docs/shopify-flows.md)** - the bundled flow and tool libraries in `flows/`, step by step
 
 *For detailed tutorials, step-by-step examples, and comprehensive workflow patterns, see the **[User Guide](user-guide.md)**.*
@@ -385,6 +387,12 @@ const engine = new WorkflowEngine(logger, aiCallback, flows, tools,
 - Session-aware helpers read only the cargo a caller passes: `callerTextNumber`, `textDestination`,
   `callerIsInternational`.
 
+`amountInAnswer` and `isAmountAnswer` retain their legacy parsing behavior. Explicit USD parsing uses
+`readMoneyAmount(text, {currency:'USD',cardinals:true,intent:'payment'})` or `isMoneyAmount` with the
+same options. `cardinals` defaults to false and `intent` is optional. FORM amount profiles opt in with
+`{kind:'amount',money:{currency:'USD',cardinals:true,intent:'payment'}}`; ordinary amount profiles retain
+legacy parsing. No currency conversion is inferred.
+
 **Alternative AI Services:**
 You can integrate any AI service (Claude, Gemini, local LLMs, etc.) by implementing this same interface. The engine only requires a function that takes system instructions and user input, then returns an AI response.
 
@@ -439,6 +447,14 @@ const flowsMenu = [
 - **`steps`** (required): Array of workflow steps to execute
 - **`variables`** (optional): Flow-specific variable definitions with types and descriptions
 - **`version`** (optional): Flow version for compatibility tracking (defaults to "1.0")
+
+Mutable object defaults and authored step data are copied for each activation; changing one session's
+default data does not mutate a flow definition or another activation. This does not change the shared
+variable-container behavior above. A shared `FLOW` step with `callType:'replace'` preserves that container
+and does not initialize target defaults unless it declares `initializeDefaults:true`; that opt-in fills
+only undefined defaults before explicit parameters. Isolated replacement initializes its own scope.
+`SET` steps may declare `requireTrue:true` to throw `JSFERequiredSetFailed` unless their result is literal
+true; absent or false keeps ordinary SET behavior.
 
 ##### Primary vs. Sub-Flow Architecture
 
@@ -756,10 +772,17 @@ return aiResponse;
 ### Host Responsibilities: Tool Calls, Cancellation and Concurrency
 
 A flow can take actions in the outside world through `CALL-TOOL` — charge a card, send an SMS,
-create a ticket. **The session returned by `updateActivity` is the only record that those steps
-already ran.** The engine cannot protect that record once it leaves `updateActivity`; the host
-owns it from there. Getting any of the rules below wrong lets a flow repeat an action the user
-asked for once.
+create a ticket. For ordinary `CALL-TOOL` flows, **the session returned by `updateActivity` records
+which steps already ran**; the host owns its persistence. Native performers can additionally use an
+explicitly attached durable action journal. Neither mode removes the host responsibilities below.
+Getting these rules wrong can repeat an action the user asked for once.
+
+The reference host defaults `config.jsfe` to `{durableActions:false,sessionEncoding:'plain'}`. Durable
+journaling and `sessionEncoding:'br-v1'` conversation writes are separate opt-ins. Encoded storage
+requires a reader-first rollout and a lossless conversion before an older-reader rollback. Durable
+recovery requires matching runtime/definition identities; a missing or different identity holds recovery
+without replaying effects or acknowledging receipts. See [development release boundaries](docs/development-release.md)
+for exact policy keys, storage limits and rollback requirements. Passing local tests does not approve deployment.
 
 This is not hypothetical. In production a caller confirmed a payment and repeated "confirm" a
 second later. The host cancelled the first turn while its charge was in flight and restored the

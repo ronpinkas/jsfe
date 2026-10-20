@@ -1,6 +1,6 @@
 {
   "name": "jsfe",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "TypeScript workflow engine for conversational/automation apps: multi-flow orchestration, interrupt/resume, stack-based control, robust errors, and flexible tool/REST integration.",
   "license": "MIT",
   "author": "Ron Pinkas",
@@ -19,9 +19,17 @@
       "types": "./dist/host/index.d.ts",
       "import": "./dist/host/index.js"
     },
+    "./host/node": {
+      "types": "./dist/host/node.d.ts",
+      "import": "./dist/host/node.js"
+    },
     "./helpers": {
       "types": "./dist/helpers/index.d.ts",
       "import": "./dist/helpers/index.js"
+    },
+    "./forms": {
+      "types": "./dist/forms/index.d.ts",
+      "import": "./dist/forms/index.js"
     }
   },
   "main": "./dist/index.js",
@@ -31,13 +39,16 @@
     "dist",
     "README.md",
     "LICENSE",
-    "docs/copilot-reference.md"
+    "docs/copilot-reference.md",
+    "docs/forms.md",
+    "docs/development-release.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc -p tsconfig.json && node scripts/stamp-runtime.mjs",
     "clean": "rm -rf dist",
     "test": "for t in tests/*.test.mjs; do node \"$t\" || exit 1; done",
-    "prepublishOnly": "npm run clean && npm run build"
+    "prepublishOnly": "npm run clean && npm run build",
+    "verify:runtime": "node scripts/stamp-runtime.mjs --check"
   },
   "keywords": [
     "workflow",

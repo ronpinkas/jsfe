@@ -68,7 +68,7 @@ for (const a of ['$1', '$1.', '1 dollar', '1 dólar', 'un dólar', '$1.00', '1.0
 for (const a of ['1', '1.', 'one', 'option 2', 'press 1', 'full', '2500']) {
    eq(isAmountAnswer(a), false, `"${a}" is not (a key, a word, or digits the flow judges)`);
 }
-// amountInAnswer: identifiers, spelled digits and ambiguity are not amounts (prod replay 2026-10-14)
+// Legacy amountInAnswer preserves its published unsupported-cardinal and identifier behavior.
 for (const [s, want] of [['pagar cuenta 50, Ciento Treinta y Cuatro Dólares', NaN], ['hacer el pago de $10 con 18 centavos', 10.18],
    ['10 dollars and 5 cents', 10.05], ['con su tarjeta Visa terminada en 2 4 8 6', NaN], ['pagar 168.38', 168.38], ['$62.20', 62.2],
    ['Pagar 61.50 ahora con tarjeta nueva', 61.5], ['50 cents', 0.5], ['$1', 1], ['2500', 2500], ['pagar 100 a la subcuenta 51', 100],

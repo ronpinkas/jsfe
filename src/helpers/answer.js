@@ -239,7 +239,10 @@ const DOLLARS_JOINED_CENTS = /(\$\s*)?(\d+)(\s*(?:dollars?|d[oó]lar(?:es)?|buck
  * one by one, are not amounts; two different remaining numbers are ambiguous unless exactly one is marked as money ($,
  * dollars, cents or decimals). "50 cents" alone is $0.50; "82 dollars and 50" and "82 con 50" are $82.50. Amounts said only in words are NaN (not parsed yet).
  */
-export function amountInAnswer(input) {
+export function amountInAnswer(input) { return numericAmountReading(input).value; }
+
+/** Internal numeric evidence shared by the opt-in money reader; legacy results stay unchanged. */
+export function numericAmountReading(input) {
    const raw = String(input ?? '').replace(/\\(['"\\])/g, '$1');
    // 1.234,56 (European) → 1234.56; 1,234.56 → 1234.56; 12,50 → 12.50
    let t = /\d{1,3}(\.\d{3})+,\d{1,2}\b/.test(raw) ? raw.replace(/\./g, '').replace(',', '.') : raw.replace(/,(?=\d{3}\b)/g, '').replace(/(\d),(\d{1,2})\b/g, '$1.$2');
@@ -263,10 +266,10 @@ export function amountInAnswer(input) {
       // no number at all
    }
    if (!pick) {
-      return NaN;
+      return {value:NaN,candidates:found.length};
    } else {
       // Cents alone only when nothing else was said: "76 con50 centavos" read as $0.50 (prod, 10-15).
-      return pick.cents ? (values.length === 1 ? Math.round(pick.v) / 100 : NaN) : pick.v;
+      return {value:pick.cents ? (values.length === 1 ? Math.round(pick.v) / 100 : NaN) : pick.v,candidates:found.length};
    }
 }
 

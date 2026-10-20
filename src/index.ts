@@ -1,3 +1,6 @@
+import {ACTION_TOOLS} from './forms/action-tools.js';
+import {resumableActionSession,restoreActionSession,projectActionRecoverySession} from './forms/action-recovery.js';
+import {createActionRecoveryIdentity,actionRecoveryIdentityMatches} from './host/recovery-identity.js';
 /**
  * Copyright (c) 2025 InstantAIguru.com
 
@@ -134,6 +137,8 @@ const DEFAULT_MESSAGE_REGISTRY: MessageRegistry = {
     flow_resumed_with_guidance: "Resuming {{flowPrompt}} - Type 'cancel flow' or 'help' for options.",
     flow_completed: "{{flowPrompt}} completed successfully.",
     flow_completed_generic: "Flow completed.",
+    action_recovery_incompatible: "I cannot safely finish checking your earlier request right now. I have not repeated it or processed your latest message.",
+    action_recovery_input_deferred: "I recovered the earlier result above. Your latest message was not processed; please send it again if you still need help.",
     flow_cancelled: "Cancelled {{flowPrompt}}.",
     flow_help_general: "Processing {{flowPrompt}} - You can also 'cancel flow' or request 'help'.",
     flow_help_payment: "Processing {{flowPrompt}} - You can also 'cancel flow' or request 'help'.",
@@ -180,6 +185,8 @@ const DEFAULT_MESSAGE_REGISTRY: MessageRegistry = {
     flow_resumed_with_guidance: "Continuando {{flowPrompt}} - Escriba 'cancelar flujo' o 'ayuda' para opciones.",
     flow_completed: "{{flowPrompt}} completado exitosamente.",
     flow_completed_generic: "Flujo completado.",
+    action_recovery_incompatible: "No puedo terminar de verificar su solicitud anterior de forma segura en este momento. No la he repetido ni he procesado su último mensaje.",
+    action_recovery_input_deferred: "Recuperé el resultado anterior que aparece arriba. Su último mensaje no se procesó; envíelo de nuevo si todavía necesita ayuda.",
     flow_cancelled: "{{flowPrompt}} cancelado.",
     flow_help_general: "Procesando {{flowPrompt}} - También puede 'cancelar flujo' o solicitar 'ayuda'.",
     flow_help_payment: "Procesando {{flowPrompt}} - También puede 'cancelar flujo' o solicitar 'ayuda'.",
@@ -464,6 +471,7 @@ export interface FlowParameterDefinition {
   description: string; // Description for the AI to understand what to extract
   type?: string; // Type of the parameter (string, number, boolean, etc.)
   enum?: string[]; // Allowed values (string parameters only). Any other value is dropped, so the flow asks.
+  jsonSchema?: Record<string, unknown>; // Opt-in structured extraction; FORM validates individual leaves.
   internal?: boolean; // The flow's own (set by its callers), never asked of the user; two-stage detection leaves it out.
 }
 
@@ -501,6 +509,11 @@ export type AiCallbackRequest = DetectFlowRequest | IntentStageRequest;
  * @property {DispatchRecord} [lastTurnDispatch] - Set when a DISPATCH step re-routed this turn's input (one-shot, cleared at the start of each updateActivity)
  */
 export interface EngineSessionContext {
+  actionRecoveryIdentity?: {protocol:number;runtime:string;definitions:string};
+  actionRecoveryProgress?: number;
+  actionRecoveryEpoch?: string | null;
+  actionRecoveryPolicy?: {revision:number;paths:Record<string,any>};
+  lastTurnRecovery?: {key:string;sequence:number;deferredInput:ContextEntry;status?:string;hold?:boolean;reason?:string};
   sessionId: string;
   userId: string;
   createdAt: Date;
@@ -582,6 +595,7 @@ export interface FlowStep {
   [key: string]: unknown; // Allow for value-xx properties and future extensions
   name?: string;
   callType?: 'call' | 'replace' | 'reboot';
+  initializeDefaults?: boolean; // shared FLOW replace only: opt in to filling target defaults for undefined variables; legacy replacement preserves its current variables
   keepSay?: boolean; // RETURN only: deliver the SAY text queued before it ahead of the value (default: not delivered)
   discardSay?: boolean; // reboot only: drop the SAY text queued before it (default: delivered with the new flow's output)
   branches?: Record<string, FlowStep>;  // SWITCH branches contain single steps, not arrays
@@ -2777,6 +2791,27 @@ function switchToPreviousStack(engine: Engine) {
   }
 }
 
+// Mutable execution data must belong to its activation, never the registered template.
+// Plain programmatic definitions may contain callbacks; preserve those references while
+// cloning their surrounding data rather than rejecting them with structuredClone.
+function cloneFlowValue<T>(value: T, seen = new WeakMap<object, any>()): T {
+  if (value === null || typeof value !== 'object') return value;
+  if (seen.has(value)) return seen.get(value);
+  const prototype = Object.getPrototypeOf(value);
+  if (!Array.isArray(value) && prototype !== Object.prototype && prototype !== null) {
+    return structuredClone(value);
+  }
+  const copy: any = Array.isArray(value) ? new Array(value.length) : Object.create(prototype);
+  seen.set(value, copy);
+  for (const key of Object.keys(value)) {
+    Object.defineProperty(copy, key, {
+      value: cloneFlowValue((value as any)[key], seen),
+      enumerable: true, writable: true, configurable: true
+    });
+  }
+  return copy;
+}
+
 function getInitialVariables(engine: Engine, flowDefinition?: FlowDefinition, inheritedVariables?: Record<string, unknown>): Record<string, unknown> {
   let variables: Record<string, unknown>;
 
@@ -2788,7 +2823,7 @@ function getInitialVariables(engine: Engine, flowDefinition?: FlowDefinition, in
     if (flowDefinition?.variables) {
       for (const [varName, varDef] of Object.entries(flowDefinition.variables)) {
         if (varDef.value !== undefined) {
-          variables[varName] = varDef.value; // Modify in-place on shared reference
+          variables[varName] = cloneFlowValue(varDef.value); // Fresh defaults; the caller's variable container stays shared
         }
       }
     }
@@ -2800,7 +2835,7 @@ function getInitialVariables(engine: Engine, flowDefinition?: FlowDefinition, in
     if (flowDefinition?.variables) {
       for (const [varName, varDef] of Object.entries(flowDefinition.variables)) {
         if (varDef.value !== undefined) {
-          variables[varName] = varDef.value;
+          variables[varName] = cloneFlowValue(varDef.value);
         }
       }
     }
@@ -2908,7 +2943,7 @@ async function isFlowActivated(input: string, engine: Engine, userId: string = '
       flowName: flow.name,
       flowId: flow.id,
       flowVersion: flow.version,
-      flowStepsStack: [...flow.steps].reverse(),
+      flowStepsStack: cloneFlowValue(flow.steps).reverse(),
       contextStack: [{ role: 'user', content: sanitizeInput(input), timestamp: Date.now() }], // Keep activation input in context for reference
       inputStack: [], // Start empty - only SAY-GET responses go here
       variables, // Start with global variables + flow definition variables + extracted parameters
@@ -3541,8 +3576,12 @@ function enforceParameterTypes(flow: FlowDefinition, parameters: Record<string, 
     } else if (type === 'number' || type === 'integer') {
       const n = typeof value === 'number' ? value : (typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN);
       converted = Number.isFinite(n) && (type === 'number' || Number.isInteger(n)) ? n : undefined;
+    } else if (p.jsonSchema && type === 'object') {
+      converted = value !== null && typeof value === 'object' && !Array.isArray(value) ? value : undefined;
+    } else if (p.jsonSchema && type === 'array') {
+      converted = Array.isArray(value) ? value : undefined;
     } else {
-      converted = value; // object, array or another declared type - not checked here
+      converted = value; // Legacy parameters without an extraction schema retain their existing behavior
     }
     if (converted !== undefined) {
       result[p.name] = converted;
@@ -3576,7 +3615,8 @@ function buildDetectFlowRequest(input: string, lastChatTurn: { user?: ContextEnt
         name: p.name,
         description: p.description,
         ...(p.type !== undefined ? { type: p.type } : {}),
-        ...(Array.isArray(p.enum) ? { enum: [...p.enum] } : {})
+        ...(Array.isArray(p.enum) ? { enum: [...p.enum] } : {}),
+        ...(p.jsonSchema ? {jsonSchema: structuredClone(p.jsonSchema)} : {})
       }))
     }))
   };
@@ -4319,7 +4359,7 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
               flowName: rebootFlow.name,
               flowId: rebootFlow.id,
               flowVersion: rebootFlow.version,
-              flowStepsStack: [...rebootFlow.steps].reverse(),
+              flowStepsStack: cloneFlowValue(rebootFlow.steps).reverse(),
               contextStack: [{ role: 'user', content: input, timestamp: Date.now() }],
               inputStack: [input],
               variables: variables, // Fresh variables for reboot flow (with injected params)
@@ -4380,7 +4420,7 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
               flowName: onFailFlow.name,
               flowId: onFailFlow.id,
               flowVersion: onFailFlow.version,
-              flowStepsStack: [...onFailFlow.steps].reverse(),
+              flowStepsStack: cloneFlowValue(onFailFlow.steps).reverse(),
               contextStack: [...currentFlowFrame.contextStack], // Inherit context
               inputStack: [...currentFlowFrame.inputStack],
               variables: variables,
@@ -4730,6 +4770,11 @@ function handleSetStep(currentFlowFrame: FlowFrame, engine: Engine): string {
     }, engine)
     : step.value;
 
+  if (step.requireTrue === true && interpolatedValue !== true) {
+    const error = new Error(`Required SET step ${step.id || ''} did not complete successfully`);
+    error.name = 'JSFERequiredSetFailed';
+    throw error;
+  }
   if (currentFlowFrame && currentFlowFrame.variables !== undefined) {
     currentFlowFrame.variables[step.variable] = interpolatedValue;
     logger.info(`SET step: stored '${interpolatedValue}' in variable '${step.variable}'`);
@@ -5092,7 +5137,7 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
         flowName: subFlow.name,
         flowId: subFlow.id,
         flowVersion: subFlow.version,
-        flowStepsStack: [...subFlow.steps].reverse(),
+        flowStepsStack: cloneFlowValue(subFlow.steps).reverse(),
         contextStack: [{ role: 'user', content: input, timestamp: Date.now() }],
         inputStack: [input],
         variables, // Fresh variables for reboot flow
@@ -5114,7 +5159,7 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
       currentFlowFrame.flowName = subFlow.name;
       currentFlowFrame.flowId = subFlow.id;
       currentFlowFrame.flowVersion = subFlow.version;
-      currentFlowFrame.flowStepsStack = [...subFlow.steps].reverse();
+      currentFlowFrame.flowStepsStack = cloneFlowValue(subFlow.steps).reverse();
       addToContextStack(currentFlowFrame.contextStack, 'user', input);
       currentFlowFrame.inputStack.push(input);
 
@@ -5122,12 +5167,18 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
       if (subFlow.scope === 'isolated') {
          currentFlowFrame.variables = Object.assign(getInitialVariables(engine, subFlow), flowParameters);
          currentFlowFrame.isolatedScope = true;
-      } else if (Object.keys(flowParameters).length > 0) {
-         logger.info(`Injecting parameters into variables for flow ${subFlow.name}`, flowParameters);
-         Object.assign(currentFlowFrame.variables, flowParameters);
-         logger.info(`Variables after injection:`, currentFlowFrame.variables);
       } else {
-         // no parameters, shared scope: the frame keeps its variables
+         // Legacy shared replacement preserves the current variable container. New workers may
+         // explicitly initialize target defaults that are still undefined; accepted progress stays.
+         currentFlowFrame.variables ||= {};
+         if (step.initializeDefaults === true) {
+           for (const [name, definition] of Object.entries(subFlow.variables || {})) {
+             if (currentFlowFrame.variables[name] === undefined && definition.value !== undefined) {
+               currentFlowFrame.variables[name] = cloneFlowValue(definition.value);
+             }
+           }
+         }
+         Object.assign(currentFlowFrame.variables, flowParameters);
       }
 
       // Update transaction
@@ -5151,7 +5202,7 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
         flowName: subFlow.name,
         flowId: subFlow.id,
         flowVersion: subFlow.version,
-        flowStepsStack: [...subFlow.steps].reverse(),
+        flowStepsStack: cloneFlowValue(subFlow.steps).reverse(),
         contextStack: [{ role: 'user', content: input, timestamp: Date.now() }],
         inputStack: [input],
         variables, // Inherit + merge flow definition variables (isolated: its own)
@@ -6475,33 +6526,18 @@ function evaluateJavaScriptExpression(expression: string, context: Record<string
     return value;
   });
 
-  // Build function body that evaluates the expression
-  // When preserveObjects is true (e.g., SET steps), don't auto-stringify objects
-  const functionBody = preserveObjects ? `
-    "use strict";
-    try {
-      return (${expression});
-    } catch (e) {
-      throw new Error('Expression evaluation failed: ' + e.message);
+  // Keep evaluator temporaries outside the generated function: a flow may legitimately declare `result`.
+  const evaluatorFunction = new Function(...validParamNames, `"use strict"; return (${expression});`);
+  try {
+    const evaluated = evaluatorFunction(...paramValues);
+    if (!preserveObjects && typeof evaluated === 'object' && evaluated !== null &&
+        !(evaluated.__userInput === true && evaluated.__literal === true)) {
+      return JSON.stringify(evaluated);
     }
-  ` : `
-    "use strict";
-    try {
-      const result = (${expression});
-      // Auto-stringify complex data structures when used in string contexts
-      if (typeof result === 'object' && result !== null &&
-          !(result.__userInput === true && result.__literal === true)) {
-        return JSON.stringify(result);
-      }
-      return result;
-    } catch (e) {
-      throw new Error('Expression evaluation failed: ' + e.message);
-    }
-  `;
-
-  // Create and execute function with only valid parameter names
-  const evaluatorFunction = new Function(...validParamNames, functionBody);
-  return evaluatorFunction(...paramValues);
+    return evaluated;
+  } catch (error: any) {
+    throw new Error('Expression evaluation failed: ' + error.message);
+  }
 }
 
 /**
@@ -6920,7 +6956,7 @@ async function handlePendingInterruptionSwitch(engine: Engine, userId: string): 
     flowName: targetFlow,
     flowId: targetFlowDefinition.id,
     flowVersion: targetFlowDefinition.version || '1.0',
-    flowStepsStack: [...targetFlowDefinition.steps].reverse(),
+    flowStepsStack: cloneFlowValue(targetFlowDefinition.steps).reverse(),
     contextStack: [],
     inputStack: [],
     variables: getInitialVariables(engine, targetFlowDefinition), // Fresh variables for first flow activation
@@ -7004,7 +7040,7 @@ async function handleRegularFlowInterruption(intentAnalysis: any, engine: Engine
         flowName: targetFlow,
         flowId: targetFlowDefinition.id,
         flowVersion: targetFlowDefinition.version || '1.0',
-        flowStepsStack: [...targetFlowDefinition.steps].reverse(),
+        flowStepsStack: cloneFlowValue(targetFlowDefinition.steps).reverse(),
         contextStack: [], // Start with empty context - don't use interruption input
         inputStack: [],   // Start with empty input stack - new flow will get proper input next
         variables: getInitialVariables(engine, targetFlowDefinition), // Fresh variables for interrupting flow activation
@@ -7331,6 +7367,24 @@ export function applyWraps(flowsMenu: FlowDefinition[]): FlowDefinition[] {
 }
 
 export class WorkflowEngine implements Engine {
+  /** Host-injected durable action journal. Without it common performers fail closed before effects. */
+  public actionJournal?: {
+    claim(input: {sessionId:string;record:any;action:any;checkpoint?:any}): Promise<any>;
+    complete(input: {sessionId:string;record:any;action:any;outcome:any;checkpoint?:any}): Promise<any>;
+    checkpoint(input: {sessionId:string;keys?:string[];receipts?:Array<{key:string;sequence:number}>}): Promise<number>;
+    pending(input: {sessionId:string}): Promise<any>;
+  };
+  private actionRecoveryIdentityPromise?: Promise<{protocol:number;runtime:string;definitions:string}>;
+  /** Loaded definitions are immutable after activation. Hot reload constructs a new engine. */
+  public async getActionRecoveryIdentity(): Promise<{protocol:number;runtime:string;definitions:string}> {
+    if (this.actionJournal) {
+      for (const method of ['claim','complete','checkpoint','pending']) {
+        if (typeof (this.actionJournal as any)[method] !== 'function') throw new Error('Durable action journal requires ' + method);
+      }
+    }
+    if (!this.actionRecoveryIdentityPromise) this.actionRecoveryIdentityPromise = createActionRecoveryIdentity({flows:this.flowsMenu,tools:this.toolsRegistry});
+    return this.actionRecoveryIdentityPromise;
+  }
   public cargo: Record<string, unknown> | undefined;
   public flowsMenu: FlowDefinition[];
   public toolsRegistry: ToolDefinition[];
@@ -7461,8 +7515,17 @@ export class WorkflowEngine implements Engine {
 
     this.aiCallback = aiCallback;
     this.flowsMenu = applyWraps(flowsMenu);
-    this.toolsRegistry = toolsRegistry;
-    this.APPROVED_FUNCTIONS = APPROVED_FUNCTIONS;
+    if(toolsRegistry.some(tool=>ACTION_TOOLS.some(internal=>internal.id===tool.id)))throw new Error('Internal JSFE action tool identities are reserved');
+    this.toolsRegistry = [...toolsRegistry,...ACTION_TOOLS] as ToolDefinition[];
+    const receipt=(reply:any)=>reply;
+    this.APPROVED_FUNCTIONS = {...APPROVED_FUNCTIONS,
+      jsfeClaimAction: async ({record,action}:any)=>receipt(this.actionJournal
+        ? await this.actionJournal.claim({sessionId:this.sessionId,record,action,checkpoint:resumableActionSession(this.sessionContext,this.flowsMenu,await this.getActionRecoveryIdentity())})
+        : {status:'hold',outcome:{status:'unknown',reason:'durable_journal_unavailable'}}),
+      jsfeCompleteAction: async ({record,action,outcome}:any)=>receipt(this.actionJournal
+        ? await this.actionJournal.complete({sessionId:this.sessionId,record,action,outcome,checkpoint:resumableActionSession(this.sessionContext,this.flowsMenu,await this.getActionRecoveryIdentity())})
+        : {status:'unknown',outcome:{status:'unknown',reason:'durable_journal_unavailable'}}),
+    };
     this.globalVariables = globalVariables ? { ...globalVariables } : {}; // Copy global variables to prevent external mutations
     this.aiTimeOut = aiTimeOut ?? 2000; // Default to 2000ms (2 seconds)
 
@@ -7618,6 +7681,51 @@ export class WorkflowEngine implements Engine {
         engineSessionContext.lastActivity = this.lastActivity;
       }
 
+      // Recover durable effects before the new message can mutate an older saved session.
+      // A successfully saved session carries its observed sequence even when acknowledgement failed.
+      delete engineSessionContext.lastTurnRecovery;
+      let recoveredAction = false;
+      let suspendedRecoveryStacks: FlowFrame[][] | undefined;
+      if (contextEntry.role === 'user' && this.actionJournal) {
+        const recoveryIdentity = await this.getActionRecoveryIdentity();
+        const pending = await this.actionJournal.pending({sessionId:this.sessionId});
+        const applied = (this.cargo.actionJournalApplied || {}) as Record<string,number>;
+        // A journal sequence orders writes, not execution progress. Track consumption per attempt.
+        const record = (pending?.records || []).filter((row:any) => row.checkpoint && Number(row.sequence) > Number(applied[row.key] || 0))
+          .sort((a:any,b:any) => Number(a.sequence)-Number(b.sequence)).at(-1);
+        const recovery = record ? {key:record.key,sequence:record.sequence,status:record.status,session:record.checkpoint,record} : null;
+        if (recovery) {
+          if (!actionRecoveryIdentityMatches(recoveryIdentity,recovery.session.actionRecoveryIdentity)) {
+            engineSessionContext.lastTurnToolCalls = [];
+            delete engineSessionContext.lastFlowOutcome;
+            delete engineSessionContext.lastTurnDispatch;
+            this.hostStart = null;
+            engineSessionContext.lastTurnRecovery = {key:record.key,sequence:record.sequence,status:record.status,hold:true,reason:'incompatible_recovery_identity',deferredInput:contextEntry};
+            engineSessionContext.response = getSystemMessage(this,'action_recovery_incompatible');
+            return engineSessionContext;
+          }
+          const snapshotProgress = recovery.session.actionRecoveryProgress;
+          const changedEpoch = (engineSessionContext.actionRecoveryEpoch || null) !== (recovery.session.actionRecoveryEpoch || null);
+          const alreadyAdvanced = Number.isSafeInteger(snapshotProgress) && Number(engineSessionContext.actionRecoveryProgress || 0) >= Number(snapshotProgress);
+          const snapshotApplied = recovery.session.cargo?.actionJournalApplied || {};
+          const hasNewerApplied = Object.entries(applied).some(([key,sequence]) => Number(sequence) > Number(snapshotApplied[key] || 0));
+          const invalidatedSinceCheckpoint = Number(engineSessionContext.actionRecoveryPolicy?.revision || 0) > Number(recovery.session.actionRecoveryPolicy?.revision || 0);
+          if (changedEpoch || alreadyAdvanced || hasNewerApplied || invalidatedSinceCheckpoint) {
+            suspendedRecoveryStacks = projectActionRecoverySession(engineSessionContext,recovery,contextEntry,this.flowsMenu,recoveryIdentity);
+          } else {
+            restoreActionSession(engineSessionContext,recovery,contextEntry,recoveryIdentity);
+          }
+          this.cargo = engineSessionContext.cargo;
+          this.reconstructVariableReferences();
+          engineSessionContext.lastTurnToolCalls = [];
+          delete engineSessionContext.lastFlowOutcome;
+          delete engineSessionContext.lastTurnDispatch;
+          this.hostStart = null;
+          recoveredAction = true;
+        }
+
+      }
+
       // Role-based processing logic
       if (contextEntry.role === 'user') {
         // A sensitive answer (SAY-GET `pii`) is kept out of every log line of this turn, raw and as its digits
@@ -7628,9 +7736,14 @@ export class WorkflowEngine implements Engine {
         // Detect intent to activate a flow or switch flows
         let responseOrNull: string | null;
         try {
-          responseOrNull = await processActivity(said, userId, this);
+          if (!recoveredAction && this.actionJournal) engineSessionContext.actionRecoveryProgress = Number(engineSessionContext.actionRecoveryProgress || 0) + 1;
+          responseOrNull = recoveredAction ? await playFlowFrame(this) : await processActivity(said, userId, this);
         } finally {
           piiInputs = [];
+          if (suspendedRecoveryStacks) {
+            engineSessionContext.flowStacks = suspendedRecoveryStacks;
+            this.reconstructVariableReferences();
+          }
         }
 
         // Anomaly guard: a flow is STILL ACTIVE but produced no response.
@@ -7661,6 +7774,8 @@ export class WorkflowEngine implements Engine {
           err.name = 'JSFEActiveFlowEmptyResponse';
           throw err;
         }
+
+        if(recoveredAction)responseOrNull=[responseOrNull,getSystemMessage(this,'action_recovery_input_deferred')].filter(Boolean).join('\n\n');
 
         // Store user turn in lastChatTurn if not in a flow
         if (responseOrNull === null) {

@@ -1,0 +1,15 @@
+import assert from 'node:assert/strict';
+import { sourceNeedsLoad,beginSourceRefresh,completeSourceRefresh } from '../dist/helpers/form-sources.js';
+let checks=0;const eq=(a,b,label)=>{assert.deepEqual(a,b,label);checks++;};
+const source={flow:'load',result:'cargo.facts',subject:'cargo.account',max_age_ms:100};
+const cargo={account:'A',facts:{balance:10}};
+eq(sourceNeedsLoad(cargo,source,1000),true,'untracked data needs a load');
+beginSourceRefresh(cargo,source);eq(cargo.facts,undefined,'old source removed before refresh');
+eq(completeSourceRefresh(cargo,source,1000),false,'returning without writing cannot make old data fresh');
+eq(cargo.sourceLoadedAt,undefined,'failed refresh does not advance timestamp');
+cargo.facts={balance:20};eq(completeSourceRefresh(cargo,source,1000),true,'successful loader writes are recorded');
+eq(sourceNeedsLoad(cargo,source,1050),false,'same subject can use fresh data');
+eq(sourceNeedsLoad(cargo,source,1100),true,'age boundary is stale');
+cargo.account='B';eq(sourceNeedsLoad(cargo,source,1050),true,'subject change invalidates fresh cache');
+assert.throws(()=>beginSourceRefresh(cargo,{result:'cargo.__proto__.x'}),/safe cargo path/);checks++;
+console.log(`form-sources: ${checks} checks passed`);

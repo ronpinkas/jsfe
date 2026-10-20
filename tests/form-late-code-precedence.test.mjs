@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import {WorkflowEngine} from '../dist/index.js';
+import {FLOWS,formFlow,linkFormSchemas} from '../dist/forms/index.js';
+import {STANDARD_FUNCTIONS} from '../dist/helpers/index.js';
+const card=formFlow({id:'card',name:'Card',version:'1',inputs:[{name:'pan',profile:{kind:'digits',min:13,max:19},question:'PAN?'},{name:'cvv',profile:{kind:'digits',min:3,max:4},question:'CVV?'}],after:[{id:'capture',type:'SET',variable:'noop',value:'(cargo.collected=JSON.parse(JSON.stringify(cargo.forms[form_instance].values)),true)'}]});
+const menu={id:'menu',name:'Menu',version:'1',description:'Plain menu without a FORM context',steps:[{id:'ask',type:'FLOW',value:'ask-choice',callType:'call',parameters:{question:'Choose YES or NO',choices:[{key:'yes',words:['yes']},{key:'no',words:['no']}]}}]};
+const late={id:'late-code-reask',name:'LateCodeReask',version:'1',description:'Echo test reask transport',parameters:[{name:'question',type:'string'}],steps:[{id:'reask',type:'SAY-GET',variable:'next',value:'{{question}}'},{id:'return-answer',type:'SET',variable:'noop',value:'(cargo.lateCodeAnswer=next,true)'}]};
+const terminals=['live-agent-requested','contact-support'].map((id,i)=>({id,name:`Terminal${i}`,version:'1',description:'Command test terminal',steps:[{id:'message',type:'SAY',value:id},{id:'done',type:'END'}]}));
+const warnings=[];const logger={info(){},debug(){},error(){},warn(...args){warnings.push(args.join(' '));}};
+const engine=new WorkflowEngine(logger,async()=>'{"flowName":"None"}',linkFormSchemas([...FLOWS,card,menu,late,...terminals]),[],STANDARD_FUNCTIONS,{},false,'en');engine.disableCommands();
+let session;const begin=async(flow)=>{session=engine.initSession('test',`late-${flow}`,'en');session.cargo.voice=false;session.cargo.otpLateCode='123456';return say('start',flow);};
+const say=async(content,start)=>{session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start:{flow:start}}:{})},JSON.parse(JSON.stringify(session)))));return session.response;};
+let checks=0;
+await begin('card');assert.match(await say('1234'),/PAN/);let state=session.cargo.forms[session.cargo.formTasks.card];assert.equal(state.values.cvv,'1234');assert.equal(state.values.pan,undefined);checks++;
+await say('4111111111111111');assert.equal(session.cargo.collected.pan,'4111111111111111');assert.equal(session.cargo.collected.cvv,'1234');checks++;
+await begin('card');await say('4111111111111111');await say('1234');assert.equal(session.cargo.collected.cvv,'1234');checks++;
+await begin('menu');const stale=await say('1234');assert.match(stale,/YES or NO/);assert.notEqual(session.cargo.choice,'1234');checks++;
+for(const command of ['agent','exit']){await begin('card');const response=await say(command);assert.match(response,command==='agent'?/live-agent-requested/:/contact-support/);assert.equal(Object.values(session.cargo.forms).some(s=>s.values.cvv===command||s.values.pan===command),false);assert.equal(session.flowStacks.flat().some(f=>f.flowId==='card'),false);checks++;}
+assert.equal(warnings.some(s=>/not defined|expression.*fail|Sub-flow not found/i.test(s)),false);checks++;
+console.log(`FORM late code precedence: all ${checks} checks passed`);
