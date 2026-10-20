@@ -682,8 +682,8 @@
   {
     "id": "shopify-orders-fetch",
     "name": "ShopifyOrdersFetch",
-    "version": "1.0.0",
-    "description": "Worker: the verified customer's Shopify orders (cargo.shopifyOrders), fetched once per conversation and reused while the verified contact is the same; a lookup that fails is the give-up.",
+    "version": "1.1.0",
+    "description": "Worker: the verified customer's Shopify orders (cargo.shopifyOrders), fetched once per conversation and reused while the verified contact is the same; a lookup that fails is the give-up. Orders are kept only when the customer found has the verified email or phone itself; another customer is no orders.",
     "variables": {
       "of_id": {
         "type": "string",
@@ -752,7 +752,7 @@
             "id": "of_record",
             "type": "SET",
             "variable": "assignment_side_effect",
-            "value": "(cargo.shopifyOrders = of_result, cargo.shopifyOrdersFor = of_id, true)"
+            "value": "(cargo.shopifyOrders = (function(r, id) { var orders = (r && r.orders) || []; if (!orders.length) { return true; } var c = (r && r.customer) || {}; id = String(id || '').trim(); if (id.indexOf('@') >= 0) { return String(c.email || '').trim().toLowerCase() === id.toLowerCase(); } var ten = function(p) { var d = String(p || '').replace(/\\D/g, ''); return d.length === 11 && d.charAt(0) === '1' ? d.slice(1) : d; }; return ten(id).length === 10 && ten(c.phone) === ten(id); })(of_result, of_id) ? of_result : { success: true, orders: [], customer: {} }, cargo.shopifyOrdersFor = of_id, true)"
           },
           "default": {
             "id": "of_lookup_error",
@@ -771,8 +771,8 @@
   {
     "id": "shopify-order-desk",
     "name": "ShopifyOrderDesk",
-    "version": "1.1.0",
-    "description": "Worker: answers about the verified customer's orders. Picks the order in question (an order number or a position the caller said; else the only order on its way, or the only order; else asks, showing the list), answers what was asked (cargo.orderAsk: track, delivery, items, details) with the answer workers, and keeps that order in focus for the next question. An order number that is not theirs lists their orders; no orders at all goes to the tracking-number question. A will call or store pickup question is answered with what the desk cannot check, and the desk ends.",
+    "version": "1.2.0",
+    "description": "Worker: answers about the verified customer's orders. AGENT / 0 reaches a person and EXIT / * ends, at the list and at every follow-up. Picks the order in question (an order number or a position the caller said; else the only order on its way, or the only order; else asks, showing the list), answers what was asked (cargo.orderAsk: track, delivery, items, details) with the answer workers, and keeps that order in focus for the next question. An order number that is not theirs lists their orders; no orders at all goes to the tracking-number question. A will call or store pickup question is answered with what the desk cannot check, and the desk ends.",
     "parameters": [
       {
         "name": "answer",
@@ -835,7 +835,7 @@
         "id": "dk_take_answer",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(dk_read.ask ? (cargo.orderAsk = dk_read.ask) : null, dk_read.number ? (cargo.orderNumberAsked = dk_read.number) : null, true)"
+        "value": "(dk_read.ask && dk_read.ask.indexOf('__') !== 0 ? (cargo.orderAsk = dk_read.ask) : null, dk_read.number ? (cargo.orderNumberAsked = dk_read.number) : null, true)"
       },
       {
         "id": "dk_choose",
@@ -847,6 +847,22 @@
         "id": "dk_route",
         "type": "CASE",
         "branches": {
+          "condition: dk_read.ask === '__agent'": {
+            "id": "dk_agent",
+            "type": "FLOW",
+            "value": "live-agent-requested",
+            "callType": "reboot"
+          },
+          "condition: dk_read.ask === '__exit'": {
+            "id": "dk_exit",
+            "type": "FLOW",
+            "value": "contact-support",
+            "callType": "reboot",
+            "parameters": {
+              "support_context": "order",
+              "support_context_es": "pedido"
+            }
+          },
           "condition: dk_read.done": {
             "id": "dk_done",
             "type": "SAY",
