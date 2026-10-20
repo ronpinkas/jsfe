@@ -774,7 +774,12 @@ return aiResponse;
 A flow can take actions in the outside world through `CALL-TOOL` — charge a card, send an SMS,
 create a ticket. For ordinary `CALL-TOOL` flows, **the session returned by `updateActivity` records
 which steps already ran**; the host owns its persistence. Native performers can additionally use an
-explicitly attached durable action journal. Neither mode removes the host responsibilities below.
+explicitly attached durable action journal (the native default). An explicit
+`engine.actionPersistence = 'session-only'` opt-out retains confirmation and saved session action guards
+without journal storage. It cannot prevent a repeated charge after an effect succeeds and its updated
+session save is lost. The reference host selects it with `jsfe: {actionPersistence:'session-only'}`;
+`durableActions:true` conflicts with that setting. Keep each existing conversation on its original mode.
+Neither policy removes the host responsibilities below.
 Getting these rules wrong can repeat an action the user asked for once.
 
 The reference host defaults `config.jsfe` to `{durableActions:false,sessionEncoding:'plain'}`. Durable

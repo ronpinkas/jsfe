@@ -113,7 +113,7 @@ export function definePerformer({performs,contract,prepare,present,project=[],..
          {...set('receipt_applied','noop','pf_receipt ? consumeActionReceipt(cargo,pf_receipt) : true'),requireTrue:true},
          call('present',present,{form:'{{form_instance}}',request:'{{pf_request}}',result:'{{pf_result}}'}),
          ...(spec.after || [])]});
-   return declared(flow,{role:'performer',...contract,requires:['durableActions',...normalizeHostRequirements(contract?.requires,spec.id)],actions:'performs',form:{inputs:'inputs'},prepares:prepare,presents:present,projects:'projection'});
+   return declared(flow,{role:'performer',...contract,requires:['guardedActions',...normalizeHostRequirements(contract?.requires,spec.id)],actions:'performs',form:{inputs:'inputs'},prepares:prepare,presents:present,projects:'projection'});
 }
 
 /** A registered tool gets one generated adapter with explicit args; no dynamic tool-name interpreter is needed. */

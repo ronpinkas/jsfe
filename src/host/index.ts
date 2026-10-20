@@ -18,4 +18,4 @@ export {CheckpointCodecError} from './checkpoint-codec-error.js';
 
 export {createActionRecoveryIdentity,assertActionRecoveryIdentity,actionRecoveryIdentityMatches} from './recovery-identity.js';
 
-export {assertFlowHostCapabilities,JSFEHostCapabilityError} from './capabilities.js';
+export {assertFlowHostCapabilities,JSFEHostCapabilityError,actionPersistenceMode} from './capabilities.js';

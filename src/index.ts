@@ -1,4 +1,6 @@
 import {ACTION_TOOLS} from './forms/action-tools.js';
+import {claimSessionAction,completeSessionAction} from './forms/session-actions.js';
+import {actionPersistenceMode} from './host/capabilities.js';
 import {resumableActionSession,restoreActionSession,projectActionRecoverySession} from './forms/action-recovery.js';
 import {createActionRecoveryIdentity,actionRecoveryIdentityMatches} from './host/recovery-identity.js';
 /**
@@ -509,6 +511,8 @@ export type AiCallbackRequest = DetectFlowRequest | IntentStageRequest;
  * @property {DispatchRecord} [lastTurnDispatch] - Set when a DISPATCH step re-routed this turn's input (one-shot, cleared at the start of each updateActivity)
  */
 export interface EngineSessionContext {
+  /** Persistence policy is pinned to an action-enabled conversation, including snapshots before its first effect. */
+  actionPersistence?: 'durable' | 'session-only';
   actionRecoveryIdentity?: {protocol:number;runtime:string;definitions:string};
   actionRecoveryProgress?: number;
   actionRecoveryEpoch?: string | null;
@@ -7367,7 +7371,15 @@ export function applyWraps(flowsMenu: FlowDefinition[]): FlowDefinition[] {
 }
 
 export class WorkflowEngine implements Engine {
-  /** Host-injected durable action journal. Without it common performers fail closed before effects. */
+  private _actionPersistence: 'durable' | 'session-only' = 'durable';
+  /** Native actions require durable storage unless the host deliberately selects session-only guards. */
+  public get actionPersistence(): 'durable' | 'session-only' { return this._actionPersistence; }
+  public set actionPersistence(mode: 'durable' | 'session-only') {
+    actionPersistenceMode(mode);
+    if (mode === 'session-only' && this.actionJournal) throw new Error('Session-only actions cannot attach a durable journal');
+    this._actionPersistence = actionPersistenceMode(mode);
+  }
+  /** Host-injected durable action journal. Missing storage never implicitly enables session-only actions. */
   public actionJournal?: {
     claim(input: {sessionId:string;record:any;action:any;checkpoint?:any}): Promise<any>;
     complete(input: {sessionId:string;record:any;action:any;outcome:any;checkpoint?:any}): Promise<any>;
@@ -7519,10 +7531,14 @@ export class WorkflowEngine implements Engine {
     this.toolsRegistry = [...toolsRegistry,...ACTION_TOOLS] as ToolDefinition[];
     const receipt=(reply:any)=>reply;
     this.APPROVED_FUNCTIONS = {...APPROVED_FUNCTIONS,
-      jsfeClaimAction: async ({record,action}:any)=>receipt(this.actionJournal
+      jsfeClaimAction: async ({record,action}:any)=>receipt(this.actionPersistence === 'session-only'
+        ? claimSessionAction(this.cargo,record,action)
+        : this.actionJournal
         ? await this.actionJournal.claim({sessionId:this.sessionId,record,action,checkpoint:resumableActionSession(this.sessionContext,this.flowsMenu,await this.getActionRecoveryIdentity())})
         : {status:'hold',outcome:{status:'unknown',reason:'durable_journal_unavailable'}}),
-      jsfeCompleteAction: async ({record,action,outcome}:any)=>receipt(this.actionJournal
+      jsfeCompleteAction: async ({record,action,outcome}:any)=>receipt(this.actionPersistence === 'session-only'
+        ? completeSessionAction(this.cargo,record,action,outcome)
+        : this.actionJournal
         ? await this.actionJournal.complete({sessionId:this.sessionId,record,action,outcome,checkpoint:resumableActionSession(this.sessionContext,this.flowsMenu,await this.getActionRecoveryIdentity())})
         : {status:'unknown',outcome:{status:'unknown',reason:'durable_journal_unavailable'}}),
     };
@@ -7579,6 +7595,7 @@ export class WorkflowEngine implements Engine {
   initSession(userId: string, sessionId: string, language?: string): EngineSessionContext {
 
     const engineSessionContext: EngineSessionContext = {
+      ...(this.actionJournal || this.actionPersistence === 'session-only' ? {actionPersistence:this.actionPersistence} : {}),
       sessionId: sessionId || globalThis.crypto.randomUUID(),
       userId: userId,
       createdAt: new Date(),
@@ -7599,6 +7616,18 @@ export class WorkflowEngine implements Engine {
 
   async updateActivity(contextEntry: ContextEntry, engineSessionContext: EngineSessionContext): Promise<EngineSessionContext> {
     try {
+      if (engineSessionContext.actionPersistence && engineSessionContext.actionPersistence !== this.actionPersistence) {
+        throw new Error('Action persistence cannot change within an existing conversation');
+      }
+      if (this.actionPersistence === 'session-only') {
+        if (engineSessionContext.actionRecoveryProgress !== undefined || engineSessionContext.cargo?.actionJournalSequence !== undefined) {
+          throw new Error('Existing durable recovery state cannot be migrated to session-only execution');
+        }
+        if (this.actionJournal) throw new Error('Session-only actions cannot attach a durable journal');
+        const receipts = engineSessionContext.cargo?.actionJournalReceipts;
+        if (receipts && (!Array.isArray(receipts) || receipts.length)) throw new Error('Pending durable action receipts require their durable journal');
+      }
+      if (this.actionJournal || this.actionPersistence === 'session-only') engineSessionContext.actionPersistence = this.actionPersistence;
       this.cargo = engineSessionContext.cargo || {};
       // a security code under any key that names one (a form stores it as `card_cvv`)
       logger.info(`Received Cargo: ${JSON.stringify(this.cargo, (k, v) => (/(cvv|cvc|card_?code|security_?code)/i.test(k) && v ? '•••' : v))}`);
