@@ -240,19 +240,39 @@ export function matchInputs(answer, candidates, current, choiceKey) {
       }
       if (r) {
          for (const option of r.alternatives || [r]) {
-            readings.push({ form:c.form, name:c.name, value:option.value, ...(option.refused===true?{refused:true}:{}), known:c.value !== undefined && c.value !== null && String(c.value) === String(option.value), spans:option.spans, keypad:option.keypad === true, fallback:option.fallback === true,
+            const known=c.value !== undefined && c.value !== null && String(c.value) === String(option.value);
+            // A repeated choice may be the whole answer or only context in the requested field's answer.
+            // Use the same whole-answer vocabulary as explicit choices, including courtesy and articles.
+            const repeatedChoice=known && !isCur(c) && c.profile.kind==='choice';
+            const wholeOptions=repeatedChoice ? (c.profile.choices || []).filter(choice=>choice.key===option.value).map(choice=>({...choice,exact:true})) : [];
+            const wholeChoice=repeatedChoice && [raw,raw.replace(/\d(?:[\s.-]?\d)*/g,run=>run.replace(/\D/g,''))].some(text=>pickChoice(text,wholeOptions,false)===option.value);
+            readings.push({ form:c.form, name:c.name, value:option.value, ...(option.refused===true?{refused:true}:{}), known, repeatedChoice, wholeChoice, spans:option.spans, keypad:option.keypad === true, fallback:option.fallback === true,
                ...(r.alternatives ? { option_label:option.option_label, option_label_es:option.option_label_es } : {}), group:c.group, exclusive:c.exclusive===true, level:forms.indexOf(c.scope || c.form), current:isCur(c), confirm:Array.isArray(c.confirm_against)?c.confirm_against:[] });
          }
       }
    }
 
-   // Readings that spent the same evidence form a group (connected components).
-   const conflicts = (a, b) => a.form === b.form && (a.name === b.name && a.value !== b.value || a.exclusive && b.exclusive && a.group && a.group===b.group && a.name!==b.name) || (a.spans || []).some(([s,e]) => (b.spans || []).some(([t,u]) => s < u && t < e));
-   const parent = readings.map((_, i) => i);
+   const paired = (a, b) => a.confirm.indexOf(b.name) > -1 || b.confirm.indexOf(a.name) > -1;
+   const fieldConflict = (a,b) => a.form === b.form && (a.name === b.name && a.value !== b.value || a.exclusive && b.exclusive && a.group && a.group===b.group && a.name!==b.name);
+   const overlap = (a,b) => (a.spans || []).some(([s,e]) => (b.spans || []).some(([t,u]) => s < u && t < e));
+   const competes = (a,b) => fieldConflict(a,b) || overlap(a,b);
+   // Resolve fallback ownership before grouping: a losing whole-answer text span cannot join
+   // independent structured evidence into an ambiguity. Known contextual choice mentions do
+   // not displace current text; whole-answer repetitions and explicit pairs still compete.
+   const fallbacks=readings.filter(reading=>reading.fallback);
+   const stronger=new Map(fallbacks.map(fallback=>[fallback,readings.filter(reading=>!reading.fallback && competes(fallback,reading) && !(reading.repeatedChoice && !reading.wholeChoice && !paired(fallback,reading)))]));
+   const keptFallbacks=fallbacks.filter(fallback=>!stronger.get(fallback).length || stronger.get(fallback).some(reading=>paired(fallback,reading)));
+   const pairedFallbacks=new Set(keptFallbacks.filter(fallback=>stronger.get(fallback).length));
+   const effective=readings.filter(reading=>reading.fallback ? keptFallbacks.includes(reading) : !(reading.repeatedChoice && !reading.wholeChoice && keptFallbacks.some(fallback=>competes(fallback,reading) && !paired(fallback,reading))));
+   // A fallback retained for a declared pair must not bridge unrelated source spans either.
+   const conflicts = (a,b) => fieldConflict(a,b) || overlap(a,b) && !(pairedFallbacks.has(a) && !b.fallback && !paired(a,b) || pairedFallbacks.has(b) && !a.fallback && !paired(a,b));
+
+   // Readings that spent the same effective evidence form a group (connected components).
+   const parent = effective.map((_, i) => i);
    const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
-   for (let i = 0; i < readings.length; i++) {
-      for (let j = i + 1; j < readings.length; j++) {
-         if (conflicts(readings[i], readings[j])) {
+   for (let i = 0; i < effective.length; i++) {
+      for (let j = i + 1; j < effective.length; j++) {
+         if (conflicts(effective[i], effective[j])) {
             parent[find(i)] = find(j);
          } else {
             // distinct parts of the answer
@@ -260,16 +280,13 @@ export function matchInputs(answer, candidates, current, choiceKey) {
       }
    }
    const groups = {};
-   readings.forEach((r, i) => { (groups[find(i)] = groups[find(i)] || []).push(r); });
-   const strip = ({ evidence, spans, keypad, fallback, level, group, exclusive, current: c, confirm, ...r }) => r;
-   const paired = (a, b) => a.confirm.indexOf(b.name) > -1 || b.confirm.indexOf(a.name) > -1;
+   effective.forEach((r, i) => { (groups[find(i)] = groups[find(i)] || []).push(r); });
+   const strip = ({ evidence, spans, keypad, fallback, repeatedChoice, wholeChoice, level, group, exclusive, current: c, confirm, ...r }) => r;
    const hits = [];
    let ambiguous = [];
    const remaining=[];
    for (const group of Object.values(groups)) {
-      // Free text is a fallback; a specific claim to the same source evidence is stronger.
-      const specific = group.filter(m => !m.fallback);
-      const members = specific.length ? specific.concat(group.filter(m=>m.fallback&&specific.some(s=>paired(m,s)))) : group;
+      const members = group;
       let winners;
       if (members.length === 1) {
          winners = members;

@@ -53,12 +53,6 @@ export const CONFIRM_WORDS = ['yes', 'yeah', 'yep', 'yup', 'sure', 'of course', 
 // AGENT words that also mean something else inside a sentence ("quiero pagar mi servicio", "someone else will pay"): they
 // ask for a person only as the whole answer (AGENT_ONLY), never from inside one.
 const AGENT_AMBIGUOUS = new Set(['servicio', 'support', 'someone', 'somebody', 'alguien', 'persona', 'a person', 'gente', 'al cliente']);
-// TEXT words that name the message itself inside a sentence ("dónde me llegó en este mensaje", "the text you sent me"): they
-// ask to switch to text only as the whole answer (TEXT_ONLY), never from inside one. Prod 2026-10-20: two callers looking for
-// the code we had texted were switched to SMS and the call ended.
-const TEXT_AMBIGUOUS = new Set(['text', 'texto', 'sms', 'message', 'mensaje', 'mensaje de texto', 'por texto', 'by text', 'whatsapp']);
-const TEXT_ONLY = /^(?:(?:by|via|por|en|a|to)\s+)?(?:text|texto|sms|message|text message|mensaje|mensaje de texto|whatsapp)(?:\s+(?:please|por favor))?[.!?]*$/;
-
 // A word that negates what follows it in its clause ("not sure", "no quiero un agente").
 const NEGATIONS = ['no', 'not', 'nope', 'nah', 'never', 'dont', 'doesnt', 'didnt', 'cant', 'cannot', 'wont', 'nunca', 'ni',
    'tampoco', 'jamas', 'jamás'];
@@ -92,6 +86,8 @@ const CONFIRM_FILLER = CONFIRM_WORDS.map(normalize).map((w) => w.split(' '));
 const ARTICLES = ['the', 'my', 'el', 'la', 'mi'].map((w) => [w]);
 const YES_SET = new Set(ANSWER_WORDS.yes.map(normalize));
 const collapse = (w) => w.replace(/([aeiouáéíóúü])\1+/g, '$1').replace(/(\p{L})\1{2,}/gu, '$1');
+const phraseAt = (tokens, i, phrase) => phrase.every((w, j) => tokens[i + j] === w
+   || (!/(\p{L})\1/u.test(w) && collapse(tokens[i + j] || '') === w));
 
 /**
  * Whether the answer, with courtesy around it removed (please / thanks / gracias, um, uh, ma'am, señora…), holds NOTHING but
@@ -106,7 +102,7 @@ function onlyAffirmative(b, words, needOne = true, filler = []) {
    }
    const tk = String(b).replace(/\./g, ' ').split(' ').filter(Boolean);
    const own = words.map(normalize).filter(Boolean).map((w) => w.split(' '));
-   const at = (i, phrase) => phrase.every((w, j) => tk[i + j] === w || (!/(\p{L})\1/u.test(w) && collapse(tk[i + j] || '') === w));
+   const at = (i, phrase) => phraseAt(tk, i, phrase);
    let i = 0;
    let saw = false;
    while (i < tk.length) {
@@ -122,6 +118,51 @@ function onlyAffirmative(b, words, needOne = true, filler = []) {
       }
    }
    return saw || !needOne;
+}
+
+// Channel nouns select a channel only inside a complete request. The remainder must describe
+// switching/continuing the conversation, not the contents of an OTP or a quoted earlier message.
+const TEXT_CHANNELS = ['text', 'text message', 'texto', 'sms', 'message', 'mensaje', 'mensaje de texto', 'whatsapp'];
+const TEXT_REQUEST_PREFIXES = ['i want to', 'i need to', 'i would like to', 'id like to', 'i would rather', 'id rather',
+   'i want', 'i need', 'i prefer', 'i would like', 'id like', 'can i', 'could i', 'can we', 'could we', 'can you', 'could you', 'would you', 'lets',
+   'quiero', 'quisiera', 'me gustaria', 'prefiero', 'necesito', 'podemos', 'podriamos', 'puedes', 'podrias', 'puede', 'podria', 'mejor']
+   .map(w => w.split(' ')).sort((a, b) => b.length - a.length);
+const TEXT_WRAPPERS = [...COURTESY, ...ACKNOWLEDGEMENTS, ...CONFIRM_FILLER].sort((a, b) => b.length - a.length);
+function trimAnswerWrappers(tokens) {
+   while (tokens.length) {
+      const first = TEXT_WRAPPERS.find(phrase => phraseAt(tokens, 0, phrase));
+      const last = first ? null : TEXT_WRAPPERS.find(phrase => phrase.length <= tokens.length && phraseAt(tokens, tokens.length - phrase.length, phrase));
+      if (first) tokens = tokens.slice(first.length);
+      else if (last) tokens = tokens.slice(0, -last.length);
+      else break;
+   }
+   return tokens;
+}
+function textRequest(input, words, extra) {
+   const raw = String(input ?? '').replace(/\\(['"\\])/g, '$1');
+   // Quotation, code, blockquotes and strikethrough mark non-command text before normalization
+   // removes their delimiters. Ordinary emphasis and apostrophes remain valid command text.
+   const quoted = /["“”«»]|(?:^|\s)'[^']+'(?=$|\s|[.,!?;:])|(?:^|\s)‘[^’]+’(?=$|\s|[.,!?;:])/u.test(raw);
+   const markdown = /`|~~|(?:^|\n)[ \t]*>/u.test(raw);
+   if (quoted || markdown) return false;
+   const command = raw.replace(/(\*{1,2}|_{1,2})(?=\S)([\s\S]*?\S)\1/g, '$2');
+   let tokens = trimAnswerWrappers(normalize(command.replace(/[,;!?¿¡]/g, ' ')).replace(/\./g, ' ').split(' ').filter(Boolean));
+   if (['instead', 'mejor'].includes(tokens.at(-1))) tokens.pop();
+   const prefix = TEXT_REQUEST_PREFIXES.find(phrase => phraseAt(tokens, 0, phrase));
+   if (prefix) tokens = trimAnswerWrappers(tokens.slice(prefix.length));
+   const body = tokens.join(' ');
+   if (!body) return false;
+   if (onlyAffirmative(body, words)) return true;
+   const channel = value => onlyAffirmative(value, [...TEXT_CHANNELS, ...extra]);
+   if (channel(body) || /^(?:text|message) me$|^escrib(?:eme|ame)$/.test(body)) return true;
+   const delivery = /^(?:by|via|over|por|en|a|to) (.+)$/.exec(body);
+   if (delivery && channel(delivery[1])) return true;
+   const continuation = /^(?:continue|communicate|chat|talk|carry on|go on|continuar|continua|continuemos|seguir|sigue|sigamos)(?: with me)? (?:by|via|over|por|en) (.+)$/.exec(body);
+   if (continuation && channel(continuation[1])) return true;
+   const switching = /^(?:switch(?: me)? (?:over )?to|cambiar(?:me)? a|cambia(?:me)? a|pasame a) (.+)$/.exec(body);
+   if (switching && channel(switching[1])) return true;
+   const sending = /^(?:send me (?:a )?|mandame (?:un )?|enviame (?:un )?)(.+)$/.exec(body);
+   return !!sending && channel(sending[1]);
 }
 
 /**
@@ -158,7 +199,7 @@ export function isAnswer(input, kind, extra = []) {
    } else if (kind === 'yes') {
       return onlyAffirmative(b, words);
    } else if (kind === 'text') {
-      return TEXT_ONLY.test(b) || matchesChoice(b, words.filter((w) => !TEXT_AMBIGUOUS.has(w)));
+      return textRequest(input, words, Array.isArray(extra) ? extra : []);
    } else {
       return matchesChoice(b, words);
    }

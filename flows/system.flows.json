@@ -1932,7 +1932,7 @@
   {
     "id": "generic-retry-with-options",
     "name": "GenericRetryWithOptions",
-    "version": "1.3.2",
+    "version": "1.3.3",
     "description": "Worker: says what failed and offers retry (YES / 1), switch to text (TEXT / 9, when callerTextNumber can reach the caller), an agent (AGENT / 0) or exit (EXIT / *). A contact in the answer retries with it; with allow_code_entry a 6-digit code is checked on the spot; anything else goes back to intent detection.",
     "parameters": [
       {
@@ -1994,6 +1994,10 @@
     "variables": {
       "user_choice": {
         "type": "string"
+      },
+      "user_choice_raw": {
+        "type": "string",
+        "description": "Original answer for semantic readers; retain quotes and command provenance"
       },
       "smart_capture_result": {
         "type": "object"
@@ -2106,6 +2110,12 @@
         }
       },
       {
+        "id": "retain_choice_provenance",
+        "type": "SET",
+        "variable": "user_choice_raw",
+        "value": "String(user_choice || '')"
+      },
+      {
         "id": "normalize_choice",
         "type": "SET",
         "variable": "user_choice",
@@ -2141,7 +2151,7 @@
               "retrying": true
             }
           },
-          "condition: isAnswer(user_choice, 'text') || user_choice === '9'": {
+          "condition: isAnswer(user_choice_raw, 'text') || user_choice === '9'": {
             "id": "do_switch_text",
             "type": "FLOW",
             "value": "switch-to-text",

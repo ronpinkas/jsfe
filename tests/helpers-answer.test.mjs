@@ -34,6 +34,12 @@ for (const said of ['Text.', 'texto', 'SMS', 'mensaje de texto', 'by text please
 for (const said of ['A ver, ahorita me acaban de mandar un código espérenme dónde me llegó en este mensaje', 'sí, Dónde está el texto que te mandaron', 'I never got the text message', 'me llegó por texto pero no lo veo']) {
    eq(isAnswer(said, 'text'), false, `"${said}" names the message, it does not ask to switch`);
 }
+for (const said of ['please text', 'por favor texto', 'sí, por texto', 'I want to continue by text', 'quiero seguir por texto']) {
+   eq(isAnswer(said, 'text'), true, `a complete polite channel request: ${said}`);
+}
+for (const said of ['Can you text me the code again?', 'escríbeme el código', 'You told me text me but where is the code?', '"text me"']) {
+   eq(isAnswer(said, 'text'), false, `code contents and reported commands never switch: ${said}`);
+}
 eq(isAnswer('thanks', 'yes'), false, 'thanks is not a standard yes');
 eq(isAnswer('thanks', 'yes', ['thanks']), true, 'a caller extra');
 eq(isAnswer('', 'yes'), false, 'empty');
