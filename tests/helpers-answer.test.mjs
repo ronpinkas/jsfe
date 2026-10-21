@@ -29,6 +29,11 @@ eq(isAnswer('Sí, por favor', 'yes'), true, 'yes');
 eq(isAnswer('not sure', 'yes'), false, 'a negated yes is not yes');
 eq(isAnswer('no gracias', 'no'), true, 'no');
 eq(isAnswer('por texto', 'text'), true, 'text');
+for (const said of ['Text.', 'texto', 'SMS', 'mensaje de texto', 'by text please', 'text me', 'escríbeme']) { eq(isAnswer(said, 'text'), true, `"${said}" asks for text`); }
+// prod 2026-10-20: callers looking for the code we had texted were switched to SMS and the call ended
+for (const said of ['A ver, ahorita me acaban de mandar un código espérenme dónde me llegó en este mensaje', 'sí, Dónde está el texto que te mandaron', 'I never got the text message', 'me llegó por texto pero no lo veo']) {
+   eq(isAnswer(said, 'text'), false, `"${said}" names the message, it does not ask to switch`);
+}
 eq(isAnswer('thanks', 'yes'), false, 'thanks is not a standard yes');
 eq(isAnswer('thanks', 'yes', ['thanks']), true, 'a caller extra');
 eq(isAnswer('', 'yes'), false, 'empty');

@@ -53,6 +53,11 @@ export const CONFIRM_WORDS = ['yes', 'yeah', 'yep', 'yup', 'sure', 'of course', 
 // AGENT words that also mean something else inside a sentence ("quiero pagar mi servicio", "someone else will pay"): they
 // ask for a person only as the whole answer (AGENT_ONLY), never from inside one.
 const AGENT_AMBIGUOUS = new Set(['servicio', 'support', 'someone', 'somebody', 'alguien', 'persona', 'a person', 'gente', 'al cliente']);
+// TEXT words that name the message itself inside a sentence ("dónde me llegó en este mensaje", "the text you sent me"): they
+// ask to switch to text only as the whole answer (TEXT_ONLY), never from inside one. Prod 2026-10-20: two callers looking for
+// the code we had texted were switched to SMS and the call ended.
+const TEXT_AMBIGUOUS = new Set(['text', 'texto', 'sms', 'message', 'mensaje', 'mensaje de texto', 'por texto', 'by text', 'whatsapp']);
+const TEXT_ONLY = /^(?:(?:by|via|por|en|a|to)\s+)?(?:text|texto|sms|message|text message|mensaje|mensaje de texto|whatsapp)(?:\s+(?:please|por favor))?[.!?]*$/;
 
 // A word that negates what follows it in its clause ("not sure", "no quiero un agente").
 const NEGATIONS = ['no', 'not', 'nope', 'nah', 'never', 'dont', 'doesnt', 'didnt', 'cant', 'cannot', 'wont', 'nunca', 'ni',
@@ -152,6 +157,8 @@ export function isAnswer(input, kind, extra = []) {
       return false;
    } else if (kind === 'yes') {
       return onlyAffirmative(b, words);
+   } else if (kind === 'text') {
+      return TEXT_ONLY.test(b) || matchesChoice(b, words.filter((w) => !TEXT_AMBIGUOUS.has(w)));
    } else {
       return matchesChoice(b, words);
    }
