@@ -183,3 +183,45 @@ Provider menus keep terminal phrases distinct from neutral menu answers. If an a
 ### Identification handoff on an unmapped answer
 
 The shared contact/account collector uses contextual `DISPATCH` (`onResponse: "continue"`, `responseContext`) before abandoning an unmapped conversational answer. The current input request is offered as a scoped `ContinueCurrent` disposition alongside the primary flows. A classified response retains the live continuation and enters the existing retry/options menu, where a complete identifier can still be supplied. A supported new intent replaces the workflow; an unrelated request without a workflow hands off to the host. This is a decision before state mutation, not a session snapshot restore. Ordinary FORM yields and exhausted retries retain their existing behavior; confirmations and action guards are unchanged.
+
+
+### Typed contextual responses
+
+The reviewed contextual-response extension is **unreleased**. Use its matched JSFE runtime, builders and `STANDARD_FUNCTIONS` registry; do not infer support from a package version label. Ordinary `DISPATCH` remains unchanged. Every explicit contextual `DISPATCH` (`onResponse: 'continue'`) passes its resolved `responseContext` to workflow detection and to parameter extraction when that stage runs, including when another primary is selected. The context is an additional assistant turn for this decision; it does not overwrite `lastChatTurn` or restore a session snapshot. Supply a concise description of the current request and the data actually offered.
+
+A contextual step may additionally declare **both** `responseParameters` and `responseVariable`. `responseParameters` is a nonempty array of canonical flow parameter descriptors (`name`, `description`, optional `type` and string `enum`). Contextual response v1 accepts only `string` (the default), `boolean`, `number`, and `integer` fields; it rejects `object`, `array`, and `jsonSchema`. Ordinary flow parameter support is unchanged. Derive it from the provider's existing parameter catalog instead of maintaining a second semantic vocabulary. `responseVariable` must name an object variable declared in the same flow: a safe identifier, never a cargo path or reserved engine variable.
+
+When detection chooses `ContinueCurrent`, JSFE extracts those parameters through the existing parameter stage, normalizes their declared types/enums, drops unoffered fields, and binds a cloned object to that variable before the following authored steps run. The live stack, transaction ownership, outcome and recovery declaration remain intact. A named primary replaces the continuation normally; `None` hands off normally. Neither disposition writes the response variable.
+
+```js
+import { defineWorker } from 'jsfe/forms';
+
+const replyParameters = [
+  { name: 'asked', type: 'string', enum: ['stock', 'price', 'search'],
+    description: 'An existing stock/price fact, or a new search with changed features.' },
+  { name: 'refinement', type: 'string',
+    description: 'Changed features for the previously shown products; otherwise absent.' },
+];
+
+const reply = defineWorker({
+  id: 'product-reply', name: 'ProductReply',
+  contract: { role: 'worker', summary: 'Interpret a question about shown products' },
+  variables: {
+    answer: { type: 'string', value: '' },
+    response: { type: 'object', value: null },
+  },
+  steps: [
+    { id: 'ask', type: 'SAY-GET', variable: 'answer', asSpoken: true,
+      value: 'Ask about these products, or describe the features you want.' },
+    { id: 'read', type: 'DISPATCH', onResponse: 'continue',
+      responseContext: 'The current product query is {{cargo.productQuery}}. Questions about its shown results or changed product features continue this task.',
+      responseParameters: replyParameters, responseVariable: 'response' },
+    { id: 'result', type: 'SET', variable: 'noop',
+      value: '(cargo.productReply = response, true)' },
+  ],
+});
+```
+
+Builders automatically declare the intrinsic requirement `jsfe:contextual-responses:v1` and add a fail-closed entry guard requiring `contextualResponseProtocol() === 1`. This is runtime support, not a host permission or a new configuration switch. Hosts still run capability admission; unsupported intrinsic versions cannot be enabled by supplying a boolean. An older helper registry fails before tenant steps execute.
+
+Missing or invalid extracted parameters may yield an empty object. The caller must check the required fields and use its normal bounded collection/retry policy; choosing `ContinueCurrent` is not evidence that every requested value exists and never authorizes an effect. A model exception during typed continuation detection or extraction preserves the pending step and prior response object. One decision is reused per turn: incompatible typed context/schema reuse fails closed, as does reaching a typed classification after another workflow has already been activated that turn. Ordinary and untyped dispatch retain their prior routing/cache semantics.

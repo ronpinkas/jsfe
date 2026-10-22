@@ -21,3 +21,5 @@ export {CheckpointCodecError} from './checkpoint-codec-error.js';
 export {createActionRecoveryIdentity,assertActionRecoveryIdentity,actionRecoveryIdentityMatches} from './recovery-identity.js';
 
 export {assertFlowHostCapabilities,JSFEHostCapabilityError,actionPersistenceMode} from './capabilities.js';
+
+export {composeRegistries,JSFERegistryCompositionError} from './registry-composition.js';

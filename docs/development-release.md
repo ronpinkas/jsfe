@@ -53,3 +53,13 @@ Contextual DISPATCH is opt-in through `onResponse:"continue"` and `responseConte
 Reviewed acceptance: all 81 engine test files, 121 legacy and 121 native tenant suites; all 622 deterministic and 622 production-model primary journeys spanning 17 primaries and 166 applicable paths. Full-day replay retains 2,325 conversations and 8,543 original turns with no engine exceptions. Nine extraction deadlines and one empty Shopify cleanup response remain visible in model-health evidence; the extraction cases rechecked cleanly with production model redundancy. Shared Shopify's safe original-input fallback remains separately scoped. Unknown backend fixtures are diagnostic, never customer-success evidence.
 
 Owner authorized publication, exact consumer pins, dev host deployment and matched shared/native flow activation on all three dev configs with session-only action persistence. Production deployment/activation is not part of this release authorization. Publish/install the accepted package before activating its matched definitions.
+
+## 1.7.7 typed contextual responses and explicit registry composition
+
+Typed contextual DISPATCH binds canonical primitive fields only after ContinueCurrent, using the active question in both intent stages. Named/None handoffs do not commit old input. Routing/extraction failures preserve pending ownership; a second incompatible decision in one turn fails closed. The capability and its strict entry guard are explicit; existing ordinary DISPATCH remains unchanged.
+
+`jsfe/host` exports opt-in `composeRegistries` for independently compiled modules. It clones plain JSON declarations, deduplicates identical same-ID definitions, and rejects conflicts and case-insensitive ID/name aliases. Array and object property order remain execution data. Existing engine loaders do not compose implicitly.
+
+Reviewed Shopify acceptance covers 47 native definitions, three primary providers, 639 domain assertions, 88 production-model synthetic journeys (336 turns), both 127-suite tenant modes, and 83 SDK test files. Customer tools remain local stubs. The 12 retained nonprimary legacy definitions serve saved continuations only; native host admission rejects known fresh legacy references and incomplete native bundles.
+
+Owner authorized publication, exact consumer pins, dev host deployment, and matched shared/native Shopify activation for all three dev tenant configurations with explicit session-only action persistence. Production deployment/activation is outside this authorization. Match runtime, system, tenant and Shopify assets; do not enable native Shopify on the older production system registry.

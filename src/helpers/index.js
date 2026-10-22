@@ -1,3 +1,4 @@
+import {contextualResponseProtocol} from './contextual-response.js';
 import {formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation} from './form-proposals.js';
 import {formProposalProtocol,validateFormProposalPolicy,validateFormProposalDescriptor,formProposalDescriptor} from './proposal-contract.js';
 import {clearFormMisses,missFormInput,formInputPrompt,consumeFormFeedback,formConversationOutcome} from './form-conversation.js';
@@ -34,6 +35,7 @@ import { validateDigits, validatePhone, validateEmail } from './validators.js';
 import { urlToSpeech, textWithUrlToSpeech } from './url-speech.js';
 
 export {
+   contextualResponseProtocol,
    formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation,formProposalProtocol,validateFormProposalPolicy,validateFormProposalDescriptor,formProposalDescriptor,
    clearFormMisses,missFormInput,formInputPrompt,consumeFormFeedback,formConversationOutcome,
    readMoneyAmount, isMoneyAmount, moneyIntentAllows, validateMoneyOptions, takeChoiceOffer, matchesChoice, ANSWER_WORDS, CONFIRM_WORDS, isAnswer, isAgentRequest, isOtherRequest, isSpelledFragment, isAmountAnswer, amountInAnswer,
@@ -45,6 +47,7 @@ export {
 
 /** The functions flows call by name, ready to spread into a host's approved functions. */
 export const STANDARD_FUNCTIONS = {
+   contextualResponseProtocol,
    formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation,formProposalProtocol,validateFormProposalPolicy,validateFormProposalDescriptor,formProposalDescriptor,
    clearFormMisses,missFormInput,formInputPrompt,consumeFormFeedback,formConversationOutcome,
    readMoneyAmount, isMoneyAmount, moneyIntentAllows, validateMoneyOptions, takeChoiceOffer, matchesChoice, isAnswer, isAgentRequest, isOtherRequest, isSpelledFragment, isAmountAnswer, amountInAnswer, pickChoice,

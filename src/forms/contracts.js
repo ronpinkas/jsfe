@@ -1,3 +1,4 @@
+import {CONTEXTUAL_RESPONSES_REQUIREMENT,validateContextualResponseStep,contextualResponseRuntimeSteps} from '../helpers/contextual-response.js';
 /** Build-time contracts for conversational flows. Transport operations remain registered tools. */
 import {INPUT_PROPOSALS_REQUIREMENT,hasInputProposals,proposalRuntimeSteps} from './proposal-runtime.js';
 import {ACTION_TOOLS} from './action-tools.js';
@@ -67,12 +68,17 @@ function declared(flow, contract) {
       ...(step.type==='FLOW'&&step.callType==='replace'?{initializeDefaults:step.initializeDefaults ?? true}:{}),
       ...(step.branches?{branches:Object.fromEntries(Object.entries(step.branches).map(([key,branch])=>[key,replacementDefaults(branch)]))}:{}),
       ...(step.onFail?{onFail:replacementDefaults(step.onFail)}:{})});
-   const requirements=[...normalizeHostRequirements(contract.requires,flow.id),...(hasInputProposals(flow.variables?.inputs?.value)?[INPUT_PROPOSALS_REQUIREMENT]:[])];
+   const contextual=stepList(flow.steps).filter(step=>step.type==='DISPATCH').map(step=>validateContextualResponseStep(step,flow)).some(Boolean);
+   const requirements=[...normalizeHostRequirements(contract.requires,flow.id),...(hasInputProposals(flow.variables?.inputs?.value)?[INPUT_PROPOSALS_REQUIREMENT]:[]),...(contextual?[CONTEXTUAL_RESPONSES_REQUIREMENT]:[])];
    const metadata={version:1,...contract,parametersFrom:'parameters'};
    if(requirements.length || contract.requires!==undefined)Object.defineProperty(metadata,'requires',{
       value:normalizeHostRequirements(requirements,flow.id),enumerable:true,writable:false,configurable:false,
    });
-   return {...flow,steps:proposalRuntimeSteps(flow.id,flow.steps.map(replacementDefaults),requirements),variables:{...flow.variables,contract:value(metadata)}};
+   const guardedSteps=flow.steps.map(replacementDefaults);
+   // Linking a form may declare it again. Rebuild an existing protocol-only prefix once.
+   const rebuiltGuards=[...(requirements.includes(CONTEXTUAL_RESPONSES_REQUIREMENT)?['contextualResponseProtocol() === 1']:[]),...(requirements.includes(INPUT_PROPOSALS_REQUIREMENT)?['formProposalProtocol() === 1']:[])];
+   if(requirements.includes(CONTEXTUAL_RESPONSES_REQUIREMENT))while(guardedSteps[0]?.type==='SET'&&guardedSteps[0]?.requireTrue===true&&rebuiltGuards.includes(guardedSteps[0]?.value))guardedSteps.shift();
+   return {...flow,steps:contextualResponseRuntimeSteps(flow.id,proposalRuntimeSteps(flow.id,guardedSteps,requirements),requirements),variables:{...flow.variables,contract:value(metadata)}};
 }
 export function defineWorker({contract,...flow}) {
    return declared({scope:'isolated',version:'1.0.0',...flow},contract);
@@ -196,6 +202,7 @@ export function validateFlowContracts(flows, tools=[], {externalFlows=[],require
       }
       for(const tool of contract.tools || [])if(!toolIds.has(tool))fail(flow.id,`unknown tool ${tool}`);
       for(const step of stepList(flow.steps)) {
+         if(step.type==='DISPATCH')validateContextualResponseStep(step,flow);
          if(step.type==='FLOW'||step.type==='CALL-TOOL'){
             const inspect=value=>{
                if(typeof value==='string')for(const match of value.matchAll(/\{\{(.*?)\}\}/g)){

@@ -1,3 +1,4 @@
+import {validateContextualResponseStep} from './helpers/contextual-response.js';
 import {validateFlowRecovery} from './host/flow-recovery.js';
 import type {FlowRecovery} from './host/flow-recovery.js';
 export type {FlowRecovery} from './host/flow-recovery.js';
@@ -594,6 +595,8 @@ export interface FlowStep {
   id?: string;
   type: StepType;
   recovery?: {version:1;mode:string;reason:string;form?:string;flow?:string};
+  responseParameters?: FlowParameterDefinition[]; // Opt-in typed ContinueCurrent extraction.
+  responseVariable?: string; // Declared object variable assigned only on ContinueCurrent.
   tool?: string;
   args?: Record<string, unknown>;
   variable?: string;
@@ -3661,7 +3664,7 @@ function enforceParameterTypes(flow: FlowDefinition, parameters: Record<string, 
 }
 
 /** The structured form of the intent-detection call, passed to aiCallback as its 4th argument. */
-function buildDetectFlowRequest(input: string, lastChatTurn: { user?: ContextEntry; assistant?: ContextEntry } | undefined, flows: FlowDefinition[]): DetectFlowRequest {
+function buildDetectFlowRequest(input: string, lastChatTurn: { user?: ContextEntry; assistant?: ContextEntry } | undefined, flows: FlowDefinition[], responseContext?: string): DetectFlowRequest {
   const conversation: DetectFlowRequest['conversation'] = [];
   for (const entry of [lastChatTurn?.user, lastChatTurn?.assistant]) {
     if (entry && (entry.role === 'user' || entry.role === 'assistant')) {
@@ -3670,6 +3673,7 @@ function buildDetectFlowRequest(input: string, lastChatTurn: { user?: ContextEnt
       // absent, or a role the conversation cannot carry
     }
   }
+  if (responseContext !== undefined) conversation.push({role:'assistant',content:responseContext});
   return {
     task: 'detect_flow',
     input: String(sanitizeInput(input)),
@@ -3696,8 +3700,8 @@ function buildDetectFlowRequest(input: string, lastChatTurn: { user?: ContextEnt
  * ({ flowName } / { parameters }). A stage-1 failure reaches the host as before; a stage-2 failure starts the flow
  * without its parameters (it asks for them) rather than losing the turn.
  */
-async function detectFlowInTwoStages(input: string, engine: Engine, flows: FlowDefinition[]): Promise<{ flow: FlowDefinition, parameters?: Record<string, any> } | null> {
-  const { input: cleanInput, conversation } = buildDetectFlowRequest(input, engine.lastChatTurn, []);
+async function detectFlowInTwoStages(input: string, engine: Engine, flows: FlowDefinition[], responseContext?: string): Promise<{ flow: FlowDefinition, parameters?: Record<string, any> } | null> {
+  const { input: cleanInput, conversation } = buildDetectFlowRequest(input, engine.lastChatTurn, [], responseContext);
   const stage1 = buildFlowStage(cleanInput, conversation, flows.map(f => ({ id: f.id, name: f.name, description: String(f.description ?? '') })));
   const reply1 = parseStageReply(await fetchAiResponse(stage1.llm.system, stage1.llm.user, engine.aiCallback, engine.aiTimeOut, stageSchema('detect_flow', stage1.llm.schema), stage1));
   const said = String(reply1.flowName ?? 'None');
@@ -3715,6 +3719,7 @@ async function detectFlowInTwoStages(input: string, engine: Engine, flows: FlowD
       const given = reply2.parameters && typeof reply2.parameters === 'object' ? reply2.parameters as Record<string, any> : {};
       return { flow, parameters: enforceParameterEnums(flow, enforceParameterTypes(flow, ownParametersOnly(flow, given))) };
     } catch (error: any) {
+      if(flow.id === '__jsfe_continue_current__' && responseContext !== undefined) throw error;
       logger.warn(`detectFlowWithParameters: stage 2 failed for "${flow.name}" (${error.message}) - the flow starts without its parameters`);
       return { flow, parameters: {} };
     }
@@ -3738,7 +3743,7 @@ export async function getFlowForInput(input: string, engine: Engine): Promise<Fl
   return result ? result.flow : null;
 }
 
-export async function detectFlowWithParameters(input: string, engine: Engine, continuation?: FlowDefinition): Promise<{ flow: FlowDefinition, parameters?: Record<string, any> } | null> {
+export async function detectFlowWithParameters(input: string, engine: Engine, continuation?: FlowDefinition, responseContext?: string): Promise<{ flow: FlowDefinition, parameters?: Record<string, any> } | null> {
   // CRITICAL: This function requires AI access via engine.aiCallback
   // Without AI, the engine cannot detect user intent and activate flows
   // Sessions would never be activated as no workflows could be triggered
@@ -3794,7 +3799,7 @@ export async function detectFlowWithParameters(input: string, engine: Engine, co
     }
 
     if (engine.intentDetection === 'two-stage') {
-      return await detectFlowInTwoStages(input, engine, flowsForIntentDetection);
+      return await detectFlowInTwoStages(input, engine, flowsForIntentDetection, responseContext);
     } else {
       // the original single call, below
     }
@@ -3830,7 +3835,8 @@ export async function detectFlowWithParameters(input: string, engine: Engine, co
     }
 
     // Let AI errors (timeout, communication failures) propagate to the host
-    const request = buildDetectFlowRequest(input, engine.lastChatTurn, flowsForIntentDetection);
+    if(responseContext !== undefined) context += `<current-response-context>\n${responseContext}\n</current-response-context>\n`;
+    const request = buildDetectFlowRequest(input, engine.lastChatTurn, flowsForIntentDetection, responseContext);
     const aiResponse = await fetchAiTask(task, rules, context, input, flowsForIntentDetection, jsonSchema, engine.aiCallback, engine.aiTimeOut, request);
 
     if (aiResponse && aiResponse.flowName && aiResponse.flowName !== 'None' && aiResponse.flowName !== 'null') {
@@ -7207,19 +7213,30 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
     // One routing decision for the original turn, shared by guarded and ordinary dispatch.
     let detected: Awaited<ReturnType<typeof detectFlowWithParameters>> | undefined;
     let activatedThisTurn = false;
+    let detectedResponseContext: string | undefined;
     let guardedRoutingFailed = false;
-    const route = async (continuation?: FlowDefinition) => {
-      if (detected === undefined) detected = await detectFlowWithParameters(String(sanitizedInput),engine,continuation);
+    const route = async (continuation?: FlowDefinition, responseContext?: string) => {
+      if (detected === undefined) {
+        detected = await detectFlowWithParameters(String(sanitizedInput),engine,continuation,responseContext);
+        detectedResponseContext = responseContext;
+      } else if(continuation?.parameters?.length && (responseContext !== detectedResponseContext || JSON.stringify(continuation.parameters) !== JSON.stringify(detected?.flow.parameters))) {
+        throw new Error('A typed contextual response cannot reuse an incompatible routing decision this turn');
+      }
       return detected;
     };
     engine.dispatchIfMatched = async (frame,step) => {
-      if (activatedThisTurn) return false;
+      if(activatedThisTurn && step.responseParameters === undefined && step.responseVariable === undefined)return false;
       if (engine.flowsMenu.some(flow=>flow.name.toLowerCase() === 'continuecurrent' || flow.id.toLowerCase() === '__jsfe_continue_current__')) throw new Error('ContinueCurrent is reserved for contextual dispatch');
+      let declaration;
+      try { declaration = validateContextualResponseStep(step,engine.flowsMenu.find(flow=>flow.id===frame.flowId)); if(activatedThisTurn && declaration)throw new Error('Typed contextual response cannot classify after a flow activation this turn'); } catch(error) { guardedRoutingFailed = true; throw error; }
       const context = interpolateMessage(step.responseContext,frame.contextStack,frame.variables,engine).trim();
-      const continuation: FlowDefinition = {id:'__jsfe_continue_current__',name:'ContinueCurrent',version:'1.0.0',primary:true,steps:[],description:`The caller is responding to the requested ${context} or reports that the requested information is invalid, unknown or unavailable; datos incorrectos o inválidos, no lo sé, no lo tengo, no puedo dar el dato. Includes asking how to provide the requested information. Not a different service request or unrelated question; choose its workflow when offered, otherwise None for the host.`};
+      const continuation: FlowDefinition = {id:'__jsfe_continue_current__',name:'ContinueCurrent',version:'1.0.0',primary:true,steps:[],...(declaration?{parameters:declaration.parameters}:{}),description:`The caller is responding to the requested ${context} or reports that the requested information is invalid, unknown or unavailable; datos incorrectos o inválidos, no lo sé, no lo tengo, no puedo dar el dato. Includes asking how to provide the requested information. Not a different service request or unrelated question; choose its workflow when offered, otherwise None for the host.`};
       let selected;
-      try { selected = await route(continuation); } catch (error) { guardedRoutingFailed = true; throw error; }
-      if (selected?.flow.id === continuation.id) return false;
+      try { selected = await route(continuation,context); } catch (error) { guardedRoutingFailed = true; throw error; }
+      if (selected?.flow.id === continuation.id) {
+        if(declaration) frame.variables[declaration.variable] = structuredClone(selected.parameters || {});
+        return false;
+      }
       stampStepRecovery(step,frame,engine);
       terminateForDispatch(frame,engine);
       if (!selected) return true; // Real host handoff: ordinary dispatch consumes the cached None below.
@@ -8701,11 +8718,12 @@ export class WorkflowEngine implements Engine {
         this._validateSubFlowStep(step, flowDef, state, opts, currentScope);
         break;
       case 'DISPATCH': {
+        try { validateContextualResponseStep(step,flowDef); } catch(error:any) { state.errors.push(`DISPATCH step \"${step.id}\" in flow \"${flowDef.name}\": ${error.message}`); }
         // DISPATCH always routes the turn's own input — no value. It may declare the ending of the
         // flows it ends (`outcome` / `reason`, kept only when no flow matches).
-        const extra = Object.keys(step).filter(k => !['id', 'type', 'outcome', 'reason', 'recovery', 'onResponse', 'responseContext'].includes(k));
+        const extra = Object.keys(step).filter(k => !['id', 'type', 'outcome', 'reason', 'recovery', 'onResponse', 'responseContext', 'responseParameters', 'responseVariable'].includes(k));
         if (extra.length > 0) {
-          state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" has invalid attribute(s) ${extra.map(k => `"${k}"`).join(', ')} - DISPATCH takes only "id", "outcome", "reason", "recovery", "onResponse" and "responseContext"`);
+          state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" has invalid attribute(s) ${extra.map(k => `"${k}"`).join(', ')} - DISPATCH takes only "id", "outcome", "reason", "recovery", "onResponse" "responseContext", "responseParameters" and "responseVariable"`);
         } else if (step.onResponse !== undefined && step.onResponse !== 'continue') {
           state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" onResponse must be "continue" when provided`);
         } else if (step.onResponse === 'continue' && (typeof step.responseContext !== 'string' || !step.responseContext.trim())) {
