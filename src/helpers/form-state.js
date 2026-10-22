@@ -1,3 +1,4 @@
+import {validateInputMeaning} from './semantic-input.js';
 import {validateFormProposalPolicy} from './proposal-contract.js';
 /** Shared FORM semantics. Pure readers plus explicit mutations of the supplied session container; no host I/O. */
 import { readInputProfile } from './match-inputs.js';
@@ -28,6 +29,7 @@ export function resolveFormInputs(inputs, presets = {}) {
       const input = { ...(raw.field ? presets[raw.field] : {}), ...raw };
       if(input.profile?.money!==undefined){if(input.profile.kind!=='amount')throw new Error('FORM money options require amount profile');validateMoneyOptions(input.profile.money);}
       validateFormExhaustion(input.on_exhausted);
+      if(input.meaning!==undefined){if(!input.profile || input.form || input.any_of || input.bind)throw new Error('FORM meaning requires a readable leaf input');validateInputMeaning(input.meaning);}
       if(input.proposal!==undefined){
          if(!input.profile || input.form || input.any_of || input.bind)throw new Error('FORM proposal requires a readable leaf input; declare it on each group member or inside the subform');
          validateFormProposalPolicy(input.proposal);
@@ -98,7 +100,7 @@ export function formInputFilled(input, state, cargo = {}, checking = new Set()) 
       const v = formPath({ cargo }, input.bind);
       return hasFormValue(v) && v !== false;
    }
-   const filled = name => !state.errors?.[name] && !state.pending?.[name] && hasFormValue(state.values[name]);
+   const filled = name => !(state.inputProposals?.[name]&&!state.inputProposals[name].committed&&['pending','confirmed'].includes(state.inputProposals[name].status)) && !state.errors?.[name] && !state.pending?.[name] && hasFormValue(state.values[name]);
    return input.any_of ? input.any_of.some(i => formInputApplies(i,state.values,cargo,state)&&formInputFilled(i,state,cargo,checking)) : filled(input.name);
 }
 export function nextFormInput(state, cargo = {}) {
@@ -155,7 +157,7 @@ export function enrichFormMatches(matches,chain,form,names=[],asked='') {
    const enrich=h=>{
       const spec=chain.find(c=>c.form===h.form&&c.name===h.name)||{};
       return {...h,label:h.option_label||spec.label||h.name,label_es:h.option_label_es||spec.label_es||spec.label||h.name,
-         validator:spec.validator||'',after:spec.after||'',validate_always:spec.validate_always===true,...(spec.activation?{activation:spec.activation}:{}),pii:spec.pii===true,current:h.form===form&&names.includes(h.name),asked};
+         validator:spec.validator||'',...(spec.meaning?{meaning:spec.meaning}:{}),after:spec.after||'',validate_always:spec.validate_always===true,...(spec.activation?{activation:spec.activation}:{}),pii:spec.pii===true,current:h.form===form&&names.includes(h.name),asked};
    };
    return {...matches,hits:matches.hits.map(enrich),ambiguous:matches.ambiguous.map(enrich),remaining:(matches.remaining||[]).map(group=>group.map(enrich))};
 }
@@ -366,7 +368,45 @@ export function rejectFormReadings(cargo, hits = []) {
 export function proposedFormValues(cargo, id, accepted = []) {
    return Object.assign({}, cargo.forms?.[id]?.values, ...accepted.filter(h => h.form === id).map(h => ({ [h.name]: h.value })));
 }
+/** Bind deferred candidates to the exact controller proposal that made their context uncertain.
+ * A declined or replaced controller never reinterprets those words under the previous context. */
+function readingProposalDependencies(cargo,hit) {
+   const found=[],visited=new Set();
+   const inspect=(owner,input)=>{
+      if(!owner||!input)return;
+      const key=owner.id+'/'+input.name;if(visited.has(key))return;visited.add(key);
+      for(const name of [...(input.depends_on||[]),...(input.reset_on||[]),...Object.keys(input.when||{})]){
+         if(name.startsWith('cargo.')||name.startsWith('form.'))continue;
+         const dependency=owner.specs.find(s=>s.name===name)||owner.specs.flatMap(s=>s.any_of||[s]).find(s=>s.name===name);
+         for(const member of dependency?.any_of||[dependency||{name}]){
+            const proposal=owner.inputProposals?.[member.name];
+            if(proposal&&!proposal.committed&&['pending','confirmed'].includes(proposal.status))found.push({form:owner.id,input:member.name,id:proposal.id,value:structuredClone(proposal.value)});
+            inspect(owner,member);
+         }
+         inspect(owner,dependency);
+      }
+   };
+   let owner=cargo.forms?.[hit.form];inspect(owner,owner?.specs.flatMap(s=>s.any_of||[s]).find(s=>s.name===hit.name));
+   const seen=new Set();while(owner?.parent&&!seen.has(owner.parent)){
+      seen.add(owner.parent);const child=owner;owner=cargo.forms[owner.parent];
+      if(!child.context_only)inspect(owner,owner?.specs.find(s=>s.name===child.result_input));
+   }
+   return found;
+}
+function proposalDependencyStatus(cargo,hit) {
+   let waiting=false;
+   for(const binding of hit.dependencyProposals||[]){
+      const owner=cargo.forms?.[binding.form],record=owner?.inputProposals?.[binding.input];
+      if(!record||record.id!==binding.id||!formValuesEqual(record.value,binding.value)||['declined','superseded'].includes(record.status))return 'obsolete';
+      if(record.committed&&!formValuesEqual(owner.values[binding.input],binding.value))return 'obsolete';
+      if(!record.committed)waiting=true;
+   }
+   return waiting||readingProposalDependencies(cargo,hit).length?'waiting':'ready';
+}
 export function formReadingRelevant(cargo,hit,accepted=[]) {
+   const dependencyStatus=proposalDependencyStatus(cargo,hit);
+   if(dependencyStatus==='obsolete')return false;
+   if(dependencyStatus==='waiting')return true;
    let state=cargo.forms?.[hit.form];if(!state)return false;
    const input=state.specs.flatMap(s=>s.any_of||[s]).find(s=>s.name===hit.name);
    if(!input||formCondition(input,proposedFormValues(cargo,state.id,accepted),cargo,state)===false)return false;
@@ -377,6 +417,7 @@ export function formReadingRelevant(cargo,hit,accepted=[]) {
    }return true;
 }
 export function formReadingReady(cargo,hit,accepted=[],rejected=[]) {
+   if(proposalDependencyStatus(cargo,hit)!=='ready')return false;
    const state=cargo.forms?.[hit.form];if(!state)return false;
    const spec=state.specs.flatMap(s=>s.any_of||[s]).find(s=>s.name===hit.name);if(!spec)return false;
    const values=proposedFormValues(cargo,hit.form,accepted);
@@ -420,7 +461,7 @@ export function formPreparation(cargo,id,input) {
    return spec?.prepare&&!state.prepared[spec.name]?{flow:spec.prepare,input:spec.name}:null;
 }
 export function queueFormReadings(cargo,hits=[]) {
-   for(const hit of hits){const state=cargo.forms?.[hit.form];if(!state)throw new Error('Pending candidate has no owning form');state.pending[hit.name]={...hit,outcome:'pending'};}
+   for(const hit of hits){const state=cargo.forms?.[hit.form];if(!state)throw new Error('Pending candidate has no owning form');const bindings=hit.dependencyProposals||readingProposalDependencies(cargo,hit);state.pending[hit.name]={...hit,...(bindings.length?{dependencyProposals:bindings}:{}),outcome:'pending'};}
    return true;
 }
 export function pendingFormReadings(cargo,id) {
@@ -431,7 +472,7 @@ export function pendingFormReadings(cargo,id) {
          if(spec?.schema){const readings=formInitialReadings(state,{[slot]:seed},cargo);
             if(readings.length){queueFormReadings(cargo,expandFormActivations(cargo,readings));delete state.seeds[slot];}}
       }
-      for(const h of Object.values(state.pending||{}))if(!h.activation_group&&formReadingReady(cargo,h))out.push({...h,fromPending:true});
+      for(const h of Object.values(state.pending||{})){if(proposalDependencyStatus(cargo,h)==='obsolete'){delete state.pending[h.name];continue;}if(!h.activation_group&&formReadingReady(cargo,h))out.push({...h,fromPending:true});}
       for(const child of Object.values(state.children||{}).concat(Object.values(state.contexts||{})))walk(child);
    };walk(id);
    const task=cargo.forms?.[id]?.task,groups=new Map();
@@ -512,6 +553,15 @@ export function resetFormInputs(cargo,id,names=[]) {
 }
 /** Commit only validated readings. Callers batch dependency-related candidates before invoking this transition. */
 export function acceptFormReadings(cargo, hits, additionalCandidates=[]) {
+   const deferred=[];
+   for(const state of Object.values(cargo.forms||{}))for(const hit of Object.values(state.pending||{})){
+      const bindings=hit.dependencyProposals||[];
+      if(bindings.length&&bindings.some(binding=>(hits||[]).some(change=>change.form===binding.form&&change.name===binding.input&&formValuesEqual(change.value,binding.value)))&&bindings.every(binding=>{
+         const record=cargo.forms[binding.form]?.inputProposals?.[binding.input];
+         return record?.id===binding.id&&!['declined','superseded'].includes(record.status)&&formValuesEqual(record.value,binding.value);
+      }))deferred.push({hit,task:state.task,definition:state.definition});
+   }
+   const preservedNodes=()=>hits.concat(additionalCandidates,deferred.map(entry=>entry.hit)).map(h=>h.form);
    const groups = new Map();
    for (const hit of hits || []) {
       const state = cargo.forms?.[hit.form];
@@ -534,7 +584,7 @@ export function acceptFormReadings(cargo, hits, additionalCandidates=[]) {
       }
       const changed = [...cleared,...readings.filter(h => !formValuesEqual(state.values[h.name],h.value)).map(h => h.name)];
       const invalidating=changed.filter(name=>cleared.includes(name)||hasFormValue(state.values[name]));
-      invalidateFormInputs(cargo, id, invalidating, readings.map(h => h.name),hits.concat(additionalCandidates).map(h=>h.form));
+      invalidateFormInputs(cargo, id, invalidating, readings.map(h => h.name),preservedNodes());
       if(changed.length&&!invalidating.length){state.revision++;state.confirmation=null;}
       for (const hit of readings) {
          state.values[hit.name] = hit.value;
@@ -549,17 +599,19 @@ export function acceptFormReadings(cargo, hits, additionalCandidates=[]) {
             seen.add(child.parent);const parent=cargo.forms[child.parent],slot=child.result_input;
             if(child.context_only){child=parent;continue;}
             delete parent.values[slot];delete parent.accepted[slot];
-            invalidateFormInputs(cargo,parent.id,[slot],[],hits.concat(additionalCandidates).map(h=>h.form));
+            invalidateFormInputs(cargo,parent.id,[slot],[],preservedNodes());
             child=parent;
          }
       }
    }
+   for(const {hit,task,definition} of deferred){const state=cargo.forms?.[hit.form];if(state?.task===task&&state.definition===definition&&!own(state.values,hit.name))state.pending[hit.name]=hit;}
    return true;
 }
 /** Resolve the outermost stale opted-in context through actual active ownership, without mutation.
  * An unflagged wrapper must not hide an ancestor whose owner accepted a different field value.
+ * Optional pure ownerWork schedules owned pending work (such as input consent) before the context re-asks.
  */
-export function formParentResume(cargo, id, explicit = false) {
+export function formParentResume(cargo, id, explicit = false, ownerWork = null) {
    const forms=cargo?.forms || {},seen=new Set();
    let state=forms[id],selected=null;
    if(!state)return null;
@@ -569,7 +621,7 @@ export function formParentResume(cargo, id, explicit = false) {
       if(!state.parent)break;
       const parent=forms[state.parent];
       if(!parent || parent.task!==state.task || (state.context_only ? parent.contexts?.[state.definition]!==state.id : parent.children?.[state.result_input]!==state.id))return null;
-      if(state.context_only && (state.resume_on_parent_change===true || state.id===id && explicit===true) && parent.revision!==state.parent_revision)selected={owner:parent.id,child:state.id};
+      if(state.context_only && (state.resume_on_parent_change===true || state.id===id && explicit===true) && (parent.revision!==state.parent_revision || typeof ownerWork==='function' && ownerWork(cargo,parent.id)))selected={owner:parent.id,child:state.id};
       state=parent;
    }
    return selected && formInstanceApplies(cargo,selected.owner) ? selected : null;

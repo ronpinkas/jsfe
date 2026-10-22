@@ -1,3 +1,5 @@
+import {CONTINUATION_SAFETY_REQUIREMENT} from '../forms/continuation-safety.js';
+import {SEMANTIC_INPUT_REQUIREMENT} from '../helpers/semantic-input.js';
 import {CONTEXTUAL_RESPONSES_REQUIREMENT} from '../helpers/contextual-response.js';
 import {INPUT_PROPOSALS_REQUIREMENT} from '../forms/proposal-runtime.js';
 /** Declarative flow admission. No engine imports, I/O, or implicit host capability activation. */
@@ -40,10 +42,11 @@ export function assertFlowHostCapabilities(flows, capabilities = {}) {
       throw new JSFEHostCapabilityError('', 'actionPersistence', 'session-only conflicts with durableActions:true');
    }
    for (const flow of flows) {
+      if (flow?.safetyRevision !== undefined && (typeof flow.safetyRevision !== 'string' || !flow.safetyRevision.trim() || flow.safetyRevision !== flow.safetyRevision.trim())) throw new JSFEHostCapabilityError(flow?.id,CONTINUATION_SAFETY_REQUIREMENT,'safetyRevision must be a nonempty unpadded string');
       const requirements = normalizeHostRequirements(flow?.variables?.contract?.value?.requires, flow?.id);
       for (const capability of requirements) {
          // Intrinsic runtime support, not a host option or an implicit host permission.
-         if (capability === INPUT_PROPOSALS_REQUIREMENT || capability === CONTEXTUAL_RESPONSES_REQUIREMENT) continue;
+         if (capability === CONTINUATION_SAFETY_REQUIREMENT || capability === INPUT_PROPOSALS_REQUIREMENT || capability === CONTEXTUAL_RESPONSES_REQUIREMENT || capability === SEMANTIC_INPUT_REQUIREMENT) continue;
          if (capability.startsWith('jsfe:')) throw new JSFEHostCapabilityError(flow?.id, capability, 'unsupported intrinsic runtime contract');
          if (!capabilities || typeof capabilities !== 'object' || Array.isArray(capabilities)) {
             throw new JSFEHostCapabilityError(flow?.id, capability, 'explicit host capabilities must be an object');

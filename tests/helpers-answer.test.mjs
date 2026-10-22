@@ -18,6 +18,8 @@ eq(isAgentRequest('No agent.'), false, '"No agent." is not');
 eq(isAgentRequest('I want to talk to a representative'), true, 'a whole agent request');
 eq(isAgentRequest('quiero hablar con un agente'), true, 'Spanish');
 eq(isAgentRequest('0'), true, '0 is an agent');
+for (const said of ['agente en vivo','quiero hablar con un agente en vivo']) eq(isAgentRequest(said),true,'advertised Spanish live-agent choice');
+for (const said of ['no quiero hablar con un agente en vivo','presiona 7','hacer un pago']) eq(isAgentRequest(said),false,'task, unknown and negated transfer are not consent');
 eq(isAgentRequest("I don't want an agent"), false, 'negated');
 
 // Kinds and keypad conventions

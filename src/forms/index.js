@@ -1,8 +1,10 @@
+import {withSafetyRevision} from './continuation-safety.js';
+export {withSafetyRevision,CONTINUATION_SAFETY_REQUIREMENT} from './continuation-safety.js';
 import {FLOWS as ADDRESS_FLOWS} from './address-flows.js';
 import {FLOWS as FORM_FLOWS} from './flows.js';
 import {FLOWS as CHOICE_FLOWS} from './choice-flow.js';
 import {FLOWS as IDENTITY} from './identity-flows.js';
-export const FLOWS=[...FORM_FLOWS,...ADDRESS_FLOWS,...CHOICE_FLOWS,...IDENTITY];
+export const FLOWS=[...FORM_FLOWS,...ADDRESS_FLOWS,...CHOICE_FLOWS,...IDENTITY].map(flow=>withSafetyRevision(flow,'consent-routing-2026-10-22'));
 export { FIELD_PRESETS, formFlow, declinedFlow, textValue } from './flows.js';
 export {FLOWS as IDENTITY_FLOWS} from './identity-flows.js';
 export { linkFormSchemas, defineWorker, defineProvider, defineForm, definePerformer, validateFlowContracts, operationWorkers, providerQuestions, providerParameter } from './contracts.js';

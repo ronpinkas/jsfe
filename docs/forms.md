@@ -225,3 +225,47 @@ const reply = defineWorker({
 Builders automatically declare the intrinsic requirement `jsfe:contextual-responses:v1` and add a fail-closed entry guard requiring `contextualResponseProtocol() === 1`. This is runtime support, not a host permission or a new configuration switch. Hosts still run capability admission; unsupported intrinsic versions cannot be enabled by supplying a boolean. An older helper registry fails before tenant steps execute.
 
 Missing or invalid extracted parameters may yield an empty object. The caller must check the required fields and use its normal bounded collection/retry policy; choosing `ContinueCurrent` is not evidence that every requested value exists and never authorizes an effect. A model exception during typed continuation detection or extraction preserves the pending step and prior response object. One decision is reused per turn: incompatible typed context/schema reuse fails closed, as does reaching a typed classification after another workflow has already been activated that turn. Ordinary and untyped dispatch retain their prior routing/cache semantics.
+
+### Optional semantic field validation
+
+A field may declare `meaning: { purpose, acceptance }` when a shape reader alone cannot establish that an answer supplies the requested information. Both values are nonempty strings. For example:
+
+```js
+{
+  name: 'issue_details',
+  profile: { kind: 'text', narrative: true },
+  meaning: {
+    purpose: 'Collect the specific issue for the service team.',
+    acceptance: 'Concrete details of what happened or the requested resolution; a fragment or a generic announcement of a complaint is insufficient.'
+  },
+  question: 'What happened?'
+}
+```
+
+The common validation batch uses the prepared owning field's question and criteria to run `ASSESS-INPUT` independently of intent detection. It checks conversational readings and untrusted activation seeds through the same path; several fields can be assessed in one turn. Already accepted, unchanged fields do not need another assessment. Fields without `meaning` retain their existing behavior and make no assessment call.
+
+The model returns exactly `{ ok: boolean, disposition: 'accept' | 'retry' | 'cancel' | 'redirect' }`. Only `ok: true` paired with `accept` permits ordinary field validation and commitment. The original candidate remains unchanged. A timeout, missing callback, malformed response or inconsistent verdict leaves it unaccepted and adds an engine-owned `unavailable: true` flag. The model cannot supply that flag through its exact two-field response schema. Technical unavailability gets distinct retry wording; semantic rejection asks for the requested data. Both consume the same bounded interaction budget, so outages cannot create infinite retries. `retry` uses the existing bounded field retry policy; `redirect` yields with the owning task available for recovery. An explicit `cancel` retires that task, except that an unknown action result remains held for reconciliation.
+
+Semantic completeness is separate from consent: it must never substitute for an exact confirmation or authorize a charge, cancellation, send or case submission. Criteria should describe the particular field: an account identifier, requested increase amount, payment date and issue narrative have different acceptance requirements. Short but concrete answers can be valid; no word-count rule determines completeness.
+
+Legacy callers can use the shared `collect-semantic-answer` worker with `question`, `question_es`, `purpose`, `acceptance`, optional `choices` and `digits`, and `context` / `context_es`. It returns `cargo.semanticAnswer`, `cargo.choice` and `cargo.choiceText`; the same FORM owns retries, validation and recovery.
+
+Flows opting in declare `jsfe:semantic-input-validation:v1` and receive a runtime guard. The underlying explicit `ASSESS-INPUT` step takes template strings `value`, `question`, `purpose`, `acceptance` and a `variable` naming a declared object result. The callback request has `task: 'assess_input'`; it is a data-validation request, separate from `detect_flow`.
+
+When a declared dependency (including an ancestor subform dependency) has a pending input proposal, dependent candidates wait for that proposal rather than using the previous committed context. Deferred candidates retain the exact proposal identity. Confirming the controller preserves those candidates through dependency invalidation and validates them under the new context; declining or superseding it discards them. Independent fields still collect normally. Declare `depends_on` for contextual prerequisites and `reset_on` for changes that invalidate previously collected data.
+
+### Safety revisions for saved continuations
+
+`withSafetyRevision(flow, token)` opts a definition into the `jsfe:continuation-safety:v1` contract. The token is a nonempty string, independent of the informational flow version. Change it when old serialized steps or retained FORM schemas must no longer execute. The helper adds an executable protocol guard and augments an existing contract's requirements; it does not invent a FORM contract for legacy workers. Hosts register the current `STANDARD_FUNCTIONS`.
+
+New frames save the token. Sessions also save the definition-token snapshot so yielded FORM tasks with no active frames are checked. Before new input is processed, and after durable checkpoint restoration, a missing or different token retires obsolete stacks and safely closes unexecuted FORM tasks. The engine does not rebase old steps, restart a request, forward the old answer, or repeat effects. It returns a localized explanation and `unresolved / obsolete_continuation`; a subsequent fresh request must collect new confirmation. Unopted definitions retain their previous behavior.
+
+If retirement encounters any attempted/unknown FORM action, session journal record, or existing payment uncertainty hold, it preserves the effect evidence and quarantines the old task. Its confirmation/proposal approvals and task index are invalidated. The session receives `continuationSafetyHold`; later turns cannot execute flows or consume durable checkpoints. This conservative restriction applies only to obsolete continuations with uncertain effects, and directs the user to configured support outside that conversation. There is no automatic release, timeout or retry. External reconciliation must resolve the effect and retire the quarantined task before deliberately clearing the hold. Cargo, identity data, action ledgers and payment holds are preserved.
+
+The runtime never treats the informational `version` as a hot-reload instruction. An older runtime without the intrinsic contract must not activate revised definitions: matched capability admission rejects unsupported intrinsic requirements, and the executable protocol guard fails closed in standalone engines.
+
+Semantic dispositions describe the caller's intent, not permission to perform an action. An explicit replacement request yields with `redirect`; withdrawing the owning request or prohibiting its intended action yields `cancel`. Refusing one field while continuing the same request yields `retry`, unless the declaration permits that answer (such as an unknown date). Factual negative allegations remain eligible data. Candidate instructions are evidence for this classification; they cannot change the evaluator's rules or authorize backend cancellation.
+
+A field meaning must explicitly identify both the field and its owning service/action in `purpose`, for example collecting a date before filing a caller-requested investigation. A vague instruction to collect information does not identify what a withdrawal applies to. Author this context in the declaration; never derive it from caller keywords or rewrite it at runtime.
+
+Callbacks serving `assess_input` (schema `input_assessment`) require semantic model qualification against acceptance, withdrawal, field-only refusal, permitted unknowns, factual denials, and task corrections. Valid JSON alone is insufficient: a model can return a schema-valid unsafe acceptance. The engine remains provider-agnostic and rejects unavailable/malformed responses; the host must select a qualified model and must not silently race or fall back to an unqualified general or intent model. Requalify proposed alternatives with the same synthetic contrasts and actual engine paths before enabling them.

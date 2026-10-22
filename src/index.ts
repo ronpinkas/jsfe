@@ -1,3 +1,5 @@
+import {closeFormInstance} from './helpers/form-state.js';
+import {validateSemanticInputStep,buildInputAssessment,normalizeInputAssessment} from './helpers/semantic-input.js';
 import {validateContextualResponseStep} from './helpers/contextual-response.js';
 import {validateFlowRecovery} from './host/flow-recovery.js';
 import type {FlowRecovery} from './host/flow-recovery.js';
@@ -446,7 +448,7 @@ export function getFlowPrompt(engine: Engine, flowName: string): string {
 }
 
 // === TYPE DEFINITIONS ===
-export type StepType = 'SAY' | 'SAY-GET' | 'SET' | 'CALL-TOOL' | 'FLOW' | 'SWITCH' | 'CASE' | 'RETURN' | 'END' | 'DISPATCH';
+export type StepType = 'SAY' | 'SAY-GET' | 'SET' | 'CALL-TOOL' | 'FLOW' | 'SWITCH' | 'CASE' | 'RETURN' | 'END' | 'DISPATCH' | 'ASSESS-INPUT';
 
 // Enhanced context tracking with role information
 export interface ContextEntry {
@@ -464,8 +466,8 @@ export interface ContextEntry {
 // AI Intelligence Callback Interface - (can be null for demo/test mode)
 // If null, engine will only match flows by exact id or name (no AI intent detection)
 //
-// The optional 4th argument, `request`, is the same call in structured form. It is passed ONLY for
-// intent detection (task 'detect_flow'), so a host can answer that call with a classifier instead
+// The optional 4th argument, `request`, is the same call in structured form. Intent stages and
+// opt-in field assessment identify their task; a host can answer detection with a classifier instead
 // of a text model: `systemInstruction` and `userMessage` are still the complete text prompt, and the
 // reply is still a JSON string `{ flowName, parameters }` that the engine validates the same way
 // either way. Hosts that ignore the 4th argument behave exactly as before.
@@ -494,7 +496,15 @@ export interface DetectFlowRequest {
   }[];
 }
 
-export type AiCallbackRequest = DetectFlowRequest | IntentStageRequest;
+/** Optional field validation is independent of routing and never rewrites the supplied value. */
+export interface InputAssessmentRequest {
+  task: 'assess_input';
+  input: string;
+  question: string;
+  purpose: string;
+  acceptance: string;
+}
+export type AiCallbackRequest = DetectFlowRequest | IntentStageRequest | InputAssessmentRequest;
 
 // Engine Session Context - Encapsulates all session-specific state
 // This object should be maintained by the host application for each user session
@@ -517,6 +527,8 @@ export type AiCallbackRequest = DetectFlowRequest | IntentStageRequest;
 export interface EngineSessionContext {
   /** Persistence policy is pinned to an action-enabled conversation, including snapshots before its first effect. */
   actionPersistence?: 'durable' | 'session-only';
+  continuationSafetyRevisions?: Record<string,string>;
+  continuationSafetyHold?: {reason:string;flowId?:string};
   actionRecoveryIdentity?: {protocol:number;runtime:string;definitions:string};
   actionRecoveryProgress?: number;
   actionRecoveryEpoch?: string | null;
@@ -789,6 +801,7 @@ export interface FlowFrame {
   flowName: string;
   flowId: string;
   flowVersion: string;
+  safetyRevision?: string; // Opt-in definition safety token; serialized inline steps require an exact match.
   flowStepsStack: FlowStep[];
   contextStack: ContextEntry[];  // Enhanced with role information
   inputStack: unknown[];
@@ -824,6 +837,7 @@ export interface FlowDefinition {
   [key: `prompt_${string}`]: string | undefined; // Support for any language code
   description: string;
   version: string;
+  safetyRevision?: string; // Changes retire saved continuations before input/steps; not a hot reload.
   primary?: boolean; // Whether this flow is a primary entry point for users (default: false)
   // A tenant's thin entry point over a shared flow (by id or name): when present, the wrapped flow is no longer primary
   // (it stays callable as a worker), and the wrapper takes its description, parameters, prompts and primary flag unless
@@ -2998,6 +3012,7 @@ async function isFlowActivated(input: string, engine: Engine, userId: string = '
       flowName: flow.name,
       flowId: flow.id,
       flowVersion: flow.version,
+      safetyRevision: flow.safetyRevision,
       flowStepsStack: cloneFlowValue(flow.steps).reverse(),
       contextStack: [{ role: 'user', content: sanitizeInput(input), timestamp: Date.now() }], // Keep activation input in context for reference
       inputStack: [], // Start empty - only SAY-GET responses go here
@@ -3024,7 +3039,79 @@ function stampStepRecovery(step: any, currentFlowFrame: FlowFrame, engine: Engin
   }
 }
 
+/** Intrinsic admission marker for generators and hosts. Absent safetyRevision retains legacy behavior. */
+export {continuationSafetyProtocol} from './forms/continuation-safety.js';
+
+/** Retire obsolete serialized steps, never rebase/restart or feed the old answer into a new action. */
+function retireUnsafeContinuation(engine: Engine, extraStacks: FlowFrame[][] = []): string | null {
+  const session = engine.getSessionContext();
+  const frames = [...(engine.flowStacks || []), ...extraStacks].flat().filter(Boolean);
+  const previousRevisions = session.continuationSafetyRevisions || {};
+  const staleForm = (Object.values(engine.cargo?.forms || {}) as any[]).find(state => {
+    const definition = engine.flowsMenu?.find(flow => flow.id === state.definition);
+    const previous = previousRevisions[state.definition], current = definition?.safetyRevision;
+    return (previous !== undefined || current !== undefined) && previous !== current;
+  });
+  const mismatch = frames.find(frame => {
+    const current = engine.flowsMenu?.find(flow => flow.id === frame.flowId);
+    return current?.safetyRevision !== undefined
+      ? current.safetyRevision !== frame.safetyRevision
+      : frame.safetyRevision !== undefined;
+  }) || (staleForm ? {flowId:staleForm.definition,flowName:staleForm.definition} : undefined);
+  const held = session.continuationSafetyHold;
+  if (!mismatch && !held) {
+    session.continuationSafetyRevisions = Object.fromEntries((engine.flowsMenu || []).filter(flow => flow.safetyRevision !== undefined).map(flow => [flow.id,flow.safetyRevision!]));
+    return null;
+  }
+  // Retiring tasks must destroy stale accepted confirmations, but keep every unknown effect intact.
+  // No root outcome may hide a descendant's attempted action.
+  const cargo: any = engine.cargo || {};
+  const forms: Record<string, any> = cargo.forms || {};
+  const belongs = (state: any, id: string): boolean => {
+    const seen = new Set();
+    while (state && !seen.has(state.id)) { if (state.id === id) return true; seen.add(state.id); state = forms[state.parent]; }
+    return false;
+  };
+  let unknown = !!engine.cargo?.chargeUnknownAt || Object.keys(engine.cargo?.paymentHolds || {}).length > 0
+    || Object.values(engine.cargo?.actionJournal || {}).some((record: any) => ['attempted','unknown'].includes(record.status));
+  for (const root of Object.values(forms) as any[]) {
+    if (root.parent && forms[root.parent]) continue;
+    const pending = (Object.values(forms) as any[]).filter(state => belongs(state, root.id))
+      .some(state => Object.values(state.actions || {}).some((record: any) => ['attempted','unknown'].includes(record.status)));
+    if (pending) {
+      unknown = true;
+      for (const state of (Object.values(forms) as any[]).filter(state => belongs(state, root.id))) {
+        state.confirmation = null;
+        state.continuationRetired = true;
+        if (cargo.formTasks?.[state.definition] === state.id) delete cargo.formTasks[state.definition];
+        if (cargo.formConfirm) delete cargo.formConfirm[state.id];
+        for (const proposal of Object.values(state.inputProposals || {}) as any[]) delete proposal.approval;
+        delete state.proposalPrompt;
+      }
+      continue;
+    }
+    closeFormInstance(engine.cargo, root.id, false);
+  }
+  if (unknown || held) session.continuationSafetyHold = held || {reason:'obsolete_continuation_action_unknown',flowId:mismatch?.flowId};
+  engine.hostStart = null;
+  engine.pendingDispatchFrom = null;
+  delete session.lastTurnDispatch;
+  delete session.lastFlowRecovery;
+  engine.resetFlowState(); // cargo, journals, payment holds and unknown FORM records are deliberately preserved.
+  engine.stampFlowOutcome({flowName:mismatch?.flowName || held?.flowId || '',outcome:'unresolved',reason:unknown || held?'obsolete_continuation_action_unknown':'obsolete_continuation',endedBy:'completion'});
+  const es = engine.getSessionLanguage() === 'es';
+  const message = es
+    ? 'La solicitud anterior cambió y no puedo continuarla de forma segura. No he repetido ninguna acción ni he procesado su último mensaje.'
+    : 'The earlier request changed and I cannot safely continue it. I have not repeated any action or processed your latest message.';
+  if (!unknown && !held) return message + (es ? ' Por favor, vuelva a indicar su solicitud.' : ' Please state your request again.');
+  const contact = engine.cargo?.contact_info;
+  return message + (es ? ' Comuníquese con atención al cliente fuera de esta conversación para revisar la acción pendiente.' : ' Please contact customer support outside this conversation to review the pending action.')
+    + (typeof contact === 'string' && contact.trim() ? ' ' + contact.trim() : '');
+}
+
 async function playFlowFrame(engine: Engine): Promise<string | null> {
+  const retired = retireUnsafeContinuation(engine);
+  if (retired) return retired;
   // Enhanced recursion protection using natural stack depth
   const stackDepth = getCurrentStackLength(engine);
   if (stackDepth > 20) {
@@ -3333,6 +3420,8 @@ async function playStep(currentFlowFrame: FlowFrame, engine: Engine): Promise<st
         return await handleSubFlowStep(currentFlowFrame, engine);
       case 'SET':
         return handleSetStep(currentFlowFrame, engine);
+      case 'ASSESS-INPUT':
+        return await handleAssessInputStep(currentFlowFrame, engine);
       case 'SWITCH':
         return await handleSwitchStep(currentFlowFrame, engine);
       case 'CASE':
@@ -4432,6 +4521,7 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
               flowName: rebootFlow.name,
               flowId: rebootFlow.id,
               flowVersion: rebootFlow.version,
+              safetyRevision: rebootFlow.safetyRevision,
               flowStepsStack: cloneFlowValue(rebootFlow.steps).reverse(),
               contextStack: [{ role: 'user', content: input, timestamp: Date.now() }],
               inputStack: [input],
@@ -4493,6 +4583,7 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
               flowName: onFailFlow.name,
               flowId: onFailFlow.id,
               flowVersion: onFailFlow.version,
+              safetyRevision: onFailFlow.safetyRevision,
               flowStepsStack: cloneFlowValue(onFailFlow.steps).reverse(),
               contextStack: [...currentFlowFrame.contextStack], // Inherit context
               inputStack: [...currentFlowFrame.inputStack],
@@ -4823,6 +4914,43 @@ function addFlowContextGuidance(message: string, flowFrame: FlowFrame, engine: E
       const defaultSeparator = config.separator || '\n\n';
       return message + defaultSeparator + guidance;
   }
+}
+
+/** An explicitly declared field meaning is assessed separately from intent detection.
+ * Clear the output before awaiting: a timeout or malformed verdict cannot retain an old acceptance.
+ * The callback receives only this field's declared context; no account facts or unrelated history.
+ */
+async function handleAssessInputStep(frame: FlowFrame, engine: Engine): Promise<string> {
+  const step = frame.flowStepsStack.pop()!;
+  const definition = engine.flowsMenu.find(flow => flow.id === frame.flowId || flow.name === frame.flowName);
+  validateSemanticInputStep(step, definition);
+  const variable = step.variable!;
+  frame.variables[variable] = {ok:false, disposition:'retry', unavailable:true};
+  const resolve = (text: unknown): string => interpolateMessage(String(text ?? ''), frame.contextStack, frame.variables, engine);
+  const input = resolve(step.value);
+  const question = resolve(step.question);
+  const purpose = resolve(step.purpose);
+  const acceptance = resolve(step.acceptance);
+  if (!input.trim()) {
+    frame.variables[variable] = {ok:false, disposition:'retry'};
+    return 'Input assessment received an empty candidate';
+  }
+  if (!question.trim() || !purpose.trim() || !acceptance.trim()) {
+    logger.warn(`ASSESS-INPUT step ${step.id || ''} could not validate its field; the input remains unaccepted`);
+    return 'Input assessment requires a complete field context';
+  }
+  try {
+    const assessment = buildInputAssessment({value:input,question,purpose,acceptance});
+    const schema = assessment.schema;
+    const response = await fetchAiResponse(assessment.system, assessment.user, engine.aiCallback, engine.aiTimeOut, schema,
+      {task:'assess_input',input,question,purpose,acceptance});
+    const result = normalizeInputAssessment(response);
+    frame.variables[variable] = result;
+    if ('unavailable' in result && result.unavailable === true) logger.warn(`ASSESS-INPUT step ${step.id || ''} could not validate its field; the input remains unaccepted`);
+  } catch {
+    logger.warn(`ASSESS-INPUT step ${step.id || ''} could not validate its field; the input remains unaccepted`);
+  }
+  return 'Input assessment completed';
 }
 
 function handleSetStep(currentFlowFrame: FlowFrame, engine: Engine): string {
@@ -5224,6 +5352,7 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
         flowName: subFlow.name,
         flowId: subFlow.id,
         flowVersion: subFlow.version,
+        safetyRevision: subFlow.safetyRevision,
         flowStepsStack: cloneFlowValue(subFlow.steps).reverse(),
         contextStack: [{ role: 'user', content: input, timestamp: Date.now() }],
         inputStack: [input],
@@ -5246,6 +5375,7 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
       currentFlowFrame.flowName = subFlow.name;
       currentFlowFrame.flowId = subFlow.id;
       currentFlowFrame.flowVersion = subFlow.version;
+      currentFlowFrame.safetyRevision = subFlow.safetyRevision;
       currentFlowFrame.flowStepsStack = cloneFlowValue(subFlow.steps).reverse();
       addToContextStack(currentFlowFrame.contextStack, 'user', input);
       currentFlowFrame.inputStack.push(input);
@@ -5289,6 +5419,7 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
         flowName: subFlow.name,
         flowId: subFlow.id,
         flowVersion: subFlow.version,
+        safetyRevision: subFlow.safetyRevision,
         flowStepsStack: cloneFlowValue(subFlow.steps).reverse(),
         contextStack: [{ role: 'user', content: input, timestamp: Date.now() }],
         inputStack: [input],
@@ -7045,6 +7176,7 @@ async function handlePendingInterruptionSwitch(engine: Engine, userId: string): 
     flowName: targetFlow,
     flowId: targetFlowDefinition.id,
     flowVersion: targetFlowDefinition.version || '1.0',
+    safetyRevision: targetFlowDefinition.safetyRevision,
     flowStepsStack: cloneFlowValue(targetFlowDefinition.steps).reverse(),
     contextStack: [],
     inputStack: [],
@@ -7129,6 +7261,7 @@ async function handleRegularFlowInterruption(intentAnalysis: any, engine: Engine
         flowName: targetFlow,
         flowId: targetFlowDefinition.id,
         flowVersion: targetFlowDefinition.version || '1.0',
+        safetyRevision: targetFlowDefinition.safetyRevision,
         flowStepsStack: cloneFlowValue(targetFlowDefinition.steps).reverse(),
         contextStack: [], // Start with empty context - don't use interruption input
         inputStack: [],   // Start with empty input stack - new flow will get proper input next
@@ -7654,6 +7787,9 @@ export class WorkflowEngine implements Engine {
     logger = withPiiRedaction(hostLogger); // Assign to global logger (a SAY-GET's `pii` answer never reaches it)
 
     this.aiCallback = aiCallback;
+    for (const flow of flowsMenu) {
+      if (flow.safetyRevision !== undefined && (typeof flow.safetyRevision !== 'string' || !flow.safetyRevision.trim() || flow.safetyRevision !== flow.safetyRevision.trim())) throw new Error('Invalid safetyRevision for flow '+flow.id);
+    }
     this.flowsMenu = applyWraps(flowsMenu);
     if(toolsRegistry.some(tool=>ACTION_TOOLS.some(internal=>internal.id===tool.id)))throw new Error('Internal JSFE action tool identities are reserved');
     this.toolsRegistry = [...toolsRegistry,...ACTION_TOOLS] as ToolDefinition[];
@@ -7728,6 +7864,7 @@ export class WorkflowEngine implements Engine {
       userId: userId,
       createdAt: new Date(),
       lastActivity: new Date(),
+      continuationSafetyRevisions: Object.fromEntries((this.flowsMenu || []).filter(flow=>flow.safetyRevision !== undefined).map(flow=>[flow.id,flow.safetyRevision!])),
       flowStacks: [[]], // Initialize as array with one empty stack (pure data)
       globalAccumulatedMessages: [],
       lastChatTurn: {},
@@ -7839,6 +7976,12 @@ export class WorkflowEngine implements Engine {
         engineSessionContext.lastActivity = this.lastActivity;
       }
 
+      // A durable checkpoint cannot release an already established obsolete-action safety hold.
+      if (contextEntry.role === 'user' && engineSessionContext.continuationSafetyHold) {
+        engineSessionContext.response = retireUnsafeContinuation(this)!;
+        return engineSessionContext;
+      }
+
       // Recover durable effects before the new message can mutate an older saved session.
       // A successfully saved session carries its observed sequence even when acknowledgement failed.
       delete engineSessionContext.lastTurnRecovery;
@@ -7884,6 +8027,11 @@ export class WorkflowEngine implements Engine {
           recoveredAction = true;
         }
 
+      }
+
+      if (contextEntry.role === 'user') {
+        const retired = retireUnsafeContinuation(this, suspendedRecoveryStacks || []);
+        if (retired) { engineSessionContext.response = retired; return engineSessionContext; }
       }
 
       // Role-based processing logic
@@ -8239,6 +8387,8 @@ export class WorkflowEngine implements Engine {
 
   // Stamp the one-shot host-facing outcome for a flow that terminated this turn
   // (sessionContext is private; finalizeFlowTransaction goes through this).
+  getSessionContext(): EngineSessionContext { return this.sessionContext!; }
+
   stampFlowRecovery(recovery: FlowRecovery): void {
     const value=validateFlowRecovery(recovery);
     if(value.form && (this.cargo?.forms as any)?.[value.form]?.definition!==value.flow)throw new Error('Recovery form ownership mismatch');
@@ -8687,7 +8837,7 @@ export class WorkflowEngine implements Engine {
     }
 
     // Validate step type
-    const validStepTypes = ['SAY', 'SAY-GET', 'SET', 'SWITCH', 'CASE', 'CALL-TOOL', 'FLOW', 'RETURN', 'END', 'DISPATCH'];
+    const validStepTypes = ['SAY', 'SAY-GET', 'SET', 'SWITCH', 'CASE', 'CALL-TOOL', 'FLOW', 'RETURN', 'END', 'DISPATCH', 'ASSESS-INPUT'];
     if (!validStepTypes.includes(step.type)) {
       state.errors.push(`Step "${step.id}" in flow "${flowDef.name}" has invalid type: ${step.type}`);
       return;
@@ -8704,6 +8854,10 @@ export class WorkflowEngine implements Engine {
         break;
       case 'SET':
         this._validateSetStep(step, flowDef, state, opts, currentScope);
+        break;
+      case 'ASSESS-INPUT':
+        try { validateSemanticInputStep(step, flowDef); }
+        catch(error:any) { state.errors.push(`ASSESS-INPUT step "${step.id}" in flow "${flowDef.name}": ${error.message}`); }
         break;
       case 'SWITCH':
         this._validateSwitchStep(step, flowDef, state, opts, currentScope);

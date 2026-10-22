@@ -15,7 +15,16 @@ export function moneyIntentAllows(input,intent) {
    const refused=/\b(?:can't|cannot|can not|won't|will not|don't|do not|refuse to)\s+(?:want\s+to\s+)?pay(?:\b|(?=\d))|\bno\s+(?:lo\s+)?(?:se\s+)?(?:puede|pudo|puedo|quiero|voy\s+a)\s+pagar(?:\b|(?=\d))/.test(raw);
    const unable=/\b(?:unable|not able)\s+to\s+pay(?:\b|(?=\d))|\bno\s+(?:soy|somos|es|son)\s+capaz(?:es)?\s+de\s+pagar(?:\b|(?=\d))|\bincapaz\s+de\s+pagar(?:\b|(?=\d))|\b(?:no\s+(?:me\s+)?es\s+posible|me\s+es\s+imposible|no\s+podr[eé])\s+pagar(?:\b|(?=\d))/.test(raw);
    const deferred=/\b(?:pay|paying|pagar|abonar)(?:\b|(?=\d))/.test(raw)&&/\b(?:later|tomorrow|next week|not today|despu[eé]s|m[aá]s tarde|ma[nñ]ana|hasta)\b/.test(raw);
-   return !refused&&!unable&&!deferred;
+   return !refused&&!unable&&!deferred&&!isPastPaymentStatement(raw);
+}
+/** A cents-only continuation needs a complete amount; it is not an independent replacement. */
+export function isPartialMoneyAnswer(input) {
+   return /^\s*(?:and|con|y)\s*(?:un\s+)?\d{1,2}\s*(?:cents?|centavos?)\b/i.test(String(input??''));
+}
+/** Reports of money already paid cannot supply prospective payment amounts or consent. */
+export function isPastPaymentStatement(input) {
+   const raw=String(input??'').replace(/\\(['"\\])/g,'$1').toLowerCase().replace(/[’‘]/g,"'");
+   return /(?<!\b(?:what|that|than|as|if|when|whether)\s)\b(?:i|we)(?:'ve|\s+have|\s+had)?\s+(?:already\s+|just\s+|recently\s+)*paid\b|\b(?:already|just)\s+paid\b|(?<!\b(?:no|nunca|que|cuando)\s)\b(?:ya\s+)?pagu[eé](?![a-záéíóúüñ])|\b(?:acabo|acabamos)\s+de\s+pagar\b/.test(raw);
 }
 function unsupportedCurrency(raw) {
    return /(?:^|[^a-záéíóúüñ])(?:pesos?|mxn|euros?|eur|pounds?|gbp|yen|jpy|cad|aud|nzd|hkd|sgd|chf|canadian|canadienses?|australian|australianos?)(?![a-záéíóúüñ])|[€£¥₱₹₩₽]|\bmx\s*\$/i.test(raw);

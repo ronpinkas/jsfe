@@ -12,7 +12,7 @@ import { matchesChoice } from './matches-choice.js';
 import { pickChoice, amountInAnswer, isAmountAnswer } from './answer.js';
 import { readEmail, readPhone, readInternationalPhone, readIdentifier } from './contact.js';
 import { readSpokenMoney } from './spoken-money.js';
-import {readMoneyAmount,moneyIntentAllows} from './money.js';
+import {readMoneyAmount,moneyIntentAllows,isPastPaymentStatement,isPartialMoneyAnswer} from './money.js';
 import { pickProviderQuestion } from './form-sources.js';
 
 /** The answer as said: jsfe stores user input escaped (don\'t). */
@@ -131,7 +131,10 @@ export function readInputProfile(profile, answer, isCurrent = true) {
       return isCurrent&&profile.accept_other===true&&raw.trim()?{value:raw.trim(),...(profile.narrative===true?{fallback:true}:{}),spans:[[0,raw.length]]}:null;
    } else if (kind === 'amount') {
       const money=profile.money;
+      if(isPartialMoneyAnswer(raw))return {value:raw,incompleteMoney:true,spans:[[0,raw.length]],evidence:['partial-money']};
       const read=money?text=>readMoneyAmount(text,money):amountInAnswer;
+      // A historical report belongs to its task router, not an amount correction or refusal proposal.
+      if(money?.intent==='payment'&&isPastPaymentStatement(raw))return null;
       const refused=!!money&&money.intent==='payment'&&!moneyIntentAllows(raw,'payment');
       // A refusal is an uncommittable validation candidate, never a numeric correction. A declared
       // validator may route it to recovery; the common batch always withholds acceptance.
@@ -278,7 +281,7 @@ export function matchInputs(answer, candidates, current, choiceKey) {
             const isChoice=!isCur(c) && c.profile.kind==='choice';
             const wholeOptions=isChoice ? (c.profile.choices || []).filter(choice=>choice.key===option.value).map(choice=>({...choice,exact:true})) : [];
             const wholeChoice=isChoice && [raw,raw.replace(/\d(?:[\s.-]?\d)*/g,run=>run.replace(/\D/g,''))].some(text=>pickChoice(text,wholeOptions,false)===option.value);
-            readings.push({ form:c.form, name:c.name, value:option.value, ...(option.refused===true?{refused:true}:{}), known, repeatedChoice, wholeChoice, choice:isChoice, correctiveChoice:isChoice && choiceCorrection(raw,wholeOptions,option.value), narrative:isCur(c) && ['text','choice'].includes(c.profile.kind) && c.profile.narrative===true, resetOn:Array.isArray(c.reset_on)?c.reset_on:[], spans:option.spans, keypad:option.keypad === true, fallback:option.fallback === true,
+            readings.push({ form:c.form, name:c.name, value:option.value, ...(option.refused===true?{refused:true}:{}), ...(option.incompleteMoney===true?{incompleteMoney:true}:{}), known, repeatedChoice, wholeChoice, choice:isChoice, correctiveChoice:isChoice && choiceCorrection(raw,wholeOptions,option.value), narrative:isCur(c) && ['text','choice'].includes(c.profile.kind) && c.profile.narrative===true, resetOn:Array.isArray(c.reset_on)?c.reset_on:[], spans:option.spans, keypad:option.keypad === true, fallback:option.fallback === true,
                ...(r.alternatives ? { option_label:option.option_label, option_label_es:option.option_label_es } : {}), group:c.group, exclusive:c.exclusive===true, level:forms.indexOf(c.scope || c.form), current:isCur(c), confirm:Array.isArray(c.confirm_against)?c.confirm_against:[] });
          }
       }

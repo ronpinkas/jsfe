@@ -1,3 +1,4 @@
+import {SEMANTIC_INPUT_REQUIREMENT,hasInputMeaning,semanticInputRuntimeSteps} from '../helpers/semantic-input.js';
 /**
  * The FORM convention's system workers (owner direction and decisions 2026-10-19; spec: the jsfe-flow-designer skill,
  * references/collect-input-pattern.md and references/manifests.md). This file is their SOURCE: the flows below are
@@ -117,6 +118,7 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
       id, name, version, description, scope, metadata:{formProtocol:2}, parameters: [...parameters, { name: 'form_instance', type: 'string', internal: true, description: 'Internal instance to resume' }], ...(primary ? { primary: true } : {}), ...(prompt ? { prompt, prompt_es } : {}),
       variables: vars({ form_on_exhausted:on_exhausted, form_incomplete_outcome:incompleteFrom?null:incomplete_outcome, form_instance: '', form_internal_resume: false, form_resume_owner:'', form_arguments:{}, form_exhaustion:null, form_values: {}, form_validation: '', initial_readings: [], inputs: resolveFormInputs(inputs, FIELD_PRESETS), parent_form: '', result_input: '', questions: [], provides: null, exit_context: '', exit_context_es: '', form_confirm_q: '', form_confirm_q_es: '', form_confirmation:confirm || {}, form_should_confirm:false, ...extraVars }),
       steps: [
+         ...semanticInputRuntimeSteps(id,[],hasInputMeaning(inputs)?[SEMANTIC_INPUT_REQUIREMENT]:[]),
          ...proposalRuntimeSteps(id,[],hasInputProposals(inputs)?[INPUT_PROPOSALS_REQUIREMENT]:[]),
          SET(`${id}_resume_kind`, 'form_internal_resume', '!!form_instance'),
          SET(`${id}_open`, 'form_instance', `openFormInstance(cargo, ${JSON.stringify(id)}, inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: ${resume_on_parent_change===true}, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[${JSON.stringify(id)}] || '' : ''), providers: provides, questions: questions, incomplete_outcome: ${incompleteExpression}, on_exhausted: form_on_exhausted })`),
@@ -169,7 +171,7 @@ const runForm = {
    variables: vars({ rf_stop: '', rf_resume: '', rf_resume_parent:false, rf_parent_resume:null, rf_status: '', rf_next: '', rf_next_form: '', rf_questions: [], rf_provides: null, rf_max: 0, rf_pending: [], rf_deferred:[],rf_proposal:null,rf_proposal_readings:[] }),
    steps: [
       SIDE('rf_resume_policy', '(rf_resume_parent === true && cargo.forms[rf_form] && cargo.forms[rf_form].context_only ? (cargo.forms[rf_form].resume_on_parent_change=true) : true, true)'),
-      SET('rf_ancestor_resume','rf_parent_resume','formParentResume(cargo,rf_form,rf_resume_parent)'),
+      SET('rf_ancestor_resume','rf_parent_resume','formParentResume(cargo,rf_form,rf_resume_parent,nextFormProposal)'),
       WHEN('rf_ancestor_close','rf_parent_resume',SIDE('rf_ancestor_release','(closeFormInstance(cargo,rf_parent_resume.child,false),true)')),
       WHEN('rf_ancestor_reboot','rf_parent_resume',FLOW('rf_ancestor_owner','resume-form','reboot',{form:'{{rf_parent_resume.owner}}'})),
       SIDE('rf_pass_count', '(cargo.forms[rf_form] ? (cargo.forms[rf_form].replays = Number(cargo.forms[rf_form].replays || 0) + 1) : true, true)'),
@@ -251,7 +253,7 @@ const collectInput = {
       WHEN('ci_route_key', 'ci_routed', FLOW('ci_route_key_flow', '{{ci_routed}}', 'call', { form: '{{form}}', input: '{{current}}' })),
       WHEN('ci_routed_end', 'ci_routed', END('ci_routed_done')),
       SET('ci_build_chain', 'ci_chain', CHAIN_JS),
-      SET('ci_match', 'ci_m', "readFormAnswer(cargo.choiceText, ci_chain, ci_names.length > 1 ? { form: form, names: ci_names } : { form: form, name: current }, cargo.choice, provides && Array.isArray(questions) ? questions : [])"),
+      SET('ci_match', 'ci_m', "readFormAnswer(cargo.choiceText, ci_chain, Array.isArray(ci_spec.any_of) ? { form: form, names: ci_names } : { form: form, name: current }, cargo.choice, provides && Array.isArray(questions) ? questions : [])"),
       // The labels and validators ride on each reading, so the presets stay in this one flow.
       SET('ci_enrich','ci_m','enrichFormMatches(ci_m, ci_chain, form, ci_names, current)'),
       SET('ci_question_key', 'ci_qkey', "ci_m.questions.length ? ci_m.questions[0] : !ci_m.hits.length && !ci_m.ambiguous.length && Array.isArray(questions) && questions.length && provides ? pickChoice(cargo.choiceText, questions, false) : ''"),
@@ -286,7 +288,7 @@ const validateBatch = {
    id: 'validate-input-batch', name: 'ValidateInputBatch', version: '2.0.0', scope: 'isolated',
    description: 'Worker: validate dependency-ordered candidates; return accepted, rejected and pending readings before a single commit.',
    parameters: ['hits','accepted','rejected','pending','ignored'].map(name=>({name,type:'array'})),
-   variables: vars({ accepted: [], rejected: [], pending:[], ignored:[], vb_h: null, vb_rest: [], vb_values: {}, vb_known: false, vb_ready: false, vb_relevant:false, vb_outcome: '',vb_candidate:null,vb_proposal_values:{},vb_proposal:null,vb_proposal_ok:true }),
+   variables: vars({ accepted: [], rejected: [], pending:[], ignored:[], vb_h: null, vb_rest: [], vb_values: {}, vb_known: false, vb_ready: false, vb_relevant:false, vb_outcome: '',vb_candidate:null,vb_meaning:null,vb_semantic:null,vb_cancelled:null,vb_proposal_values:{},vb_proposal:null,vb_proposal_ok:true }),
    steps: [
       SET('vb_init_accepted','accepted','Array.isArray(accepted) ? accepted : []'),
       SET('vb_init_rejected','rejected','Array.isArray(rejected) ? rejected : []'),
@@ -303,8 +305,16 @@ const validateBatch = {
       SET('vb_known','vb_known',"!!(!vb_h.revalidate && !vb_h.validate_always && cargo.forms[vb_h.form] && !cargo.forms[vb_h.form].errors[vb_h.name] && cargo.forms[vb_h.form].accepted[vb_h.name] && formValuesEqual(vb_values[vb_h.name], vb_h.value))"),
       SET('vb_outcome','vb_outcome',"vb_known ? 'known' : (hasFormValue(vb_values[vb_h.name]) && !formValuesEqual(vb_values[vb_h.name],vb_h.value) ? 'changed' : (vb_h.current ? 'stored' : 'taken'))"),
       SIDE('vb_reset',"(cargo.inputCheck = vb_h.invalid ? { ok: false } : (vb_h.validator && !vb_known ? null : { ok: true, value: vb_h.value }), true)"),
-      WHEN('vb_validator','vb_ready === true && vb_h.validator && !vb_known && !vb_h.invalid',FLOW('vb_validate','{{vb_h.validator}}','call',{form:'{{vb_h.form}}',input:'{{vb_h.name}}',value:'{{vb_h.value}}',values:'{{vb_values}}',reading:'{{vb_h}}'})),
-      WHEN('vb_refused','vb_h.refused === true',SIDE('vb_withhold_refusal',"(cargo.inputCheck=Object.assign({},cargo.inputCheck || {},{ok:false}),true)")),
+      SET('vb_meaning','vb_meaning',"(function(){var state=cargo.forms[vb_h.form],spec=state && state.specs.flatMap(function(s){return s.any_of || [s];}).find(function(s){return s.name===vb_h.name;});return spec && spec.meaning || null;})()"),
+      SET('vb_semantic_reset','vb_semantic',"({ok:true,disposition:'accept'})"),
+      WHEN('vb_semantic_needed','vb_ready === true && vb_meaning && !vb_known && !vb_h.invalid',FLOW('vb_assess','assess-form-input','call',{form:'{{vb_h.form}}',input:'{{vb_h.name}}',value:'{{vb_h.value}}'})),
+      SET('vb_semantic_read','vb_semantic',"vb_ready === true && vb_meaning && !vb_known && !vb_h.invalid ? cargo.inputMeaningCheck : vb_semantic"),
+      WHEN('vb_semantic_cancelled',"vb_semantic && vb_semantic.disposition === 'cancel'",SET('vb_cancel_task','vb_cancelled',"cancelFormTask(cargo,vb_h.form)")),
+      WHEN('vb_cancel_dispatch','vb_cancelled',{id:'vb_cancelled_dispatch',type:'DISPATCH',outcome:'{{vb_cancelled.outcome}}',reason:'{{vb_cancelled.reason}}',recovery:{version:1,mode:'{{vb_cancelled.recovery.mode}}',reason:'{{vb_cancelled.recovery.reason}}',form:"{{vb_cancelled.recovery.form || ''}}",flow:"{{vb_cancelled.recovery.flow || ''}}"}}),
+      WHEN('vb_semantic_redirect',"vb_semantic && vb_semantic.disposition === 'redirect'",yieldDispatch('vb_meaning_redirect','vb_h.form',"'input_request_changed'")),
+      WHEN('vb_meaning_rejected','!vb_semantic || vb_semantic.ok !== true',SIDE('vb_withhold_meaning',"(cargo.inputCheck={ok:false,message:vb_semantic && vb_semantic.unavailable === true ? 'I could not validate that right now. Please try again.' : 'Please provide the requested information.',message_es:vb_semantic && vb_semantic.unavailable === true ? 'No pude validar eso en este momento. Por favor intente de nuevo.' : 'Por favor proporcione la información solicitada.'},true)")),
+      WHEN('vb_validator','vb_ready === true && vb_h.validator && !vb_known && !vb_h.invalid && vb_semantic && vb_semantic.ok === true',FLOW('vb_validate','{{vb_h.validator}}','call',{form:'{{vb_h.form}}',input:'{{vb_h.name}}',value:'{{vb_h.value}}',values:'{{vb_values}}',reading:'{{vb_h}}'})),
+      WHEN('vb_refused','vb_h.refused === true || vb_h.incompleteMoney === true',SIDE('vb_withhold_refusal',"(cargo.inputCheck=Object.assign({},cargo.inputCheck || {},{ok:false}),true)")),
       SET('vb_candidate','vb_candidate',"Object.assign({},vb_h,{ok:!!(cargo.inputCheck && cargo.inputCheck.ok === true),value:cargo.inputCheck && cargo.inputCheck.value !== undefined && cargo.inputCheck.value !== null ? cargo.inputCheck.value : vb_h.value,message:cargo.inputCheck && cargo.inputCheck.message,message_es:cargo.inputCheck && cargo.inputCheck.message_es})"),
       SET('vb_proposal_policy','vb_proposal','vb_relevant === true && vb_ready === true && vb_candidate.ok && !vb_known ? formProposalPolicy(cargo,vb_candidate,cargo.inputCheck,accepted) : null'),
       SET('vb_proposal_values','vb_proposal_values','proposedFormValues(cargo,vb_h.form,accepted.concat([vb_candidate]))'),
@@ -317,6 +327,31 @@ const validateBatch = {
       FLOW('vb_next','validate-input-batch','replace',{hits:'{{vb_rest}}',accepted:'{{accepted}}',rejected:'{{rejected}}',pending:'{{pending}}',ignored:'{{ignored}}'}),
    ],
 };
+const requestCancelled={
+ id:'request-cancelled',name:'RequestCancelled',version:'1.0.0',scope:'isolated',description:'Retire an explicitly withdrawn owning request and acknowledge it; preserve unknown actions for reconciliation.',
+ parameters:[{name:'form',type:'string'}],variables:vars({form:'',cancelled:null}),
+ steps:[SET('cancel_request_owner','cancelled','cancelFormTask(cargo,form)'),
+ {id:'cancel_request_notice',type:'SAY',value:"{{cancelled.recovery.mode === 'hold' ? 'The result of your earlier request is still unknown. Our team needs to check it before another attempt.' : 'Okay, I stopped this request. Is there anything else I can help you with?'}}",value_es:"{{cancelled.recovery.mode === 'hold' ? 'El resultado de su solicitud anterior sigue sin confirmarse. Nuestro equipo debe revisarlo antes de otro intento.' : 'De acuerdo, detuve esta solicitud. ¿Hay algo más en lo que le pueda ayudar?'}}",outcome:'{{cancelled.outcome}}',reason:'{{cancelled.reason}}',recovery:{version:1,mode:'{{cancelled.recovery.mode}}',reason:'{{cancelled.recovery.reason}}',form:"{{cancelled.recovery.form || ''}}",flow:"{{cancelled.recovery.flow || ''}}"}}]
+};
+const assessFormInput={
+ id:'assess-form-input',name:'AssessFormInput',version:'1.0.0',scope:'isolated',description:'Validate a candidate against the owning field’s declared meaning without changing its words or authorizing actions.',
+ parameters:[{name:'form',type:'string'},{name:'input',type:'string'},{name:'value',type:'string'}],
+ variables:vars({group:null,spec:null,purpose:'',acceptance:'',question:'',assessment:null}),
+ steps:[SET('meaning_group','group',"cargo.forms[form].specs.find(function(s){return s.name===input || s.any_of && s.any_of.some(function(member){return member.name===input;});})"),SET('meaning_spec','spec',"group && (group.any_of ? group.any_of.find(function(s){return s.name===input;}) : group)"),
+  {...SET('meaning_declared','noop','!!spec && !!spec.meaning && !!validateInputMeaning(spec.meaning)'),requireTrue:true},
+  SET('meaning_question','question',"formInputPrompt(cargo,form,input,Object.assign({},group,spec,{question:spec.question || group.question,question_es:spec.question_es || group.question_es,question_from:spec.question_from || group.question_from}),cargo.forms[form].data || {},language)"),
+  SET('meaning_purpose','purpose','spec.meaning.purpose'),SET('meaning_acceptance','acceptance','spec.meaning.acceptance'),
+  {id:'meaning_assess',type:'ASSESS-INPUT',value:'{{value}}',question:'{{question}}',purpose:'{{purpose}}',acceptance:'{{acceptance}}',variable:'assessment'},
+  SIDE('meaning_result','(cargo.inputMeaningCheck=assessment,true)')]
+};
+// Adapter for legacy callers: the same optional semantic contract and bounded FORM lifecycle.
+const collectSemanticAnswer=formFlow({id:'collect-semantic-answer',name:'CollectSemanticAnswer',description:'Collect one meaningful field using explicit purpose and acceptance criteria, preserving the caller’s wording.',
+ parameters:[...['question','question_es','purpose','acceptance','context','context_es'].map(name=>({name,type:'string'})),{name:'choices',type:'array'},{name:'digits',type:'object'}],
+ extraVars:{question:'',question_es:'',purpose:'',acceptance:'',context:'your request',context_es:'su solicitud',choices:[],digits:null},
+ inputs:[{name:'answer',profile:{kind:'text',narrative:true},meaning:{purpose:'Use the caller declaration supplied to this collector.',acceptance:'Use the caller acceptance criteria supplied to this collector.'},question_from:'question'}],
+ before:[{...SET('semantic_policy_required','noop',"typeof purpose==='string' && !!purpose.trim() && typeof acceptance==='string' && !!acceptance.trim()"),requireTrue:true},
+ SIDE('semantic_declaration',"(function(){var state=cargo.forms[form_instance];state.data={question:question,question_es:question_es};state.specs[0].meaning={purpose:purpose,acceptance:acceptance};state.specs[0].profile=choices.length ? {kind:'choice',choices:choices,accept_other:true,narrative:true} : {kind:'text',narrative:true};state.specs[0].digits=digits;return true;})()"),SET('semantic_context','exit_context','context'),SET('semantic_context_es','exit_context_es','context_es')],
+ after:[SIDE('semantic_return',"(cargo.semanticAnswer={value:cargo.forms[form_instance].values.answer,raw:String(cargo.choiceText || '')},cargo.choice=cargo.semanticAnswer.value,cargo.choiceText=cargo.semanticAnswer.raw,true)")]});
 const accept = {
    id: 'collect-input-accept', name: 'CollectInputAccept', version: '2.0.0', scope: 'isolated',
    description: 'Worker: validate all readings, commit accepted changes once with transitive invalidation, then acknowledge and run declared callbacks.',
@@ -711,13 +746,16 @@ const resumeForm={id:'resume-form',name:'ResumeForm',version:'1.0.0',scope:'isol
       SET('resume_definition','target','cargo.forms[form].definition'),SET('resume_parent','parent',"cargo.forms[form].parent || ''"),SET('resume_slot','slot',"cargo.forms[form].result_input || ''"),
       FLOW('resume_owned_form','{{target}}','replace',{form_instance:'{{form}}',parent_form:'{{parent}}',result_input:'{{slot}}'})
    ]};
-const LIBRARY_FLOWS = [confirmInputProposal,proposalDeclined,resumeForm,performAction, sendTextAction, prepareInput, runForm, collectInput, validateBatch, accept, acceptedEffects, disambiguate, confirmForm, formDone, providerMenu, ...validators, ...fieldCollectors, ...subForms, provideData, provideQueuedData, loadSource, answerFacts];
+const LIBRARY_FLOWS = [confirmInputProposal,proposalDeclined,resumeForm,performAction, sendTextAction, prepareInput, runForm, collectInput, validateBatch, requestCancelled, assessFormInput, collectSemanticAnswer, accept, acceptedEffects, disambiguate, confirmForm, formDone, providerMenu, ...validators, ...fieldCollectors, ...subForms, provideData, provideQueuedData, loadSource, answerFacts];
 const LIBRARY_CONTRACTS={
    'confirm-input-proposal':{role:'collector',requires:[INPUT_PROPOSALS_REQUIREMENT]},'confirm-input-proposal-declined':{role:'worker',requires:[INPUT_PROPOSALS_REQUIREMENT]},
    'resume-form':{role:'worker'},
    'perform-action':{role:'worker',tools:['jsfe:action-claim','jsfe:action-complete'],result:{path:'cargo.actionResult',type:'object'}},
    'send-text-action':{role:'worker',result:{path:'cargo.actionOutcome',type:'object'}},
    'prepare-input':{role:'worker'},'run-form':{role:'worker'},'collect-input':{role:'worker'},
+   'request-cancelled':{role:'worker',requires:[SEMANTIC_INPUT_REQUIREMENT]},
+   'assess-form-input':{role:'worker',requires:[SEMANTIC_INPUT_REQUIREMENT],result:{path:'cargo.inputMeaningCheck',type:'object'}},
+   'collect-semantic-answer':{role:'collector',requires:[SEMANTIC_INPUT_REQUIREMENT]},
    'validate-input-batch':{role:'worker',result:{path:'cargo.inputBatch',type:'object'}},
    'collect-input-accept':{role:'worker'},'input-accepted-effects':{role:'worker'},
    'disambiguate-input':{role:'worker'},'confirm-form':{role:'worker'},'form-done':{role:'worker'},
@@ -735,6 +773,6 @@ export const FLOWS=LIBRARY_FLOWS.map(flow=>{
    const declaration=LIBRARY_CONTRACTS[flow.id];
    if(!declaration)throw new Error('Shared worker needs an explicit contract: '+flow.id);
    if((declaration.role==='collector')!==(flow.metadata?.formProtocol===2))throw new Error('Shared collector contract mismatch: '+flow.id);
-   return {...flow,steps:proposalRuntimeSteps(flow.id,flow.steps,declaration.requires),variables:{...flow.variables,contract:{type:'object',value:{version:1,summary:flow.description,
+   return {...flow,steps:semanticInputRuntimeSteps(flow.id,proposalRuntimeSteps(flow.id,flow.steps,declaration.requires),declaration.requires),variables:{...flow.variables,contract:{type:'object',value:{version:1,summary:flow.description,
       parametersFrom:'parameters',...declaration,...(declaration.role==='collector'?{form:{inputs:'inputs'}}:{})}}}};
 });

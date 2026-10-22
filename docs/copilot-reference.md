@@ -93,3 +93,8 @@ Multiple assignments MUST use comma operator, NEVER semicolons (semicolons termi
 1. SAY in an onFail handler — An onFail with a SAY step will display the error message but then continue to the next step, typically leading to unintended behavior. Use FLOW with reboot to a handler, or RETURN.
 2. SAY in a CASE/SWITCH branch — A branch whose only step is SAY will continue execution into the following step. If the flow should terminate at that point, follow it with END (back to the caller) or use RETURN (with a language-aware expression), or FLOW with reboot.
 3. Referencing non-existent flows — Every FLOW step value must be a flow ID that exists. Return an array of flows if new sub-flows are needed.
+
+
+### Optional field assessment (unreleased)
+
+An `ASSESS-INPUT` step validates a field separately from intent routing. Declare an object `variable`, and string templates `value`, `question`, `purpose`, and `acceptance`. The callback receives `task: "assess_input"` and a strict schema for `{ok, disposition}`. Only `{ok: true, disposition: "accept"}` accepts a value; the engine never rewrites the supplied text. Missing callbacks, unavailable models, timeouts, invalid JSON and contradictory verdicts return an unaccepted retry. FORM input `meaning` declarations invoke this generic step; ordinary inputs do not invoke it. See forms.md for the declaration and cancellation/recovery rules.

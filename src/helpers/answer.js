@@ -59,7 +59,7 @@ const NEGATIONS = ['no', 'not', 'nope', 'nah', 'never', 'dont', 'doesnt', 'didnt
 // Phrases that hold a negation word but agree ("no problem", "why not").
 const AGREEING = /\b(no problem|no worries|no hay problema|no te preocupes|why not|por que no|por qué no)\b/g;
 const DEFERRAL = /\b(later|tomorrow|next week|not now|not today|another time|mañana|manana|después|despues|luego|otro día|otro dia|ahora no|hoy no)\b/;
-const AGENT_ONLY = /^(?:(?:i want|i need|i would like|id like|can i|could i|let me|please|quiero|necesito|puedo|por favor)\s+)*(?:(?:to\s+)?(?:talk|speak|hablar|comunicarme)\s+(?:to|with|con)\s+)?(?:a|an|un|una|el|la)?\s*(?:live agent|agent|representative|rep|human|operator|real person|a person|person|someone|somebody|customer service|agente|representante|humano|operador|operadora|persona|alguien|servicio al cliente|gerente|manager|supervisor)(?:\s+(?:please|por favor))?$/;
+const AGENT_ONLY = /^(?:(?:i want|i need|i would like|id like|can i|could i|let me|please|quiero|necesito|puedo|por favor)\s+)*(?:(?:to\s+)?(?:talk|speak|hablar|comunicarme)\s+(?:to|with|con)\s+)?(?:a|an|un|una|el|la)?\s*(?:live agent|agent|representative|rep|human|operator|real person|a person|person|someone|somebody|customer service|agente|representante|humano|operador|operadora|persona|alguien|servicio al cliente|agente en vivo|gerente|manager|supervisor)(?:\s+(?:please|por favor))?$/;
 
 // Accents are not meaning here (owner 2026-10-16): text callers type "direccion" for "dirección", "si" for "sí". Both
 // sides of every comparison pass through normalize, so a word list matches with or without them; ñ is kept.
@@ -266,7 +266,7 @@ export function isAmountAnswer(input) {
 }
 
 // A number that names something other than an amount: an account or sub-account, a card's last digits, a code, a ZIP.
-const IDENTIFIER_NUMBER = /\b(?:sub[\s-]?accounts?|accounts?|subcuentas?|cuentas?|cards?|tarjetas?|ending(?:\s+in)?|terminad[ao]s?\s+en|que\s+termina\s+en|termina\s+en|codes?|c[oó]digos?|zip(?:\s+code)?|postal|n[uú]mero|number)\s*(?:de\s+|is\s+|es\s+)?\d[\d\s-]*/gi;
+const IDENTIFIER_NUMBER = /\b(?:sub[\s-]?accounts?|accounts?|subcuentas?|cuentas?|cards?|tarjetas?|ending(?:\s+in)?|terminad[ao]s?\s+en|que\s+termina(?:\s+en)?|termina(?:\s+en)?|codes?|c[oó]digos?|zip(?:\s+code)?|postal|n[uú]mero|number)\s*(?:de\s+|is\s+|es\s+)?\d[\d\s-]*/gi;
 // Digits spoken one at a time ("2 4 8 6"): a card ending or a code read back, never an amount.
 const SPELLED_DIGITS = /\b\d(?:\s+\d\b){2,}/g;
 // "10 con 18 centavos", "10 dollars and 18 cents", "$10 y 18 centavos"; speech-to-text also writes "76 con50 centavos", and
@@ -292,6 +292,12 @@ export function amountInAnswer(input) { return numericAmountReading(input).value
 /** Internal numeric evidence shared by the opt-in money reader; legacy results stay unchanged. */
 export function numericAmountReading(input) {
    const raw = String(input ?? '').replace(/\\(['"\\])/g, '$1');
+   // A connector plus cents is a fragment of another amount, not a new standalone payment.
+   // A caller can instead explicitly request "51 cents" or provide the complete dollars and cents.
+   if (/^\s*(?:and|con|y)\s*(?:un\s+)?\d{1,2}\s*(?:cents?|centavos?)\b/i.test(raw)) return {value:NaN,candidates:0};
+   // Last-four references (including a repeated unlabelled number) do not supply an amount.
+   // Mixed answers with an explicit monetary marker or payment verb still parse their independent amount.
+   if (/\b(?:cards?|tarjetas?|ending|termina(?:d[ao]s?)?|visa|mastercard|amex|discover)\b/i.test(raw) && !isAmountAnswer(raw) && !/\b(?:pay|paying|pagar|abonar)(?:\b|(?=\d))/i.test(raw)) return {value:NaN,candidates:0};
    // 1.234,56 (European) → 1234.56; 1,234.56 → 1234.56; 12,50 → 12.50
    let t = /\d{1,3}(\.\d{3})+,\d{1,2}\b/.test(raw) ? raw.replace(/\./g, '').replace(',', '.') : raw.replace(/,(?=\d{3}\b)/g, '').replace(/(\d),(\d{1,2})\b/g, '$1.$2');
    const dc = t.match(DOLLARS_AND_CENTS);
