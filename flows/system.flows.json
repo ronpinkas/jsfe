@@ -1148,7 +1148,9 @@
             "id": "off_topic_handoff",
             "type": "DISPATCH",
             "outcome": "unresolved",
-            "reason": "auth_prompt_off_topic"
+            "reason": "auth_prompt_off_topic",
+            "onResponse": "continue",
+            "responseContext": "account identifier: phone number, email address or account number (teléfono, correo o número de cuenta)"
           },
           "default": {
             "id": "retry_cell_or_email",
@@ -1164,6 +1166,33 @@
               "retry_call_type": "{{gce_retry_type}}",
               "gce_menu": true
             }
+          }
+        }
+      },
+      {
+        "id": "retry_unmapped_response",
+        "type": "CASE",
+        "branches": {
+          "condition: !cell_number && !email && !acct_number": {
+            "id": "retry_unmapped_contact",
+            "type": "FLOW",
+            "value": "generic-retry-with-options",
+            "callType": "replace",
+            "parameters": {
+              "error_message": "Sorry, I do need the phone or email associated with your account{{gce_or}} to proceed.",
+              "error_message_es": "Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta{{gce_or_es}} para continuar.",
+              "retry_flow": "{{retry_flow}}",
+              "cancel_flow": "{{cancel_flow}}",
+              "capture_patterns": "{{cargo.authCapture}}",
+              "retry_call_type": "{{gce_retry_type}}",
+              "gce_menu": true
+            }
+          },
+          "default": {
+            "id": "contact_already_identified",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "true"
           }
         }
       },

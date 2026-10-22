@@ -21,8 +21,16 @@ const EMAIL_LEAD_IN = new Set(['my', 'mi', 'su', 'your', 'email', 'e-mail', 'mai
  * back to the first lead-in word ("my email is", "mi correo es") is kept and joined. On a call the address is read
  * back for a YES / NO, so a misheard piece can be corrected; a dropped one could not. Accents are dropped from the
  * name (an address cannot carry them), and only the last @ counts.
+ * With `{literal:true}`, a complete visible address wins over surrounding prose; absent one,
+ * the same spoken/spelled parsing applies. Distinct visible addresses are ambiguous and return empty.
  */
-export function readEmail(text) {
+export function readEmail(text, { literal = false } = {}) {
+   // Contextual prose must not become part of an already complete, visible address. This
+   // explicit mode preserves the default spoken/spelled-name grammar for existing callers.
+   if (literal) {
+      const addresses = [...String(text ?? '').matchAll(/(?<![a-z0-9._%+@-])([a-z0-9][a-z0-9._%+-]*@[a-z0-9.-]+\.[a-z]{2,})(?![a-z0-9_@-])/gi)].map(match=>match[1].toLowerCase());
+      if (addresses.length) return new Set(addresses).size === 1 ? addresses[0] : '';
+   }
    const spoken = String(text ?? '')
       .replace(/\s+(?:at|arroba)\s+/gi, ' @ ')
       .replace(/\s+(?:dot|punto)\s+/gi, '.')

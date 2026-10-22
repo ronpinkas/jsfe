@@ -119,7 +119,7 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
       steps: [
          ...proposalRuntimeSteps(id,[],hasInputProposals(inputs)?[INPUT_PROPOSALS_REQUIREMENT]:[]),
          SET(`${id}_resume_kind`, 'form_internal_resume', '!!form_instance'),
-         SET(`${id}_open`, 'form_instance', `openFormInstance(cargo, ${JSON.stringify(id)}, inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[${JSON.stringify(id)}] || '' : ''), providers: provides, questions: questions, incomplete_outcome: ${incompleteExpression}, on_exhausted: form_on_exhausted })`),
+         SET(`${id}_open`, 'form_instance', `openFormInstance(cargo, ${JSON.stringify(id)}, inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: ${resume_on_parent_change===true}, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[${JSON.stringify(id)}] || '' : ''), providers: provides, questions: questions, incomplete_outcome: ${incompleteExpression}, on_exhausted: form_on_exhausted })`),
          SIDE(`${id}_task`, `(!parent_form ? (cargo.formTasks = cargo.formTasks || {}, cargo.formTasks[${JSON.stringify(id)}] = form_instance) : true, true)`),
          SIDE(`${id}_provider_reset`, '(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].providerGateActive, true)'),
          SIDE(`${id}_pass_reset`, '(cargo.forms[form_instance].replays = 0, form_internal_resume ? true : (cargo.forms[form_instance].attempts = {},cargo.forms[form_instance].misses={},cargo.forms[form_instance].feedback={}), true)'),
@@ -129,11 +129,6 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
          SET(`${id}_initial`, 'initial_readings', 'form_internal_resume ? [] : formInitialReadings(cargo.forms[form_instance], currentContext, cargo)'),
          WHEN(`${id}_accept_initial`, 'initial_readings.length > 0', FLOW(`${id}_initial_accept`, 'collect-input-accept', 'call', { hits: '{{initial_readings}}' })),
          FLOW(`${id}_run`, 'run-form', 'call', { rf_form: '{{form_instance}}', ...(resume_on_parent_change ? {rf_resume_parent:true} : {}), ...(stop ? { rf_stop: stop } : {}) }),
-         ...(resume_on_parent_change ? [
-            WHEN(`${id}_parent_capture`, "rf_status === 'parent_changed'", SET(`${id}_parent_id`,'form_resume_owner','cargo.forms[form_instance].parent')),
-            WHEN(`${id}_parent_close`, "rf_status === 'parent_changed'", SIDE(`${id}_parent_release`,'(closeFormInstance(cargo, form_instance, false), true)')),
-            WHEN(`${id}_parent_resume`, "rf_status === 'parent_changed'", FLOW(`${id}_parent_reenter`,'resume-form','reboot',{form:'{{form_resume_owner}}'})),
-         ] : []),
          ...(close_on_stop ? [WHEN(`${id}_close_stopped`, "rf_status === 'stopped'", SIDE(`${id}_stop_close`, '(closeFormInstance(cargo, form_instance, false), true)'))] : []),
          WHEN(`${id}_left`, "rf_status !== 'complete' || !cargo.forms[form_instance]", END(`${id}_left_end`)),
          ...(validator ? [
@@ -171,13 +166,15 @@ const runForm = {
    id: 'run-form', name: 'RunForm', version: '1.0.0',
    description: "Worker (shared scope, called by a form flow): the FORM loop. Merges the form's activation parameters into cargo.forms[rf_form] once, then each pass finds the first missing input whose `when` holds, collects it (collect-input) or runs its sub-form, and replaces itself until nothing is missing. Sets rf_status: 'complete' | 'stopped' (a path in rf_stop was set) | 'unwound'. Reads the form's `inputs`, `parent_form`, `result_input`, `questions`, `provides`, `exit_context(_es)`.",
    parameters: [{name:'rf_resume_parent',type:'boolean',description:'Yield a context collector when its owning form accepts a change'}, { name: 'rf_form', type: 'string', description: 'The form id (the calling form flow id)' }, { name: 'rf_resume', type: 'string', description: "'true' on the loop's own replays" }, { name: 'rf_stop', type: 'string', description: 'A cargo path (or list) that ends the form when set' }],
-   variables: vars({ rf_stop: '', rf_resume: '', rf_resume_parent:false, rf_status: '', rf_next: '', rf_next_form: '', rf_questions: [], rf_provides: null, rf_max: 0, rf_pending: [], rf_deferred:[],rf_proposal:null,rf_proposal_readings:[] }),
+   variables: vars({ rf_stop: '', rf_resume: '', rf_resume_parent:false, rf_parent_resume:null, rf_status: '', rf_next: '', rf_next_form: '', rf_questions: [], rf_provides: null, rf_max: 0, rf_pending: [], rf_deferred:[],rf_proposal:null,rf_proposal_readings:[] }),
    steps: [
+      SIDE('rf_resume_policy', '(rf_resume_parent === true && cargo.forms[rf_form] && cargo.forms[rf_form].context_only ? (cargo.forms[rf_form].resume_on_parent_change=true) : true, true)'),
+      SET('rf_ancestor_resume','rf_parent_resume','formParentResume(cargo,rf_form,rf_resume_parent)'),
+      WHEN('rf_ancestor_close','rf_parent_resume',SIDE('rf_ancestor_release','(closeFormInstance(cargo,rf_parent_resume.child,false),true)')),
+      WHEN('rf_ancestor_reboot','rf_parent_resume',FLOW('rf_ancestor_owner','resume-form','reboot',{form:'{{rf_parent_resume.owner}}'})),
       SIDE('rf_pass_count', '(cargo.forms[rf_form] ? (cargo.forms[rf_form].replays = Number(cargo.forms[rf_form].replays || 0) + 1) : true, true)'),
       SET('rf_pass', 'rf_status', "formInstanceApplies(cargo, rf_form) ? '' : (closeFormInstance(cargo, rf_form, false), 'unwound')"),
       WHEN('rf_unwound', "rf_status === 'unwound'", END('rf_unwound_end')),
-      WHEN('rf_parent_changed',"rf_resume_parent === true && cargo.forms[rf_form].context_only && cargo.forms[cargo.forms[rf_form].parent].revision !== cargo.forms[rf_form].parent_revision",SET('rf_parent_status','rf_status',"'parent_changed'")),
-      WHEN('rf_parent_end',"rf_status === 'parent_changed'",END('rf_parent_changed_end')),
       SET('rf_cap', 'rf_max', 'formWorkLimit(cargo, rf_form)'),
       WHEN('rf_runaway', 'cargo.forms[rf_form].replays > rf_max', incompleteDispatch('rf_runaway_out','rf_form',"rf_form+'_incomplete'")),
       WHEN('rf_stopped_early', '[].concat(rf_stop || []).some(function(p) { return !!formPath({cargo:cargo}, p); })', SET('rf_stopped_status','rf_status',"'stopped'")),
@@ -241,7 +238,9 @@ const collectInput = {
       SET('ci_own_choices', 'ci_choices', "ci_spec.choices_from && Array.isArray(ci_d[ci_spec.choices_from]) ? ci_d[ci_spec.choices_from] : (ci_spec.profile.kind === 'choice' && Array.isArray(ci_spec.profile.choices) ? ci_spec.profile.choices : [])"),
       SET('ci_keypad', 'ci_digits', 'ci_spec.digits || null'),
       SET('ci_is_amount', 'ci_amount', "ci_spec.amount === 'marked' ? 'marked' : (ci_spec.amount === true || ci_spec.profile.kind === 'amount')"),
-      SET('ci_as_spoken','ci_as_spoken','ci_spec.as_spoken === true'),
+      // FORM profile readers own normalization and compound matching. Never discard other
+      // fields through question-specific voice cleanup before they see the original answer.
+      SET('ci_as_spoken','ci_as_spoken','ci_spec.as_spoken !== false'),
       SET('ci_is_pii', 'ci_pii', 'ci_spec.pii === true'),
       SET('ci_precheck', 'ci_pre', "ci_spec.answer_precheck || ''"),
       SET('ci_validator', 'ci_val', "ci_spec.answer_validator || ''"),

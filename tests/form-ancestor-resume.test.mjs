@@ -1,0 +1,16 @@
+/** Stale owned context ancestors must yield to their updated owner, including through unflagged wrappers. */
+import assert from 'node:assert/strict';
+import {openFormInstance,formParentResume,formInstanceApplies} from '../src/helpers/form-state.js';
+let checks=0;const test=(name,run)=>{run();checks++;console.log('PASS '+name);};
+function chain(){const cargo={};const root=openFormInstance(cargo,'root',[]);const outer=openFormInstance(cargo,'outer',[],{parent:root,context:true,resume_on_parent_change:true});const inner=openFormInstance(cargo,'inner',[],{parent:outer,context:true});return {cargo,root,outer,inner};}
+test('unflagged inner wrapper exposes stale opted-in grandparent owner',()=>{const {cargo,root,outer,inner}=chain();cargo.forms[root].revision++;const before=structuredClone(cargo);assert.deepEqual(formParentResume(cargo,inner),{owner:root,child:outer});assert.deepEqual(cargo,before,'Resolver is pure');});
+test('unchanged ancestry produces no resume',()=>{const {cargo,inner}=chain();assert.equal(formParentResume(cargo,inner),null);});
+test('an outer stale context wins over a second stale inner context',()=>{const {cargo,root,outer,inner}=chain();cargo.forms[inner].resume_on_parent_change=true;cargo.forms[root].revision++;cargo.forms[outer].revision++;assert.deepEqual(formParentResume(cargo,inner),{owner:root,child:outer});});
+test('the explicit current flag supports earlier callers without persisted policy',()=>{const {cargo,outer,inner}=chain();cargo.forms[outer].revision++;assert.deepEqual(formParentResume(cargo,inner,true),{owner:outer,child:inner});assert.equal(cargo.forms[inner].resume_on_parent_change,false);});
+test('ordinary contexts are unchanged by default',()=>{const {cargo,root,outer,inner}=chain();cargo.forms[outer].resume_on_parent_change=false;cargo.forms[root].revision++;assert.equal(formParentResume(cargo,inner),null);});
+test('a removed owner cannot be resumed',()=>{const {cargo,root,inner}=chain();delete cargo.forms[root];assert.equal(formParentResume(cargo,inner),null);});
+test('a closed owner cannot be resumed',()=>{const {cargo,root,inner}=chain();cargo.forms[root].revision++;cargo.forms[root].status='closed';assert.equal(formParentResume(cargo,inner),null);});
+test('a sibling substituted into the ownership map invalidates the old chain',()=>{const {cargo,root,outer,inner}=chain();cargo.forms[root].revision++;cargo.forms[root].contexts.outer='another-child';assert.equal(formParentResume(cargo,inner),null);assert.ok(cargo.forms[outer]);});
+test('a cross-task owner cannot supply recovery authority',()=>{const {cargo,root,inner}=chain();cargo.forms[root].revision++;cargo.forms[root].task='other-task';assert.equal(formParentResume(cargo,inner),null);});
+test('cycles reject both the resume descriptor and applicability without recursive overflow',()=>{const {cargo,root,outer,inner}=chain();cargo.forms[root].parent=inner;cargo.forms[root].context_only=true;cargo.forms[inner].contexts.root=root;cargo.forms[root].revision++;assert.equal(formParentResume(cargo,inner),null);assert.equal(formInstanceApplies(cargo,outer),false);});
+console.log(`Ancestor resume state: all checks passed (${checks})`);

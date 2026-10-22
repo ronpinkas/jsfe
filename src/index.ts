@@ -2573,8 +2573,47 @@ function reportToolFailure(engine: Engine, tool: ToolDefinition, result: unknown
   }
 }
 
-function validateToolArgs(tool: ToolDefinition, args: Record<string, unknown>): Record<string, unknown> {
-  if (!tool.parameters) return args; // No validation schema
+// Flat parameter maps and object schemas describe named argument bags. Explicitly non-object
+// schemas retain their existing typed values, including a declared nullable root.
+function usesToolArgumentBag(schema: any): boolean {
+  const type = schema?.type;
+  if (typeof type === 'string') return type === 'object';
+  if (Array.isArray(type)) return type.every((name: unknown) => name === 'object');
+  if (schema === undefined || schema === null) return true;
+  if (typeof schema !== 'object') return false;
+  // A typeless JSON Schema can admit primitive/array/null roots. Only a clear flat field
+  // map has the named-bag contract; do not infer it from a schema's missing `type`.
+  const objectKeywords = ['properties', 'patternProperties', 'additionalProperties', 'propertyNames',
+    'items', 'additionalItems', 'contains', 'unevaluatedProperties', 'unevaluatedItems',
+    'allOf', 'anyOf', 'oneOf', 'not', 'if', 'then', 'else', 'enum', 'const', 'contentSchema'];
+  if (Object.keys(schema).some((key) => key.startsWith('$') || objectKeywords.includes(key))) return false;
+  return Object.values(schema).every((field) => field !== null && typeof field === 'object' && !Array.isArray(field));
+}
+
+function validateToolArgs(tool: ToolDefinition, supplied: unknown): Record<string, unknown> {
+  const declared: any = tool.parameters || tool.schema;
+  let args: any = supplied;
+  const objectBranch = Array.isArray(declared?.type) && declared.type.includes('object') &&
+    supplied !== null && typeof supplied === 'object' && !Array.isArray(supplied);
+  if (usesToolArgumentBag(declared) || objectBranch) {
+    // A null/absent previous tool result supplies no named arguments. Never pass that value to
+    // a positional adapter, or mutate a previous result while filling this tool's defaults.
+    if (supplied !== null && supplied !== undefined && (typeof supplied !== 'object' || Array.isArray(supplied))) {
+      throw new Error('Tool arguments must be an object');
+    }
+    if (supplied === null || supplied === undefined) {
+      args = {};
+      const properties = declared?.properties || (declared && !declared.type ? declared : {});
+      for (const [key, property] of Object.entries(properties) as [string, any][]) {
+        if (property && typeof property === 'object' && property.default !== undefined) {
+          // Only a newly normalized absent bag receives defaults. Preserve supplied objects
+          // and their existing adapter/payload semantics; each new default owns its JSON copy.
+          args[key] = JSON.parse(JSON.stringify(property.default));
+        }
+      }
+    }
+  }
+  if (!tool.parameters) return args; // Preserve the existing schema validation policy.
   if (!ajv) return args; // ajv not available — skip validation
 
   const validate = ajv.compile(tool.parameters);
@@ -2913,8 +2952,8 @@ async function detectLanguage(input: string, engine: Engine): Promise<string> {
 }
 
 // === FLOW EXECUTION ENGINE WITH ENHANCED ERROR HANDLING ===
-async function isFlowActivated(input: string, engine: Engine, userId: string = 'anonymous') {
-  const result = await detectFlowWithParameters(input, engine);
+async function isFlowActivated(input: string, engine: Engine, userId: string = 'anonymous', detected?: Awaited<ReturnType<typeof detectFlowWithParameters>> | null) {
+  const result = detected === undefined ? await detectFlowWithParameters(input, engine) : detected;
 
   if (result && result.flow) {
     const flow = result.flow;
@@ -2972,6 +3011,14 @@ async function isFlowActivated(input: string, engine: Engine, userId: string = '
   }
 
   return null;
+}
+
+function stampStepRecovery(step: any, currentFlowFrame: FlowFrame, engine: Engine): void {
+  if (step.recovery !== undefined) {
+    const resolved = Object.fromEntries(Object.entries(step.recovery).map(([key,value]) => [key,typeof value === 'string' && value.includes('{{') ? interpolateMessage(value,currentFlowFrame.contextStack,currentFlowFrame.variables,engine).trim() : value]));
+    if(resolved.form===''&&resolved.flow===''){delete resolved.form;delete resolved.flow;}
+    engine.stampFlowRecovery(validateFlowRecovery(resolved));
+  }
 }
 
 async function playFlowFrame(engine: Engine): Promise<string | null> {
@@ -3156,12 +3203,8 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
     const startTime = Date.now();
 
     try {
-      if (step.recovery !== undefined) {
-        const declaration = step.recovery;
-        const resolved = Object.fromEntries(Object.entries(declaration).map(([key,value]) => [key,typeof value === 'string' && value.includes('{{') ? interpolateMessage(value,currentFlowFrame.contextStack,currentFlowFrame.variables,engine).trim() : value]));
-        if(resolved.form===''&&resolved.flow===''){delete resolved.form;delete resolved.flow;}
-        engine.stampFlowRecovery(validateFlowRecovery(resolved));
-      }
+      // A conditional handoff declares recovery only after a target has been selected.
+      if (!(step.type === 'DISPATCH' && step.onResponse === 'continue')) stampStepRecovery(step,currentFlowFrame,engine);
       const result = await playStep(currentFlowFrame, engine);
       const duration = Date.now() - startTime;
 
@@ -3194,6 +3237,11 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
       }
 
       // DISPATCH ended every flow; processActivity routes this turn's input (see handleDispatchStep)
+      if (step.type === 'DISPATCH' && step.onResponse === 'continue') {
+        // ContinueCurrent retains the stack; a workflow replaces it; None hands off to the host.
+        if (engine.pendingDispatchFrom !== null) return result;
+        continue;
+      }
       if (step.type === 'DISPATCH') {
         logger.info(`DISPATCH step executed, all flows ended; handing this turn's input back to intent detection`);
         return result;
@@ -3291,7 +3339,7 @@ async function playStep(currentFlowFrame: FlowFrame, engine: Engine): Promise<st
       case 'END':
         return handleEndStep(currentFlowFrame);
       case 'DISPATCH':
-        return handleDispatchStep(currentFlowFrame, engine);
+        return await handleDispatchStep(currentFlowFrame, engine);
       default:
         throw new Error(`Unknown step type: ${step.type}`);
     }
@@ -3690,7 +3738,7 @@ export async function getFlowForInput(input: string, engine: Engine): Promise<Fl
   return result ? result.flow : null;
 }
 
-export async function detectFlowWithParameters(input: string, engine: Engine): Promise<{ flow: FlowDefinition, parameters?: Record<string, any> } | null> {
+export async function detectFlowWithParameters(input: string, engine: Engine, continuation?: FlowDefinition): Promise<{ flow: FlowDefinition, parameters?: Record<string, any> } | null> {
   // CRITICAL: This function requires AI access via engine.aiCallback
   // Without AI, the engine cannot detect user intent and activate flows
   // Sessions would never be activated as no workflows could be triggered
@@ -3711,7 +3759,7 @@ export async function detectFlowWithParameters(input: string, engine: Engine): P
 
     // Filter to only primary flows for AI intent detection
     const primaryFlows = flowsMenu.filter(flow => flow.primary === true);
-    const flowsForIntentDetection = primaryFlows.length > 0 ? primaryFlows : flowsMenu;
+    const flowsForIntentDetection = (primaryFlows.length > 0 ? primaryFlows : flowsMenu).concat(continuation ? [continuation] : []);
 
     logger.debug(`Using ${flowsForIntentDetection.length} flows for intent detection (${primaryFlows.length} primary flows available)`);
 
@@ -3786,7 +3834,7 @@ export async function detectFlowWithParameters(input: string, engine: Engine): P
     const aiResponse = await fetchAiTask(task, rules, context, input, flowsForIntentDetection, jsonSchema, engine.aiCallback, engine.aiTimeOut, request);
 
     if (aiResponse && aiResponse.flowName && aiResponse.flowName !== 'None' && aiResponse.flowName !== 'null') {
-      const flow = flowsMenu.find(flow => flow.name.toLowerCase() === aiResponse.flowName.toLowerCase() || flow.id === aiResponse.flowName);
+      const flow = flowsMenu.concat(continuation ? [continuation] : []).find(flow => flow.name.toLowerCase() === aiResponse.flowName.toLowerCase() || flow.id === aiResponse.flowName);
       if (flow) {
         // Defensive: strip empty-string keys from AI-generated parameters.
         // AI occasionally emits { "": value } which would cascade into flow
@@ -5009,7 +5057,19 @@ function handleReturnStep(currentFlowFrame: FlowFrame, engine: Engine): string {
   return String(returnValue);
 }
 
-function handleDispatchStep(currentFlowFrame: FlowFrame, engine: Engine): string {
+async function handleDispatchStep(currentFlowFrame: FlowFrame, engine: Engine): Promise<string> {
+  const pending = currentFlowFrame.flowStepsStack[currentFlowFrame.flowStepsStack.length - 1];
+  if (pending.onResponse === 'continue') {
+    // Detection precedes any pop, declaration, transaction finalization or state reset.
+    // A model error leaves this live continuation available to the caller's error policy.
+    const matched = engine.dispatchIfMatched ? await engine.dispatchIfMatched(currentFlowFrame,pending) : false;
+    if (!matched) currentFlowFrame.flowStepsStack.pop();
+    return '';
+  }
+  return terminateForDispatch(currentFlowFrame,engine);
+}
+
+function terminateForDispatch(currentFlowFrame: FlowFrame, engine: Engine): string {
   // DISPATCH = forget every flow and treat THIS turn's input as if no flow had been active:
   // processActivity runs intent detection on the input the turn started with (never a flow
   // variable a step may have rewritten). It resets ALL engine flow state — every stack, the
@@ -5376,6 +5436,8 @@ async function generateToolArgs(schema: any, input: any, contextStack: ContextEn
 
     logger.info(`Generating tool arguments for schema: ${schema.name || schema.title || 'unknown'}`);
 
+    // Preserve raw null until validation can distinguish an absent bag from a supplied {}.
+    // Undefined retains the existing flow-variable and AI inference path below.
     if (typeof input === 'object') {
       // the caller passed the arguments already built: used as given (keys only, never the values: they can be personal data)
       logger.info(`Using input object directly for args: ${Object.keys(input || {}).join(', ')}`);
@@ -7142,6 +7204,32 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
 
     // A DISPATCH is consumed within the call that raised it; never carry one into another turn.
     engine.pendingDispatchFrom = null;
+    // One routing decision for the original turn, shared by guarded and ordinary dispatch.
+    let detected: Awaited<ReturnType<typeof detectFlowWithParameters>> | undefined;
+    let activatedThisTurn = false;
+    let guardedRoutingFailed = false;
+    const route = async (continuation?: FlowDefinition) => {
+      if (detected === undefined) detected = await detectFlowWithParameters(String(sanitizedInput),engine,continuation);
+      return detected;
+    };
+    engine.dispatchIfMatched = async (frame,step) => {
+      if (activatedThisTurn) return false;
+      if (engine.flowsMenu.some(flow=>flow.name.toLowerCase() === 'continuecurrent' || flow.id.toLowerCase() === '__jsfe_continue_current__')) throw new Error('ContinueCurrent is reserved for contextual dispatch');
+      const context = interpolateMessage(step.responseContext,frame.contextStack,frame.variables,engine).trim();
+      const continuation: FlowDefinition = {id:'__jsfe_continue_current__',name:'ContinueCurrent',version:'1.0.0',primary:true,steps:[],description:`The caller is responding to the requested ${context} or reports that the requested information is invalid, unknown or unavailable; datos incorrectos o inválidos, no lo sé, no lo tengo, no puedo dar el dato. Includes asking how to provide the requested information. Not a different service request or unrelated question; choose its workflow when offered, otherwise None for the host.`};
+      let selected;
+      try { selected = await route(continuation); } catch (error) { guardedRoutingFailed = true; throw error; }
+      if (selected?.flow.id === continuation.id) return false;
+      stampStepRecovery(step,frame,engine);
+      terminateForDispatch(frame,engine);
+      if (!selected) return true; // Real host handoff: ordinary dispatch consumes the cached None below.
+      engine.pendingDispatchFrom = null;
+      engine.recordDispatch({fromFlow:frame.flowName,matchedFlow:selected.flow.name});
+      engine.clearFlowOutcome();
+      activatedThisTurn = true;
+      await isFlowActivated(String(sanitizedInput),engine,userId,selected);
+      return true;
+    };
 
     // Check if we're already in a flow (using new stack-of-stacks)
     if (getCurrentStackLength(engine) > 0) {
@@ -7211,7 +7299,7 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         logger.info(`Stack trace: ${error.stack}`);
 
         // Clean up failed flow
-        if (getCurrentStackLength(engine) > 0) {
+        if (!guardedRoutingFailed && getCurrentStackLength(engine) > 0) {
           const failedFrame = popFromCurrentStack(engine)!;
           TransactionManager.fail(failedFrame.transaction, error.message);
         }
@@ -7228,7 +7316,9 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
     engine.pendingDispatchFrom = null;
 
     try {
-      const activatedFlow = await isFlowActivated(String(sanitizedInput), engine, userId);
+      const routed = await route();
+      const activatedFlow = activatedThisTurn || routed?.flow.id === '__jsfe_continue_current__' ? null : await isFlowActivated(String(sanitizedInput), engine, userId, routed);
+      if (activatedFlow) activatedThisTurn = true;
 
       if (dispatchedFrom !== null) {
         engine.recordDispatch({ fromFlow: dispatchedFrom, matchedFlow: activatedFlow ? activatedFlow.name : null });
@@ -7291,6 +7381,8 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
 
     // Re-throw as-is — let the host distinguish JSFEExecutionError from intent detection errors
     throw error;
+  } finally {
+    engine.dispatchIfMatched = null;
   }
 }
 
@@ -7451,6 +7543,8 @@ export class WorkflowEngine implements Engine {
    * within the same call and routes the turn's input to intent detection. Never persisted.
    */
   public pendingDispatchFrom: string | null = null;
+  /** Internal per-turn routing callback; never serialized or retained across updateActivity calls. */
+  public dispatchIfMatched: ((frame: FlowFrame, step: any) => Promise<boolean>) | null = null;
 
   // Command management for different application types (chat vs voice vs automation)
   private enabledCommands: Set<string>;
@@ -8609,11 +8703,15 @@ export class WorkflowEngine implements Engine {
       case 'DISPATCH': {
         // DISPATCH always routes the turn's own input — no value. It may declare the ending of the
         // flows it ends (`outcome` / `reason`, kept only when no flow matches).
-        const extra = Object.keys(step).filter(k => !['id', 'type', 'outcome', 'reason', 'recovery'].includes(k));
+        const extra = Object.keys(step).filter(k => !['id', 'type', 'outcome', 'reason', 'recovery', 'onResponse', 'responseContext'].includes(k));
         if (extra.length > 0) {
-          state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" has invalid attribute(s) ${extra.map(k => `"${k}"`).join(', ')} - DISPATCH takes only "id", "outcome", "reason" and "recovery"`);
-        } else {
-          // well-formed
+          state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" has invalid attribute(s) ${extra.map(k => `"${k}"`).join(', ')} - DISPATCH takes only "id", "outcome", "reason", "recovery", "onResponse" and "responseContext"`);
+        } else if (step.onResponse !== undefined && step.onResponse !== 'continue') {
+          state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" onResponse must be "continue" when provided`);
+        } else if (step.onResponse === 'continue' && (typeof step.responseContext !== 'string' || !step.responseContext.trim())) {
+          state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" requires a non-empty responseContext for contextual dispatch`);
+        } else if (step.responseContext !== undefined && step.onResponse !== 'continue') {
+          state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" responseContext requires onResponse:"continue"`);
         }
         break;
       }

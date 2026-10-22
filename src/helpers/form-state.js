@@ -199,7 +199,7 @@ export function settleFormActivations(batch={},cargo=null) {
       rejected:rejected.map(h=>h.activation_inferred?{...h,...h.activation_entry,activation_inferred:false}:h),pending:pending.concat(accepted.filter(h=>held.has(h.activation_group))).filter(h=>!discarded.has(h.activation_group)).map(h=>held.has(h.activation_group)?{...h,ok:undefined,outcome:'pending',silent:true}:h)};
 }
 /** Explicit ownership: unrelated tasks and sibling inputs never share an instance by definition id. */
-export function openFormInstance(cargo, definition, specs, { parent = null, input = '', resume = '', task = '', providers = null, questions = null, context = false, incomplete_outcome = undefined, on_exhausted = undefined } = {}) {
+export function openFormInstance(cargo, definition, specs, { parent = null, input = '', resume = '', task = '', providers = null, questions = null, context = false, resume_on_parent_change = undefined, incomplete_outcome = undefined, on_exhausted = undefined } = {}) {
    const incomplete=validateFormIncompleteOutcome(incomplete_outcome);
    validateFormExhaustion(on_exhausted);
    cargo.forms ||= {};
@@ -207,6 +207,7 @@ export function openFormInstance(cargo, definition, specs, { parent = null, inpu
    if (resume && !existing) throw new Error('FORM resume instance no longer exists');
    if (existing) {
       if (existing.definition !== definition || existing.parent !== parent || existing.result_input !== input || !!existing.context_only !== !!context || (task && existing.task !== task)) throw new Error('FORM resume ownership mismatch');
+      if(resume_on_parent_change!==undefined)existing.resume_on_parent_change=resume_on_parent_change===true;
       if(incomplete_outcome!==undefined)existing.incomplete_outcome=incomplete;
       if(on_exhausted!==undefined)existing.on_exhausted=on_exhausted;
       return resume;
@@ -217,6 +218,7 @@ export function openFormInstance(cargo, definition, specs, { parent = null, inpu
       const child = context ? owner.contexts?.[definition] : owner.children?.[input];
       if (child && cargo.forms[child]) {
          if (cargo.forms[child].definition !== definition) throw new Error('FORM child definition changed without invalidation');
+         if(resume_on_parent_change!==undefined)cargo.forms[child].resume_on_parent_change=resume_on_parent_change===true;
          if(incomplete_outcome!==undefined)cargo.forms[child].incomplete_outcome=incomplete;
          if(on_exhausted!==undefined)cargo.forms[child].on_exhausted=on_exhausted;
          return child;
@@ -225,7 +227,7 @@ export function openFormInstance(cargo, definition, specs, { parent = null, inpu
    cargo.formSequence = Number(cargo.formSequence || 0) + 1;
    const id = `${definition}:${cargo.formSequence}`;
    cargo.forms[id] = { id, definition, task: owner?.task || task || id, parent, result_input: input,
-      on_exhausted:on_exhausted || '', incomplete_outcome:incomplete, context_only:!!context, parent_revision:owner?.revision ?? null, specs, values: {}, accepted: {}, errors: {}, pending: {}, seeds:{}, attempts: {}, misses:{}, feedback:{}, prepared: {}, data:{}, arguments:{}, contexts:{}, children: {}, childResults:{}, revision: 0,
+      on_exhausted:on_exhausted || '', incomplete_outcome:incomplete, context_only:!!context, resume_on_parent_change:resume_on_parent_change===true, parent_revision:owner?.revision ?? null, specs, values: {}, accepted: {}, errors: {}, pending: {}, seeds:{}, attempts: {}, misses:{}, feedback:{}, prepared: {}, data:{}, arguments:{}, contexts:{}, children: {}, childResults:{}, revision: 0,
       providers: providers || owner?.providers || null, questions: questions?.length ? questions : owner?.questions || [], status: 'collecting' };
    if (owner) {if(context){owner.contexts ||= {};owner.contexts[definition]=id;}else owner.children[input]=id;}
    return id;
@@ -554,12 +556,31 @@ export function acceptFormReadings(cargo, hits, additionalCandidates=[]) {
    }
    return true;
 }
-export function formInstanceApplies(cargo, id) {
+/** Resolve the outermost stale opted-in context through actual active ownership, without mutation.
+ * An unflagged wrapper must not hide an ancestor whose owner accepted a different field value.
+ */
+export function formParentResume(cargo, id, explicit = false) {
+   const forms=cargo?.forms || {},seen=new Set();
+   let state=forms[id],selected=null;
+   if(!state)return null;
+   while(state) {
+      if(seen.has(state.id) || forms[state.id]!==state || state.status!=='collecting')return null;
+      seen.add(state.id);
+      if(!state.parent)break;
+      const parent=forms[state.parent];
+      if(!parent || parent.task!==state.task || (state.context_only ? parent.contexts?.[state.definition]!==state.id : parent.children?.[state.result_input]!==state.id))return null;
+      if(state.context_only && (state.resume_on_parent_change===true || state.id===id && explicit===true) && parent.revision!==state.parent_revision)selected={owner:parent.id,child:state.id};
+      state=parent;
+   }
+   return selected && formInstanceApplies(cargo,selected.owner) ? selected : null;
+}
+export function formInstanceApplies(cargo, id, seen = new Set()) {
    const state = cargo.forms?.[id];
-   if (!state) return false;
+   if (!state || seen.has(id)) return false;
+   seen.add(id);
    if (!state.parent) return true;
    const parent = cargo.forms[state.parent];
-   if(state.context_only)return !!parent&&formInstanceApplies(cargo,parent.id);
+   if(state.context_only)return !!parent&&formInstanceApplies(cargo,parent.id,seen);
    const input = parent?.specs.find(i => i.name === state.result_input);
    return !!input && formInputApplies(input, parent.values, cargo,parent) && !formInputFilled(input, parent, cargo);
 }
