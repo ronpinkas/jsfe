@@ -1,3 +1,11 @@
+## 1.7.9: simpler authoring and DISPATCH ownership of conversational interpretation
+
+The separate input-assessment classifier, model override and ASSESS-INPUT step are removed. Open-ended fields use existing contextual DISPATCH extraction and concise descriptions; an uncertain answer yields to the host with saved progress. Narrative correction phrases and broad payment refusal/tense rules are removed. Strict money reading, exact confirmation, proposal dependencies and action recovery guards remain.
+
+Requires matched shared and tenant definitions. Updated safety revisions retire incompatible saved continuations before consuming input and preserve unknown action holds. Old meaning/assessment declarations fail admission rather than silently bypassing validation. This is an intentional removal of the 1.7.8 assessment extension, not a drop-in runtime-only upgrade. Publish and activate the matched shared/tenant definitions together; the runtime alone is not sufficient.
+
+The Form, Provider, Performer and Worker authoring facades derive conventional metadata, parameter defaults, extraction descriptions and provider questions. Plain synchronous calculations/projections compile into ordinary guarded JSFE steps; compileExpression centralizes existing compound expression serialization. explainSession reads existing session snapshots and diffs without exposing collected values or introducing state. Runtime execution continues to consume JSON flow/tool sets, with the established shared-set composition.
+
 # Reproducible native JSFE development candidate
 
 The native form/performer implementation spans the engine, host and tenant flow generator. Testing an unversioned sibling symlink does not establish that a clean consumer installation will use the same engine.

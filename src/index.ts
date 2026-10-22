@@ -1,5 +1,4 @@
 import {closeFormInstance} from './helpers/form-state.js';
-import {validateSemanticInputStep,buildInputAssessment,normalizeInputAssessment} from './helpers/semantic-input.js';
 import {validateContextualResponseStep} from './helpers/contextual-response.js';
 import {validateFlowRecovery} from './host/flow-recovery.js';
 import type {FlowRecovery} from './host/flow-recovery.js';
@@ -448,7 +447,7 @@ export function getFlowPrompt(engine: Engine, flowName: string): string {
 }
 
 // === TYPE DEFINITIONS ===
-export type StepType = 'SAY' | 'SAY-GET' | 'SET' | 'CALL-TOOL' | 'FLOW' | 'SWITCH' | 'CASE' | 'RETURN' | 'END' | 'DISPATCH' | 'ASSESS-INPUT';
+export type StepType = 'SAY' | 'SAY-GET' | 'SET' | 'CALL-TOOL' | 'FLOW' | 'SWITCH' | 'CASE' | 'RETURN' | 'END' | 'DISPATCH';
 
 // Enhanced context tracking with role information
 export interface ContextEntry {
@@ -496,15 +495,7 @@ export interface DetectFlowRequest {
   }[];
 }
 
-/** Optional field validation is independent of routing and never rewrites the supplied value. */
-export interface InputAssessmentRequest {
-  task: 'assess_input';
-  input: string;
-  question: string;
-  purpose: string;
-  acceptance: string;
-}
-export type AiCallbackRequest = DetectFlowRequest | IntentStageRequest | InputAssessmentRequest;
+export type AiCallbackRequest = DetectFlowRequest | IntentStageRequest;
 
 // Engine Session Context - Encapsulates all session-specific state
 // This object should be maintained by the host application for each user session
@@ -3420,8 +3411,6 @@ async function playStep(currentFlowFrame: FlowFrame, engine: Engine): Promise<st
         return await handleSubFlowStep(currentFlowFrame, engine);
       case 'SET':
         return handleSetStep(currentFlowFrame, engine);
-      case 'ASSESS-INPUT':
-        return await handleAssessInputStep(currentFlowFrame, engine);
       case 'SWITCH':
         return await handleSwitchStep(currentFlowFrame, engine);
       case 'CASE':
@@ -4914,43 +4903,6 @@ function addFlowContextGuidance(message: string, flowFrame: FlowFrame, engine: E
       const defaultSeparator = config.separator || '\n\n';
       return message + defaultSeparator + guidance;
   }
-}
-
-/** An explicitly declared field meaning is assessed separately from intent detection.
- * Clear the output before awaiting: a timeout or malformed verdict cannot retain an old acceptance.
- * The callback receives only this field's declared context; no account facts or unrelated history.
- */
-async function handleAssessInputStep(frame: FlowFrame, engine: Engine): Promise<string> {
-  const step = frame.flowStepsStack.pop()!;
-  const definition = engine.flowsMenu.find(flow => flow.id === frame.flowId || flow.name === frame.flowName);
-  validateSemanticInputStep(step, definition);
-  const variable = step.variable!;
-  frame.variables[variable] = {ok:false, disposition:'retry', unavailable:true};
-  const resolve = (text: unknown): string => interpolateMessage(String(text ?? ''), frame.contextStack, frame.variables, engine);
-  const input = resolve(step.value);
-  const question = resolve(step.question);
-  const purpose = resolve(step.purpose);
-  const acceptance = resolve(step.acceptance);
-  if (!input.trim()) {
-    frame.variables[variable] = {ok:false, disposition:'retry'};
-    return 'Input assessment received an empty candidate';
-  }
-  if (!question.trim() || !purpose.trim() || !acceptance.trim()) {
-    logger.warn(`ASSESS-INPUT step ${step.id || ''} could not validate its field; the input remains unaccepted`);
-    return 'Input assessment requires a complete field context';
-  }
-  try {
-    const assessment = buildInputAssessment({value:input,question,purpose,acceptance});
-    const schema = assessment.schema;
-    const response = await fetchAiResponse(assessment.system, assessment.user, engine.aiCallback, engine.aiTimeOut, schema,
-      {task:'assess_input',input,question,purpose,acceptance});
-    const result = normalizeInputAssessment(response);
-    frame.variables[variable] = result;
-    if ('unavailable' in result && result.unavailable === true) logger.warn(`ASSESS-INPUT step ${step.id || ''} could not validate its field; the input remains unaccepted`);
-  } catch {
-    logger.warn(`ASSESS-INPUT step ${step.id || ''} could not validate its field; the input remains unaccepted`);
-  }
-  return 'Input assessment completed';
 }
 
 function handleSetStep(currentFlowFrame: FlowFrame, engine: Engine): string {
@@ -7363,9 +7315,19 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
       let declaration;
       try { declaration = validateContextualResponseStep(step,engine.flowsMenu.find(flow=>flow.id===frame.flowId)); if(activatedThisTurn && declaration)throw new Error('Typed contextual response cannot classify after a flow activation this turn'); } catch(error) { guardedRoutingFailed = true; throw error; }
       const context = interpolateMessage(step.responseContext,frame.contextStack,frame.variables,engine).trim();
+      if(declaration) {
+        declaration.parameters = declaration.parameters.map((parameter: FlowParameterDefinition)=>({...parameter,description:interpolateMessage(parameter.description,frame.contextStack,frame.variables,engine).trim()}));
+        if(declaration.parameters.some((parameter: FlowParameterDefinition)=>!parameter.description)) { guardedRoutingFailed=true; throw new Error('Contextual response parameter description resolved empty'); }
+      }
       const continuation: FlowDefinition = {id:'__jsfe_continue_current__',name:'ContinueCurrent',version:'1.0.0',primary:true,steps:[],...(declaration?{parameters:declaration.parameters}:{}),description:`The caller is responding to the requested ${context} or reports that the requested information is invalid, unknown or unavailable; datos incorrectos o inválidos, no lo sé, no lo tengo, no puedo dar el dato. Includes asking how to provide the requested information. Not a different service request or unrelated question; choose its workflow when offered, otherwise None for the host.`};
       let selected;
       try { selected = await route(continuation,context); } catch (error) { guardedRoutingFailed = true; throw error; }
+      // A contextual handoff must not restart its own live workflow without new input.
+      // The host has the broader dialogue needed to clarify this otherwise empty re-entry.
+      if (selected && selected.flow.id !== continuation.id && !Object.keys(selected.parameters || {}).length && engine.flowStacks.flat().some(active => active.flowId === selected!.flow.id)) {
+        selected = null;
+        detected = null;
+      }
       if (selected?.flow.id === continuation.id) {
         if(declaration) frame.variables[declaration.variable] = structuredClone(selected.parameters || {});
         return false;
@@ -8837,7 +8799,7 @@ export class WorkflowEngine implements Engine {
     }
 
     // Validate step type
-    const validStepTypes = ['SAY', 'SAY-GET', 'SET', 'SWITCH', 'CASE', 'CALL-TOOL', 'FLOW', 'RETURN', 'END', 'DISPATCH', 'ASSESS-INPUT'];
+    const validStepTypes = ['SAY', 'SAY-GET', 'SET', 'SWITCH', 'CASE', 'CALL-TOOL', 'FLOW', 'RETURN', 'END', 'DISPATCH'];
     if (!validStepTypes.includes(step.type)) {
       state.errors.push(`Step "${step.id}" in flow "${flowDef.name}" has invalid type: ${step.type}`);
       return;
@@ -8854,10 +8816,6 @@ export class WorkflowEngine implements Engine {
         break;
       case 'SET':
         this._validateSetStep(step, flowDef, state, opts, currentScope);
-        break;
-      case 'ASSESS-INPUT':
-        try { validateSemanticInputStep(step, flowDef); }
-        catch(error:any) { state.errors.push(`ASSESS-INPUT step "${step.id}" in flow "${flowDef.name}": ${error.message}`); }
         break;
       case 'SWITCH':
         this._validateSwitchStep(step, flowDef, state, opts, currentScope);

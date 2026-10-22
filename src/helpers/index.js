@@ -1,6 +1,5 @@
 import {continuationSafetyProtocol} from '../forms/continuation-safety.js';
-import {semanticInputValidationProtocol,validateInputMeaning} from './semantic-input.js';
-import {contextualResponseProtocol} from './contextual-response.js';
+import {contextualResponseProtocol,validateFormResponse,hasFormResponse} from './contextual-response.js';
 import {formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation} from './form-proposals.js';
 import {formProposalProtocol,validateFormProposalPolicy,validateFormProposalDescriptor,formProposalDescriptor} from './proposal-contract.js';
 import {cancelFormTask,clearFormMisses,missFormInput,formInputPrompt,consumeFormFeedback,formConversationOutcome} from './form-conversation.js';
@@ -37,7 +36,7 @@ import { validateDigits, validatePhone, validateEmail } from './validators.js';
 import { urlToSpeech, textWithUrlToSpeech } from './url-speech.js';
 
 export {
-   continuationSafetyProtocol,semanticInputValidationProtocol,validateInputMeaning,cancelFormTask, contextualResponseProtocol,
+   continuationSafetyProtocol,cancelFormTask, contextualResponseProtocol,validateFormResponse,hasFormResponse,
    formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation,formProposalProtocol,validateFormProposalPolicy,validateFormProposalDescriptor,formProposalDescriptor,
    clearFormMisses,missFormInput,formInputPrompt,consumeFormFeedback,formConversationOutcome,
    readMoneyAmount, isMoneyAmount, moneyIntentAllows, isPastPaymentStatement, isPartialMoneyAnswer, validateMoneyOptions, takeChoiceOffer, matchesChoice, ANSWER_WORDS, CONFIRM_WORDS, isAnswer, isAgentRequest, isOtherRequest, isSpelledFragment, isAmountAnswer, amountInAnswer,
@@ -49,7 +48,7 @@ export {
 
 /** The functions flows call by name, ready to spread into a host's approved functions. */
 export const STANDARD_FUNCTIONS = {
-   continuationSafetyProtocol,semanticInputValidationProtocol,validateInputMeaning,cancelFormTask, contextualResponseProtocol,
+   continuationSafetyProtocol,cancelFormTask, contextualResponseProtocol,validateFormResponse,hasFormResponse,
    formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation,formProposalProtocol,validateFormProposalPolicy,validateFormProposalDescriptor,formProposalDescriptor,
    clearFormMisses,missFormInput,formInputPrompt,consumeFormFeedback,formConversationOutcome,
    readMoneyAmount, isMoneyAmount, moneyIntentAllows, isPastPaymentStatement, isPartialMoneyAnswer, validateMoneyOptions, takeChoiceOffer, matchesChoice, isAnswer, isAgentRequest, isOtherRequest, isSpelledFragment, isAmountAnswer, amountInAnswer, pickChoice,

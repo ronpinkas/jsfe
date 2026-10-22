@@ -28,3 +28,10 @@ export function contextualResponseRuntimeSteps(id,steps,requirements=[]) {
  const guard={id:id+'_contextual_response_protocol',type:'SET',variable:'noop',value:'contextualResponseProtocol() === 1',requireTrue:true};
  return steps[0]?.type==='SET'&&steps[0]?.value===guard.value&&steps[0]?.requireTrue===true?steps:[guard,...steps];
 }
+
+/** A normal extraction description for an open-ended FORM answer, using contextual DISPATCH. */
+export function validateFormResponse(response) {
+ if(!response || typeof response!=='object' || Array.isArray(response) || Object.keys(response).some(k=>k!=='description') || typeof response.description!=='string' || !response.description.trim())fail('FORM response requires a nonempty description only');
+ return structuredClone(response);
+}
+export const hasFormResponse=inputs=>(inputs || []).some(input=>input.response!==undefined || hasFormResponse(input.any_of) || hasFormResponse(input.schema?.inputs));

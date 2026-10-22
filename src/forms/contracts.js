@@ -1,5 +1,4 @@
-import {SEMANTIC_INPUT_REQUIREMENT,hasInputMeaning,validateSemanticInputStep,semanticInputRuntimeSteps} from '../helpers/semantic-input.js';
-import {CONTEXTUAL_RESPONSES_REQUIREMENT,validateContextualResponseStep,contextualResponseRuntimeSteps} from '../helpers/contextual-response.js';
+import {CONTEXTUAL_RESPONSES_REQUIREMENT,hasFormResponse,validateContextualResponseStep,contextualResponseRuntimeSteps} from '../helpers/contextual-response.js';
 /** Build-time contracts for conversational flows. Transport operations remain registered tools. */
 import {INPUT_PROPOSALS_REQUIREMENT,hasInputProposals,proposalRuntimeSteps} from './proposal-runtime.js';
 import {ACTION_TOOLS} from './action-tools.js';
@@ -41,8 +40,8 @@ export function linkFormSchemas(flows,{externalFlows=[]}={}) {
    };
    const leafSchema=input=>{
       if(input.schema)return objectSchema(input.schema.inputs);
-      if(input.profile?.kind==='choice'&&!input.profile.accept_other)return {type:'string',enum:(input.profile.choices||[]).map(c=>c.key),description:input.description || input.label || input.name};
-      return {type:'string',description:input.description || input.label || input.name};
+      if(input.profile?.kind==='choice'&&!input.profile.accept_other)return {type:'string',enum:(input.profile.choices||[]).map(c=>c.key),description:input.response?.description || input.description || input.label || input.name};
+      return {type:'string',description:input.response?.description || input.description || input.label || input.name};
    };
    const objectSchema=inputs=>{
       const fields=inputs.flatMap(input=>input.any_of || [input]).filter(input=>input.schema || input.profile);
@@ -53,8 +52,8 @@ export function linkFormSchemas(flows,{externalFlows=[]}={}) {
       const parameters=[...(flow.parameters || [])];
       if(flow.primary)for(const input of inputs.flatMap(input=>input.any_of || [input])){
          if(parameters.some(p=>p.name===input.name)||!input.profile&&!input.schema)continue;
-         parameters.push(input.schema?{name:input.name,type:'object',jsonSchema:objectSchema(input.schema.inputs),description:input.description || input.label || input.name}
-            :{name:input.name,type:'string',...(input.profile.kind==='choice'&&!input.profile.accept_other?{enum:input.profile.choices.map(c=>c.key)}:{}),description:input.description || input.label || input.name});
+         parameters.push(input.schema?{name:input.name,type:'object',jsonSchema:objectSchema(input.schema.inputs),description:input.response?.description || input.description || input.label || input.name}
+            :{name:input.name,type:'string',...(input.profile.kind==='choice'&&!input.profile.accept_other?{enum:input.profile.choices.map(c=>c.key)}:{}),description:input.response?.description || input.description || input.label || input.name});
       }
       const linked={...flow,parameters,variables:{...flow.variables,inputs:{...flow.variables.inputs,value:inputs}}};
       // Descendant schemas are linked after declaration; propagate their runtime requirement to the root entry.
@@ -70,33 +69,50 @@ function declared(flow, contract) {
       ...(step.branches?{branches:Object.fromEntries(Object.entries(step.branches).map(([key,branch])=>[key,replacementDefaults(branch)]))}:{}),
       ...(step.onFail?{onFail:replacementDefaults(step.onFail)}:{})});
    const contextual=stepList(flow.steps).filter(step=>step.type==='DISPATCH').map(step=>validateContextualResponseStep(step,flow)).some(Boolean);
-   const semantic=stepList(flow.steps).filter(step=>step.type==='ASSESS-INPUT').map(step=>validateSemanticInputStep(step,flow)).length>0 || hasInputMeaning(flow.variables?.inputs?.value);
-   const requirements=[...normalizeHostRequirements(contract.requires,flow.id),...(semantic?[SEMANTIC_INPUT_REQUIREMENT]:[]),...(hasInputProposals(flow.variables?.inputs?.value)?[INPUT_PROPOSALS_REQUIREMENT]:[]),...(contextual?[CONTEXTUAL_RESPONSES_REQUIREMENT]:[])];
+   const requirements=[...normalizeHostRequirements(contract.requires,flow.id),...(hasInputProposals(flow.variables?.inputs?.value)?[INPUT_PROPOSALS_REQUIREMENT]:[]),...(contextual || hasFormResponse(flow.variables?.inputs?.value)?[CONTEXTUAL_RESPONSES_REQUIREMENT]:[])];
    const metadata={version:1,...contract,parametersFrom:'parameters'};
    if(requirements.length || contract.requires!==undefined)Object.defineProperty(metadata,'requires',{
       value:normalizeHostRequirements(requirements,flow.id),enumerable:true,writable:false,configurable:false,
    });
    const guardedSteps=flow.steps.map(replacementDefaults);
    // Linking a form may declare it again. Rebuild an existing protocol-only prefix once.
-   const rebuiltGuards=[...(requirements.includes(SEMANTIC_INPUT_REQUIREMENT)?['semanticInputValidationProtocol() === 1']:[]),...(requirements.includes(CONTEXTUAL_RESPONSES_REQUIREMENT)?['contextualResponseProtocol() === 1']:[]),...(requirements.includes(INPUT_PROPOSALS_REQUIREMENT)?['formProposalProtocol() === 1']:[])];
-   if(requirements.includes(CONTEXTUAL_RESPONSES_REQUIREMENT)||requirements.includes(SEMANTIC_INPUT_REQUIREMENT))while(guardedSteps[0]?.type==='SET'&&guardedSteps[0]?.requireTrue===true&&rebuiltGuards.includes(guardedSteps[0]?.value))guardedSteps.shift();
-   return {...flow,steps:semanticInputRuntimeSteps(flow.id,contextualResponseRuntimeSteps(flow.id,proposalRuntimeSteps(flow.id,guardedSteps,requirements),requirements),requirements),variables:{...flow.variables,contract:value(metadata)}};
+   const rebuiltGuards=[...(requirements.includes(CONTEXTUAL_RESPONSES_REQUIREMENT)?['contextualResponseProtocol() === 1']:[]),...(requirements.includes(INPUT_PROPOSALS_REQUIREMENT)?['formProposalProtocol() === 1']:[])];
+   if(requirements.includes(CONTEXTUAL_RESPONSES_REQUIREMENT))while(guardedSteps[0]?.type==='SET'&&guardedSteps[0]?.requireTrue===true&&rebuiltGuards.includes(guardedSteps[0]?.value))guardedSteps.shift();
+   return {...flow,steps:contextualResponseRuntimeSteps(flow.id,proposalRuntimeSteps(flow.id,guardedSteps,requirements),requirements),variables:{...flow.variables,contract:value(metadata)}};
 }
 export function defineWorker({contract,...flow}) {
    return declared({scope:'isolated',version:'1.0.0',...flow},contract);
 }
-export function defineProvider({provides,contract,parameters=[],variables={},steps,...flow}) {
+// Lower declarative gate arguments to a SET expression; FLOW arguments remain paths only.
+function gateArgumentExpression(value) {
+   if(typeof value==='string') {
+      const expression=/^\{\{([\s\S]+)\}\}$/.exec(value);
+      if(expression)return '('+expression[1]+')';
+      if(value.includes('{{'))throw new Error('Provider gate argument templates must be whole expressions');
+      return JSON.stringify(value);
+   }
+   if(Array.isArray(value))return '['+value.map(gateArgumentExpression).join(',')+']';
+   if(value&&typeof value==='object')return '{'+Object.entries(value).map(([key,entry])=>{
+      if(['__proto__','prototype','constructor'].includes(key))throw new Error('Provider gate argument uses an unsafe key');
+      return JSON.stringify(key)+':'+gateArgumentExpression(entry);
+   }).join(',')+'}';
+   return JSON.stringify(value);
+}
+export function defineProvider({provides,contract,parameters=[],variables={},steps,before=[],gateParameters,...flow}) {
    const asked=providerParameter(provides);
+   if(provides.default!==undefined&&![...(provides.facts || []),...(provides.sets || [])].some(entry=>entry.key===provides.default))fail(flow.id,'provider default must name a declared fact or set');
    return declared({scope:'isolated',version:'1.0.0',primary:true,...flow,
-      parameters:[...parameters,asked],variables:{...variables,asked:value(''),provides:value(provides)},
-      steps:steps || [{id:`${flow.id}_provide`,type:'FLOW',value:'provide-data',callType:'call',parameters:{provides:'{{provides}}',asked:'{{asked}}'}}]},
+      parameters:[...parameters,asked],variables:{...variables,...(gateParameters!==undefined?{provider_gate_arguments:value(null)}:{}),asked:value(''),provides:value(provides)},
+      steps:steps || [...before,...(provides.default!==undefined?[{id:`${flow.id}_default`,type:'SET',variable:'asked',value:`asked || ${JSON.stringify(provides.default)}`}]:[]),
+         ...(gateParameters!==undefined?[{id:`${flow.id}_gate_arguments`,type:'SET',variable:'provider_gate_arguments',value:gateArgumentExpression(gateParameters)}]:[]),
+         {id:`${flow.id}_provide`,type:'FLOW',value:'provide-data',callType:'call',parameters:{provides:'{{provides}}',asked:'{{asked}}',...(gateParameters!==undefined?{gate_params:'{{provider_gate_arguments}}'}:{})}}]},
       {role:'provider',...contract,catalog:'provides'});
 }
-export function defineForm({contract,...spec}) {
-   const flow=formFlow(spec);
+export function defineForm({contract,provides,...spec}) {
+   const flow=formFlow({...spec,...(provides?{extraVars:{...spec.extraVars,provides,questions:providerQuestions(provides)}}:{})});
    return declared(flow,{role:'collector',...contract,form:{inputs:'inputs'}});
 }
-export function definePerformer({performs,contract,prepare,present,project=[],...spec}) {
+export function definePerformer({performs,contract,prepare,present,project=[],provides,...spec}) {
    validateActionProjection(project,spec.id);
    if(!Array.isArray(performs)||!performs.length||!prepare||!present)fail(spec.id,'performer needs actions, request preparation and outcome presentation');
    const confirm=spec.confirm || (performs.length===1&&performs[0].confirm?.question ? performs[0].confirm : null);
@@ -114,7 +130,7 @@ export function definePerformer({performs,contract,prepare,present,project=[],..
       set('proposal','pf_record',"pf_action ? prepareFormAction(cargo, form_instance, pf_action, pf_request) : null"),
    ];
    const flow=formFlow({...spec,confirm,confirmation_condition:"pf_action !== null && pf_action && typeof pf_action === 'object'",
-      extraVars:{...spec.extraVars,performs,projection:project,pf_action:null,pf_request:null,pf_record:null,pf_result:null,pf_receipt:null},
+      extraVars:{...spec.extraVars,...(provides?{provides,questions:providerQuestions(provides)}:{}),performs,projection:project,pf_action:null,pf_request:null,pf_record:null,pf_result:null,pf_receipt:null},
       before_confirm:confirm?[...prepareSteps,...(spec.before_confirm || [])]:spec.before_confirm || [],
       after:[...(confirm?[]:prepareSteps),
          when('perform','pf_action && typeof pf_action === \'object\'',call('execute','perform-action',{form:'{{form_instance}}',action:'{{pf_action}}',request:'{{pf_request}}',defer_receipt:true})),

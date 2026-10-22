@@ -446,7 +446,7 @@ export const FLOWS = [
         "id": "ac_amount_check",
         "type": "SET",
         "variable": "ac_key",
-        "value": "ac_amount && Number.isFinite(amountInAnswer(ac_answer)) && (isAmountAnswer(ac_answer) || (ac_marked ? (ac_key === '' && /\\d\\s*(?:con|and)\\s*(?:un\\s+)?\\d{2}\\b(?!\\s*\\d)/i.test(String(ac_answer || ''))) : (ac_key === '' && (!/^\\D*\\d\\D*$/.test(String(ac_answer || '')) || /\\b(?:pay|paying|pagar|pagarle|abonar)\\b/i.test(String(ac_answer || ''))) && !/^[\\s,.;]*\\d(?:[\\s,.;]+\\d)+[\\s,.;]*$/.test(String(ac_answer || '')) && !isNaN(amountInAnswer(ac_answer))))) ? '__amount' : ac_key"
+        "value": "!ac_prechecked && ac_amount && Number.isFinite(amountInAnswer(ac_answer)) && (isAmountAnswer(ac_answer) || (ac_marked ? (ac_key === '' && /\\d\\s*(?:con|and)\\s*(?:un\\s+)?\\d{2}\\b(?!\\s*\\d)/i.test(String(ac_answer || ''))) : (ac_key === '' && (!/^\\D*\\d\\D*$/.test(String(ac_answer || '')) || /\\b(?:pay|paying|pagar|pagarle|abonar)\\b/i.test(String(ac_answer || ''))) && !/^[\\s,.;]*\\d(?:[\\s,.;]+\\d)+[\\s,.;]*$/.test(String(ac_answer || '')) && !isNaN(amountInAnswer(ac_answer))))) ? '__amount' : ac_key"
       },
       {
         "id": "ac_switch_to_text_key",
@@ -617,7 +617,7 @@ export const FLOWS = [
         "id": "ac_amount_check_again",
         "type": "SET",
         "variable": "ac_key",
-        "value": "ac_amount && Number.isFinite(amountInAnswer(ac_answer)) && (isAmountAnswer(ac_answer) || (ac_marked ? (ac_key === '' && /\\d\\s*(?:con|and)\\s*(?:un\\s+)?\\d{2}\\b(?!\\s*\\d)/i.test(String(ac_answer || ''))) : (ac_key === '' && (!/^\\D*\\d\\D*$/.test(String(ac_answer || '')) || /\\b(?:pay|paying|pagar|pagarle|abonar)\\b/i.test(String(ac_answer || ''))) && !/^[\\s,.;]*\\d(?:[\\s,.;]+\\d)+[\\s,.;]*$/.test(String(ac_answer || '')) && !isNaN(amountInAnswer(ac_answer))))) ? '__amount' : ac_key"
+        "value": "!ac_prechecked && ac_amount && Number.isFinite(amountInAnswer(ac_answer)) && (isAmountAnswer(ac_answer) || (ac_marked ? (ac_key === '' && /\\d\\s*(?:con|and)\\s*(?:un\\s+)?\\d{2}\\b(?!\\s*\\d)/i.test(String(ac_answer || ''))) : (ac_key === '' && (!/^\\D*\\d\\D*$/.test(String(ac_answer || '')) || /\\b(?:pay|paying|pagar|pagarle|abonar)\\b/i.test(String(ac_answer || ''))) && !/^[\\s,.;]*\\d(?:[\\s,.;]+\\d)+[\\s,.;]*$/.test(String(ac_answer || '')) && !isNaN(amountInAnswer(ac_answer))))) ? '__amount' : ac_key"
       },
       {
         "id": "ac_other_request_check",

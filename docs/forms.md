@@ -226,31 +226,17 @@ Builders automatically declare the intrinsic requirement `jsfe:contextual-respon
 
 Missing or invalid extracted parameters may yield an empty object. The caller must check the required fields and use its normal bounded collection/retry policy; choosing `ContinueCurrent` is not evidence that every requested value exists and never authorizes an effect. A model exception during typed continuation detection or extraction preserves the pending step and prior response object. One decision is reused per turn: incompatible typed context/schema reuse fails closed, as does reaching a typed classification after another workflow has already been activated that turn. Ordinary and untyped dispatch retain their prior routing/cache semantics.
 
-### Optional semantic field validation
+### Open-ended answers through contextual DISPATCH
 
-A field may declare `meaning: { purpose, acceptance }` when a shape reader alone cannot establish that an answer supplies the requested information. Both values are nonempty strings. For example:
+A readable leaf field can declare `response: { description }`. Describe the information to extract concisely, for example `{name:'issue_details',profile:{kind:'text',narrative:true},response:{description:'The specific issue or desired resolution in the caller words; omit a fragment or a generic complaint announcement.'},question:'What happened?'}`.
 
-```js
-{
-  name: 'issue_details',
-  profile: { kind: 'text', narrative: true },
-  meaning: {
-    purpose: 'Collect the specific issue for the service team.',
-    acceptance: 'Concrete details of what happened or the requested resolution; a fragment or a generic announcement of a complaint is insufficient.'
-  },
-  question: 'What happened?'
-}
-```
+The common collector uses existing `DISPATCH` with `onResponse:'continue'` and an `answer` extraction parameter. Its context includes the actual prepared question and the field description. An extracted answer permits ordinary deterministic validation; the stored candidate retains the caller wording. A different workflow is routed normally. `None` or a continuation without a usable answer yields to the host with the form progress saved. The host can answer with its full conversation context. Detection/extraction errors preserve the pending step and never commit the candidate.
 
-The common validation batch uses the prepared owning field's question and criteria to run `ASSESS-INPUT` independently of intent detection. It checks conversational readings and untrusted activation seeds through the same path; several fields can be assessed in one turn. Already accepted, unchanged fields do not need another assessment. Fields without `meaning` retain their existing behavior and make no assessment call.
+This uses the existing tenant-configured intent/extraction roles. There is no separate classifier, model assignment, verdict taxonomy or extra request-withdrawal inference. Public activation parameters use the same descriptions, and already extracted activation or deferred candidates are not classified again. Ordinary fields keep their existing deterministic readers. Exact consent and action guards still apply independently.
 
-The model returns exactly `{ ok: boolean, disposition: 'accept' | 'retry' | 'cancel' | 'redirect' }`. Only `ok: true` paired with `accept` permits ordinary field validation and commitment. The original candidate remains unchanged. A timeout, missing callback, malformed response or inconsistent verdict leaves it unaccepted and adds an engine-owned `unavailable: true` flag. The model cannot supply that flag through its exact two-field response schema. Technical unavailability gets distinct retry wording; semantic rejection asks for the requested data. Both consume the same bounded interaction budget, so outages cannot create infinite retries. `retry` uses the existing bounded field retry policy; `redirect` yields with the owning task available for recovery. An explicit `cancel` retires that task, except that an unknown action result remains held for reconciliation.
+Legacy callers use `collect-contextual-answer` with `question`, `question_es`, `description`, optional `choices` and `digits`, and `context` / `context_es`. It returns `cargo.choice` and preserves `cargo.choiceText`. These definitions require the existing `jsfe:contextual-responses:v1` runtime. Retired `meaning` declarations and the removed classifier capability are rejected rather than silently accepted.
 
-Semantic completeness is separate from consent: it must never substitute for an exact confirmation or authorize a charge, cancellation, send or case submission. Criteria should describe the particular field: an account identifier, requested increase amount, payment date and issue narrative have different acceptance requirements. Short but concrete answers can be valid; no word-count rule determines completeness.
-
-Legacy callers can use the shared `collect-semantic-answer` worker with `question`, `question_es`, `purpose`, `acceptance`, optional `choices` and `digits`, and `context` / `context_es`. It returns `cargo.semanticAnswer`, `cargo.choice` and `cargo.choiceText`; the same FORM owns retries, validation and recovery.
-
-Flows opting in declare `jsfe:semantic-input-validation:v1` and receive a runtime guard. The underlying explicit `ASSESS-INPUT` step takes template strings `value`, `question`, `purpose`, `acceptance` and a `variable` naming a declared object result. The callback request has `task: 'assess_input'`; it is a data-validation request, separate from `detect_flow`.
+Payment-intent amount reading accepts a bounded whole monetary answer. Uncertain prose yields to DISPATCH rather than inferring refusal, deferral or an earlier payment. Currency, range, identifier and partial-amount checks remain deterministic. Narrative matching preserves strict whole choices and independent structured fields without parsing conversational correction phrases.
 
 When a declared dependency (including an ancestor subform dependency) has a pending input proposal, dependent candidates wait for that proposal rather than using the previous committed context. Deferred candidates retain the exact proposal identity. Confirming the controller preserves those candidates through dependency invalidation and validates them under the new context; declining or superseding it discards them. Independent fields still collect normally. Declare `depends_on` for contextual prerequisites and `reset_on` for changes that invalidate previously collected data.
 
@@ -268,4 +254,56 @@ Semantic dispositions describe the caller's intent, not permission to perform an
 
 A field meaning must explicitly identify both the field and its owning service/action in `purpose`, for example collecting a date before filing a caller-requested investigation. A vague instruction to collect information does not identify what a withdrawal applies to. Author this context in the declaration; never derive it from caller keywords or rewrite it at runtime.
 
-Callbacks serving `assess_input` (schema `input_assessment`) require semantic model qualification against acceptance, withdrawal, field-only refusal, permitted unknowns, factual denials, and task corrections. Valid JSON alone is insufficient: a model can return a schema-valid unsafe acceptance. The engine remains provider-agnostic and rejects unavailable/malformed responses; the host must select a qualified model and must not silently race or fall back to an unqualified general or intent model. Requalify proposed alternatives with the same synthetic contrasts and actual engine paths before enabling them.
+## Concise authoring pilot: four components
+
+`Form`, `Provider`, `Performer` and `Worker` from `jsfe/forms` are the preferred concise declarations for the account-info/make-payment pilot. They compile through the existing `define*` builders and validators; they add no runtime protocol. Existing declarations remain supported.
+
+Declare `id` once; the conventional name is derived unless overridden. Parameters can be an array or a map. A string map entry supplies a string parameter description; an object entry supplies a typed descriptor and optional `default`. JSFE derives its runtime variable and removes the authoring-only default from extraction metadata. Existing advanced variable definitions remain available.
+
+```js
+const lookup = Provider({
+  id: 'account-info',
+  description: 'Answer questions about a verified account',
+  parameters: { acct_number: 'The caller account number' },
+  provides: {
+    default: 'balance',
+    gate: { flow: 'verify-account', verified: ['cargo.verified'] },
+    source: { flow: 'load-account', result: 'cargo.account', refresh: 'per_turn' },
+    facts: [{ key: 'balance', gloss: 'The account balance', path: 'balance' }]
+  },
+  gateParameters: { acct_number: '{{acct_number}}' }
+});
+```
+
+The provider compiles its default selection and gate argument plumbing. Gate arguments can use whole template expressions; JSFE lowers them into SET steps so FLOW argument validation remains path-only. The gate and subject freshness checks are still enforced by the shared provider workers. Actual account authentication policy stays in its declaration.
+
+A primary `Form` or `Performer` can put a public extraction `description` directly on a readable field, including a group member. JSFE derives that parameter before generating collection/reentry steps. Explicit parameters remain useful for aliases or a more restricted extraction enum. A performer can declare `provides` once; its provider question list is generated.
+
+```js
+const payment = Performer({
+  id: 'make-payment', primary: true,
+  description: 'Make a payment',
+  inputs: [{ name: 'amount', field: 'amount', description: 'The requested amount' }],
+  performs: [chargeAction],
+  prepare: 'prepare-payment', present: 'present-payment',
+  confirm: { question: 'Authorize this exact payment?' },
+  project: { apply: applyPaymentResult, helpers: { recordPayment } }
+});
+```
+
+An action still declares its real effect, authentication gate, outcomes and idempotency/reconciliation policy. JSFE owns proposal identity, fresh confirmation, guarded execution and receipt application. `project.apply(cargo, {form, formSnapshot, request, result, key})` is a synchronous domain result projection that returns true; it compiles into the same validated SET-only projection used for ordinary and recovered results. It cannot replace the action executor. Helpers must be explicit; captured module closures are not serialized.
+
+A `Worker` can use ordinary `steps`, one `call: {flow, parameters}`, or one `calculate: {value, args, result, helpers}`. Calculations are plain synchronous functions with explicit argument paths and a safe cargo result path. Use registered tools/flows for external effects. A worker's calculation result metadata and parameter variables are generated. `before` retains ordinary sequencing where needed.
+
+### Explain a session without another state store
+
+```js
+const explanation = explainSession(session, { flows, previous: previousSnapshot });
+// {status: 'confirmation', entries: [{kind, message, component, flowId, input, ...}]}
+```
+
+The inspector reads existing state only. It identifies missing inputs, current proposals, recorded outcomes, holds, handoffs and source component/worker/step references. Comparing two snapshots adds changed field names and invalidated confirmations without outputting collected values. Unknown/attempted evidence takes precedence over contradictory completed records. Component provenance is compiler-generated metadata, not author-maintained bookkeeping.
+
+This is a snapshot explanation and optional difference, not a persistent event history, model role, authorization decision or new logging stream. An empty stack does not prove that an action succeeded or that no action was attempted. A generic last result without source identity is labelled only as the most recent recorded outcome. Callers can show the messages in a debugger or retain synthetic snapshots in tests.
+
+For a calculation embedded in an existing SET or CASE, use `compileExpression(fn, ...args)` instead of a tenant `fn.toString()` wrapper. Each argument is **developer-authored JavaScript expression source**, not a caller value; bind caller data through existing variables and paths. Functions must be synchronous and use declared arguments or existing runtime helpers. `Worker.calculate` remains the simpler choice for a whole calculation and retains its path-only argument checks. Collectors may also declare `provides` once; JSFE derives their provider question list just as it does for performers.

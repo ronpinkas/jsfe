@@ -70,11 +70,14 @@ for(const language of ['en','es'])for(const voice of [false,true])await test(`${
  response=await t.say('no, make it $40');assert.match(response,language==='es'?/COTIZACIÓN 40 90001/:/QUOTE 40 90001/);assert.equal(t.session.cargo.requests,undefined);
  await t.say(language==='es'?'sí':'yes');assert.deepEqual(t.session.cargo.requests,[{amount:40,zip:'90001'}]);
 });
-for(const language of ['en','es'])await test(`${language} confirmation misses yield without accepting consent and reentry asks the quote again`,async()=>{
- const t=fixture([draft,nested],{language});await t.say('begin','draft');await t.say('$25');await t.say('90001');const root=t.owner('draft');let response=await t.say('zqx');assert.ok(response.includes(acknowledgment(language)),response);assert.equal(t.session.cargo.requests,undefined);
+// Nonfinancial confirmation retains the bounded short-answer retry. Monetary uncertainty
+// yields immediately to contextual DISPATCH instead of inventing a payment interpretation.
+const addressDraft=formFlow({id:'address-draft',name:'AddressDraft',version:'1',inputs:[{name:'zip',field:'zip'}],confirm:{question:'ADDRESS {{cargo.forms[form_instance].values.zip}}. YES or NO.',question_es:'DIRECCIÓN {{cargo.forms[form_instance].values.zip}}. SÍ o NO.'},after:[S('address-commit',"(cargo.requests=[{zip:cargo.forms[form_instance].values.zip}],true)")]});
+for(const language of ['en','es'])await test(`${language} nonfinancial confirmation misses yield without accepting consent and reentry asks the proposal again`,async()=>{
+ const t=fixture([addressDraft],{language});await t.say('begin','address-draft');await t.say('90001');const root=t.owner('address-draft');let response=await t.say('zqx');assert.ok(response.includes(acknowledgment(language)),response);assert.equal(t.session.cargo.requests,undefined);
  await t.say('qzx');assertYield(t,root);assert.equal(t.session.cargo.requests,undefined);assert.deepEqual(t.calls,['qzx']);
- response=await t.say('resume','draft');assert.match(response,language==='es'?/COTIZACIÓN 25 90001/:/QUOTE 25 90001/);assert.equal(t.session.cargo.requests,undefined);assert.ok(!response.includes(acknowledgment(language)),response);
- await t.say(language==='es'?'sí':'yes');assert.deepEqual(t.session.cargo.requests,[{amount:25,zip:'90001'}]);
+ response=await t.say('resume','address-draft');assert.match(response,language==='es'?/DIRECCIÓN 90001/:/ADDRESS 90001/);assert.equal(t.session.cargo.requests,undefined);assert.ok(!response.includes(acknowledgment(language)),response);
+ await t.say(language==='es'?'sí':'yes');assert.deepEqual(t.session.cargo.requests,[{zip:'90001'}]);
 });
 for(const language of ['en','es'])await test(`${language} a YES with an amount correction is not consent to either proposal`,async()=>{
  const t=fixture([draft,nested],{language});await t.say('begin','draft');await t.say('$25');await t.say('90001');const response=await t.say(language==='es'?'sí, cámbielo a $40':'yes, make it $40');assert.match(response,language==='es'?/COTIZACIÓN 40 90001/:/QUOTE 40 90001/);assert.equal(t.session.cargo.requests,undefined);await t.say(language==='es'?'sí':'yes');assert.deepEqual(t.session.cargo.requests,[{amount:40,zip:'90001'}]);
@@ -86,7 +89,8 @@ await test('Spanish imposible is an unrecognized menu answer, never an affirmati
  const t=fixture([menu(),refresh],{language:'es'});await t.say('empezar','menu');const root=t.owner();const response=await t.say('imposible');assert.ok(response.includes(acknowledgment('es')),response);assert.equal(t.session.cargo.forms[root].values.color,undefined);assert.equal(t.session.cargo.finished,undefined);assert.equal(t.calls.length,0);
 });
 await test('Spanish imposible is never YES at exact confirmation',async()=>{
- const t=fixture([draft,nested],{language:'es'});await t.say('empezar','draft');await t.say('$25');await t.say('90001');const response=await t.say('imposible');assert.ok(response.includes(acknowledgment('es')),response);assert.match(response,/COTIZACIÓN 25 90001/);assert.equal(t.session.cargo.requests,undefined);assert.equal(t.calls.length,0);
+ const t=fixture([draft,nested],{language:'es'});await t.say('empezar','draft');await t.say('$25');await t.say('90001');const root=t.owner('draft');await t.say('imposible');assert.deepEqual(t.calls,['imposible']);assertYield(t,root);assert.equal(t.session.cargo.requests,undefined);assert.equal(t.session.cargo.forms[root].values.amount,'25');
+ const response=await t.say('reanudar','draft');assert.match(response,/COTIZACIÓN 25 90001/);assert.equal(t.session.cargo.requests,undefined);await t.say('sí');assert.deepEqual(t.session.cargo.requests,[{amount:25,zip:'90001'}]);
 });
 for(const language of ['en','es'])await test(`${language} an unknown price reference yields unchanged without selecting a service or confirming cancellation`,async()=>{
  const utterance=language==='es'?'el que cuesta 9.99':'the one that costs 9.99';
@@ -99,7 +103,7 @@ for(const language of ['en','es'])await test(`${language} declared confirmation 
  const clarified={...draft,variables:{...draft.variables,form_confirmation:{...draft.variables.form_confirmation,value:{...draft.variables.form_confirmation.value,clarifications:['how much is it','cuánto cuesta']}}}};
  const t=fixture([clarified,nested],{language});await t.say('begin','draft');await t.say('$25');await t.say('90001');
  for(let i=0;i<4;i++){const response=await t.say(language==='es'?'¿cuánto cuesta?':'how much is it?');assert.match(response,language==='es'?/COTIZACIÓN 25 90001/:/QUOTE 25 90001/);assert.ok(!response.includes(acknowledgment(language)),response);assert.equal(t.session.cargo.requests,undefined);assert.equal(t.calls.length,0);}
- const response=await t.say('zqx');assert.ok(response.includes(acknowledgment(language)),response);assert.equal(t.calls.length,0);assert.equal(t.session.cargo.requests,undefined);
+ const root=t.owner('draft');await t.say('zqx');assert.deepEqual(t.calls,['zqx']);assertYield(t,root);assert.equal(t.session.cargo.requests,undefined);
 });
 await test('legacy JSON without FORM workers or recovery attributes retains its own retry behavior and emits no new metadata',async()=>{
  const legacy={id:'legacy',name:'Legacy',version:'1',description:'Existing JSON dialog',variables:{answer:{type:'string',value:''}},steps:[{id:'ask',type:'SAY-GET',value:'LEGACY QUESTION',variable:'answer'},{id:'read',type:'CASE',branches:{"condition: answer === 'yes'":S('legacy-effect',"(cargo.legacyEffects=Number(cargo.legacyEffects||0)+1,true)"),default:C('legacy-retry','legacy',{},'replace')}},{id:'done',type:'SAY',value:'LEGACY DONE'}]};

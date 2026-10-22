@@ -11,8 +11,12 @@ for(const raw of ['con 75 centavos','and 75 cents','y 75 centavos','la 4242 term
 for(const raw of ['Pague 130','Pagué 130','ya pagué 130','I paid 130','we have paid 130','I just paid $130']){
  assert.equal(moneyIntentAllows(raw,'payment'),false,raw);assert.ok(Number.isNaN(readMoneyAmount(raw,USD)),raw);assert.equal(readInputProfile({kind:'amount',money:USD},raw,true),null,raw);checks++;
 }
-for(const [raw,amount] of [['75 cents',.75],['75 centavos',.75],['123 con 75 centavos',123.75],['pay 50 with card ending 4242',50],['pagar 50 con tarjeta que termina en 4242',50],['pay what I paid last month, $50',50],['pagar lo que pagué el mes pasado, $50',50]]){
+for(const [raw,amount] of [['75 cents',.75],['75 centavos',.75],['123 con 75 centavos',123.75],['pay 50 with card ending 4242',50],['pagar 50 con tarjeta que termina en 4242',50]]){
  assert.equal(readMoneyAmount(raw,USD),amount,raw);checks++;
+}
+// No finite grammar needs to infer whether these utterances are a refusal, question or changed task.
+for(const raw of ['pay what I paid last month, $50','pagar lo que pagué el mes pasado, $50',"I can't pay $50 today",'no entiendo, quiero pagar50','is $50 enough?','I thought $50 was due','my bill says $50 but I need help','50 dollars tomorrow','no pagar50']){
+ assert.equal(moneyIntentAllows(raw,'payment'),false,raw);assert.ok(Number.isNaN(readMoneyAmount(raw,USD)),raw);assert.equal(readInputProfile({kind:'amount',money:USD},raw,true),null,raw);checks++;
 }
 console.log(`Payment reading safety: all checks passed (${checks})`);
 // A permissive domain validator cannot turn a structurally incomplete amount into an accepted value.

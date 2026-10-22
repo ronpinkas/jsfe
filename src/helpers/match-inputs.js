@@ -12,7 +12,7 @@ import { matchesChoice } from './matches-choice.js';
 import { pickChoice, amountInAnswer, isAmountAnswer } from './answer.js';
 import { readEmail, readPhone, readInternationalPhone, readIdentifier } from './contact.js';
 import { readSpokenMoney } from './spoken-money.js';
-import {readMoneyAmount,moneyIntentAllows,isPastPaymentStatement,isPartialMoneyAnswer} from './money.js';
+import {readMoneyAmount,isPartialMoneyAnswer} from './money.js';
 import { pickProviderQuestion } from './form-sources.js';
 
 /** The answer as said: jsfe stores user input escaped (don\'t). */
@@ -73,19 +73,6 @@ function emailSpans(raw, value) {
    return [[0,raw.length]];
 }
 
-/** Explicitly revise a declared choice, rather than mentioning it inside a requested narrative.
- * The remaining correction clause must itself be a whole declared choice; a cue alone is not authority.
- */
-function choiceCorrection(raw, choices, value) {
-   const prefix = /^\s*(?:(?:please|por favor)\s+)?(?:actually|instead|rather|i (?:mean|meant)|make it|switch to|change (?:it |the service |my service )?to|en realidad|mejor|quise decir|quiero decir|cambi(?:a|e|é|ar) (?:el servicio )?a)\s*[,;:]?\s+/iu;
-   const suffix = /\s+(?:instead|en su lugar)\s*[.!]?\s*$/iu;
-   const clauses = [raw, ...raw.split(/[,;\n]/)];
-   return clauses.some(clause => {
-      const replaced = clause.replace(prefix, '').replace(suffix, '');
-      return replaced !== clause && pickChoice(replaced.split(/[,;\n]/)[0], choices, false) === value;
-   });
-}
-
 /** Remove independently spent evidence while leaving the original narrative value intact. */
 function unclaimedSpans(raw, readings) {
    let spans = [[0, raw.length]];
@@ -133,12 +120,6 @@ export function readInputProfile(profile, answer, isCurrent = true) {
       const money=profile.money;
       if(isPartialMoneyAnswer(raw))return {value:raw,incompleteMoney:true,spans:[[0,raw.length]],evidence:['partial-money']};
       const read=money?text=>readMoneyAmount(text,money):amountInAnswer;
-      // A historical report belongs to its task router, not an amount correction or refusal proposal.
-      if(money?.intent==='payment'&&isPastPaymentStatement(raw))return null;
-      const refused=!!money&&money.intent==='payment'&&!moneyIntentAllows(raw,'payment');
-      // A refusal is an uncommittable validation candidate, never a numeric correction. A declared
-      // validator may route it to recovery; the common batch always withholds acceptance.
-      if(refused)return Number.isFinite(readMoneyAmount(raw,{...money,intent:undefined}))?{value:raw,refused:true,spans:[[0,raw.length]],evidence:['money-intent']}:null;
       const n = (profile.marked === 'out_of_order' ? !isCurrent : profile.marked) ? (isAmountAnswer(raw) ? read(raw) : NaN) : read(raw);
       const inRange = !isNaN(n) && (profile.min === undefined || n >= Number(profile.min)) && (profile.max === undefined || n <= Number(profile.max));
       if (inRange) {
@@ -261,13 +242,6 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    for (const c of list) {
       const profile=narrativeCurrent && c.profile.kind==='email' ? {...c.profile,literal:true} : c.profile;
       let r = readInputProfile(profile, raw, isCur(c));
-      // An opted-in narrative can still receive an explicit correction whose declared word
-      // is otherwise a strict acknowledgement (for example Spanish `seguro`). Preserve the
-      // noncurrent keypad/current-only rules when recognizing that correction clause.
-      if (!r && !isCur(c) && c.profile.kind==='choice' && narrativeCurrent) {
-         const corrected=(c.profile.choices || []).filter(choice=>choice.current_only!==true).map(choice=>({...choice,exact:true,words:(choice.words || []).filter(word=>c.profile.numeric_values===true || !/^[\d*#]$/.test(String(word).trim()))})).filter(choice=>choiceCorrection(raw,[choice],choice.key)).map(choice=>({value:choice.key,spans:choiceSpans(raw,choice.words)}));
-         if(corrected.length)r=corrected.length===1?corrected[0]:{alternatives:corrected};
-      }
       // A semantic choice supplied by ask-choice (e.g. spoken keypad keys) is a reading, not an early return.
       if (!r && c === own && choiceKey && c.profile.kind === 'choice' && (c.profile.choices || []).some(x => x.key === choiceKey)) {
          r = { ...(r || {}), value: choiceKey, spans: r?.spans?.length ? r.spans : [[0, raw.length]] };
@@ -281,7 +255,7 @@ export function matchInputs(answer, candidates, current, choiceKey) {
             const isChoice=!isCur(c) && c.profile.kind==='choice';
             const wholeOptions=isChoice ? (c.profile.choices || []).filter(choice=>choice.key===option.value).map(choice=>({...choice,exact:true})) : [];
             const wholeChoice=isChoice && [raw,raw.replace(/\d(?:[\s.-]?\d)*/g,run=>run.replace(/\D/g,''))].some(text=>pickChoice(text,wholeOptions,false)===option.value);
-            readings.push({ form:c.form, name:c.name, value:option.value, ...(option.refused===true?{refused:true}:{}), ...(option.incompleteMoney===true?{incompleteMoney:true}:{}), known, repeatedChoice, wholeChoice, choice:isChoice, correctiveChoice:isChoice && choiceCorrection(raw,wholeOptions,option.value), narrative:isCur(c) && ['text','choice'].includes(c.profile.kind) && c.profile.narrative===true, resetOn:Array.isArray(c.reset_on)?c.reset_on:[], spans:option.spans, keypad:option.keypad === true, fallback:option.fallback === true,
+            readings.push({ form:c.form, name:c.name, value:option.value, ...(option.refused===true?{refused:true}:{}), ...(option.incompleteMoney===true?{incompleteMoney:true}:{}), known, repeatedChoice, wholeChoice, choice:isChoice,  narrative:isCur(c) && ['text','choice'].includes(c.profile.kind) && c.profile.narrative===true, resetOn:Array.isArray(c.reset_on)?c.reset_on:[], spans:option.spans, keypad:option.keypad === true, fallback:option.fallback === true,
                ...(r.alternatives ? { option_label:option.option_label, option_label_es:option.option_label_es } : {}), group:c.group, exclusive:c.exclusive===true, level:forms.indexOf(c.scope || c.form), current:isCur(c), confirm:Array.isArray(c.confirm_against)?c.confirm_against:[] });
          }
       }
@@ -290,10 +264,10 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    const paired = (a, b) => a.confirm.indexOf(b.name) > -1 || b.confirm.indexOf(a.name) > -1;
    // Narrative ownership protects ancestor choices and same-form choices that reset
    // the requested field. Other sibling choices remain independent compound data. A current choice can carry narrative context too (e.g. a channel plus a
-   // complaint). Preserve declared corrections and confirmation pairs, and leave all
+   // complaint). Preserve whole declared choices and confirmation pairs, and leave all
    // independently shaped non-choice fields available for compound collection.
    const owners=readings.filter(reading=>reading.current && reading.narrative);
-   readings=readings.filter(reading=>!reading.choice || !owners.some(owner=>(reading.level>owner.level || reading.form===owner.form && owner.resetOn.includes(reading.name)) && !reading.wholeChoice && !reading.correctiveChoice && !paired(owner,reading)));
+   readings=readings.filter(reading=>!reading.choice || !owners.some(owner=>(reading.level>owner.level || reading.form===owner.form && owner.resetOn.includes(reading.name)) && !reading.wholeChoice && !paired(owner,reading)));
    const fieldConflict = (a,b) => a.form === b.form && (a.name === b.name && a.value !== b.value || a.exclusive && b.exclusive && a.group && a.group===b.group && a.name!==b.name);
    const overlap = (a,b) => (a.spans || []).some(([s,e]) => (b.spans || []).some(([t,u]) => s < u && t < e));
    const competes = (a,b) => fieldConflict(a,b) || overlap(a,b);
@@ -307,11 +281,11 @@ export function matchInputs(answer, candidates, current, choiceKey) {
       const structured=readings.filter(reading=>!reading.fallback);
       const prose=unclaimedSpans(raw,structured);
       if (prose.some(([a,b])=>/\p{L}/u.test(raw.slice(a,b)))) {
-         const independent=structured.filter(reading=>(!reading.choice || reading.level===fallback.level && !reading.wholeChoice && !reading.correctiveChoice && !fallback.resetOn.includes(reading.name)) && !fieldConflict(fallback,reading) && !paired(fallback,reading));
+         const independent=structured.filter(reading=>(!reading.choice || reading.level===fallback.level && !reading.wholeChoice && !fallback.resetOn.includes(reading.name)) && !fieldConflict(fallback,reading) && !paired(fallback,reading));
          if (independent.length) fallback.spans=unclaimedSpans(raw,independent);
       }
    }
-   const contextualChoice=(fallback,reading)=>!paired(fallback,reading) && !reading.wholeChoice && (reading.repeatedChoice && !(fallback.narrative && reading.correctiveChoice) || fallback.narrative && reading.choice && (reading.level>fallback.level || reading.form===fallback.form && fallback.resetOn.includes(reading.name)) && !reading.correctiveChoice);
+   const contextualChoice=(fallback,reading)=>!paired(fallback,reading) && !reading.wholeChoice && (reading.repeatedChoice || fallback.narrative && reading.choice && (reading.level>fallback.level || reading.form===fallback.form && fallback.resetOn.includes(reading.name)));
    const stronger=new Map(fallbacks.map(fallback=>[fallback,readings.filter(reading=>!reading.fallback && competes(fallback,reading) && !contextualChoice(fallback,reading))]));
    const keptFallbacks=fallbacks.filter(fallback=>!stronger.get(fallback).length || stronger.get(fallback).some(reading=>paired(fallback,reading)));
    const pairedFallbacks=new Set(keptFallbacks.filter(fallback=>stronger.get(fallback).length));
@@ -333,7 +307,7 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    }
    const groups = {};
    effective.forEach((r, i) => { (groups[find(i)] = groups[find(i)] || []).push(r); });
-   const strip = ({ evidence, spans, keypad, fallback, repeatedChoice, wholeChoice, choice, correctiveChoice, narrative, resetOn, level, group, exclusive, current: c, confirm, ...r }) => r;
+   const strip = ({ evidence, spans, keypad, fallback, repeatedChoice, wholeChoice, choice, narrative, resetOn, level, group, exclusive, current: c, confirm, ...r }) => r;
    const hits = [];
    let ambiguous = [];
    const remaining=[];

@@ -7,24 +7,38 @@ export function validateMoneyOptions(options) {
    if(!options||typeof options!=='object'||Array.isArray(options)||Object.keys(options).some(key=>!['currency','cardinals','intent'].includes(key))||options.currency!=='USD'||options.cardinals!==undefined&&typeof options.cardinals!=='boolean'||options.intent!==undefined&&options.intent!=='payment')throw new Error('Money options require currency USD, optional boolean cardinals and optional payment intent');
    return options;
 }
-/** One declared intent acceptance rule, shared by parsing and domain validation. Uncertainty is not refusal. */
+// This is an input grammar, not a conversation classifier. Anything outside one complete
+// monetary answer belongs to DISPATCH, including refusals, corrections with context and reports.
+const NUMERIC_MONEY=/^(?:\$\s*)?(?:\d{1,3}(?:[,.]\d{3})+|\d+)(?:[.,]\d{1,2})?(?:\s*(?:dollars?|d[oó]lar(?:es)?|bucks?))?(?:\s*(?:and|con|y)\s*(?:un\s*)?\d{1,2}(?:\s*(?:cents?|centavos?))?)?$|^\d{1,2}\s*(?:cents?|centavos?)$/i;
+const PAYMENT_PREFIX=/^(?:(?:i (?:want to|would like to|can|am able to|will) |i['’]d like to )?pay|(?:quiero |quisiera |puedo |s[ií] puedo |voy a )?(?:pagar|abonar)|(?:no,?\s+)?make it)\s*(?=\$|\d|[a-záéíóúüñ])/i;
+const ACCOUNT_PREFIX=/^(?:(?:sub[ -]?account|subcuenta|cuenta)\s+\d{1,8}\s*,\s*)/i;
+const DIGIT_WORD='(?:zero|one|two|three|four|five|six|seven|eight|nine|cero|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve)';
+const CARD_SUFFIX=new RegExp('\\s+(?:with (?:the |my )?card(?: (?:ending(?: in)?|number))?|con (?:la |mi )?tarjeta(?: (?:que termina en|terminad[ao] en))?)\\s+(?:\\d(?:[ -]?\\d){3}|'+DIGIT_WORD+'(?: '+DIGIT_WORD+'){3})$','i');
+const ACCOUNT_SUFFIX=/\s+(?:(?:on|to) (?:sub[ -]?account|account)|(?:a|en) (?:la )?(?:subcuenta|cuenta))\s+\d{1,8}$/i;
+function completeMoneyAnswer(input) {
+   let raw=String(input??'').replace(/\\(['"\\])/g,'$1').trim().replace(/^[¡!]+|[.!]+$/g,'').trim();
+   raw=raw.replace(/^(?:please|por favor)[, ]+/i,'').replace(/[, ]+(?:please|por favor)$/i,'').trim();
+   raw=raw.replace(PAYMENT_PREFIX,'').replace(ACCOUNT_PREFIX,'').replace(CARD_SUFFIX,'').replace(ACCOUNT_SUFFIX,'').trim();
+   if(NUMERIC_MONEY.test(raw))return true;
+   const {readings,invalid}=scanSpokenMoney(raw);
+   return !invalid.length&&readings.length===1&&readings[0].start===0&&readings[0].end===raw.length;
+}
+/** Accept only a complete monetary answer or a simple explicit payment instruction.
+ * A false result makes no claim about intent, refusal, tense or the caller's next request. */
 export function moneyIntentAllows(input,intent) {
    if(intent===undefined||intent===null||intent==='')return true;
    if(intent!=='payment')throw new Error('Unsupported money intent');
-   const raw=String(input??'').replace(/\\(['"\\])/g,'$1').toLowerCase().replace(/[’‘]/g,"'");
-   const refused=/\b(?:can't|cannot|can not|won't|will not|don't|do not|refuse to)\s+(?:want\s+to\s+)?pay(?:\b|(?=\d))|\bno\s+(?:lo\s+)?(?:se\s+)?(?:puede|pudo|puedo|quiero|voy\s+a)\s+pagar(?:\b|(?=\d))/.test(raw);
-   const unable=/\b(?:unable|not able)\s+to\s+pay(?:\b|(?=\d))|\bno\s+(?:soy|somos|es|son)\s+capaz(?:es)?\s+de\s+pagar(?:\b|(?=\d))|\bincapaz\s+de\s+pagar(?:\b|(?=\d))|\b(?:no\s+(?:me\s+)?es\s+posible|me\s+es\s+imposible|no\s+podr[eé])\s+pagar(?:\b|(?=\d))/.test(raw);
-   const deferred=/\b(?:pay|paying|pagar|abonar)(?:\b|(?=\d))/.test(raw)&&/\b(?:later|tomorrow|next week|not today|despu[eé]s|m[aá]s tarde|ma[nñ]ana|hasta)\b/.test(raw);
-   return !refused&&!unable&&!deferred&&!isPastPaymentStatement(raw);
+   return completeMoneyAnswer(input);
 }
 /** A cents-only continuation needs a complete amount; it is not an independent replacement. */
 export function isPartialMoneyAnswer(input) {
    return /^\s*(?:and|con|y)\s*(?:un\s+)?\d{1,2}\s*(?:cents?|centavos?)\b/i.test(String(input??''));
 }
-/** Reports of money already paid cannot supply prospective payment amounts or consent. */
+/** Compatibility predicate for a whole short historical report, never a search through prose.
+ * Payment collectors do not use this to route or answer the caller; DISPATCH owns that decision. */
 export function isPastPaymentStatement(input) {
-   const raw=String(input??'').replace(/\\(['"\\])/g,'$1').toLowerCase().replace(/[’‘]/g,"'");
-   return /(?<!\b(?:what|that|than|as|if|when|whether)\s)\b(?:i|we)(?:'ve|\s+have|\s+had)?\s+(?:already\s+|just\s+|recently\s+)*paid\b|\b(?:already|just)\s+paid\b|(?<!\b(?:no|nunca|que|cuando)\s)\b(?:ya\s+)?pagu[eé](?![a-záéíóúüñ])|\b(?:acabo|acabamos)\s+de\s+pagar\b/.test(raw);
+   const raw=String(input??'').trim().toLowerCase().replace(/[’‘]/g,"'").replace(/[.!]+$/,'').trim();
+   return /^(?:(?:i|we)(?:'ve| have)? (?:already |just )?paid|(?:ya )?pagu[eé])(?: \$?\d+(?:[.,]\d{1,2})?(?: (?:dollars?|d[oó]lares?))?)?$/.test(raw);
 }
 function unsupportedCurrency(raw) {
    return /(?:^|[^a-záéíóúüñ])(?:pesos?|mxn|euros?|eur|pounds?|gbp|yen|jpy|cad|aud|nzd|hkd|sgd|chf|canadian|canadienses?|australian|australianos?)(?![a-záéíóúüñ])|[€£¥₱₹₩₽]|\bmx\s*\$/i.test(raw);
@@ -38,7 +52,7 @@ function introducedAsIdentifier(raw,start) {
 }
 /** Number or NaN. currency is required; cardinals defaults false and intent is optional.
  * Explicit foreign currencies, negative amounts and independent unequal readings fail closed.
- * Refusal is rejected only under the explicitly declared payment intent; it never grants consent.
+ * Payment intent accepts a bounded whole answer; unrelated prose is never mined for an amount or consent.
  */
 export function readMoneyAmount(input,options) {
    validateMoneyOptions(options);

@@ -1,4 +1,4 @@
-import {validateInputMeaning} from './semantic-input.js';
+import {validateFormResponse} from './contextual-response.js';
 import {validateFormProposalPolicy} from './proposal-contract.js';
 /** Shared FORM semantics. Pure readers plus explicit mutations of the supplied session container; no host I/O. */
 import { readInputProfile } from './match-inputs.js';
@@ -29,7 +29,8 @@ export function resolveFormInputs(inputs, presets = {}) {
       const input = { ...(raw.field ? presets[raw.field] : {}), ...raw };
       if(input.profile?.money!==undefined){if(input.profile.kind!=='amount')throw new Error('FORM money options require amount profile');validateMoneyOptions(input.profile.money);}
       validateFormExhaustion(input.on_exhausted);
-      if(input.meaning!==undefined){if(!input.profile || input.form || input.any_of || input.bind)throw new Error('FORM meaning requires a readable leaf input');validateInputMeaning(input.meaning);}
+      if(input.meaning!==undefined)throw new Error('FORM meaning is retired; use a contextual response description');
+      if(input.response!==undefined){if(!input.profile || input.form || input.any_of || input.bind)throw new Error('FORM response requires a readable leaf input');validateFormResponse(input.response);}
       if(input.proposal!==undefined){
          if(!input.profile || input.form || input.any_of || input.bind)throw new Error('FORM proposal requires a readable leaf input; declare it on each group member or inside the subform');
          validateFormProposalPolicy(input.proposal);
@@ -157,7 +158,7 @@ export function enrichFormMatches(matches,chain,form,names=[],asked='') {
    const enrich=h=>{
       const spec=chain.find(c=>c.form===h.form&&c.name===h.name)||{};
       return {...h,label:h.option_label||spec.label||h.name,label_es:h.option_label_es||spec.label_es||spec.label||h.name,
-         validator:spec.validator||'',...(spec.meaning?{meaning:spec.meaning}:{}),after:spec.after||'',validate_always:spec.validate_always===true,...(spec.activation?{activation:spec.activation}:{}),pii:spec.pii===true,current:h.form===form&&names.includes(h.name),asked};
+         validator:spec.validator||'',...(spec.response?{response:spec.response}:{}),after:spec.after||'',validate_always:spec.validate_always===true,...(spec.activation?{activation:spec.activation}:{}),pii:spec.pii===true,current:h.form===form&&names.includes(h.name),asked};
    };
    return {...matches,hits:matches.hits.map(enrich),ambiguous:matches.ambiguous.map(enrich),remaining:(matches.remaining||[]).map(group=>group.map(enrich))};
 }

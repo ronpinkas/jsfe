@@ -97,4 +97,4 @@ Multiple assignments MUST use comma operator, NEVER semicolons (semicolons termi
 
 ### Optional field assessment (unreleased)
 
-An `ASSESS-INPUT` step validates a field separately from intent routing. Declare an object `variable`, and string templates `value`, `question`, `purpose`, and `acceptance`. The callback receives `task: "assess_input"` and a strict schema for `{ok, disposition}`. Only `{ok: true, disposition: "accept"}` accepts a value; the engine never rewrites the supplied text. Missing callbacks, unavailable models, timeouts, invalid JSON and contradictory verdicts return an unaccepted retry. FORM input `meaning` declarations invoke this generic step; ordinary inputs do not invoke it. See forms.md for the declaration and cancellation/recovery rules.
+Open-ended FORM answers may declare `response: {description}` to use ordinary contextual DISPATCH extraction. Uncertainty yields to the host, routing errors preserve the pending step, and exact consent remains separate. See forms.md.
