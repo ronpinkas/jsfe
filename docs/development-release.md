@@ -92,3 +92,9 @@ Version-1 JSON flow declarations compile inside JSFE. Tenant JSON contains its f
 Owner authorized publication, exact pins in both consumers, dev host deployment and matching shared/ai-ar-ql activation on all three dev configurations with session-only actions. Native Shopify remains composed and Shopify Policy remains unchanged. Production is outside this authorization. Full execution/model replay follows the matched dev activation; local focused results are not relabelled as full published-runtime acceptance.
 
 The 1.7.10 publication workflow was stopped before publication after the host-composition preflight rejected call-only declarative workers. Its tag is retained unchanged. The corrected 1.7.11 candidate includes actual registry-composition-to-engine execution coverage.
+
+## 1.7.12 — OTP recovery catalog correction
+
+Correct four OTP decision expressions to reference the renamed `otp_phrases` catalog. The incomplete rename in 1.7.11 prevented resend, lost-phone, later and some invalid-code recovery branches from executing correctly. Consent, authentication, action persistence and tool permissions are unchanged. A focused runtime regression executes the actual shared validator for English/Spanish lost-phone answers, resend, later and a short code, requiring no expression failures and no authentication. Tenant execution checks cover the affected account, identity, statement-delivery and proposal paths.
+
+This corrective release follows the same authorized dev-only rollout: exact consumer pins, matched shared and ai-ar-ql definitions in all three session-only dev configurations, and production unchanged. Broader execution and model results are retained separately and must be reported as observed.
