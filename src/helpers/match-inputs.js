@@ -91,15 +91,15 @@ export function readInputProfile(profile, answer, isCurrent = true) {
    const kind = profile && profile.kind;
    if (kind === 'choice') {
       const choices = (Array.isArray(profile.choices) ? profile.choices : []).filter(c=>isCurrent||c.current_only!==true).map(c=>({...c,
-         numericWords:(c.words || []).filter(word=>/^\d{2,}$/.test(String(word).trim())),
-         words:(c.words||[]).concat(isCurrent ? c.keys || [] : []).filter(word=>!(isAmountAnswer(raw)&&/^\d+$/.test(String(word).trim()))&&(isCurrent||profile.numeric_values===true||!/^[\d*#]$/.test(String(word).trim())))}));
+         numericWords:(c.phrases ?? c.words ?? []).filter(word=>/^\d{2,}$/.test(String(word).trim())),
+         phrases:(c.phrases??c.words??[]).concat(isCurrent ? c.keys || [] : []).filter(word=>!(isAmountAnswer(raw)&&/^\d+$/.test(String(word).trim()))&&(isCurrent||profile.numeric_values===true||!/^[\d*#]$/.test(String(word).trim())))}));
       // Semantic numeric values may arrive in ASR groups ("95 52"), unlike menu keys.
       // Keep choice policy in pickChoice and source evidence in the original utterance.
       const runs=digitRuns(raw),joined=raw.replace(/\d(?:[\s.-]?\d)*/g,run=>' '+run.replace(/\D/g,'')+' ');
       const numericSpans=c=>{
          if(isAmountAnswer(raw))return [];
          const words=c.numericWords.filter(word=>runs.includes(String(word).trim()));
-         if(!words.length||pickChoice(joined,[{...c,words}],false)!==c.key)return [];
+         if(!words.length||pickChoice(joined,[{...c,phrases:words}],false)!==c.key)return [];
          return words.flatMap(word=>numberSpans(raw,String(word).trim()).filter(([a,b])=>raw.slice(a,b).replace(/\D/g,'')===String(word).trim()));
       };
       const base = pickChoice(raw, choices, false);
@@ -107,9 +107,9 @@ export function readInputProfile(profile, answer, isCurrent = true) {
       const picked = choices.find(c => c.key === base);
       const pool = picked && negative(picked) ? [picked] : choices.filter(c => !negative(c));
       let readings = pool.filter(c => pickChoice(raw, [c], false) === c.key || numericSpans(c).length).map(c => {
-         const words = (c.words || []).filter(w => matchesChoice(raw,[w]));
+         const words = (c.phrases ?? c.words ?? []).filter(w => matchesChoice(raw,[w]));
          const spans = [...choiceSpans(raw,words),...numericSpans(c)].filter((span,index,all)=>all.findIndex(other=>other[0]===span[0]&&other[1]===span[1])===index);
-         return { value:c.key, ...(isCurrent && (c.keys || []).length && !isAmountAnswer(raw) && pickChoice(raw,[{key:c.key,words:c.keys,exact:true}],false)===c.key ? {keypad:true} : {}), spans:spans.length?spans:[[0,raw.length]], option_label:c.label || (c.words || []).find(w=>!/^\d+$/.test(w)) || c.key, option_label_es:c.label_es || c.label || c.key };
+         return { value:c.key, ...(isCurrent && (c.keys || []).length && !isAmountAnswer(raw) && pickChoice(raw,[{key:c.key,phrases:c.keys,exact:true}],false)===c.key ? {keypad:true} : {}), spans:spans.length?spans:[[0,raw.length]], option_label:c.label || (c.phrases ?? c.words ?? []).find(w=>!/^\d+$/.test(w)) || c.key, option_label_es:c.label_es || c.label || c.key };
       });
       // A more specific declared phrase can cover a shorter phrase of the same field's other option.
       readings = readings.filter(r => !readings.some(other => other !== r && r.spans.every(([a,b]) => other.spans.some(([c,d]) => c <= a && d >= b && (c<a || d>b)))));

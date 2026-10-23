@@ -12,8 +12,7 @@ npm i jsfe
 - **[JavaScript Flow Engine User Guide](user-guide.md)** 
 - Comprehensive tutorials, examples, and best practices
 - **[README.md](README.md)** - Technical API reference (this document)
-- **[Flow author reference](docs/copilot-reference.md)** - the engine in one page, for flow authors and AI flow generators (shipped in the package; the Flow Designer's CoPilot reads it from the published version, so change it with the engine)
-- **[Native forms, providers and performers](docs/forms.md)** - owned reentrant collection, fact catalogs, confirmed effects and durable recovery
+- **[Flow author reference](docs/copilot-reference.md)** - the authoritative engine and JSON authoring specification for flow authors and AI flow generators (shipped in the package; the Flow Designer's CoPilot reads it from the published version, so change it with the engine)
 - **[Development candidate acceptance](docs/development-release.md)** - reproducible package and cross-repository verification
 - **[System Flows](docs/system-flows.md)** and **[Shopify Flows](docs/shopify-flows.md)** - the bundled flow and tool libraries in `flows/`, step by step
 
@@ -772,7 +771,7 @@ return aiResponse;
 Native FORM collection in 1.7.2 acknowledges an unreadable answer once, then yields the current
 utterance while retaining its draft. Explicit recovery metadata distinguishes resumption, required
 restart, unknown-action hold and no promised recovery; business completion remains independent.
-See the [retry/yield/recovery contract](docs/forms.md#retry-yield-and-recovery-contract-172).
+See the [retry/yield/recovery contract](docs/copilot-reference.md#retry-yield-and-recovery).
 
 ### Host Responsibilities: Tool Calls, Cancellation and Concurrency
 

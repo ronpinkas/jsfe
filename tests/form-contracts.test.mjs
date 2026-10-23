@@ -10,7 +10,7 @@ const provider=defineProvider({id:'account',name:'Account',description:'account 
 const set=[provider,worker('gate'),worker('load'),worker('provide-data')];
 eq(validateFlowContracts(set).declared,4,'complete provider contracts validate');
 eq(provider.parameters[0].enum,['balance','summary'],'fact and set keys generate extraction enum');
-eq(providerQuestions(provides),[{key:'balance',words:['balance','saldo']}],'question table is derived from same facts');
+eq(providerQuestions(provides),[{key:'balance',phrases:['balance','saldo']}],'question table is derived from same facts');
 throws(()=>validateFlowContracts([...set,worker('load')]),/duplicate/);
 throws(()=>validateFlowContracts([{id:'undeclared',name:'Undeclared',steps:[]}]),/Missing flow contracts/);
 eq(validateFlowContracts([{id:'pending',name:'Pending',steps:[]}],[],{requireAll:false}).missing,['pending'],'migration status never counts an undeclared flow complete');

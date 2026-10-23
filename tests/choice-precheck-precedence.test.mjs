@@ -10,6 +10,6 @@ for(const retry of [false,true]){
  const engine=new WorkflowEngine(quiet,null,linkFormSchemas([...FLOWS,precheck,owner]),[],STANDARD_FUNCTIONS,{});engine.disableCommands();
  let session=engine.initSession('synthetic',crypto.randomUUID(),'en');session.cargo.voice=false;
  const say=async(content,start=false)=>{session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start:{flow:'owner'}}:{})},session)));};
- await say('begin',true);if(retry){await say('zqx');assert.equal(session.cargo.result,undefined);}
+ await say('begin',true);if(retry){await say('');assert.equal(session.cargo.result,undefined);}
  await say('$50');assert.equal(session.cargo.result,'handoff');console.log('PASS precheck precedes amount recognition '+(retry?'after retry':'on first answer'));
 }

@@ -46,7 +46,7 @@ await test('plain projections compile to the existing validated projection path'
 await test('provider catalog questions derive from its facts rather than another declaration',()=>{
  const provides={facts:[{key:'balance',words:['balance'],path:'balance'}]};
  const forms=[make({provides}),Form({id:'collect',description:'Collect with account questions',provides,inputs:[{name:'zip',field:'zip'}]})];
- for(const f of forms){assert.deepEqual(f.variables.questions.value,[{key:'balance',words:['balance']}]);assert.deepEqual(f.variables.provides.value,provides);assert.equal(f.variables.contract.value.role,f.id==='collect'?'collector':'performer');}
+ for(const f of forms){assert.deepEqual(f.variables.questions.value,[{key:'balance',phrases:['balance']}]);assert.deepEqual(f.variables.provides.value,provides);assert.equal(f.variables.contract.value.role,f.id==='collect'?'collector':'performer');}
  assert.deepEqual(provides,{facts:[{key:'balance',words:['balance'],path:'balance'}]});
 });
 await test('compound calculations share build-time serialization without changing runtime guards',async()=>{

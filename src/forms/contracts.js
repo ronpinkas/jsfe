@@ -1,3 +1,4 @@
+import {inheritFlowDeclaration} from './declaration-capture.js';
 import {CONTEXTUAL_RESPONSES_REQUIREMENT,hasFormResponse,validateContextualResponseStep,contextualResponseRuntimeSteps} from '../helpers/contextual-response.js';
 /** Build-time contracts for conversational flows. Transport operations remain registered tools. */
 import {INPUT_PROPOSALS_REQUIREMENT,hasInputProposals,proposalRuntimeSteps} from './proposal-runtime.js';
@@ -14,12 +15,12 @@ const fail = (id, message) => { throw new Error(`Flow contract ${id}: ${message}
 const stepList = steps => (steps || []).flatMap(step => [step,...stepList(Object.values(step.branches || {})),...(step.onFail ? stepList([step.onFail]) : [])]);
 
 export function providerQuestions(provides) {
-   return [...(provides.facts || []),...(provides.sets || [])].filter(f => (f.words || f.asks || []).length)
-      .map(f => ({key:f.key,words:f.words || f.asks}));
+   return [...(provides.facts || []),...(provides.sets || [])].filter(f => (f.phrases ?? f.words ?? f.asks ?? []).length)
+      .map(f => ({key:f.key,phrases:f.phrases ?? f.words ?? f.asks}));
 }
 export function providerParameter(provides) {
-   const entries=[...(provides.facts || []).filter(f=>f.gloss || f.asks?.length),...(provides.sets || [])];
-   return {name:'asked',type:'string',enum:entries.map(f=>f.key),description:entries.map(f=>`${f.key}: ${f.gloss || (f.asks || []).join('; ') || f.label || f.key}`).join('. ')};
+   const entries=[...(provides.facts || []).filter(f=>f.description || f.gloss || f.asks?.length),...(provides.sets || [])];
+   return {name:'asked',type:'string',enum:entries.map(f=>f.key),description:entries.map(f=>`${f.key}: ${f.description || f.gloss || (f.asks || []).join('; ') || f.label || f.key}`).join('. ')};
 }
 /** Link declarative sub-forms before runtime so any descendant field can receive an early answer. */
 export function linkFormSchemas(flows,{externalFlows=[]}={}) {
@@ -57,7 +58,7 @@ export function linkFormSchemas(flows,{externalFlows=[]}={}) {
       }
       const linked={...flow,parameters,variables:{...flow.variables,inputs:{...flow.variables.inputs,value:inputs}}};
       // Descendant schemas are linked after declaration; propagate their runtime requirement to the root entry.
-      return flow.variables?.contract ? declared(linked,flow.variables.contract.value) : {...linked,steps:proposalRuntimeSteps(flow.id,linked.steps,hasInputProposals(inputs)?[INPUT_PROPOSALS_REQUIREMENT]:[])};
+      return inheritFlowDeclaration(flow,flow.variables?.contract ? declared(linked,flow.variables.contract.value) : {...linked,steps:proposalRuntimeSteps(flow.id,linked.steps,hasInputProposals(inputs)?[INPUT_PROPOSALS_REQUIREMENT]:[])});
    });
 }
 function declared(flow, contract) {

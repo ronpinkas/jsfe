@@ -1,3 +1,4 @@
+export {compileNamedFunctions} from './named-functions.js';
 import {continuationSafetyProtocol} from '../forms/continuation-safety.js';
 import {contextualResponseProtocol,validateFormResponse,hasFormResponse} from './contextual-response.js';
 import {formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation} from './form-proposals.js';

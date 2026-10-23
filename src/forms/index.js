@@ -16,3 +16,6 @@ export {addressDraft,zipLocation,streetLocation,resolvedAddress} from '../helper
 export {explainSession} from './inspection.js';
 
 export {Form,Provider,Performer,Worker,compileExpression} from './authoring.js';
+
+export {compileFlowDeclarations,serializeFlowDeclaration,captureOriginalDeclaration} from './declarations.js';
+export {inheritFlowDeclaration} from './declaration-capture.js';

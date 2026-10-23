@@ -62,4 +62,18 @@ test('explicit durable-only requirements are never weakened by the session-only 
  const old={id:'old-native',variables:{contract:{value:{role:'performer',requires:['durableActions']}}}};
  rejected(old,{actionPersistence:'session-only'},'durableActions');
 });
+test('raw JSON performers require the same policy before compilation and do not mutate authored data',()=>{
+ const flow={declarationVersion:1,id:'json-payment',form:{inputs:[]},performs:[{action:'payment',effect:'charge'}],prepare:'prepare',present:'present'};
+ const before=JSON.stringify(flow);
+ for(const policy of [undefined,{}, {durableActions:false},{guardedActions:true},{durableActions:'true'}])rejected(flow,policy);
+ assert.equal(assertFlowHostCapabilities([flow],{actionPersistence:'session-only'}),true);
+ assert.equal(assertFlowHostCapabilities([flow],{durableActions:true}),true);
+ assert.equal(JSON.stringify(flow),before);
+});
+test('raw declarations preserve explicit requirements and reject unsupported declaration versions',()=>{
+ const flow={declarationVersion:1,id:'json-worker',contract:{requires:['auditTrail']},steps:[]};
+ rejected(flow,{},'auditTrail');assert.equal(assertFlowHostCapabilities([flow],{auditTrail:true}),true);
+ assert.throws(()=>assertFlowHostCapabilities([{...flow,declarationVersion:2}],{auditTrail:true}),/unsupported declarationVersion/);
+ assert.throws(()=>assertFlowHostCapabilities([{...flow,contract:{requires:'auditTrail'}}],{auditTrail:true}),JSFEHostCapabilityError);
+});
 console.log(`Flow host capabilities: all ${checks} checks passed`);

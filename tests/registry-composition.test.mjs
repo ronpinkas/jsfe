@@ -65,4 +65,19 @@ await test('accessors and custom conversion/iteration hooks never execute',()=>{
 await test('shared references are cloned independently without being misclassified as cycles',()=>{
  const shared={x:1};const a=flow();a.defaults={one:shared,two:shared};const result=composeRegistries({flows:[[a]],tools:[]});result.flows[0].defaults.one.x=7;assert.equal(result.flows[0].defaults.two.x,1);assert.equal(shared.x,1);
 });
+await test('raw JSON declarations compose with shared flows without compiling or mutating author data',()=>{
+ const json={declarationVersion:1,id:'collect-callback',form:{inputs:[{name:'phone',field:'phone'}]}};
+ const inputs={flows:[[json],[flow('shared','Shared')]],tools:[]},before=copy(inputs);
+ const result=composeRegistries(inputs);assert.deepEqual(result.flows[0],json);assert.equal(result.flows[0].steps,undefined);
+ result.flows[0].form.inputs[0].name='changed';assert.deepEqual(inputs,before);
+ assert.throws(()=>composeRegistries({flows:[[json],[flow('other','CollectCallback')]],tools:[]}),/ambiguous/);
+});
+await test('raw JSON functions and declaration differences retain conservative conflict checks',()=>{
+ const first={declarationVersion:1,id:'math',functions:{total:{parameters:[{name:'rows',type:'array'}],body:['return rows.reduce((sum,row)=>sum+row.amount,0);']}},steps:[]};
+ const second=copy(first);second.functions.total.body=['return 0;'];
+ assert.equal(composeRegistries({flows:[[first],[copy(first)]],tools:[]}).flows.length,1);
+ assert.throws(()=>composeRegistries({flows:[[first],[second]],tools:[]}),/conflicting/);
+ assert.throws(()=>composeRegistries({flows:[[{...first,declarationVersion:2}]],tools:[]}),/unsupported declarationVersion/);
+ assert.throws(()=>composeRegistries({flows:[[{declarationVersion:1,id:'incomplete'}]],tools:[]}),/needs steps/);
+});
 console.log(`Registry composition: all ${checks} checks passed`);

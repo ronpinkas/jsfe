@@ -42,7 +42,15 @@ export function assertFlowHostCapabilities(flows, capabilities = {}) {
    }
    for (const flow of flows) {
       if (flow?.safetyRevision !== undefined && (typeof flow.safetyRevision !== 'string' || !flow.safetyRevision.trim() || flow.safetyRevision !== flow.safetyRevision.trim())) throw new JSFEHostCapabilityError(flow?.id,CONTINUATION_SAFETY_REQUIREMENT,'safetyRevision must be a nonempty unpadded string');
-      const requirements = normalizeHostRequirements(flow?.variables?.contract?.value?.requires, flow?.id);
+      // Hosts admit raw JSON before the engine expands declarations. A native
+      // performer must retain the same explicit activation policy at that boundary.
+      const authored = flow?.declarationVersion !== undefined;
+      if (authored && flow.declarationVersion !== 1) throw new JSFEHostCapabilityError(flow?.id, '', 'unsupported declarationVersion');
+      const requirements = normalizeHostRequirements([
+         ...normalizeHostRequirements(flow?.variables?.contract?.value?.requires, flow?.id),
+         ...(authored ? normalizeHostRequirements(flow?.contract?.requires, flow?.id) : []),
+         ...(authored && flow.performs !== undefined ? ['guardedActions'] : []),
+      ], flow?.id);
       for (const capability of requirements) {
          // Intrinsic runtime support, not a host option or an implicit host permission.
          if (capability === CONTINUATION_SAFETY_REQUIREMENT || capability === INPUT_PROPOSALS_REQUIREMENT || capability === CONTEXTUAL_RESPONSES_REQUIREMENT) continue;

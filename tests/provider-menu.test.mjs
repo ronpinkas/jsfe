@@ -29,4 +29,12 @@ for(const language of ['en','es']) {
  const facts=structuredClone(catalog);facts.facts=[{key:'balance',words:['no thanks'],path:'balance',say:'BALANCE {value}',say_es:'SALDO {value}',public:true}];
  const provided=await run(['no thanks','done'],facts,language);check(language+' fact claims retain priority over menu actions and terminal preselection',()=>{assert.equal(provided.session.cargo.actions,undefined);assert.match(provided.response,language==='es'?/SALDO 17/:/BALANCE 17/);assert.match(provided.response,language==='es'?/TERMINADO/:/TERMINAL/);assert.deepEqual(provided.warnings,[]);});
 }
+for(const answer of ['pay','done','balance']) {
+ const preferred=structuredClone(catalog);
+ for(const choice of preferred.menu.choices){choice.phrases=choice.words;choice.words=['obsolete'];}
+ preferred.menu.done.phrases=preferred.menu.done.words;preferred.menu.done.words=['obsolete'];
+ preferred.facts=[{key:'balance',phrases:['balance'],words:['obsolete'],description:'Current balance',path:'balance',say:'BALANCE {value}',public:true}];
+ const t=await run([answer],preferred);
+ check('preferred phrase provider menu '+answer,()=>{if(answer==='pay')assert.equal(t.session.cargo.actions,1);else if(answer==='done')assert.match(t.response,/TERMINAL/);else assert.match(t.response,/BALANCE 17/);assert.deepEqual(t.warnings,[]);});
+}
 console.log(`Provider terminal precedence: all checks passed (${checks})`);

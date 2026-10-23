@@ -57,3 +57,13 @@ assert.equal(stateOf(ca).callback,callback);assert.equal(stateOf(cb).callback,ca
 assert.equal(stateOf(ca).counter,1);assert.equal(stateOf(cb).counter,1);
 assert.notEqual(stateOf(ca),stateOf(cb));assert.equal(callbackFlow.variables.state.value.counter,0);
 console.log('flow-defaults-callbacks: 6 checks passed');
+
+// The editable source view is detached without rejecting existing programmatic callbacks.
+const authored=callbackEngine.getFlowDeclarations();
+assert.equal(authored[0].variables.state.value.callback,callback);
+authored[0].variables.state.value.counter=99;
+assert.equal(callbackEngine.getFlowDeclarations()[0].variables.state.value.counter,0);
+assert.equal(callbackFlow.variables.state.value.counter,0);
+const cc=await activate('callback-c');assert.equal(stateOf(cc).counter,1);
+assert.equal(stateOf(cc).callback,callback);
+console.log('flow-defaults-source-callbacks: 5 checks passed');

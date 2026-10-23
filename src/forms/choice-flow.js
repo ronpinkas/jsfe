@@ -4,7 +4,7 @@ export const FLOWS = [
     "id": "ask-choice",
     "name": "AskChoice",
     "version": "1.19.0",
-    "description": "Worker: ask one question; sets cargo.choice (the matched key, or 'other' with accept_other) and cargo.choiceText. AGENT / 0 reaches a person, EXIT / * ends, a new request is DISPATCHed. With amount: an answer naming an amount returns 'amount' — one marked as money ($, dollars, cents, decimals), or, when it matched no choice, any answer amountInAnswer reads as one (\"109 con 47\"), except an answer with a single digit and no payment verb (\"5\", \"5 please\"), which is a key press (\"pay 5\" is an amount). An exact choice keyed no / decline / done / cancel (or negative) is picked only by its own words and keys, never by a refusal or a deferral. Optional answer_precheck: a caller flow run with { answer } BEFORE the choices are matched; an answer_key it sets wins (the answer_validator contract, which runs only when no choice matched). A caller-set one-time offer (cargo.switchOffer = { text, text_es, words, flow }) is added to the question and consumed by it: an answer in its words runs its flow (reboot) — e.g. ANOTHER ACCOUNT when the account question was skipped (owner 2026-10-17). Optional reask_long: a long answer that matches nothing is asked again once before it is DISPATCHed. Params: question(_es), choices [{key, words, negative?, neutral?}], retry(_es), accept_other, expect ('number' | 'email' | 'contact'), amount, digits, exit_context(_es). With amount: 'marked' (owner 2026-10-18), only a marked amount is one: '$', a dollar or cents word, a decimal, or 'con' / 'and' with two digits ('102 con 21'); a bare number is not.",
+    "description": "Worker: ask one question and return cargo.choice plus the original cargo.choiceText. Declared choices, precheck keys and typed answer-validator keys keep priority across both read passes. Exact negative choices accept only their own declared words and keys. With amount, an unowned legacy payment question accepts a complete USD monetary answer or a simple payment instruction through readMoneyAmount; uncertain prose yields to DISPATCH without declaring an action failure. A lone digit keeps the question's keypad policy; amount:'marked' still requires marked money. An owning FORM supplies form_context and performs its own field, correction, provider-question and confirmation matching before deciding to retry or yield, retaining its draft and safety guards. Optional answer_precheck runs before choices; answer_validator runs only when no choice matched. AGENT/0 requests a person; EXIT/* leaves the request; a consumed switch offer routes its declared flow. Params include question(_es), choices [{key,phrases,exact?,negative?,neutral?}], retry(_es), accept_other, expect, amount, digits, exit_context(_es), pii and form_context.",
     "parameters": [
       {"name":"form_context","type":"object","description":"Optional declared FORM reader context {form,current,names,questions}; valid field readings take precedence over stale verification-code echoes."},
       {
@@ -22,7 +22,7 @@ export const FLOWS = [
       {
         "name": "choices",
         "type": "array",
-        "description": "[{key, words}] in priority order",
+        "description": "[{key, phrases}] in priority order",
         "required": true
       },
       {
@@ -401,13 +401,13 @@ export const FLOWS = [
         "id": "ac_match_offer",
         "type": "SET",
         "variable": "ac_key",
-        "value": "ac_offer && Array.isArray(ac_offer.words) && matchesChoice(ac_answer, ac_offer.words) ? '__switch' : ac_key"
+        "value": "ac_offer && Array.isArray(ac_offer.phrases ?? ac_offer.words) && matchesChoice(ac_answer, ac_offer.phrases ?? ac_offer.words) ? '__switch' : ac_key"
       },
       {
         "id": "ac_exact_no_own_words",
         "type": "SET",
         "variable": "ac_key",
-        "value": "(function() { var cs = Array.isArray(choices) ? choices : []; var isExactNo = function(c) { return !!c && c.exact === true && (['no', 'decline', 'done', 'cancel'].indexOf(c.key) > -1 || c.negative === true); }; var c = cs.filter(function(x) { return !!x && x.key === ac_key; })[0]; if (!isExactNo(c)) { return ac_key; } else if (pickChoice(ac_answer, [{ key: 'ac_own', words: c.words, exact: true }], false) === 'ac_own') { return ac_key; } else { return pickChoice(ac_answer, cs.filter(function(x) { return !isExactNo(x); }), ac_other); } })()"
+        "value": "(function() { var cs = Array.isArray(choices) ? choices : []; var isExactNo = function(c) { return !!c && c.exact === true && (['no', 'decline', 'done', 'cancel'].indexOf(c.key) > -1 || c.negative === true); }; var c = cs.filter(function(x) { return !!x && x.key === ac_key; })[0]; if (!isExactNo(c)) { return ac_key; } else if (pickChoice(ac_answer, [{ key: 'ac_own', phrases: c.phrases ?? c.words, exact: true }], false) === 'ac_own') { return ac_key; } else { return pickChoice(ac_answer, cs.filter(function(x) { return !isExactNo(x); }), ac_other); } })()"
       },
       {
         "id": "ac_init_answer_key",
@@ -446,7 +446,7 @@ export const FLOWS = [
         "id": "ac_amount_check",
         "type": "SET",
         "variable": "ac_key",
-        "value": "!ac_prechecked && ac_amount && Number.isFinite(amountInAnswer(ac_answer)) && (isAmountAnswer(ac_answer) || (ac_marked ? (ac_key === '' && /\\d\\s*(?:con|and)\\s*(?:un\\s+)?\\d{2}\\b(?!\\s*\\d)/i.test(String(ac_answer || ''))) : (ac_key === '' && (!/^\\D*\\d\\D*$/.test(String(ac_answer || '')) || /\\b(?:pay|paying|pagar|pagarle|abonar)\\b/i.test(String(ac_answer || ''))) && !/^[\\s,.;]*\\d(?:[\\s,.;]+\\d)+[\\s,.;]*$/.test(String(ac_answer || '')) && !isNaN(amountInAnswer(ac_answer))))) ? '__amount' : ac_key"
+        "value": "ac_key !== '' || !ac_amount || (typeof form_context !== 'undefined' && form_context && form_context.form) ? ac_key : (String(ac_answer||'').trim() && !Number.isFinite(readMoneyAmount(ac_answer,{currency:'USD',cardinals:true,intent:'payment'}))) ? '__elsewhere' : (ac_amount && (isAmountAnswer(ac_answer) || (ac_marked ? (ac_key === '' && /\\d\\s*(?:con|and)\\s*(?:un\\s+)?\\d{2}\\b(?!\\s*\\d)/i.test(String(ac_answer || ''))) : (ac_key === '' && (!/^\\D*\\d\\D*$/.test(String(ac_answer || '')) || /\\b(?:pay|paying|pagar|pagarle|abonar)\\b/i.test(String(ac_answer || ''))) && !/^[\\s,.;]*\\d(?:[\\s,.;]+\\d)+[\\s,.;]*$/.test(String(ac_answer || '')) && !isNaN(readMoneyAmount(ac_answer,{currency:'USD',cardinals:true,intent:'payment'}))))) ? '__amount' : ac_key)"
       },
       {
         "id": "ac_switch_to_text_key",
@@ -572,13 +572,13 @@ export const FLOWS = [
         "id": "ac_match_again_offer",
         "type": "SET",
         "variable": "ac_key",
-        "value": "ac_offer && Array.isArray(ac_offer.words) && matchesChoice(ac_answer, ac_offer.words) ? '__switch' : ac_key"
+        "value": "ac_offer && Array.isArray(ac_offer.phrases ?? ac_offer.words) && matchesChoice(ac_answer, ac_offer.phrases ?? ac_offer.words) ? '__switch' : ac_key"
       },
       {
         "id": "ac_exact_no_own_words_again",
         "type": "SET",
         "variable": "ac_key",
-        "value": "ac_key === '' ? ac_key : (function() { var cs = Array.isArray(choices) ? choices : []; var isExactNo = function(c) { return !!c && c.exact === true && (['no', 'decline', 'done', 'cancel'].indexOf(c.key) > -1 || c.negative === true); }; var c = cs.filter(function(x) { return !!x && x.key === ac_key; })[0]; if (!isExactNo(c)) { return ac_key; } else if (pickChoice(ac_answer, [{ key: 'ac_own', words: c.words, exact: true }], false) === 'ac_own') { return ac_key; } else { return pickChoice(ac_answer, cs.filter(function(x) { return !isExactNo(x); }), ac_other); } })()"
+        "value": "ac_key === '' ? ac_key : (function() { var cs = Array.isArray(choices) ? choices : []; var isExactNo = function(c) { return !!c && c.exact === true && (['no', 'decline', 'done', 'cancel'].indexOf(c.key) > -1 || c.negative === true); }; var c = cs.filter(function(x) { return !!x && x.key === ac_key; })[0]; if (!isExactNo(c)) { return ac_key; } else if (pickChoice(ac_answer, [{ key: 'ac_own', phrases: c.phrases ?? c.words, exact: true }], false) === 'ac_own') { return ac_key; } else { return pickChoice(ac_answer, cs.filter(function(x) { return !isExactNo(x); }), ac_other); } })()"
       },
       {
         "id": "ac_init_answer_key_again",
@@ -617,7 +617,7 @@ export const FLOWS = [
         "id": "ac_amount_check_again",
         "type": "SET",
         "variable": "ac_key",
-        "value": "!ac_prechecked && ac_amount && Number.isFinite(amountInAnswer(ac_answer)) && (isAmountAnswer(ac_answer) || (ac_marked ? (ac_key === '' && /\\d\\s*(?:con|and)\\s*(?:un\\s+)?\\d{2}\\b(?!\\s*\\d)/i.test(String(ac_answer || ''))) : (ac_key === '' && (!/^\\D*\\d\\D*$/.test(String(ac_answer || '')) || /\\b(?:pay|paying|pagar|pagarle|abonar)\\b/i.test(String(ac_answer || ''))) && !/^[\\s,.;]*\\d(?:[\\s,.;]+\\d)+[\\s,.;]*$/.test(String(ac_answer || '')) && !isNaN(amountInAnswer(ac_answer))))) ? '__amount' : ac_key"
+        "value": "ac_key !== '' || !ac_amount || (typeof form_context !== 'undefined' && form_context && form_context.form) ? ac_key : (String(ac_answer||'').trim() && !Number.isFinite(readMoneyAmount(ac_answer,{currency:'USD',cardinals:true,intent:'payment'}))) ? '__elsewhere' : (ac_amount && (isAmountAnswer(ac_answer) || (ac_marked ? (ac_key === '' && /\\d\\s*(?:con|and)\\s*(?:un\\s+)?\\d{2}\\b(?!\\s*\\d)/i.test(String(ac_answer || ''))) : (ac_key === '' && (!/^\\D*\\d\\D*$/.test(String(ac_answer || '')) || /\\b(?:pay|paying|pagar|pagarle|abonar)\\b/i.test(String(ac_answer || ''))) && !/^[\\s,.;]*\\d(?:[\\s,.;]+\\d)+[\\s,.;]*$/.test(String(ac_answer || '')) && !isNaN(readMoneyAmount(ac_answer,{currency:'USD',cardinals:true,intent:'payment'}))))) ? '__amount' : ac_key)"
       },
       {
         "id": "ac_other_request_check",
@@ -677,9 +677,7 @@ export const FLOWS = [
           },
           "condition: ac_key === '__elsewhere'": {
             "id": "ac_elsewhere",
-            "type": "DISPATCH",
-            "outcome": "{{ac_exit_ctx === 'payment' ? 'unresolved' : ''}}",
-            "reason": "{{ac_exit_ctx === 'payment' ? 'payment_incomplete' : ''}}"
+            "type": "DISPATCH"
           },
           "condition: ac_key === '' && ac_other": {
             "id": "ac_return_other",
@@ -689,9 +687,7 @@ export const FLOWS = [
           },
           "condition: ac_key === ''": {
             "id": "ac_other_request",
-            "type": "DISPATCH",
-            "outcome": "{{ac_exit_ctx === 'payment' ? 'unresolved' : ''}}",
-            "reason": "{{ac_exit_ctx === 'payment' ? 'payment_incomplete' : ''}}"
+            "type": "DISPATCH"
           },
           "default": {
             "id": "ac_return_choice",

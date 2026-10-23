@@ -29,8 +29,8 @@ export function completeSourceRefresh(cargo, source, now = Date.now()) {
 /** Prefer the most specific positively matched catalog phrase over a contained broad fact alias.
  * Ordinary menu actions retain their own exact-choice rules. No match returns no fact. */
 export function pickProviderQuestion(answer,questions=[]) {
-   const matches=questions.flatMap((question,index)=>(question.words || []).flatMap(word=>
-      pickChoice(answer,[{...question,words:[word]}],false)===question.key
+   const matches=questions.flatMap((question,index)=>(question.phrases ?? question.words ?? []).flatMap(word=>
+      pickChoice(answer,[{...question,phrases:[word]}],false)===question.key
          ? [{key:question.key,length:String(word).normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().length,index}] : []));
    matches.sort((a,b)=>b.length-a.length||a.index-b.index);
    return matches[0]?.key || '';

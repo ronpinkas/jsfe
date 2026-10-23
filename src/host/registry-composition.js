@@ -46,8 +46,13 @@ function compose(registries,kind) {
       for(const declaration of registry){
          const entry=declaration;
          if(!plain(entry))fail(kind+' entries must be declaration objects');
-         const id=identity(entry.id,kind+' ID'),name=identity(entry.name,kind+' name');
-         if(kind==='flows'&&!Array.isArray(entry.steps))fail('flow '+id+' needs a steps array');
+         const id=identity(entry.id,kind+' ID');
+         const authored=kind==='flows'&&Object.hasOwn(entry,'declarationVersion');
+         if(authored&&entry.declarationVersion!==1)fail('flow '+id+' has unsupported declarationVersion');
+         // Composition preserves authored JSON; the engine compiles only after
+         // all selected sets are available. Mirror the builder's conventional alias.
+         const name=identity(authored&&entry.name===undefined?id.split(/[-:]/).map(part=>part.charAt(0).toUpperCase()+part.slice(1)).join(''):entry.name,kind+' name');
+         if(kind==='flows'&&!Array.isArray(entry.steps)&&!(authored&&(entry.form||entry.provides||entry.performs)))fail('flow '+id+' needs steps or a declarative form/provider/performer');
          const bytes=JSON.stringify(canonical(entry));
          if(definitions.has(id)){if(definitions.get(id)!==bytes)fail('conflicting '+kind+' ID '+id);continue;}
          for(const alias of [id,name]){

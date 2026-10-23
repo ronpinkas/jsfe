@@ -337,7 +337,7 @@ function spokenKeys(b) {
 
 /**
  * ask-choice's matcher: the key of the choice the answer picks, '__agent', '__exit', or '' (no choice).
- * choices: [{ key, words, negative?, neutral?, exact? }]. A key (digit, * or #) and a YES word pick a choice only as the whole
+ * choices: [{ key, phrases, negative?, neutral?, exact? }]. A key (digit, * or #) and a YES word pick a choice only as the whole
  * answer, courtesy aside (onlyAffirmative); an `exact` choice (one that charges or cancels) treats ALL its words that way. A choice keyed 'yes' also takes ANSWER_WORDS.yes (CONFIRM_WORDS when `exact`) and, when not `exact`, a bare thanks (THANKS), and the NO-type
  * choice (key no / decline / done / cancel, or negative: true) also takes ANSWER_WORDS.no, so callers list only their
  * extras. A word after a negation in its clause is negated: it picks the NO-type choice; a `neutral` choice still
@@ -386,7 +386,7 @@ export function pickChoice(answer, choices, acceptOther) {
    let blocked = false;
    let found = '';
    for (const c of cs) {
-      const own = Array.isArray(c.words) ? c.words : [];
+      const own = Array.isArray(c.phrases) ? c.phrases : Array.isArray(c.words) ? c.words : [];
       const all = c.key === 'yes' ? [...own, ...(c.exact === true ? CONFIRM_WORDS : ANSWER_WORDS.yes)] : (c.key === noChoice ? [...own, ...ANSWER_WORDS.no] : own);
       // Strict words pick this choice only when they are the whole answer (onlyAffirmative): a key, a YES word, or — on an
       // `exact` choice (one that charges or cancels) — every word. The rest (named actions: LINK, RECEIPT…) match inside it.

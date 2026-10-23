@@ -1,3 +1,5 @@
+import {compileFlowDeclarations} from './forms/declarations.js';
+import {compileNamedFunctions} from './helpers/named-functions.js';
 import {closeFormInstance} from './helpers/form-state.js';
 import {validateContextualResponseStep} from './helpers/contextual-response.js';
 import {validateFlowRecovery} from './host/flow-recovery.js';
@@ -815,6 +817,13 @@ export interface FlowFrame {
 
 // Engine is now just an alias for WorkflowEngine since we only have one implementation
 export type Engine = WorkflowEngine;
+
+/** Explicit JSON authoring input. The constructor lowers only version 1 declarations. */
+export interface FlowDeclaration {
+  declarationVersion: 1;
+  id: string;
+  [key: string]: unknown;
+}
 
 export interface FlowDefinition {
   id: string;
@@ -6673,6 +6682,8 @@ function createSimplifiedEvaluationContext(
     Array,
     JSON
   };
+  const functions = engine.getNamedFunctionNamespace();
+  if (functions) context.fn = functions;
 
   return context;
 }
@@ -7620,6 +7631,46 @@ export class WorkflowEngine implements Engine {
   }
   public cargo: Record<string, unknown> | undefined;
   public flowsMenu: FlowDefinition[];
+  private readonly sourceFlowDeclarations: Array<FlowDefinition | FlowDeclaration>;
+  private readonly namedFunctionNamespaces = new Map<string, Record<string, unknown>>();
+  /** A detached authoring copy; engine compilation and validation never become editor source. */
+  public getFlowDeclarations(): Array<FlowDefinition | FlowDeclaration> {
+    return cloneFlowValue(this.sourceFlowDeclarations);
+  }
+  /** Engine-only lexical helpers for the current definition, never persisted in session variables. */
+  public getNamedFunctionNamespace(): Record<string, unknown> | undefined {
+    if (!this.namedFunctionNamespaces.size) return undefined;
+    const stack = this.flowStacks[this.flowStacks.length - 1] || [];
+    const current = stack[stack.length - 1];
+    if (!current) return undefined;
+    const definition = this.flowsMenu.find(flow => flow.id === current.flowId);
+    const namespaceFor = (flow: FlowDefinition | undefined): Record<string, unknown> | undefined => {
+      const source = (flow?.metadata?.declaration as any)?.source;
+      return typeof source === 'string' ? this.namedFunctionNamespaces.get(source) : undefined;
+    };
+    // Generated workers retain the authoring source. A declared worker with no helpers
+    // cannot accidentally borrow similarly named functions from an unrelated caller.
+    if ((definition?.metadata?.declaration as any)?.version === 1) return namespaceFor(definition);
+    const parameters = new Set((definition?.parameters || []).map(parameter => parameter.name));
+    for (const name of ['form', 'rf_form', 'owner', 'form_instance', 'parent_form']) {
+      if (!parameters.has(name)) continue;
+      const value = current.variables?.[name];
+      if (typeof value !== 'string' || !value) continue;
+      const state = (this.cargo?.forms as any)?.[value];
+      // An explicit form owner is authoritative, including a missing/retired owner.
+      // Never substitute a newer caller's similarly named functions for that scope.
+      if (!state) return undefined;
+      const owner = this.flowsMenu.find(flow => flow.id === state.definition);
+      return namespaceFor(owner);
+    }
+    // Provider/form system workers may evaluate templates authored by their caller.
+    // Search this active stack only: paused and newer sessions never supply a scope.
+    for (let index = stack.length - 2; index >= 0; index--) {
+      const caller = this.flowsMenu.find(flow => flow.id === stack[index].flowId);
+      if ((caller?.metadata?.declaration as any)?.version === 1) return namespaceFor(caller);
+    }
+    return undefined;
+  }
   public toolsRegistry: ToolDefinition[];
   public APPROVED_FUNCTIONS: ApprovedFunctions;
   public sessionId: string;
@@ -7724,7 +7775,7 @@ export class WorkflowEngine implements Engine {
   constructor(
     hostLogger: Logger | null,
     aiCallback: AiCallbackFunction,
-    flowsMenu: FlowDefinition[],
+    flowsMenu: Array<FlowDefinition | FlowDeclaration>,
     toolsRegistry: ToolDefinition[],
     APPROVED_FUNCTIONS: ApprovedFunctions,
     globalVariables?: Record<string, unknown>, // Optional global variables shared across all new flows
@@ -7749,10 +7800,12 @@ export class WorkflowEngine implements Engine {
     logger = withPiiRedaction(hostLogger); // Assign to global logger (a SAY-GET's `pii` answer never reaches it)
 
     this.aiCallback = aiCallback;
-    for (const flow of flowsMenu) {
+    this.sourceFlowDeclarations = cloneFlowValue(flowsMenu);
+    const compiledFlows = compileFlowDeclarations(cloneFlowValue(this.sourceFlowDeclarations), {tools:toolsRegistry}) as FlowDefinition[];
+    for (const flow of compiledFlows) {
       if (flow.safetyRevision !== undefined && (typeof flow.safetyRevision !== 'string' || !flow.safetyRevision.trim() || flow.safetyRevision !== flow.safetyRevision.trim())) throw new Error('Invalid safetyRevision for flow '+flow.id);
     }
-    this.flowsMenu = applyWraps(flowsMenu);
+    this.flowsMenu = applyWraps(compiledFlows);
     if(toolsRegistry.some(tool=>ACTION_TOOLS.some(internal=>internal.id===tool.id)))throw new Error('Internal JSFE action tool identities are reserved');
     this.toolsRegistry = [...toolsRegistry,...ACTION_TOOLS] as ToolDefinition[];
     const receipt=(reply:any)=>reply;
@@ -7768,6 +7821,13 @@ export class WorkflowEngine implements Engine {
         ? await this.actionJournal.complete({sessionId:this.sessionId,record,action,outcome,checkpoint:resumableActionSession(this.sessionContext,this.flowsMenu,await this.getActionRecoveryIdentity())})
         : {status:'unknown',outcome:{status:'unknown',reason:'durable_journal_unavailable'}}),
     };
+    for (const flow of this.flowsMenu) {
+      if ((flow.metadata?.declaration as any)?.version !== 1 || !(flow as any).functions) continue;
+      const functions = compileNamedFunctions((flow as any).functions, {approvedFunctions:this.APPROVED_FUNCTIONS,label:flow.id});
+      if (!functions) continue;
+      if (Object.prototype.hasOwnProperty.call(flow.variables || {}, 'fn') || (flow.parameters || []).some(parameter => parameter.name === 'fn') || Object.prototype.hasOwnProperty.call(this.APPROVED_FUNCTIONS, 'fn') || Object.prototype.hasOwnProperty.call(globalVariables || {}, 'fn')) throw new Error('Named functions '+flow.id+': fn is a reserved evaluation namespace');
+      this.namedFunctionNamespaces.set(flow.id, functions);
+    }
     this.globalVariables = globalVariables ? { ...globalVariables } : {}; // Copy global variables to prevent external mutations
     this.aiTimeOut = aiTimeOut ?? 2000; // Default to 2000ms (2 seconds)
 

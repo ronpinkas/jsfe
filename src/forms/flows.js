@@ -108,7 +108,7 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
       // FLOW parameters are paths only: the question is built here, as a SAY-style template, then passed by name
       SET(`${id}_confirm_q`, 'form_confirm_q', textValue(confirm.question)),
       SET(`${id}_confirm_q_es`, 'form_confirm_q_es', textValue(confirm.question_es || confirm.question)),
-      FLOW(`${id}_confirm`, 'confirm-form', 'call', { form: '{{form_instance}}', question: '{{form_confirm_q}}', question_es: '{{form_confirm_q_es}}', words:'{{form_confirmation.words}}', clarifications:'{{form_confirmation.clarifications}}', no_keys:'{{form_confirmation.no_keys}}', interrupts:'{{form_confirmation.interrupts}}', exit_context: '{{exit_context}}', exit_context_es: '{{exit_context_es}}' }),
+      FLOW(`${id}_confirm`, 'confirm-form', 'call', { form: '{{form_instance}}', question: '{{form_confirm_q}}', question_es: '{{form_confirm_q_es}}', phrases:'{{form_confirmation.phrases}}', words:'{{form_confirmation.words}}', clarifications:'{{form_confirmation.clarifications}}', no_keys:'{{form_confirmation.no_keys}}', interrupts:'{{form_confirmation.interrupts}}', exit_context: '{{exit_context}}', exit_context_es: '{{exit_context_es}}' }),
       { id: `${id}_confirmed`, type: 'CASE', branches: {
          [`condition: (cargo.formConfirm || {})[form_instance] === 'changed'`]: FLOW(`${id}_again`, id, 'replace', { parent_form: '{{parent_form}}', result_input: '{{result_input}}', form_instance: '{{form_instance}}' }),
          // NO: the declined flow takes the form's place, so the action below never runs
@@ -308,7 +308,7 @@ const validateBatch = {
       SET('vb_outcome','vb_outcome',"vb_known ? 'known' : (hasFormValue(vb_values[vb_h.name]) && !formValuesEqual(vb_values[vb_h.name],vb_h.value) ? 'changed' : (vb_h.current ? 'stored' : 'taken'))"),
       SIDE('vb_reset',"(cargo.inputCheck = vb_h.invalid ? { ok: false } : (vb_h.validator && !vb_known ? null : { ok: true, value: vb_h.value }), true)"),
       SET('vb_response','vb_response',"(function(){var state=cargo.forms[vb_h.form],spec=state && state.specs.flatMap(function(s){return s.any_of || [s];}).find(function(s){return s.name===vb_h.name;});return spec && spec.response || null;})()"),
-      WHEN('vb_contextual_needed',"vb_ready === true && vb_response && !vb_known && !vb_h.invalid && vb_h.origin !== 'activation' && !vb_h.fromPending",FLOW('vb_read_response','read-form-response','call',{form:'{{vb_h.form}}',input:'{{vb_h.name}}'})),
+      WHEN('vb_contextual_needed',"vb_ready === true && vb_h.current && vb_response && !vb_known && !vb_h.invalid && vb_h.origin !== 'activation' && !vb_h.fromPending",FLOW('vb_read_response','read-form-response','call',{form:'{{vb_h.form}}',input:'{{vb_h.name}}'})),
       WHEN('vb_validator','vb_ready === true && vb_h.validator && !vb_known && !vb_h.invalid',FLOW('vb_validate','{{vb_h.validator}}','call',{form:'{{vb_h.form}}',input:'{{vb_h.name}}',value:'{{vb_h.value}}',values:'{{vb_values}}',reading:'{{vb_h}}'})),
       WHEN('vb_refused','vb_h.refused === true || vb_h.incompleteMoney === true',SIDE('vb_withhold_refusal',"(cargo.inputCheck=Object.assign({},cargo.inputCheck || {},{ok:false}),true)")),
       SET('vb_candidate','vb_candidate',"Object.assign({},vb_h,{ok:!!(cargo.inputCheck && cargo.inputCheck.ok === true),value:cargo.inputCheck && cargo.inputCheck.value !== undefined && cargo.inputCheck.value !== null ? cargo.inputCheck.value : vb_h.value,message:cargo.inputCheck && cargo.inputCheck.message,message_es:cargo.inputCheck && cargo.inputCheck.message_es})"),
@@ -398,7 +398,7 @@ const disambiguate = {
    steps: [
       WHEN('di_store_clear', 'Array.isArray(hits) && hits.length > 0', FLOW('di_store_hits', 'collect-input-accept', 'call', { hits: '{{hits}}' })),
       SET('di_number', 'di_keys', `${KEYS_JS}(readings.length)`),
-      SET('di_build', 'di_choices', "readings.map(function (r, i) { var own = String(r.label + ' ' + r.label_es).toLowerCase().split(/\\s+/).filter(function (w) { return w.length > 3 && !readings.some(function (o, j) { return j !== i && String(o.label + ' ' + o.label_es).toLowerCase().split(/\\s+/).indexOf(w) > -1; }); }); return { key: 'r' + i, words: [di_keys[i], r.label, r.label_es].concat(own) }; })"),
+      SET('di_build', 'di_choices', "readings.map(function (r, i) { var own = String(r.label + ' ' + r.label_es).toLowerCase().split(/\\s+/).filter(function (w) { return w.length > 3 && !readings.some(function (o, j) { return j !== i && String(o.label + ' ' + o.label_es).toLowerCase().split(/\\s+/).indexOf(w) > -1; }); }); return { key: 'r' + i, phrases: [di_keys[i], r.label, r.label_es].concat(own) }; })"),
       SET('di_said', 'di_value', "readings[0].pii ? '' : String(readings[0].value)"),
       SET('di_question', 'di_q', "(di_value ? 'Is ' + di_value + ' your ' : 'Is that your ') + readings.map(function (r) { return r.label; }).join(' or your ') + '? ' + readings.map(function (r, i) { return (cargo.voice ? 'Press ' + di_keys[i] + ' or say ' : 'Say ') + r.label.toUpperCase(); }).join(', ') + '.'"),
       SET('di_question_es', 'di_q_es', "(di_value ? '¿' + di_value + ' es su ' : '¿Eso es su ') + readings.map(function (r) { return r.label_es; }).join(' o su ') + '? ' + readings.map(function (r, i) { return (cargo.voice ? 'Presione ' + di_keys[i] + ' o diga ' : 'Diga ') + r.label_es.toUpperCase(); }).join(', ') + '.'"),
@@ -426,17 +426,17 @@ const disambiguate = {
 const confirmForm = {
    id: 'confirm-form', name: 'ConfirmForm', version: '1.0.0', scope: 'isolated',
    description: "Worker: ask a form's confirmation (exact YES / NO; keys 1 and 2). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an unclear short answer is asked again, a long unrelated one is DISPATCHed. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
-   parameters: ['form', 'question', 'question_es', 'exit_context', 'exit_context_es','words','interrupts','no_keys','clarifications'].map((n) => ({ name: n, type: ['words','interrupts','no_keys','clarifications'].includes(n)?'array':'string', description: n })),
-   variables: vars({ cf_presets: FIELD_PRESETS, cf_chain: [], cf_m: null, cf_current:null, cf_result: '',cf_prompt:'',cf_prompt_es:'', cf_words: 0, cf_tries: 0, words:[], clarifications:[], no_keys:['2'], interrupts:[], cf_choices:[], cf_event:'', cf_amount:false, cf_questions:[],cf_provides:null,cf_skip_gate:'' }),
+   parameters: ['form', 'question', 'question_es', 'exit_context', 'exit_context_es','phrases','words','interrupts','no_keys','clarifications'].map((n) => ({ name: n, type: ['phrases','words','interrupts','no_keys','clarifications'].includes(n)?'array':'string', description: n })),
+   variables: vars({ cf_presets: FIELD_PRESETS, cf_chain: [], cf_m: null, cf_current:null, cf_result: '',cf_prompt:'',cf_prompt_es:'', cf_words: 0, cf_tries: 0, phrases:null, words:[], clarifications:[], no_keys:['2'], interrupts:[], cf_choices:[], cf_event:'', cf_amount:false, cf_questions:[],cf_provides:null,cf_skip_gate:'' }),
    steps: [
       SIDE('cf_reset', "(cargo.formConfirm = cargo.formConfirm || {}, cargo.formConfirm[form] = '', true)"),
-      SET('cf_choices','cf_choices',`[{key:'yes',words:['1'].concat(Array.isArray(words)?words:[]),exact:true},{key:'no',words:(Array.isArray(no_keys)?no_keys:['2']).concat(${JSON.stringify(ANSWER_WORDS.no)}),exact:true}].concat((Array.isArray(interrupts)?interrupts:[]).map(function(event){return {key:'event:'+event.key,words:event.words,exact:event.exact!==false};}))`),
+      SET('cf_choices','cf_choices',`[{key:'yes',phrases:['1'].concat(Array.isArray(phrases)?phrases:Array.isArray(words)?words:[]),exact:true},{key:'no',phrases:(Array.isArray(no_keys)?no_keys:['2']).concat(${JSON.stringify(ANSWER_WORDS.no)}),exact:true}].concat((Array.isArray(interrupts)?interrupts:[]).map(function(event){return {key:'event:'+event.key,phrases:event.phrases ?? event.words,exact:event.exact!==false};}))`),
       SET('cf_initial_chain','cf_chain',CHAIN_JS),
       SET('cf_amount_context','cf_amount',"cf_chain.some(function(input){return input.profile && input.profile.kind==='amount';})"),
       SET('cf_prompt','cf_prompt',"formInputPrompt(cargo,form,'__confirm',{question:question,question_es:question_es},{},'en')"),
       SET('cf_prompt_es','cf_prompt_es',"formInputPrompt(cargo,form,'__confirm',{question:question,question_es:question_es},{},'es')"),
       SIDE('cf_feedback_consumed',"consumeFormFeedback(cargo,form,'__confirm')"),
-      FLOW('cf_ask', 'ask-choice', 'call', { amount:'{{cf_amount}}', question: '{{cf_prompt}}', question_es: '{{cf_prompt_es}}', choices: '{{cf_choices}}', accept_other: true, reask_long: true, digits: { min: 1, max: 1 }, exit_context: '{{exit_context}}', exit_context_es: '{{exit_context_es}}' }),
+      FLOW('cf_ask', 'ask-choice', 'call', { form_context:{form:'{{form}}',current:'__confirm'}, amount:'{{cf_amount}}', question: '{{cf_prompt}}', question_es: '{{cf_prompt_es}}', choices: '{{cf_choices}}', accept_other: true, reask_long: true, digits: { min: 1, max: 1 }, exit_context: '{{exit_context}}', exit_context_es: '{{exit_context_es}}' }),
       SET('cf_event','cf_event',"(Array.isArray(interrupts)?interrupts:[]).filter(function(event){return cargo.choice==='event:'+event.key;}).map(function(event){return event.flow;})[0] || ''"),
       WHEN('cf_interrupt','cf_event',FLOW('cf_event_flow','{{cf_event}}','reboot',{form:'{{form}}',event:'{{cargo.choice}}',text:'{{cargo.choiceText}}'})),
       SET('cf_build_chain', 'cf_chain', CHAIN_JS),
@@ -445,7 +445,7 @@ const confirmForm = {
       SET('cf_provider_catalog','cf_provides','cargo.forms[form].providers'),
       SET('cf_gate_policy','cf_skip_gate',"!cf_provides || !cf_provides.gate || [].concat(cf_provides.gate.verified || []).every(function(p){return !!formPath({cargo:cargo},p);}) ? 'true' : ''"),
       SET('cf_current','cf_current',"cargo.forms[form].proposalPrompt ? {form:cargo.forms[form].parent,name:cargo.forms[form].proposalPrompt.input} : {form:form,name:''}"),
-      SET('cf_match', 'cf_m', "cargo.choice === 'yes' || cargo.choice === 'no' && pickChoice(cargo.choiceText, [{key:'no',words:Array.isArray(no_keys)?no_keys:['2'],exact:true}], false) === 'no' ? { hits: [], ambiguous: [], questions:[] } : readFormAnswer(cargo.choiceText, cf_chain, cf_current, '',cf_questions)"),
+      SET('cf_match', 'cf_m', "cargo.choice === 'yes' || cargo.choice === 'no' && pickChoice(cargo.choiceText, [{key:'no',phrases:Array.isArray(no_keys)?no_keys:['2'],exact:true}], false) === 'no' ? { hits: [], ambiguous: [], questions:[] } : readFormAnswer(cargo.choiceText, cf_chain, cf_current, '',cf_questions)"),
       SET('cf_enrich','cf_m',"(function(m){m.hits=m.hits.map(function(h){return Object.assign({},h,{silent:true});});return m;})(enrichFormMatches(cf_m, cf_chain, form))"),
       SET('cf_count_words', 'cf_words', "String(cargo.choiceText || '').split(/\\s+/).filter(function (w) { return /[a-záéíóúüñ]/i.test(w); }).length"),
       WHEN('cf_question_fields','cf_m.questions.length > 0 && cf_m.hits.length > 0',FLOW('cf_question_accept','collect-input-accept','call',{hits:'{{cf_m.hits}}'})),
@@ -456,7 +456,7 @@ const confirmForm = {
          'condition: cf_m.ambiguous.length > 0': FLOW('cf_ambiguous', 'disambiguate-input', 'call', { readings: '{{cf_m.ambiguous}}', hits: '{{cf_m.hits}}', remaining:'{{cf_m.remaining}}' }),
          'condition: cf_m.hits.length > 0': FLOW('cf_accept', 'collect-input-accept', 'call', { hits: '{{cf_m.hits}}' }),
          "condition: cargo.choice === 'no'": SET('cf_declined', 'cf_result', "'no'"),
-         "condition: Array.isArray(clarifications) && pickChoice(String(cargo.choiceText || '').replace(/[?¿]/g,''),[{key:'clarify',words:clarifications,exact:true}],false)==='clarify'": SET('cf_clarification','cf_result',"'clarification'"),
+         "condition: Array.isArray(clarifications) && pickChoice(String(cargo.choiceText || '').replace(/[?¿]/g,''),[{key:'clarify',phrases:clarifications,exact:true}],false)==='clarify'": SET('cf_clarification','cf_result',"'clarification'"),
          'condition: cf_words >= 3 || cf_amount && cf_words > 0': yieldDispatch('cf_elsewhere','form',"'confirmation_not_matched'"),
          default: SET('cf_unclear', 'cf_result', "'unclear'") } },
       SET('cf_changed', 'cf_result', "cf_result ? cf_result : 'changed'"),
@@ -634,24 +634,24 @@ const provideQueuedData={
 // the menu's choices, built where the expression can see pd_menu (FLOW parameters are paths only)
 provideData.variables.pd_menu_choices = { type: 'array', value: [] };
 provideData.steps.splice(provideData.steps.findIndex((s) => s.id === 'pd_menu_q'), 0,
-   SET('pd_menu_build', 'pd_menu_choices', "pd_menu.map(function (m, i) { return { key: m.key, words: [pd_mkeys[i], m.label || m.key, m.label_es || ''].filter(Boolean) }; })"));
+   SET('pd_menu_build', 'pd_menu_choices', "pd_menu.map(function (m, i) { return { key: m.key, phrases: [pd_mkeys[i], m.label || m.key, m.label_es || ''].filter(Boolean) }; })"));
 
 // provider-menu: what next, after an answer — the catalog's actions, another fact, or done (owner MENU-1016 shape)
 const providerMenu = {
    id: 'provider-menu', name: 'ProviderMenu', version: '1.0.0', scope: 'isolated',
-   description: "Worker: after a provider answered, offer its menu (provides.menu: question(_voice)(_es) with {verb} / {name}; choices [{ key, words, flow, exact, set }]; done { words, say(_es) }). A fact or set named by its words is answered and the menu comes back; an action runs its flow (replace) after setting its `set` cargo fields; done says goodbye. Other words: DISPATCH. No words: asked once more, then 'anything else?'. Params: provides, retry.",
+   description: "Worker: after a provider answered, offer its menu (provides.menu: question(_voice)(_es) with {verb} / {name}; choices [{ key, phrases, flow, exact, set }]; done { phrases, say(_es) }). A fact or set named by its words is answered and the menu comes back; an action runs its flow (replace) after setting its `set` cargo fields; done says goodbye. Other phrases: DISPATCH. No phrases: asked once more, then 'anything else?'. Params: provides, retry.",
    parameters: [{ name: 'provides', type: 'object', description: 'The provider catalog' }, { name: 'retry', type: 'string', description: "'1' on the re-ask" }],
    variables: vars({ retry: '', pm_q: '', pm_q_es: '', pm_choices: [], pm_key: '', pm_keys: [], pm_close:false, pm_flow: '', pm_bye: '', pm_bye_es: '', pm_who: '', pm_sorry: '', pm_sorry_es: '' }),
    steps: [
       SET('pm_name', 'pm_who', NAME_JS),
       SET('pm_question', 'pm_q', `(function () { ${RENDER_JS} var m = provides.menu; var t = cargo.voice && m.question_voice ? m.question_voice : m.question; return (retry === '1' ? "Sorry, I didn't catch that. " : '') + fill(t, {}, null, 'en', { name: pm_who, verb: cargo.verb || (cargo.voice ? 'say' : 'type') }); })()`),
       SET('pm_question_es', 'pm_q_es', `(function () { ${RENDER_JS} var m = provides.menu; var t = cargo.voice && (m.question_voice_es || m.question_voice) ? (m.question_voice_es || m.question_voice) : (m.question_es || m.question); return (retry === '1' ? 'Disculpe, no le entendí. ' : '') + fill(t, {}, null, 'es', { name: pm_who, verb: cargo.verb_es || (cargo.voice ? 'diga' : 'escriba') }); })()`),
-      SET('pm_build', 'pm_choices', "provides.facts.concat(provides.sets || []).filter(function (f) { return Array.isArray(f.words) && f.words.length; }).map(function (f) { return { key: 'fact:' + f.key, words: f.words }; }).concat((provides.menu.choices || []).map(function (c) { return { key: 'act:' + c.key, words: c.words, exact: c.exact === true }; })).concat(provides.menu.done ? [{ key: 'done', words: provides.menu.done.words, exact: true }] : [])"),
+      SET('pm_build', 'pm_choices', "provides.facts.concat(provides.sets || []).filter(function (f) { return Array.isArray(f.phrases ?? f.words) && (f.phrases ?? f.words).length; }).map(function (f) { return { key: 'fact:' + f.key, phrases: f.phrases ?? f.words }; }).concat((provides.menu.choices || []).map(function (c) { return { key: 'act:' + c.key, phrases: c.phrases ?? c.words, exact: c.exact === true }; })).concat(provides.menu.done ? [{ key: 'done', phrases: provides.menu.done.phrases ?? provides.menu.done.words, exact: true }] : [])"),
       FLOW('pm_ask', 'ask-choice', 'call', { question: '{{pm_q}}', question_es: '{{pm_q_es}}', choices: '{{pm_choices}}', accept_other: true, digits: { min: 1, max: 1 }, exit_context: '{{provides.subject}}', exit_context_es: '{{provides.subject_es}}' }),
       // A declared terminal phrase (for example "no thanks") may also fit a shorter action
       // after courtesy stripping ("no"). Resolve only that overlap; fact ownership and the
       // existing reserved done fallback retain their normal behavior.
-      SET('pm_take', 'pm_key', "(function(){var key=String(cargo.choice || '');if(key.indexOf('fact:')===0)return pickProviderQuestion(cargo.choiceText,pm_choices.filter(function(c){return c.key.indexOf('fact:')===0;}));if(key.indexOf('act:')===0 && provides.menu.done && pickChoice(cargo.choiceText,[{key:'terminal:done',words:provides.menu.done.words,exact:true}],true)==='terminal:done')return 'done';return key;})()"),
+      SET('pm_take', 'pm_key', "(function(){var key=String(cargo.choice || '');if(key.indexOf('fact:')===0)return pickProviderQuestion(cargo.choiceText,pm_choices.filter(function(c){return c.key.indexOf('fact:')===0;}));if(key.indexOf('act:')===0 && provides.menu.done && pickChoice(cargo.choiceText,[{key:'terminal:done',phrases:provides.menu.done.phrases ?? provides.menu.done.words,exact:true}],true)==='terminal:done')return 'done';return key;})()"),
       SET('pm_fact_keys', 'pm_keys', "pm_key.indexOf('fact:') === 0 ? (function (k) { var s = (provides.sets || []).filter(function (x) { return x.key === k; })[0]; return s ? s.facts.slice() : [k]; })(pm_key.slice(5)) : []"),
       SET('pm_closing', 'pm_close', "pm_keys.length > 0 && pm_keys.every(function (key) { var fact = provides.facts.find(function (f) { return f.key === key; }); return !!fact && fact.close === true; })"),
       SET('pm_action_flow', 'pm_flow', "pm_key.indexOf('act:') === 0 ? (function (c) { if (c && c.set) { Object.keys(c.set).forEach(function (k) { cargo[k] = c.set[k]; }); } else { /* nothing to set */ } return c ? c.flow : ''; })((provides.menu.choices || []).filter(function (x) { return 'act:' + x.key === pm_key; })[0]) : ''"),

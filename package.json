@@ -1,6 +1,6 @@
 {
   "name": "jsfe",
-  "version": "1.7.9",
+  "version": "1.7.10",
   "description": "TypeScript workflow engine for conversational/automation apps: multi-flow orchestration, interrupt/resume, stack-based control, robust errors, and flexible tool/REST integration.",
   "license": "MIT",
   "author": "Ron Pinkas",
@@ -40,7 +40,6 @@
     "README.md",
     "LICENSE",
     "docs/copilot-reference.md",
-    "docs/forms.md",
     "docs/development-release.md"
   ],
   "scripts": {
