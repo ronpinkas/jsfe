@@ -52,7 +52,7 @@ function compose(registries,kind) {
          // Composition preserves authored JSON; the engine compiles only after
          // all selected sets are available. Mirror the builder's conventional alias.
          const name=identity(authored&&entry.name===undefined?id.split(/[-:]/).map(part=>part.charAt(0).toUpperCase()+part.slice(1)).join(''):entry.name,kind+' name');
-         if(kind==='flows'&&!Array.isArray(entry.steps)&&!(authored&&(entry.form||entry.provides||entry.performs)))fail('flow '+id+' needs steps or a declarative form/provider/performer');
+         if(kind==='flows'&&!Array.isArray(entry.steps)&&!(authored&&(entry.form||entry.provides||entry.performs||entry.call||Array.isArray(entry.before)&&entry.before.length)))fail('flow '+id+' needs steps or a declarative form/provider/performer/worker');
          const bytes=JSON.stringify(canonical(entry));
          if(definitions.has(id)){if(definitions.get(id)!==bytes)fail('conflicting '+kind+' ID '+id);continue;}
          for(const alias of [id,name]){

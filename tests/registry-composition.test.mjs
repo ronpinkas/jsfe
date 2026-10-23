@@ -1,5 +1,7 @@
 /** Explicit native registry composition. Pure declarations, actual shared adapter generation and recovery identity. */
 import assert from 'node:assert/strict';
+import {WorkflowEngine} from '../dist/index.js';
+import {STANDARD_FUNCTIONS} from '../dist/helpers/index.js';
 import {composeRegistries,JSFERegistryCompositionError,createActionRecoveryIdentity} from '../dist/host/index.js';
 import {operationWorkers} from '../dist/forms/index.js';
 const flow=(id='one',name='One')=>({id,name,steps:[{id:'say',type:'SAY',value:'one'}]});
@@ -79,5 +81,17 @@ await test('raw JSON functions and declaration differences retain conservative c
  assert.throws(()=>composeRegistries({flows:[[first],[second]],tools:[]}),/conflicting/);
  assert.throws(()=>composeRegistries({flows:[[{...first,declarationVersion:2}]],tools:[]}),/unsupported declarationVersion/);
  assert.throws(()=>composeRegistries({flows:[[{declarationVersion:1,id:'incomplete'}]],tools:[]}),/needs steps/);
+});
+await test('raw call and before-only workers compose and actually execute through the engine',async()=>{
+ const caller={declarationVersion:1,id:'account-gate',call:{flow:'gate-target'}};
+ const beforeOnly={declarationVersion:1,id:'before-only',before:[{id:'before',type:'SET',variable:'noop',value:'(cargo.before=true,true)'}]};
+ const target={id:'gate-target',name:'GateTarget',steps:[{id:'mark',type:'SET',variable:'noop',value:'(cargo.called=true,true)'},{id:'last',type:'FLOW',value:'before-only',callType:'call'}]};
+ const inputs={flows:[[caller,beforeOnly],[target]],tools:[]},before=copy(inputs),composed=composeRegistries(inputs);
+ assert.deepEqual(inputs,before);assert.equal(composed.flows[0].steps,undefined);
+ const logger={info(){},debug(){},warn(){},error(){}},engine=new WorkflowEngine(logger,async()=>'{}',composed.flows,composed.tools,STANDARD_FUNCTIONS, {},false,'en');engine.disableCommands();
+ const session=await engine.updateActivity({role:'user',content:'start',start:{flow:'account-gate'}},engine.initSession('worker','worker','en'));
+ assert.equal(session.cargo.called,true);assert.equal(session.cargo.before,true);assert.deepEqual(inputs,before);
+ const invalid=composeRegistries({flows:[[{declarationVersion:1,id:'bad-call',call:{flow:42}}]],tools:[]});
+ assert.throws(()=>new WorkflowEngine(logger,async()=>'{}',invalid.flows,[],STANDARD_FUNCTIONS, {},false,'en'),/call needs a flow/);
 });
 console.log(`Registry composition: all ${checks} checks passed`);

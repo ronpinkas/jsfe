@@ -85,8 +85,10 @@ Reviewed acceptance: 89 SDK test files; 142 legacy and 142 native flow suites; 6
 Owner authorized publication, exact pins in both consumers, dev host deployment and matching shared/ai-ar-ql activation in all three dev configs with session-only actions. Production deployment and activation are excluded. Shopify Policy remains unchanged with its later review recorded as a tenant TODO. Match runtime, host and regenerated definitions before activation; existing uncertain work must retain its hold.
 
 
-## 1.7.10 — self-contained JSON authoring
+## 1.7.11 — self-contained JSON authoring
 
 Version-1 JSON flow declarations compile inside JSFE. Tenant JSON contains its forms, providers, performers, workers and ordinary named JavaScript functions; source snapshots remain detached from executable state. Named functions use explicit session arguments and normal JavaScript loops/callbacks. `phrases` and provider `description` are the authoring names; existing executable `words`/`gloss` inputs retain compatibility. Continuation safety revisions are generated internally from source declarations and preserve unknown action holds. The single authoring specification is `docs/copilot-reference.md`, also consumed by the Lambda CoPilot.
 
 Owner authorized publication, exact pins in both consumers, dev host deployment and matching shared/ai-ar-ql activation on all three dev configurations with session-only actions. Native Shopify remains composed and Shopify Policy remains unchanged. Production is outside this authorization. Full execution/model replay follows the matched dev activation; local focused results are not relabelled as full published-runtime acceptance.
+
+The 1.7.10 publication workflow was stopped before publication after the host-composition preflight rejected call-only declarative workers. Its tag is retained unchanged. The corrected 1.7.11 candidate includes actual registry-composition-to-engine execution coverage.
