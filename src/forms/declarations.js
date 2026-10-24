@@ -68,7 +68,14 @@ function describeChoiceValues(flow){
   if(parameter.jsonSchema&&input?.schema)return {...describeLeaf(input,parameter,{top:true}),jsonSchema:describeSchema(parameter.jsonSchema,input.schema.inputs)};
   return describeLeaf(input,parameter,{top:true});
  });
- return {...flow,parameters};
+ // Every generated parameter is a variable of the flow, as an authored one is (Form's parametersFor): the flow's
+ // expressions read it by name whether or not it was supplied.
+ const variables={...(flow.variables||{})};
+ for(const parameter of parameters)if(!Object.hasOwn(variables,parameter.name)){
+  const type=parameter.type||'string';
+  variables[parameter.name]={type:type==='integer'?'number':type,value:type==='object'?null:type==='array'?[]:type==='boolean'?false:type==='number'||type==='integer'?0:''};
+ }
+ return {...flow,parameters,variables};
 }
 const callSteps=steps=>(steps||[]).flatMap(step=>[step,...callSteps(Object.values(step.branches||{})),...(step.onFail?callSteps([step.onFail]):[])]);
 /** Version 2's single parameter contract: a parameter is generated from an input or authored, never both; a call
@@ -84,7 +91,8 @@ function enforceParameterContract(flows,authored,builder,protocol=new Map()){
   if(step.type!=='FLOW'||typeof step.value!=='string'||step.value.includes('{{'))continue;
   const target=byId.get(step.value)||byName.get(step.value);
   if(!target||target.metadata?.declaration?.version!==2)continue;
-  const declared=new Set([...(target.parameters||[]).map(parameter=>parameter.name),...(protocol.get(target.id)||[])]);
+  // A target compiled earlier (not authored in this call) keeps its protocol variables only as variables.
+  const declared=new Set([...(target.parameters||[]).map(parameter=>parameter.name),...(protocol.get(target.id)||(target.variables?.form_instance!==undefined?Object.keys(target.variables):[]))]);
   for(const name of Object.keys(step.parameters||{}))if(!declared.has(name))fail(flow.id+' step '+step.id+' passes '+name+', which '+target.id+' does not declare');
  }
 }
@@ -101,7 +109,11 @@ export function compileFlowDeclarations(flows,{tools,externalFlows=[],validate=t
  for(const flow of flows)if(flow&&flow.declarationVersion===undefined&&flow.library===undefined&&!flow.metadata?.declaration&&flow.functions!==undefined)fail((flow.id||'a flow')+' declares functions without declarationVersion');
  const libraries=flows.filter(isLibrary),shared=sharedFunctions(libraries);
  if(libraries.length)flows=flows.filter(flow=>!isLibrary(flow));
- if(!flows.some(flow=>flow?.declarationVersion!==undefined)){if(Object.keys(shared).length)fail('shared functions need declarationVersion 2 flows');return flows;}
+ if(!flows.some(flow=>flow?.declarationVersion!==undefined)){
+  // Already compiled version 2 flows carry the shared functions merged in; the entry adds nothing to them.
+  if(Object.keys(shared).length&&!flows.some(flow=>flow?.metadata?.declaration?.version===2))fail('shared functions need declarationVersion 2 flows');
+  return flows;
+ }
  const ids=new Set();for(const flow of flows){if(ids.has(flow.id))fail('duplicate flow id '+flow.id);ids.add(flow.id);}
  const authoredParameters=new Map(),builderParameters=new Map(),protocolVariables=new Map();
  const compiled=flows.map(source=>{

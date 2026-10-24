@@ -1,3 +1,7 @@
+## 1.8.1: version 2 fixes found in the first tenant migration
+
+A generated parameter is also a variable of its flow, as an authored one always was, so a flow's expressions can read it by name (without it, removing an authored copy left `service is not defined`). Compiling already compiled version 2 flows again keeps working: a FLOW call may pass a compiled form target's protocol variables, and a shared-functions entry beside compiled flows is accepted.
+
 ## 1.8.0: declaration version 2, shared functions, option clarification
 
 `declarationVersion: 2` makes parameters one contract: a primary form's input parameters (sub-forms as object parameters with every nested field) are generated, and writing one of those names in `parameters` is a compile error at any depth. `parameters` holds only entry arguments. An enum value's meaning is read from its choice's `description`, after the input's own `description` as the rule (`enumDescriptions`, and the parameter description `rule: key: meaning; …`); `extract:false` keeps a choice out of the enum and `internal:true` marks an input extraction never fills. A FLOW step may pass only arguments a version 2 target declares. Version 1 is unchanged.

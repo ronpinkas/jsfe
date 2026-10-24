@@ -25,6 +25,7 @@ await test('a generated parameter cannot also be authored, at the top level or n
 });
 await test('choice meanings are declared once on the choices and read into the generated parameter',()=>{
    const flow=compile([CARD,cancel()]).find(f=>f.id==='cancel-it');const p=flow.parameters.find(x=>x.name==='service');
+   assert.deepEqual(flow.variables.service,{type:'string',value:''},'a generated parameter is a variable expressions can read');assert.deepEqual(flow.variables.card,{type:'object',value:null});
    assert.deepEqual(p.enum,['club','bc']);assert.equal(p.description,'service to cancel: club: Gold Club membership; bc: Member Benefits, including the benefits card');
    // A value the form offers but extraction must not set is declared on its choice; an input callers set but extraction never fills is internal.
    const narrowed={...SERVICE,description:'The service named.',profile:{kind:'choice',choices:[...SERVICE.profile.choices,{key:'decline',phrases:['none'],extract:false},{key:'club',phrases:['the club']}]}};
@@ -65,6 +66,9 @@ await test('shared functions are declared once and reach every version 2 flow',a
 await test('functions on an undeclared flow fail instead of being silently ignored',()=>{
    assert.throws(()=>compile([{id:'plain',steps:[],functions:{x:{parameters:[],body:['return 1;']}}}]),/plain declares functions without declarationVersion/);
    const compiled=compile([worker({functions:{x:{parameters:[],body:['return 1;']}}})]);assert.ok(compile(compiled),'compiled declarations may be compiled again');
+   const library={id:'set-functions',library:'functions',declarationVersion:2,functions:{one:{parameters:[],body:['return 1;']}}};
+   const formAndCaller=[CARD,{declarationVersion:2,id:'again',steps:[{id:'go',type:'FLOW',value:'card-details',callType:'call',parameters:{parent_form:'x'}}]}];
+   const once=compile([library,...formAndCaller]);assert.ok(compile([library,...once]),'a compiled set with its shared entry and form-protocol calls compiles again');
 });
 await test('a primary thin wrapper may inherit its description',()=>{
    const target={id:'target-flow',name:'TargetFlow',version:'1',description:'Target does the thing',primary:true,steps:[{id:'s',type:'SAY',value:'hi'}]};
