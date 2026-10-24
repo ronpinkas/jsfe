@@ -55,13 +55,59 @@ await test('shared functions are declared once and reach every version 2 flow',a
    assert.throws(()=>compile([library,{...library,id:'other'},worker()]),/shared function greet is declared twice/);
    assert.throws(()=>compile([{...library,declarationVersion:1},worker()]),/require declarationVersion 2/);
    assert.throws(()=>compile([{...library,steps:[]},worker()]),/cannot declare steps/);
-   assert.throws(()=>compile([library,{id:'plain',steps:[]}]),/shared functions need declarationVersion 2 flows/);
+   assert.throws(()=>compile([library,{id:'plain',steps:[]}]),/shared functions and data need declarationVersion 2 flows/);
    const composed=composeRegistries({flows:[flows],tools:[]});assert.equal(composed.flows.length,2);
    const quiet={info(){},debug(){},warn(){},error(){}};
    const e=new WorkflowEngine(quiet,async()=>'{"flowName":"None"}',composed.flows,[],STANDARD_FUNCTIONS,{},false,'en');e.disableCommands();
    let s=e.initSession('user',crypto.randomUUID(),'en');
    s=JSON.parse(JSON.stringify(await e.updateActivity({role:'user',content:'go',start:{flow:'say-it',arguments:{text:'Ana'}}},s)));
    assert.equal(s.response,'Hello Ana');
+});
+await test('shared data is declared once and referenced by path from version 2 declarations',()=>{
+   const data={id:'set-data',library:'data',declarationVersion:2,data:{services:{club:{key:'club',label:'Gold Club',phrases:['club','the club']},bc:{key:'bc',label:'Member Benefits',phrases:['benefits']}},menu:['club','bc']}};
+   const pick={declarationVersion:2,id:'pick-it',description:'Pick a service.',primary:true,form:{inputs:[{name:'service',question:'Which?',question_es:'¿Cuál?',profile:{kind:'choice',choices:[{key:'club',keys:['1'],label:{"$data":'services.club.label'},phrases:{"$data":'services.club.phrases'}},{"$data":'services.bc'}]}}]},variables:{catalog:{type:'array',value:[{"$data":'services.club'},{"$data":'services.bc'}]},order:{type:'array',value:{"$data":'menu'}}}};
+   const flow=compile([data,pick]).find(f=>f.id==='pick-it');
+   const choices=flow.variables.inputs.value[0].profile.choices;
+   assert.deepEqual(choices[0],{key:'club',keys:['1'],label:'Gold Club',phrases:['club','the club']});assert.equal(choices[1].label,'Member Benefits');
+   assert.equal(flow.variables.catalog.value[1].label,'Member Benefits');assert.deepEqual(flow.variables.order.value,['club','bc']);
+   assert.ok(!JSON.stringify(flow).includes('$data'),'no reference survives compilation');
+   assert.throws(()=>compile([data,{...pick,variables:{x:{type:'string',value:{"$data":'services.nope.label'}}}}]),/references unknown shared data services\.nope\.label/);
+   assert.throws(()=>compile([data,{...data,id:'other'},pick]),/shared data services is declared twice/);
+   assert.throws(()=>compile([{...data,declarationVersion:1},pick]),/requires declarationVersion 2/);
+   assert.throws(()=>compile([{...data,functions:{}},pick]),/cannot declare functions/);
+   const v1={...pick,id:'pick-v1',name:'PickV1',primary:false,declarationVersion:1,form:{inputs:[{name:'service',question:'Which?',question_es:'¿Cuál?',profile:{kind:'choice',choices:[{key:'club',phrases:['club']}]}}]},variables:{keep:{type:'object',value:{"$data":'menu'}}}};
+   assert.deepEqual(compile([data,pick,v1]).find(f=>f.id==='pick-it').variables.order.value,['club','bc']);
+   assert.deepEqual(compileFlowDeclarations([data,pick,v1],{validate:false}).find(f=>f.id===v1.id).variables.keep.value,{"$data":'menu'},'version 1 is unchanged');
+   assert.equal(composeRegistries({flows:[[data,pick]],tools:[]}).flows.length,2);
+});
+await test('expressions read shared data at runtime as $data: one frozen copy, never in the session, checked at load',async()=>{
+   const data={id:'set-data',library:'data',declarationVersion:2,data:{services:{club:{key:'club',name:'Gold Club',kind:'subscription'},bc:{key:'bc',name:'Member Benefits',kind:'subscription'},tv:{key:'tv',name:'TV',kind:'service'}}}};
+   const reader=(steps,extra={})=>({declarationVersion:2,id:'read-it',steps,...extra});
+   const quiet={info(){},debug(){},warn(){},error(){}};
+   const make=flows=>{const e=new WorkflowEngine(quiet,async()=>'{"flowName":"None"}',flows,[],STANDARD_FUNCTIONS,{},false,'en');e.disableCommands();return e;};
+   const e=make([data,reader([
+      {id:'count',type:'SET',variable:'count',value:"Object.values($data.services).filter(s=>s.kind==='subscription').length"},
+      {id:'say',type:'SAY',value:'{{count}} subscriptions; {{$data.services.club.name}}'}])]);
+   assert.ok(Object.isFrozen(e.sharedData.services.club),'deep-frozen');
+   let s=e.initSession('user',crypto.randomUUID(),'en');
+   s=JSON.parse(JSON.stringify(await e.updateActivity({role:'user',content:'go',start:{flow:'read-it'}},s)));
+   assert.match(s.response,/2 subscriptions; Gold Club/);
+   assert.ok(!JSON.stringify(s).includes('Member Benefits'),'the shared data is not saved in the session');
+   const mutate=make([data,reader([{id:'m',type:'SET',variable:'x',value:"($data.services.club.name='changed', true)"},{id:'say',type:'SAY',value:'{{$data.services.club.name}}'}])]);
+   let m=mutate.initSession('user',crypto.randomUUID(),'en');
+   m=JSON.parse(JSON.stringify(await mutate.updateActivity({role:'user',content:'go',start:{flow:'read-it'}},m)));
+   assert.equal(mutate.sharedData.services.club.name,'Gold Club','a flow cannot change the shared data');
+   assert.throws(()=>make([data,reader([{id:'say',type:'SAY',value:'{{$data.nope.name}}'}])]),/read-it reads unknown shared data \$data\.nope/);
+   assert.throws(()=>make([reader([{id:'say',type:'SAY',value:'{{$data.services}}'}])]),/reads unknown shared data \$data\.services/);
+   assert.throws(()=>make([data,reader([{id:'say',type:'SAY',value:'{{$data}}'}])]),/reads \$data without a name/);
+   assert.throws(()=>make([data,reader([],{variables:{$data:{type:'string',value:'x'}}})]),/\$data is a reserved evaluation namespace/);
+   assert.equal(make([reader([{id:'say',type:'SAY',value:'hi'}])]).sharedData,undefined,'a set without shared data has none');
+   const compiled=linkFormSchemas(compileFlowDeclarations([data,reader([{id:'say',type:'SAY',value:'{{$data.services.tv.name}}'}])],{validate:false}));
+   assert.ok(compiled.some(entry=>entry.library==='data'),'the compiled set keeps the shared data its expressions read');
+   const ce=make(compiled);let c=ce.initSession('user',crypto.randomUUID(),'en');
+   c=JSON.parse(JSON.stringify(await ce.updateActivity({role:'user',content:'go',start:{flow:'read-it'}},c)));
+   assert.equal(c.response,'TV','an engine built from the compiled set reads it');
+   assert.ok(!ce.flowsMenu.some(entry=>entry.library!==undefined),'the shared entry is not a flow');
 });
 await test('functions on an undeclared flow fail instead of being silently ignored',()=>{
    assert.throws(()=>compile([{id:'plain',steps:[],functions:{x:{parameters:[],body:['return 1;']}}}]),/plain declares functions without declarationVersion/);

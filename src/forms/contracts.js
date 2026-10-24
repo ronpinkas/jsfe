@@ -24,6 +24,9 @@ export function providerParameter(provides) {
 }
 /** Link declarative sub-forms before runtime so any descendant field can receive an early answer. */
 export function linkFormSchemas(flows,{externalFlows=[]}={}) {
+   // A flow set's shared entries (library: functions | data) are not flows; they pass through unchanged.
+   const shared=flows.filter(flow=>flow&&flow.library!==undefined);
+   if(shared.length)return [...linkFormSchemas(flows.filter(flow=>!(flow&&flow.library!==undefined)),{externalFlows}),...shared];
    const registry=new Map([...externalFlows,...flows].map(flow=>[flow.id,flow])),memo=new Map();
    const inputsFor=(id,active=new Set())=>{
       if(memo.has(id))return memo.get(id);
@@ -166,6 +169,7 @@ export function operationWorkers(tools) {
 
 /** Validate compiled declarations and all static references against the actual combined flow/tool registry. */
 export function validateFlowContracts(flows, tools=[], {externalFlows=[],requireAll=true,presets=FIELD_PRESETS}={}) {
+   flows=flows.filter(flow=>!(flow&&flow.library!==undefined));   // shared entries are not flows
    const ids=new Set(externalFlows),names=new Set(),toolIds=new Set([...tools,...ACTION_TOOLS].map(t=>t.id));
    for (const flow of flows) {
       if (ids.has(flow.id)) fail(flow.id,'duplicate id');

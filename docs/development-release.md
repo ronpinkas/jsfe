@@ -1,3 +1,7 @@
+## 1.9.0: shared data
+
+A flow set may carry one reserved shared-data entry (`library:"data"`, version 2), read two ways. Expressions read it at run time as `$data.<name>` (`Object.values($data.services)`): one deep-frozen copy per engine, never saved in a session, and every `$data.<name>` an expression reads must exist when the engine is built. A declaration field that is not an expression (a choice's phrases or label) references it by path as `{"$data":"a.b.c"}`, which compiles to a copy. `$data` is a reserved evaluation namespace. Unknown paths and names, duplicate names and reference cycles fail at load. Version 1 is unchanged. JavaScript authoring of flows (the public Form/Provider/Performer/Worker builders and compileExpression) is deprecated: author JSON declarations; the builders leave the public API at 2.0.
+
 ## 1.8.1: version 2 fixes found in the first tenant migration
 
 A generated parameter is also a variable of its flow, as an authored one always was, so a flow's expressions can read it by name (without it, removing an authored copy left `service is not defined`). Compiling already compiled version 2 flows again keeps working: a FLOW call may pass a compiled form target's protocol variables, and a shared-functions entry beside compiled flows is accepted.

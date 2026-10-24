@@ -1,4 +1,4 @@
-import {compileFlowDeclarations} from './forms/declarations.js';
+import {compileFlowDeclarations, flowSetData} from './forms/declarations.js';
 import {compileNamedFunctions} from './helpers/named-functions.js';
 import {closeFormInstance} from './helpers/form-state.js';
 import {validateContextualResponseStep} from './helpers/contextual-response.js';
@@ -6684,6 +6684,7 @@ function createSimplifiedEvaluationContext(
   };
   const functions = engine.getNamedFunctionNamespace();
   if (functions) context.fn = functions;
+  if (engine.sharedData) context.$data = engine.sharedData;
 
   return context;
 }
@@ -7633,6 +7634,8 @@ export class WorkflowEngine implements Engine {
   public flowsMenu: FlowDefinition[];
   private readonly sourceFlowDeclarations: Array<FlowDefinition | FlowDeclaration>;
   private readonly namedFunctionNamespaces = new Map<string, Record<string, unknown>>();
+  /** The flow set's shared data, read in expressions as $data.<name>: deep-frozen, never persisted in session variables. */
+  public sharedData?: Record<string, unknown>;
   /** A detached authoring copy; engine compilation and validation never become editor source. */
   public getFlowDeclarations(): Array<FlowDefinition | FlowDeclaration> {
     return cloneFlowValue(this.sourceFlowDeclarations);
@@ -7805,7 +7808,7 @@ export class WorkflowEngine implements Engine {
     for (const flow of compiledFlows) {
       if (flow.safetyRevision !== undefined && (typeof flow.safetyRevision !== 'string' || !flow.safetyRevision.trim() || flow.safetyRevision !== flow.safetyRevision.trim())) throw new Error('Invalid safetyRevision for flow '+flow.id);
     }
-    this.flowsMenu = applyWraps(compiledFlows);
+    this.flowsMenu = applyWraps(compiledFlows.filter(flow => (flow as any)?.library === undefined)); // the shared data entry is read through $data, never run
     if(toolsRegistry.some(tool=>ACTION_TOOLS.some(internal=>internal.id===tool.id)))throw new Error('Internal JSFE action tool identities are reserved');
     this.toolsRegistry = [...toolsRegistry,...ACTION_TOOLS] as ToolDefinition[];
     const receipt=(reply:any)=>reply;
@@ -7828,6 +7831,8 @@ export class WorkflowEngine implements Engine {
       if (Object.prototype.hasOwnProperty.call(flow.variables || {}, 'fn') || (flow.parameters || []).some(parameter => parameter.name === 'fn') || Object.prototype.hasOwnProperty.call(this.APPROVED_FUNCTIONS, 'fn') || Object.prototype.hasOwnProperty.call(globalVariables || {}, 'fn')) throw new Error('Named functions '+flow.id+': fn is a reserved evaluation namespace');
       this.namedFunctionNamespaces.set(flow.id, functions);
     }
+    this.sharedData = flowSetData(this.sourceFlowDeclarations, this.flowsMenu);
+    if (Object.prototype.hasOwnProperty.call(this.APPROVED_FUNCTIONS, '$data') || Object.prototype.hasOwnProperty.call(globalVariables || {}, '$data')) throw new Error('$data is a reserved evaluation namespace');
     this.globalVariables = globalVariables ? { ...globalVariables } : {}; // Copy global variables to prevent external mutations
     this.aiTimeOut = aiTimeOut ?? 2000; // Default to 2000ms (2 seconds)
 

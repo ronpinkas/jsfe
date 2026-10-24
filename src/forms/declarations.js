@@ -13,12 +13,15 @@ function sourceRevision(source){const text=JSON.stringify(source);const hashes=[
 const variableDeclaration=value=>value&&typeof value==='object'&&!Array.isArray(value)&&['string','number','integer','boolean','object','array'].includes(value.type)?value:{type:Array.isArray(value)?'array':value===null||typeof value==='object'?'object':typeof value,value};
 
 const DECLARATION_VERSIONS=new Set([1,2]);
-/** A flow set's shared functions: one reserved entry, {id, library:'functions', declarationVersion:2, functions}. */
+/** A flow set's shared entries: {id, library:'functions', declarationVersion:2, functions} and
+ * {id, library:'data', declarationVersion:2, data}. */
 const isLibrary=flow=>!!flow&&typeof flow==='object'&&flow.library!==undefined;
+const LIBRARY_KINDS=new Set(['functions','data']);
 function sharedFunctions(libraries){
  const shared={};
  for(const library of libraries){
-  if(library.library!=='functions')fail('unsupported library '+String(library.library)+' on '+library.id);
+  if(!LIBRARY_KINDS.has(library.library))fail('unsupported library '+String(library.library)+' on '+library.id);
+  if(library.library!=='functions')continue;
   if(typeof library.id!=='string'||!library.id)fail('a shared functions entry needs an id');
   if(library.declarationVersion!==2)fail('shared functions '+library.id+' require declarationVersion 2');
   const extra=Object.keys(library).filter(key=>!['id','name','library','declarationVersion','description','functions'].includes(key));
@@ -29,6 +32,50 @@ function sharedFunctions(libraries){
  return shared;
 }
 const inputFields=inputs=>(inputs||[]).flatMap(input=>input.any_of||[input]);
+/** A flow set's shared data: values declared once, referenced from any version 2 declaration as {"$data":"path.to.value"}. */
+function sharedData(libraries){
+ const data={};
+ for(const library of libraries.filter(entry=>entry.library==='data')){
+  if(typeof library.id!=='string'||!library.id)fail('a shared data entry needs an id');
+  if(library.declarationVersion!==2)fail('shared data '+library.id+' requires declarationVersion 2');
+  const extra=Object.keys(library).filter(key=>!['id','name','library','declarationVersion','description','data'].includes(key));
+  if(extra.length)fail('shared data '+library.id+' cannot declare '+extra.join(', '));
+  if(!library.data||typeof library.data!=='object'||Array.isArray(library.data)||!Object.keys(library.data).length)fail('shared data '+library.id+' must declare a nonempty data map');
+  for(const [name,value]of Object.entries(library.data)){if(Object.hasOwn(data,name))fail('shared data '+name+' is declared twice');data[name]=structuredClone(value);}
+ }
+ return data;
+}
+const deepFreeze=value=>{if(value&&typeof value==='object'&&!Object.isFrozen(value)){Object.freeze(value);for(const item of Object.values(value))deepFreeze(item);}return value;};
+/** The set's shared data for expressions, read as $data.<name>: references resolved, deep-frozen (one engine serves many
+ * sessions), never copied into session variables. Every $data.<name> an expression reads must exist, checked at load. */
+export function flowSetData(flows,compiledFlows=[]){
+ const data=sharedData((flows||[]).filter(isLibrary));
+ const resolved=deepFreeze(resolveDataReferences(data,data,'shared data'));
+ for(const flow of compiledFlows){
+  const named=[...Object.keys(flow.variables||{}),...(Array.isArray(flow.parameters)?flow.parameters.map(parameter=>parameter?.name):Object.keys(flow.parameters||{}))];
+  if(named.includes('$data'))fail(flow.id+': $data is a reserved evaluation namespace');
+  const text=JSON.stringify(flow);
+  for(const match of text.matchAll(/(?<![\w$])\$data(?![\w$])(\.([A-Za-z_$][\w$]*))?/g)){
+   if(!match[2])fail(flow.id+' reads $data without a name; write $data.<name>');
+   if(!Object.hasOwn(resolved,match[2]))fail(flow.id+' reads unknown shared data $data.'+match[2]);
+  }
+ }
+ return Object.keys(resolved).length?resolved:undefined;
+}
+const isDataReference=value=>!!value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===1&&typeof value.$data==='string';
+/** Replace every {"$data":"path"} with a copy of the shared value at that path; an unknown path fails compilation. */
+function resolveDataReferences(value,data,where,active=new Set()){
+ if(isDataReference(value)){
+  const path=value.$data;
+  if(active.has(path))fail(where+' shared data reference cycle at '+path);
+  let found=data;
+  for(const part of path.split('.')){if(found===null||typeof found!=='object'||!Object.hasOwn(found,part))fail(where+' references unknown shared data '+path);found=found[part];}
+  return resolveDataReferences(structuredClone(found),data,where,new Set([...active,path]));
+ }
+ if(Array.isArray(value))return value.map(item=>resolveDataReferences(item,data,where,active));
+ if(value&&typeof value==='object')return Object.fromEntries(Object.entries(value).map(([key,item])=>[key,resolveDataReferences(item,data,where,active)]));
+ return value;
+}
 /** Names a primary form generates: each input with a profile or a sub-form schema, and every field nested in one. */
 const generatedFieldNames=inputs=>inputFields(inputs).flatMap(input=>[...(input.profile||input.schema?[input.name]:[]),...(input.schema?generatedFieldNames(input.schema.inputs):[])]);
 /** Version 2 extraction values: a choice input's keys once each, minus choices declared `extract:false`. */
@@ -107,17 +154,21 @@ export function compileFlowDeclarations(flows,{tools,externalFlows=[],validate=t
  // Functions compile only on declared flows (authored, or already compiled from a declaration); on any other flow they
  // would be silently ignored at run time.
  for(const flow of flows)if(flow&&flow.declarationVersion===undefined&&flow.library===undefined&&!flow.metadata?.declaration&&flow.functions!==undefined)fail((flow.id||'a flow')+' declares functions without declarationVersion');
- const libraries=flows.filter(isLibrary),shared=sharedFunctions(libraries);
+ const libraries=flows.filter(isLibrary),shared=sharedFunctions(libraries),data=sharedData(libraries);
+ // The shared data travels with the compiled flows: their expressions read it at run time as $data.<name>.
+ const dataEntries=libraries.filter(library=>library.library==='data').map(library=>structuredClone(library));
  if(libraries.length)flows=flows.filter(flow=>!isLibrary(flow));
  if(!flows.some(flow=>flow?.declarationVersion!==undefined)){
-  // Already compiled version 2 flows carry the shared functions merged in; the entry adds nothing to them.
-  if(Object.keys(shared).length&&!flows.some(flow=>flow?.metadata?.declaration?.version===2))fail('shared functions need declarationVersion 2 flows');
-  return flows;
+  // Already compiled version 2 flows carry the shared functions and data merged in; the entries add nothing to them.
+  if((Object.keys(shared).length||Object.keys(data).length)&&!flows.some(flow=>flow?.metadata?.declaration?.version===2))fail('shared functions and data need declarationVersion 2 flows');
+  return dataEntries.length?[...flows,...dataEntries]:flows;
  }
  const ids=new Set();for(const flow of flows){if(ids.has(flow.id))fail('duplicate flow id '+flow.id);ids.add(flow.id);}
  const authoredParameters=new Map(),builderParameters=new Map(),protocolVariables=new Map();
- const compiled=flows.map(source=>{
-  if(source.declarationVersion===undefined)return source;
+ const compiled=flows.map(original=>{
+  if(original.declarationVersion===undefined)return original;
+  // Version 2 references shared data by path; each reference becomes a copy before anything else reads the declaration.
+  const source=original.declarationVersion===2&&Object.keys(data).length?resolveDataReferences(original,data,original.id):original;
   if(!DECLARATION_VERSIONS.has(source.declarationVersion))fail('unsupported declarationVersion on '+source.id);
   const {declarationVersion,form,functions:ownFunctions,safetyRevision,...rest}=structuredClone(source);
   // Version 2: a flow's own functions plus the set's shared ones; a flow cannot redefine a shared name.
@@ -162,7 +213,7 @@ export function compileFlowDeclarations(flows,{tools,externalFlows=[],validate=t
   const installed=[...externalFlows.map(flow=>typeof flow==='string'?flow:flow.id),...linked.filter(flow=>!declaredIds.has(flow.id)).map(flow=>flow.id)];
   validateFlowContracts(declared,tools||[],{externalFlows:[...new Set(installed)]});
  }
- return linked;
+ return [...linked,...dataEntries];
 }
 
 /** Return the original programmatic declaration, even after ordinary spread/clone transformations. */
