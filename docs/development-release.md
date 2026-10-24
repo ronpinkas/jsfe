@@ -1,3 +1,10 @@
+## 1.9.3: a card number said in groups
+
+A digit input may opt in to `accumulate: true`: an answer that is only digits and short of the input's minimum is kept, and
+the next question is "Go on." / "Continúe."; the next digits are joined to it, and anything that is not digits drops the
+partial. The shared `card_number` preset opts in, so a card read in groups across turns is collected whole instead of each
+group being read as another field (an account number, an amount).
+
 ## 1.9.2: address city list and part corrections
 
 The shared address form (`collect-geocoded-address`) asks the city when the ZIP code carries several place names (`geocode-zip` returns `localities`, Google's `postcode_localities`; at most 7): "Which city is it: Commerce, East Los Angeles, Los Angeles or Vernon?", by name or key. With one name it is not asked, and a caller who says the city is wrong is asked it plainly and any city is taken. At the read-back, naming one part without a value ("the city is wrong", "la ciudad no") asks only that part again, and a plain NO asks which part is wrong (zip code, city, street, apartment, or ALL to start over) instead of starting over. The part naming is an opt-in form confirmation setting, `confirm.named_fields: true`, read from each input's `names`; other forms keep their behavior. A host whose `geocode-zip` returns no `localities` keeps the one city it returns.

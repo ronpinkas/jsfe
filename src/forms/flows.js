@@ -69,7 +69,7 @@ export const FIELD_PRESETS = {
    city: { label: 'city', label_es: 'ciudad', profile: { kind: 'text' }, question: 'What city?', question_es: '¿En qué ciudad?' },
    state: { label: 'state', label_es: 'estado', profile: { kind: 'pattern', regex: '^\\s*(?:Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming|District of Columbia|Puerto Rico|AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC|PR)\\s*$' },
       question: 'What state?', question_es: '¿En qué estado?' },
-   card_number: { label: 'card number', label_es: 'número de tarjeta', profile: { kind: 'digits', min: 13, max: 19 }, digits: { min: 13, max: 19, complete:[{first:'4',lengths:[16,19]},{first:'25',lengths:[16]},{first:'3',lengths:[15]},{first:'6',lengths:[16,19]}] },
+   card_number: { label: 'card number', label_es: 'número de tarjeta', accumulate: true, profile: { kind: 'digits', min: 13, max: 19 }, digits: { min: 13, max: 19, complete:[{first:'4',lengths:[16,19]},{first:'25',lengths:[16]},{first:'3',lengths:[15]},{first:'6',lengths:[16,19]}] },
       pii: true, validator: 'validate-card-number',
       question: 'Please say or enter your card number.', question_es: 'Por favor diga o ingrese el número de su tarjeta.',
       retry: 'Please say or enter the full card number.', retry_es: 'Por favor diga o ingrese el número completo de su tarjeta.' },
@@ -214,7 +214,7 @@ const collectInput = {
    id: 'collect-input', name: 'CollectInput', version: '1.0.0', scope: 'isolated',
    description: "Worker: ask the form's current input once and file the answer wherever it belongs in the form chain (matchInputs, decided by scope; a declared confirm_against pair is asked). One reading → collect-input-accept; ambiguous → disambiguate-input; a question about the form's data → provide-data; a short miss → counted, the loop re-asks; 3+ words that fit nothing → DISPATCH. Params: form, current, questions, provides, exit_context(_es).",
    parameters: ['form', 'current', 'questions', 'provides', 'exit_context', 'exit_context_es'].map((n) => ({ name: n, type: ['questions'].includes(n) ? 'array' : n === 'provides' ? 'object' : 'string', description: n })),
-   variables: vars({ ci_exhaustion:null, ci_d: {}, ci_pre: '', ci_val: '', ci_routed: '', ci_names: [], ci_chain: [], ci_spec: null, ci_choices: [], ci_q: '', ci_q_es: '', ci_missed: 0, ci_max: 3, ci_misses:0,ci_miss_limit:2, ci_m: null, ci_qkey: '', ci_skip_gate:'', ci_words: 0, ci_digits: null, ci_amount: false, ci_as_spoken:false, ci_reader:{}, ci_pii: false, ci_ctx: '', ci_ctx_es: '' }),
+   variables: vars({ ci_partial:'', ci_exhaustion:null, ci_d: {}, ci_pre: '', ci_val: '', ci_routed: '', ci_names: [], ci_chain: [], ci_spec: null, ci_choices: [], ci_q: '', ci_q_es: '', ci_missed: 0, ci_max: 3, ci_misses:0,ci_miss_limit:2, ci_m: null, ci_qkey: '', ci_skip_gate:'', ci_words: 0, ci_digits: null, ci_amount: false, ci_as_spoken:false, ci_reader:{}, ci_pii: false, ci_ctx: '', ci_ctx_es: '' }),
    steps: [
       SET('ci_find_spec', 'ci_spec', "(function () { var s = ((cargo.forms[form] || {}).specs || []).filter(function (s) { return s.name === current; })[0]; return s ? (Array.isArray(s.any_of) ? Object.assign({}, s, { profile: { kind: 'group' } }) : s) : null; })()"),
       SET('ci_current_names', 'ci_names', "Array.isArray(ci_spec && ci_spec.any_of) ? ci_spec.any_of.map(function (m) { return m.name; }) : [current]"),
@@ -254,6 +254,10 @@ const collectInput = {
       SET('ci_route_to', 'ci_routed', "(ci_spec.route_keys || []).filter(function (r) { return String(cargo.choice || '').indexOf(r.prefix) === 0; }).map(function (r) { return r.flow; })[0] || ''"),
       WHEN('ci_route_key', 'ci_routed', FLOW('ci_route_key_flow', '{{ci_routed}}', 'call', { form: '{{form}}', input: '{{current}}' })),
       WHEN('ci_routed_end', 'ci_routed', END('ci_routed_done')),
+      // `accumulate` (opt-in, digit inputs): a number said in groups across turns ("4347", "6971 2210"…) is kept and joined;
+      // short of the input's minimum the next question is "Go on." Anything that is not digits drops the partial.
+      SET('ci_partial_join', 'ci_partial', "(function () { var state = cargo.forms[form]; if (!ci_spec || ci_spec.accumulate !== true || !ci_spec.digits) return ''; var said = String(cargo.choiceText || '').trim(); var data = state.data = state.data || {}; var key = '__partial_' + current; if (!/^[0-9][0-9\\s.,-]*$/.test(said)) { delete data[key]; return ''; } var joined = String(data[key] || '') + said.replace(/[^0-9]/g, ''); if (joined.length < Number(ci_spec.digits.min || 0)) { data[key] = joined; var fb = state.feedback || {}; fb[current] = 'partial'; state.feedback = fb; return 'hold'; } delete data[key]; cargo.choiceText = joined; cargo.choice = joined; return 'joined'; })()"),
+      WHEN('ci_partial_hold', "ci_partial === 'hold'", END('ci_partial_wait')),
       SET('ci_build_chain', 'ci_chain', CHAIN_JS),
       SET('ci_match', 'ci_m', "readFormAnswer(cargo.choiceText, ci_chain, Array.isArray(ci_spec.any_of) ? { form: form, names: ci_names } : { form: form, name: current }, cargo.choice, provides && Array.isArray(questions) ? questions : [])"),
       // The labels and validators ride on each reading, so the presets stay in this one flow.

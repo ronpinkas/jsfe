@@ -14,6 +14,7 @@ export function formInputPrompt(cargo,id,input,spec,data={},language='en') {
    const es=language==='es',feedback=cargo.forms?.[id]?.feedback?.[input];
    const question=spec.question_from&&(es?(data[spec.question_from+'_es']||data[spec.question_from]):data[spec.question_from]) || (es?(spec.question_es||spec.question):spec.question) || '';
    const retry=es?spec.retry_es:spec.retry;
+   if(feedback==='partial')return es?'Continúe.':'Go on.';
    if(feedback&&retry)return retry;
    return (feedback==='miss'?(es?'Disculpe, no le entendí. ':"Sorry, I didn't catch that. "):'')+question;
 }
