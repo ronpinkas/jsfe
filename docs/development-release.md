@@ -1,3 +1,9 @@
+## 1.9.4: card groups start like a card
+
+`accumulate_first` (a regular expression) limits accumulation to a first group that matches it; the `card_number` preset
+uses `^[2-6]` (every card network's first digit), so "1234" or "0729" said at the card question keeps its normal reading
+as an expiration date or a security code.
+
 ## 1.9.3: a card number said in groups
 
 A digit input may opt in to `accumulate: true`: an answer that is only digits and short of the input's minimum is kept, and
