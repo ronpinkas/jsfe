@@ -1,6 +1,7 @@
 import {compileFlowDeclarations, flowSetData} from './forms/declarations.js';
 import {compileNamedFunctions} from './helpers/named-functions.js';
 import {closeFormInstance} from './helpers/form-state.js';
+import {storedSession,restoreStoredSession} from './helpers/stored-session.js';
 import {validateContextualResponseStep} from './helpers/contextual-response.js';
 import {validateFlowRecovery} from './host/flow-recovery.js';
 import type {FlowRecovery} from './host/flow-recovery.js';
@@ -7928,6 +7929,8 @@ export class WorkflowEngine implements Engine {
 
       // Store reference to session context - no copying needed! Engine works directly with session data
       this.sessionContext = engineSessionContext;
+      // A session stored with storedSession() names the sources of its form instances' definition copies; restore them.
+      restoreStoredSession(engineSessionContext, this.flowsMenu);
 
       // One-shot semantics: a declared flow outcome belongs to the turn in which
       // the flow terminated — drop any stale stamp from a prior turn before
@@ -8415,6 +8418,15 @@ export class WorkflowEngine implements Engine {
   // Stamp the one-shot host-facing outcome for a flow that terminated this turn
   // (sessionContext is private; finalizeFlowTransaction goes through this).
   getSessionContext(): EngineSessionContext { return this.sessionContext!; }
+
+  /**
+   * The session as a host should store it (jsfe 1.9.1): a copy without the form-instance definition copies that the
+   * loaded flows reproduce exactly, and with revision hashes only for open form instances. updateActivity restores it.
+   * The session passed in is not changed.
+   */
+  storedSession(session: EngineSessionContext): EngineSessionContext {
+    return storedSession(session, this.flowsMenu) as EngineSessionContext;
+  }
 
   stampFlowRecovery(recovery: FlowRecovery): void {
     const value=validateFlowRecovery(recovery);
