@@ -1,3 +1,9 @@
+## 1.8.0: declaration version 2, shared functions, option clarification
+
+`declarationVersion: 2` makes parameters one contract: a primary form's input parameters (sub-forms as object parameters with every nested field) are generated, and writing one of those names in `parameters` is a compile error at any depth. `parameters` holds only entry arguments. An enum value's meaning is read from its choice's `description`, after the input's own `description` as the rule (`enumDescriptions`, and the parameter description `rule: key: meaning; …`); `extract:false` keeps a choice out of the enum and `internal:true` marks an input extraction never fills. A FLOW step may pass only arguments a version 2 target declares. Version 1 is unchanged.
+
+A flow set may carry one reserved shared-functions entry (`library:"functions"`, version 2); every version 2 flow sees those functions, and a redefinition or a name declared twice fails compilation. `functions` on an undeclared flow now fails compilation instead of being silently ignored. A primary `wraps` wrapper may omit its description (it inherits it). When a phrase is shared by two options of ONE input, the clarification names them ("Do you mean Gold Club or Member Benefits?" / "¿Se refiere a … o a …?"); a Spanish option label falls back to its first phrase rather than its key.
+
 ## 1.7.9: simpler authoring and DISPATCH ownership of conversational interpretation
 
 The separate input-assessment classifier, model override and ASSESS-INPUT step are removed. Open-ended fields use existing contextual DISPATCH extraction and concise descriptions; an uncertain answer yields to the host with saved progress. Narrative correction phrases and broad payment refusal/tense rules are removed. Strict money reading, exact confirmation, proposal dependencies and action recovery guards remain.

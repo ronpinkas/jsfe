@@ -45,7 +45,7 @@ export function assertFlowHostCapabilities(flows, capabilities = {}) {
       // Hosts admit raw JSON before the engine expands declarations. A native
       // performer must retain the same explicit activation policy at that boundary.
       const authored = flow?.declarationVersion !== undefined;
-      if (authored && flow.declarationVersion !== 1) throw new JSFEHostCapabilityError(flow?.id, '', 'unsupported declarationVersion');
+      if (authored && flow.declarationVersion !== 1 && flow.declarationVersion !== 2) throw new JSFEHostCapabilityError(flow?.id, '', 'unsupported declarationVersion');
       const requirements = normalizeHostRequirements([
          ...normalizeHostRequirements(flow?.variables?.contract?.value?.requires, flow?.id),
          ...(authored ? normalizeHostRequirements(flow?.contract?.requires, flow?.id) : []),

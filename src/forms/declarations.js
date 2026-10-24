@@ -12,6 +12,83 @@ const fail=message=>{throw new Error('Flow declaration: '+message);};
 function sourceRevision(source){const text=JSON.stringify(source);const hashes=[2166136261,2246822507,3266489909,668265263];for(let i=0;i<text.length;i++)for(let lane=0;lane<hashes.length;lane++)hashes[lane]=Math.imul(hashes[lane]^text.charCodeAt(i),16777619+lane*2)>>>0;return hashes.map(n=>n.toString(16).padStart(8,'0')).join('');}
 const variableDeclaration=value=>value&&typeof value==='object'&&!Array.isArray(value)&&['string','number','integer','boolean','object','array'].includes(value.type)?value:{type:Array.isArray(value)?'array':value===null||typeof value==='object'?'object':typeof value,value};
 
+const DECLARATION_VERSIONS=new Set([1,2]);
+/** A flow set's shared functions: one reserved entry, {id, library:'functions', declarationVersion:2, functions}. */
+const isLibrary=flow=>!!flow&&typeof flow==='object'&&flow.library!==undefined;
+function sharedFunctions(libraries){
+ const shared={};
+ for(const library of libraries){
+  if(library.library!=='functions')fail('unsupported library '+String(library.library)+' on '+library.id);
+  if(typeof library.id!=='string'||!library.id)fail('a shared functions entry needs an id');
+  if(library.declarationVersion!==2)fail('shared functions '+library.id+' require declarationVersion 2');
+  const extra=Object.keys(library).filter(key=>!['id','name','library','declarationVersion','description','functions'].includes(key));
+  if(extra.length)fail('shared functions '+library.id+' cannot declare '+extra.join(', '));
+  if(!library.functions||typeof library.functions!=='object'||Array.isArray(library.functions)||!Object.keys(library.functions).length)fail('shared functions '+library.id+' must declare a nonempty functions map');
+  for(const [name,definition]of Object.entries(library.functions)){if(Object.hasOwn(shared,name))fail('shared function '+name+' is declared twice');shared[name]=structuredClone(definition);}
+ }
+ return shared;
+}
+const inputFields=inputs=>(inputs||[]).flatMap(input=>input.any_of||[input]);
+/** Names a primary form generates: each input with a profile or a sub-form schema, and every field nested in one. */
+const generatedFieldNames=inputs=>inputFields(inputs).flatMap(input=>[...(input.profile||input.schema?[input.name]:[]),...(input.schema?generatedFieldNames(input.schema.inputs):[])]);
+/** Version 2 extraction values: a choice input's keys once each, minus choices declared `extract:false`. */
+const extractableChoices=input=>{
+ if(input?.profile?.kind!=='choice'||input.profile.accept_other)return null;
+ const seen=new Set();return (input.profile.choices||[]).filter(choice=>choice.extract!==false&&!seen.has(choice.key)&&seen.add(choice.key));
+};
+const meaningText=choices=>choices.map(choice=>choice.key+': '+(choice.description||choice.label||choice.key)).join('; ');
+/** A generated leaf read from its input: the enum it may take, each value's meaning (declared once, on its choice)
+ * after the input's own rule, and `internal` for an input callers set but extraction never fills. */
+function describeLeaf(input,leaf,{top=false}={}){
+ if(!input)return leaf;
+ const out={...leaf},choices=extractableChoices(input),rule=input.response?.description||input.description||'';
+ if(choices&&Array.isArray(out.enum)){
+  out.enum=choices.map(choice=>choice.key);
+  if(choices.some(choice=>choice.description)){
+   out.description=rule?rule+(/[.:;]$/.test(rule.trim())?' ':': ')+meaningText(choices):meaningText(choices);
+   if(top)out.enumDescriptions=Object.fromEntries(choices.map(choice=>[choice.key,choice.description||choice.label||choice.key]));
+  }
+ }
+ if(top&&input.internal===true)out.internal=true;
+ return out;
+}
+function describeChoiceValues(flow){
+ const inputs=inputFields(flow.variables?.inputs?.value);
+ const describeSchema=(schema,owners)=>{
+  if(!schema||schema.type!=='object'||!schema.properties)return schema;
+  const properties=Object.fromEntries(Object.entries(schema.properties).map(([name,property])=>{
+   const input=inputFields(owners).find(candidate=>candidate.name===name);const variants=property.anyOf||[property];
+   const described=variants.map(variant=>variant.type==='object'?describeSchema(variant,input?.schema?.inputs):describeLeaf(input,variant));
+   return [name,property.anyOf?{...property,anyOf:described}:described[0]];
+  }));
+  return {...schema,properties};
+ };
+ const parameters=(flow.parameters||[]).map(parameter=>{
+  const input=inputs.find(candidate=>candidate.name===parameter.name);
+  if(parameter.jsonSchema&&input?.schema)return {...describeLeaf(input,parameter,{top:true}),jsonSchema:describeSchema(parameter.jsonSchema,input.schema.inputs)};
+  return describeLeaf(input,parameter,{top:true});
+ });
+ return {...flow,parameters};
+}
+const callSteps=steps=>(steps||[]).flatMap(step=>[step,...callSteps(Object.values(step.branches||{})),...(step.onFail?callSteps([step.onFail]):[])]);
+/** Version 2's single parameter contract: a parameter is generated from an input or authored, never both; a call
+ * passes only what its target declares. */
+function enforceParameterContract(flows,authored,builder,protocol=new Map()){
+ const byId=new Map(flows.map(flow=>[flow.id,flow])),byName=new Map(flows.map(flow=>[flow.name,flow]));
+ for(const [id,names]of authored){
+  const flow=byId.get(id);
+  const generated=new Set([...(builder.get(id)||[]),...(flow.primary?generatedFieldNames(flow.variables?.inputs?.value):[])]);
+  for(const name of names)if(generated.has(name))fail(id+' parameter '+name+' is generated from its form; remove it from parameters');
+ }
+ for(const flow of flows)for(const step of callSteps(flow.steps)){
+  if(step.type!=='FLOW'||typeof step.value!=='string'||step.value.includes('{{'))continue;
+  const target=byId.get(step.value)||byName.get(step.value);
+  if(!target||target.metadata?.declaration?.version!==2)continue;
+  const declared=new Set([...(target.parameters||[]).map(parameter=>parameter.name),...(protocol.get(target.id)||[])]);
+  for(const name of Object.keys(step.parameters||{}))if(!declared.has(name))fail(flow.id+' step '+step.id+' passes '+name+', which '+target.id+' does not declare');
+ }
+}
+
 /** Compile only explicitly versioned declarations. Ordinary executable JSON is unchanged.
  * @param {any[]} flows
  * @param {{tools?: any[], externalFlows?: any[], validate?: boolean}} options
@@ -19,12 +96,21 @@ const variableDeclaration=value=>value&&typeof value==='object'&&!Array.isArray(
  */
 export function compileFlowDeclarations(flows,{tools,externalFlows=[],validate=true}={}){
  if(!Array.isArray(flows))fail('flows must be an array');
- if(!flows.some(flow=>flow?.declarationVersion!==undefined))return flows;
+ // Functions compile only on declared flows (authored, or already compiled from a declaration); on any other flow they
+ // would be silently ignored at run time.
+ for(const flow of flows)if(flow&&flow.declarationVersion===undefined&&flow.library===undefined&&!flow.metadata?.declaration&&flow.functions!==undefined)fail((flow.id||'a flow')+' declares functions without declarationVersion');
+ const libraries=flows.filter(isLibrary),shared=sharedFunctions(libraries);
+ if(libraries.length)flows=flows.filter(flow=>!isLibrary(flow));
+ if(!flows.some(flow=>flow?.declarationVersion!==undefined)){if(Object.keys(shared).length)fail('shared functions need declarationVersion 2 flows');return flows;}
  const ids=new Set();for(const flow of flows){if(ids.has(flow.id))fail('duplicate flow id '+flow.id);ids.add(flow.id);}
+ const authoredParameters=new Map(),builderParameters=new Map(),protocolVariables=new Map();
  const compiled=flows.map(source=>{
   if(source.declarationVersion===undefined)return source;
-  if(source.declarationVersion!==1)fail('unsupported declarationVersion on '+source.id);
-  const {declarationVersion,form,functions,safetyRevision,...rest}=structuredClone(source);
+  if(!DECLARATION_VERSIONS.has(source.declarationVersion))fail('unsupported declarationVersion on '+source.id);
+  const {declarationVersion,form,functions:ownFunctions,safetyRevision,...rest}=structuredClone(source);
+  // Version 2: a flow's own functions plus the set's shared ones; a flow cannot redefine a shared name.
+  if(declarationVersion===2&&ownFunctions&&typeof ownFunctions==='object')for(const name of Object.keys(ownFunctions))if(Object.hasOwn(shared,name))fail(source.id+' redefines shared function '+name);
+  const functions=declarationVersion===2&&Object.keys(shared).length?{...structuredClone(shared),...(ownFunctions||{})}:ownFunctions;
   if(Object.hasOwn(source,'form')&&(!form||typeof form!=='object'||!Array.isArray(form.inputs)))fail(source.id+' form requires inputs');
   if(form&&[...formKeys].some(key=>Object.hasOwn(rest,key)))fail(source.id+' form options must be inside form');
   if(form&&rest.steps)fail(source.id+' cannot combine form and executable steps');
@@ -32,23 +118,33 @@ export function compileFlowDeclarations(flows,{tools,externalFlows=[],validate=t
   if(functions!==undefined&&(!functions||Array.isArray(functions)||typeof functions!=='object'))fail(source.id+' functions must be a map');
   const spec=form?{...rest,...form,extraVars:Object.fromEntries(Object.entries(rest.variables||{}).map(([name,value])=>[name,value&&typeof value==='object'&&Object.hasOwn(value,'value')?value.value:value]))}:rest;
   if(form)delete spec.variables;
-  let flow=rest.performs?Performer(spec):form?Form(spec):rest.provides?Provider(spec):Worker(spec);
+  const build=value=>rest.performs?Performer(value):form?Form(value):rest.provides?Provider(value):Worker(value);
+  let flow=build(spec);
+  if(declarationVersion===2&&form){
+   const named=list=>(Array.isArray(list)?list:Object.keys(list||{}).map(name=>({name}))).map(p=>p.name);
+   authoredParameters.set(source.id,named(rest.parameters));
+   // What the builder adds on its own (form_instance, an input with a description) is generated, never authored.
+   builderParameters.set(source.id,named(build({...spec,parameters:[]}).parameters));
+  }
+  // The form protocol's own variables (parent_form, result_input, …) are JSFE's to pass, never an author's.
+  if(declarationVersion===2&&form)protocolVariables.set(source.id,Object.keys(flow.variables||{}).filter(name=>!Object.hasOwn(rest.variables||{},name)));
   const parameterNames=new Set();
-  flow={...flow,parameters:(flow.parameters||[]).filter(parameter=>{if(parameterNames.has(parameter.name))return false;parameterNames.add(parameter.name);return true;}),...(rest.parameterInstructions!==undefined?{parameterInstructions:rest.parameterInstructions}:{}),...(functions?{functions}:{}),metadata:{...flow.metadata,declaration:{version:1,source:source.id}}};
+  flow={...flow,parameters:(flow.parameters||[]).filter(parameter=>{if(parameterNames.has(parameter.name))return false;parameterNames.add(parameter.name);return true;}),...(rest.parameterInstructions!==undefined?{parameterInstructions:rest.parameterInstructions}:{}),...(functions?{functions}:{}),metadata:{...flow.metadata,declaration:{version:declarationVersion,source:source.id}}};
   // Revisions are engine bookkeeping; a stale authored token cannot override source change detection.
   const {safetyRevision:ignoredRevision,...revisionSource}=source;
-  return withSafetyRevision(flow,'declaration-v1:'+sourceRevision(revisionSource));
+  return withSafetyRevision(flow,'declaration-v'+declarationVersion+':'+sourceRevision(declarationVersion===2&&Object.keys(shared).length?{...revisionSource,sharedFunctions:shared}:revisionSource));
  });
  const externalObjects=externalFlows.filter(flow=>flow&&typeof flow==='object');
- const formIds=new Set(flows.filter(flow=>flow.declarationVersion===1&&flow.form).map(flow=>flow.id));
+ const formIds=new Set(flows.filter(flow=>flow.declarationVersion!==undefined&&flow.form).map(flow=>flow.id));
  const prompted=compileFormPrompts(compiled.filter(flow=>formIds.has(flow.id)));
  const promptOwners=new Map(prompted.filter(flow=>formIds.has(flow.id)).map(flow=>[flow.id,flow]));
  const generated=prompted.filter(flow=>!formIds.has(flow.id));
  const installedIds=new Set([...ids,...externalFlows.map(flow=>typeof flow==='string'?flow:flow.id)]);
  for(const worker of generated){if(installedIds.has(worker.id))fail('generated question worker id collision '+worker.id);installedIds.add(worker.id);}
- const linked=linkFormSchemas([...compiled.map(flow=>promptOwners.get(flow.id)||flow),...generated],{externalFlows:externalObjects});
+ const linked=linkFormSchemas([...compiled.map(flow=>promptOwners.get(flow.id)||flow),...generated],{externalFlows:externalObjects}).map(flow=>authoredParameters.has(flow.id)?describeChoiceValues(flow):flow);
+ enforceParameterContract(linked,authoredParameters,builderParameters,protocolVariables);
  if(validate){
-  const declaredIds=new Set([...flows.filter(flow=>flow.declarationVersion===1).map(flow=>flow.id),...generated.map(flow=>flow.id)]);
+  const declaredIds=new Set([...flows.filter(flow=>flow.declarationVersion!==undefined).map(flow=>flow.id),...generated.map(flow=>flow.id)]);
   // Loading a declaration must not opt unrelated executable host/shared flows into authoring contracts.
   const declared=linked.filter(flow=>declaredIds.has(flow.id));
   const installed=[...externalFlows.map(flow=>typeof flow==='string'?flow:flow.id),...linked.filter(flow=>!declaredIds.has(flow.id)).map(flow=>flow.id)];

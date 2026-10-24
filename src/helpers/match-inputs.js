@@ -109,7 +109,7 @@ export function readInputProfile(profile, answer, isCurrent = true) {
       let readings = pool.filter(c => pickChoice(raw, [c], false) === c.key || numericSpans(c).length).map(c => {
          const words = (c.phrases ?? c.words ?? []).filter(w => matchesChoice(raw,[w]));
          const spans = [...choiceSpans(raw,words),...numericSpans(c)].filter((span,index,all)=>all.findIndex(other=>other[0]===span[0]&&other[1]===span[1])===index);
-         return { value:c.key, ...(isCurrent && (c.keys || []).length && !isAmountAnswer(raw) && pickChoice(raw,[{key:c.key,phrases:c.keys,exact:true}],false)===c.key ? {keypad:true} : {}), spans:spans.length?spans:[[0,raw.length]], option_label:c.label || (c.phrases ?? c.words ?? []).find(w=>!/^\d+$/.test(w)) || c.key, option_label_es:c.label_es || c.label || c.key };
+         return { value:c.key, ...(isCurrent && (c.keys || []).length && !isAmountAnswer(raw) && pickChoice(raw,[{key:c.key,phrases:c.keys,exact:true}],false)===c.key ? {keypad:true} : {}), spans:spans.length?spans:[[0,raw.length]], option_label:c.label || (c.phrases ?? c.words ?? []).find(w=>!/^\d+$/.test(w)) || c.key, option_label_es:c.label_es || c.label || (c.phrases ?? c.words ?? []).find(w=>!/^\d+$/.test(w)) || c.key };
       });
       // A more specific declared phrase can cover a shorter phrase of the same field's other option.
       readings = readings.filter(r => !readings.some(other => other !== r && r.spans.every(([a,b]) => other.spans.some(([c,d]) => c <= a && d >= b && (c<a || d>b)))));

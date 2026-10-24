@@ -17,7 +17,11 @@ There are four authoring concepts:
 | Performer | `form` and `performs`, with `prepare` and `present` | Collect, prepare, confirm and execute a guarded action. |
 | Worker | `steps`, or `call` | Perform a small explicit calculation or orchestration task. |
 
-A versioned entry has `declarationVersion: 1`. JSFE lowers it at engine construction, compiles contextual question workers, links installed child schemas and validates the new declarations. Ordinary executable entries without that marker retain their existing meaning. Generated steps and schemas are execution output, not a second editable source. Keep `declarationVersion: 1` on workers that declare `functions`.
+A versioned entry has `declarationVersion: 2` (new authoring) or `1` (earlier sets, unchanged). JSFE lowers it at engine construction, compiles contextual question workers, links installed child schemas and validates the new declarations. Ordinary executable entries without that marker retain their existing meaning; `functions` on such an entry is a compile error. Generated steps and schemas are execution output, not a second editable source.
+
+**Version 2: one parameter contract.** A primary form's parameters are GENERATED, never written: one per input that has a profile or sub-form, and a sub-form input becomes an object parameter carrying every nested field (`card_info{card_number, card_expiration, …}`). An enum's values come from the input's choices, and each value's meaning from that choice's `description`; write the meaning there, once, next to its phrases. The input's own `description` is the rule read before the meanings (`rule: key: meaning; …`, plus `enumDescriptions`). A choice the form offers but extraction must never set carries `extract:false`; an input callers may set but extraction never fills carries `internal:true`. `parameters` holds only entry arguments: values a calling flow passes (`owner`, `question`) and values a caller may say up front that the form does not ask under that name. Authoring a name the form generates, at any depth, is a compile error. A FLOW step may pass only arguments its version 2 target declares.
+
+**Shared functions.** One reserved entry per flow set: `{"id":"<set>-functions","library":"functions","declarationVersion":2,"functions":{…}}`. Every version 2 flow can call them as `fn.name(…)`; a flow redefining a shared name, or a name declared twice, is a compile error. Put a function used by more than one flow there, never in copies.
 
 `compileFlowDeclarations(flows, {tools?, externalFlows?, validate?})` is the tooling accessor; validation defaults to true. External flow objects support child-schema linking; external IDs alone support reference checking. A runtime engine must receive the actual complete composed registry. Compilation/contract validation is not behavioral testing.
 
@@ -31,12 +35,12 @@ A versioned entry has `declarationVersion: 1`. JSFE lowers it at engine construc
 | `primary` | Whether intent detection may activate this entry. Ordinary flows default false; Provider defaults true unless overridden. |
 | `version` | Informational flow version; not a saved-session migration or hot-reload instruction. |
 | `scope` | `isolated` or `shared`. Prefer isolated reusable workers. Versioned builders default isolated. |
-| `parameters` | Activation/call inputs. Declare meaning precisely; never infer consent from extraction. |
+| `parameters` | Entry arguments: what a caller passes, or what may be said up front that no input asks. On a version 2 form, input parameters are generated and may not be written. Declare meaning precisely; never infer consent from extraction. |
 | `parameterInstructions` | Cross-parameter extraction guidance for stage two; not stage-one intent selection. |
 | `variables` | Initial local variables, preferably `{ "name": {"type":"string","value":""} }`. Object/array defaults are cloned per activation. |
 | `functions` | Named ordinary JavaScript bodies, described below. |
 | `contract` | Business summary, role, requirements, tool references and result metadata; builders supply normal protocol details. |
-| `wraps` | Ordinary thin wrapper over an installed shared flow, by ID/name. The shared target becomes non-primary; omitted wrapper description, parameters, prompts and primary flag inherit from it. |
+| `wraps` | Ordinary thin wrapper over an installed shared flow, by ID/name. The shared target becomes non-primary; omitted wrapper description, parameters, prompts and primary flag inherit from it (a primary wrapper needs no description of its own). |
 
 For an ordinary executable flow, `prompt` / `prompt_es` are short UI labels, not intent instructions. For a Form/Performer declaration put them inside `form`. Other supported language variants use the corresponding language suffix.
 
@@ -79,7 +83,7 @@ A function declaration is:
 
 `functions` maps safe JavaScript identifiers to `{parameters, body}`. Each parameter has `name`, optional descriptive `type` / `description`, and optional `rest:true` on a rest parameter. `body` is an array of ordinary JavaScript source lines. Optional function `name` preserves its own recursion name when the registry key is an alias. Argument type annotations are descriptive; business validation remains explicit.
 
-Use ordinary `if`, loops, local variables, arrays, objects, callbacks, `map`, `filter`, `reduce` and sibling function calls. This is not a restricted calculation DSL. Bodies are synchronous trusted developer code, compiled once for the loaded owner definition. Expressions call `fn.name(args)`; bodies can call siblings directly or through `fn`. Registered approved platform helpers are lexically available; callbacks may also be explicit parameters. Pass `cargo`, form state, request, result and other session values explicitly: functions do not capture a live session, caller variables or module imports. Function names are scoped to their declaring flow. `fn` is reserved; do not declare a variable, parameter, global or approved helper with that name.
+Use ordinary `if`, loops, local variables, arrays, objects, callbacks, `map`, `filter`, `reduce` and sibling function calls. This is not a restricted calculation DSL. Bodies are synchronous trusted developer code, compiled once for the loaded owner definition. Expressions call `fn.name(args)`; bodies can call siblings directly or through `fn`. Registered approved platform helpers are lexically available; callbacks may also be explicit parameters. Pass `cargo`, form state, request, result and other session values explicitly: functions do not capture a live session, caller variables or module imports. Function names are scoped to their declaring flow, plus the set's shared functions on version 2 flows. `fn` is reserved; do not declare a variable, parameter, global or approved helper with that name.
 
 Use functions for pure business calculations and guarded session projections. External effects must use registered tools/action workers. Do not hide transport calls, new model selection or action authorization in a helper.
 

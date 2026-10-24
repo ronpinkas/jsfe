@@ -818,9 +818,9 @@ export interface FlowFrame {
 // Engine is now just an alias for WorkflowEngine since we only have one implementation
 export type Engine = WorkflowEngine;
 
-/** Explicit JSON authoring input. The constructor lowers only version 1 declarations. */
+/** Explicit JSON authoring input. The constructor lowers version 1 and 2 declarations (2: one parameter contract, shared functions). */
 export interface FlowDeclaration {
-  declarationVersion: 1;
+  declarationVersion: 1 | 2;
   id: string;
   [key: string]: unknown;
 }
@@ -7650,7 +7650,7 @@ export class WorkflowEngine implements Engine {
     };
     // Generated workers retain the authoring source. A declared worker with no helpers
     // cannot accidentally borrow similarly named functions from an unrelated caller.
-    if ((definition?.metadata?.declaration as any)?.version === 1) return namespaceFor(definition);
+    if ((definition?.metadata?.declaration as any)?.version >= 1) return namespaceFor(definition);
     const parameters = new Set((definition?.parameters || []).map(parameter => parameter.name));
     for (const name of ['form', 'rf_form', 'owner', 'form_instance', 'parent_form']) {
       if (!parameters.has(name)) continue;
@@ -7667,7 +7667,7 @@ export class WorkflowEngine implements Engine {
     // Search this active stack only: paused and newer sessions never supply a scope.
     for (let index = stack.length - 2; index >= 0; index--) {
       const caller = this.flowsMenu.find(flow => flow.id === stack[index].flowId);
-      if ((caller?.metadata?.declaration as any)?.version === 1) return namespaceFor(caller);
+      if ((caller?.metadata?.declaration as any)?.version >= 1) return namespaceFor(caller);
     }
     return undefined;
   }
@@ -7822,7 +7822,7 @@ export class WorkflowEngine implements Engine {
         : {status:'unknown',outcome:{status:'unknown',reason:'durable_journal_unavailable'}}),
     };
     for (const flow of this.flowsMenu) {
-      if ((flow.metadata?.declaration as any)?.version !== 1 || !(flow as any).functions) continue;
+      if (!((flow.metadata?.declaration as any)?.version >= 1) || !(flow as any).functions) continue;
       const functions = compileNamedFunctions((flow as any).functions, {approvedFunctions:this.APPROVED_FUNCTIONS,label:flow.id});
       if (!functions) continue;
       if (Object.prototype.hasOwnProperty.call(flow.variables || {}, 'fn') || (flow.parameters || []).some(parameter => parameter.name === 'fn') || Object.prototype.hasOwnProperty.call(this.APPROVED_FUNCTIONS, 'fn') || Object.prototype.hasOwnProperty.call(globalVariables || {}, 'fn')) throw new Error('Named functions '+flow.id+': fn is a reserved evaluation namespace');

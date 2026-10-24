@@ -73,7 +73,7 @@ test('raw JSON performers require the same policy before compilation and do not 
 test('raw declarations preserve explicit requirements and reject unsupported declaration versions',()=>{
  const flow={declarationVersion:1,id:'json-worker',contract:{requires:['auditTrail']},steps:[]};
  rejected(flow,{},'auditTrail');assert.equal(assertFlowHostCapabilities([flow],{auditTrail:true}),true);
- assert.throws(()=>assertFlowHostCapabilities([{...flow,declarationVersion:2}],{auditTrail:true}),/unsupported declarationVersion/);
+ assert.throws(()=>assertFlowHostCapabilities([{...flow,declarationVersion:3}],{auditTrail:true}),/unsupported declarationVersion/);
  assert.throws(()=>assertFlowHostCapabilities([{...flow,contract:{requires:'auditTrail'}}],{auditTrail:true}),JSFEHostCapabilityError);
 });
 console.log(`Flow host capabilities: all ${checks} checks passed`);

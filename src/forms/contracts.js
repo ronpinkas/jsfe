@@ -181,7 +181,8 @@ export function validateFlowContracts(flows, tools=[], {externalFlows=[],require
       if(contract.projects)validateActionProjection(flow.variables?.[contract.projects]?.value,flow.id);
       const exhaustion=flow.variables?.form_on_exhausted?.value;
       if(exhaustion&&!ids.has(exhaustion))fail(flow.id,`unknown on_exhausted worker ${exhaustion}`);
-      if (flow.primary && !flow.description) fail(flow.id,'primary requires trigger description');
+      // A thin wrapper inherits the wrapped flow's description when the menu is installed (applyWraps).
+      if (flow.primary && !flow.description && !flow.wraps) fail(flow.id,'primary requires trigger description');
       const inputSpecs=contract.inputs || flow.variables?.inputs?.value;
       if (inputSpecs) {
          // Already resolved field specs are valid without their original preset registry.

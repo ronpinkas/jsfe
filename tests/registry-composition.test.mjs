@@ -79,7 +79,7 @@ await test('raw JSON functions and declaration differences retain conservative c
  const second=copy(first);second.functions.total.body=['return 0;'];
  assert.equal(composeRegistries({flows:[[first],[copy(first)]],tools:[]}).flows.length,1);
  assert.throws(()=>composeRegistries({flows:[[first],[second]],tools:[]}),/conflicting/);
- assert.throws(()=>composeRegistries({flows:[[{...first,declarationVersion:2}]],tools:[]}),/unsupported declarationVersion/);
+ assert.throws(()=>composeRegistries({flows:[[{...first,declarationVersion:3}]],tools:[]}),/unsupported declarationVersion/);
  assert.throws(()=>composeRegistries({flows:[[{declarationVersion:1,id:'incomplete'}]],tools:[]}),/needs steps/);
 });
 await test('raw call and before-only workers compose and actually execute through the engine',async()=>{

@@ -157,7 +157,7 @@ export function formInputChain(forms, id, cargo = {}) {
 export function enrichFormMatches(matches,chain,form,names=[],asked='') {
    const enrich=h=>{
       const spec=chain.find(c=>c.form===h.form&&c.name===h.name)||{};
-      return {...h,label:h.option_label||spec.label||h.name,label_es:h.option_label_es||spec.label_es||spec.label||h.name,
+      return {...h,label:h.option_label||spec.label||h.name,label_es:h.option_label_es||spec.label_es||spec.label||h.name,...(h.option_label?{option:true}:{}),
          validator:spec.validator||'',...(spec.response?{response:spec.response}:{}),after:spec.after||'',validate_always:spec.validate_always===true,...(spec.activation?{activation:spec.activation}:{}),pii:spec.pii===true,current:h.form===form&&names.includes(h.name),asked};
    };
    return {...matches,hits:matches.hits.map(enrich),ambiguous:matches.ambiguous.map(enrich),remaining:(matches.remaining||[]).map(group=>group.map(enrich))};

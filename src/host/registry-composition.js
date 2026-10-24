@@ -48,11 +48,11 @@ function compose(registries,kind) {
          if(!plain(entry))fail(kind+' entries must be declaration objects');
          const id=identity(entry.id,kind+' ID');
          const authored=kind==='flows'&&Object.hasOwn(entry,'declarationVersion');
-         if(authored&&entry.declarationVersion!==1)fail('flow '+id+' has unsupported declarationVersion');
+         if(authored&&entry.declarationVersion!==1&&entry.declarationVersion!==2)fail('flow '+id+' has unsupported declarationVersion');
          // Composition preserves authored JSON; the engine compiles only after
          // all selected sets are available. Mirror the builder's conventional alias.
          const name=identity(authored&&entry.name===undefined?id.split(/[-:]/).map(part=>part.charAt(0).toUpperCase()+part.slice(1)).join(''):entry.name,kind+' name');
-         if(kind==='flows'&&!Array.isArray(entry.steps)&&!(authored&&(entry.form||entry.provides||entry.performs||entry.call||Array.isArray(entry.before)&&entry.before.length)))fail('flow '+id+' needs steps or a declarative form/provider/performer/worker');
+         if(kind==='flows'&&!Array.isArray(entry.steps)&&!(authored&&(entry.library==='functions'||entry.form||entry.provides||entry.performs||entry.call||Array.isArray(entry.before)&&entry.before.length)))fail('flow '+id+' needs steps or a declarative form/provider/performer/worker');
          const bytes=JSON.stringify(canonical(entry));
          if(definitions.has(id)){if(definitions.get(id)!==bytes)fail('conflicting '+kind+' ID '+id);continue;}
          for(const alias of [id,name]){
