@@ -1,0 +1,38 @@
+import assert from 'node:assert/strict';
+import {WorkflowEngine} from '../dist/index.js';
+import {FLOWS,linkFormSchemas} from '../dist/forms/index.js';
+import {STANDARD_FUNCTIONS} from '../dist/helpers/index.js';
+// A ZIP code can carry several place names (Google's postcode_localities): the caller picks one. A part named at the
+// read-back ('the city is wrong') or picked after NO is the only part asked again.
+const comp=(city)=>[{long_name:city,short_name:city,types:['locality']},{long_name:'California',short_name:'CA',types:['administrative_area_level_1']}];
+const ZIP={'90023':{status:'OK',components:comp('Commerce'),localities:['Commerce','East Los Angeles','Los Angeles','Vernon']},'91352':{status:'OK',components:comp('Los Angeles'),localities:[]}};
+const warnings=[];const tools=['geocode-zip','geocode-street'].map(id=>({id,name:id,description:'Synthetic geocoder',parameters:{type:'object',properties:{components:{type:'string'},address:{type:'string'}}},implementation:{type:'local',function:id,retries:0}}));
+const engine=new WorkflowEngine({info(){},debug(){},error(){},warn:m=>warnings.push(String(m))},async()=>'{"flowName":"None"}',linkFormSchemas(FLOWS),tools,{...STANDARD_FUNCTIONS,'geocode-zip':async(a)=>ZIP[(String((a&&a.components)||a).match(/\d{5}/)||[])[0]]||null,'geocode-street':async()=>null},{},false,'en');engine.disableCommands();
+let session,checks=0;const say=async(content,start)=>{session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start:{flow:'collect-geocoded-address'}}:{})},JSON.parse(JSON.stringify(session)))));return String(session.response||'').replace(/\s+/g,' ');};
+const begin=async(language,voice)=>{session=engine.initSession('test',crypto.randomUUID(),language);session.cargo.voice=voice;await say('start',true);};
+const check=(ok,label)=>{assert.ok(ok,label);checks++;};
+await begin('es',true);
+let r=await say('90023');check(r==='¿Qué ciudad es: Commerce, East Los Angeles, Los Angeles o Vernon? Presione 1 para Commerce, 2 para East Los Angeles, 3 para Los Angeles, 4 para Vernon.',`a ZIP code with several names: the list (voice, es) [${r}]`);
+r=await say('3');check(/^Entendido, Los Angeles, CA\./.test(r),`its key picks the city [${r}]`);
+await say('100 Main Street');r=await say('2');check(/Apt 2, Los Angeles, CA 90023\. ¿Es correcta\?$/.test(r),`read back with the chosen city [${r}]`);
+await say('sí');check(session.cargo.address?.city==='Los Angeles, CA',`stored [${JSON.stringify(session.cargo.address)}]`);
+await begin('en',false);
+r=await say('90023');check(/Type the city or its number, 1 to 4\.$/.test(r),`text wording [${r}]`);
+await say('Los Angeles');await say('100 Main Street');await say('none');
+r=await say('the city is wrong');check(/^Which city is it: Commerce, East Los Angeles, Los Angeles or Vernon\?/.test(r),`a part named without a value: only that part is asked [${r}]`);
+r=await say('2');check(/100 Main Street, East Los Angeles, CA 90023\. Is that correct\?$/.test(r),`and read back again, street kept [${r}]`);
+await begin('es',false);
+await say('90023');await say('Commerce');await say('10 Main Street');await say('ninguno');
+r=await say('la ciudad es Los Ángeles');check(/10 Main Street, Los Angeles, CA 90023\. ¿Es correcta\?$/.test(r),`a part corrected with its value [${r}]`);
+await begin('es',false);
+r=await say('91352');check(/^Entendido, Los Angeles, CA\./.test(r),`one name: not asked [${r}]`);
+await say('10 Main Street');await say('ninguno');
+r=await say('la ciudad no');check(r==='¿Qué ciudad es?',`one name, named wrong: asked plainly [${r}]`);
+r=await say('Sun Valley');check(/10 Main Street, Sun Valley, CA 91352\./.test(r),`the caller's own city is taken [${r}]`);
+await begin('en',false);
+await say('90023');await say('1');await say('10 Main Street');await say('none');
+r=await say('no');check(/^Which part is wrong: 1 the zip code, 2 the city, 3 the street, or 4 the apartment\? Or say ALL to start over\.$/.test(r),`NO asks which part [${r}]`);
+r=await say('3');check(/^Got it, Commerce, CA\. What is the street address\?$/.test(r),`only the street is asked again [${r}]`);
+await say('20 Oak Street');r=await say('none');check(/20 Oak Street, Commerce, CA 90023/.test(r),`ZIP code and city kept [${r}]`);
+assert.deepEqual(warnings,[]);checks++;
+console.log(`Address city: all ${checks} checks passed`);

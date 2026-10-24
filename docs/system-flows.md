@@ -1723,7 +1723,7 @@ Reference host: a refusal also sets `container.otpFailure` to `missing`, `expire
 
 The parameters use the JSON Schema form (`type: object`, `additionalProperties: false`).
 
-**Returns** (no `returns` schema) an object, in the reference host: `status` (Google's status, e.g. `OK`; `''` when absent), `components` (`results[0].address_components`; `[]` when absent), `types`, `location_type`, `partial_match`, `formatted_address`, `lat` and `lon`, as for geocode-street. An HTTP error from Google throws, so `onFail` runs.
+**Returns** (no `returns` schema) an object, in the reference host: `status` (Google's status, e.g. `OK`; `''` when absent), `components` (`results[0].address_components`; `[]` when absent), `types`, `location_type`, `partial_match`, `formatted_address`, `lat` and `lon`, as for geocode-street. An HTTP error from Google throws, so `onFail` runs. `localities` (`results[0].postcode_localities`; `[]` when absent): every place name the ZIP code carries, which the address form offers as a list when there is more than one.
 
 ### geocode-street
 **Name**: Geocode Street - looks up a spoken or typed street address inside a known US zip code via Google Geocoding, so address collection can replace what the caller said with Google's normalized street when there is a precise match. Called by [ask-address](#askaddress).  

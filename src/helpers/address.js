@@ -12,7 +12,14 @@ export function zipLocation(result) {
    const components=result?.components || result?.results?.[0]?.address_components || [];
    const part=(kind,short=false)=>{const row=components.find(c=>(c.types || []).includes(kind));return row ? String(short?row.short_name || row.long_name:row.long_name || row.short_name) : '';};
    const city=part('locality')||part('postal_town')||part('sublocality'),state=part('administrative_area_level_1',true);
-   return result?.status==='OK'&&city&&state?{city,state,line:city+', '+state}:null;
+   // A ZIP code can belong to several places (90023: Commerce, East Los Angeles, Los Angeles, Vernon); each is a name its
+   // mail may carry, so the caller picks one. Google lists them as postcode_localities; at most 7 (8 is a reserved key).
+   const listed=[].concat(result?.localities || result?.results?.[0]?.postcode_localities || []).map(String).filter(Boolean);
+   const cities=listed.length>1?[...new Set(listed)].slice(0,7):[];
+   return result?.status==='OK'&&city&&state?{city,state,line:city+', '+state,cities}:null;
+}
+export function cityChoices(location) {
+   return (location?.cities || []).map((name,index)=>({key:name,keys:[String(index+1)],phrases:[name],label:name,neutral:true}));
 }
 export function streetLocation(result,said,zip) {
    const row=result?.results?.[0] || result || {},components=row.components || row.address_components || [];
@@ -23,6 +30,6 @@ export function streetLocation(result,said,zip) {
 }
 export function resolvedAddress(values,data) {
    const unit=/^(none|no|ninguno|ninguna|sin|no hay)$/i.test(String(values.unit || ''))?'':String(values.unit || '').replace(/^(apt\.?|unit|#)\s*/i,'');
-   const street=data.street?.street || values.street || '',city=data.location?.line || values.city_state || '';
+   const street=data.street?.street || values.street || '',city=values.city && data.location?.state ? values.city+', '+data.location.state : data.location?.line || values.city_state || '';
    return {street,unit,city,zip:String(values.zip || ''),line:street+(unit?' Apt '+unit:'')+', '+city+' '+values.zip,verified:data.street?.verified===true,said:data.street?.said || values.street || ''};
 }
