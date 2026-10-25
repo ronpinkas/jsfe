@@ -150,6 +150,9 @@ eq(names(matchInputs('88 91 7112', [...code, method], { form: 'otp', names: ['co
 eq(matchInputs('88 91 7112', [...code, method], { form: 'otp', names: ['code', 'raw'] }).refused.map((x) => x.rule), ['fragment'], 'rule 3: the refusal is recorded');
 eq(names(matchInputs('4111111111111111', [...code, pan], { form: 'otp', names: ['code', 'raw'] })), ['card_number=4111111111111111'], 'rule 3: a whole card number at the code question is taken out of order');
 eq(names(matchInputs('my zip is 90012 and the card 4111111111111111', [C({ form: 'card', name: 'card_zip', profile: { kind: 'digits', min: 5, max: 5 } }), pan], { form: 'card', name: 'card_number' })), ['card_number=4111111111111111', 'card_zip=90012'], 'rule 5: two separate parts fill two fields');
+eq(matchInputs('2', [route, payAmt], { form: 'pay', name: 'route' }).refused, undefined, 'a key the current question took records no refused amount');
+eq(matchInputs('799604', [...code, payAmt], { form: 'otp', names: ['code', 'raw'] }).refused, undefined, 'a code the current question took records no refused amount');
+eq(matchInputs('8528777', [route, payAmt], { form: 'pay', name: 'route' }).refused.map((x) => x.rule), ['bare_amount_out_of_order'], 'a bare number nothing current took is a recorded refusal');
 const trace = formAcceptanceTrace(null, matchInputs('88 91 7112', [...code, method], { form: 'otp:3', names: ['code', 'raw'] }));
 eq(trace, { filled: [], refused: [{ form: 'pay', name: 'method', rule: 'fragment' }] }, 'the trace records the refusal by field and rule, no value');
 eq(formAcceptanceTrace(trace, matchInputs('50 dollars', [route, payAmt], { form: 'pay', name: 'route' })).filled, [{ form: 'pay', name: 'amount', rule: 'out_of_order' }], 'the trace appends an out-of-order fill');

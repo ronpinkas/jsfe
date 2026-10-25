@@ -269,7 +269,8 @@ export function matchInputs(answer, candidates, current, choiceKey) {
       // Rule 2: a confirmation is answered only when asked, firm by CONFIRM_WORDS, soft by the wider YES vocabulary.
       const confirmation = ['firm', 'soft'].includes(c.confirmation) ? c.confirmation : '';
       if (confirmation && !isCur(c)) {
-         if (readInputProfile(c.profile, raw, false)) refused.push({ form: c.form, name: c.name, rule: 'confirmation_out_of_order' });
+         const would = readInputProfile(c.profile, raw, false);
+         if (would) refused.push({ form: c.form, name: c.name, rule: 'confirmation_out_of_order', spans: (would.alternatives || [would]).flatMap((x) => x.spans || []) });
          continue;
       } else {
          // asked, or not a confirmation
@@ -316,10 +317,10 @@ export function matchInputs(answer, candidates, current, choiceKey) {
          else { /* the current input */ }
          return true;
       } else if (bare(reading) && fieldOf(reading).profile.kind === 'amount') {
-         refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'bare_amount_out_of_order' });
+         refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'bare_amount_out_of_order', spans: reading.spans });
          return false;
       } else if (/\d/.test(spanText(reading)) && !wholeRuns(reading)) {
-         refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'fragment' });
+         refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'fragment', spans: reading.spans });
          return false;
       } else {
          reading.rule = 'out_of_order';
@@ -409,11 +410,16 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    // refused with it, never kept by order.
    const clash = (a, b) => (a.spans || []).some(([s, e]) => (b.spans || []).some(([t, u]) => s < u && t < e));
    const kept = taken.filter((a) => !taken.some((b) => b !== a && clash(a, b)));
-   for (const r of taken.filter((a) => !kept.includes(a))) refused.push({ form: r.form, name: r.name, value: r.value, rule: 'one_part_two_fields' });
+   for (const r of taken.filter((a) => !kept.includes(a))) refused.push({ form: r.form, name: r.name, value: r.value, rule: 'one_part_two_fields', spans: r.spans });
+   // A refusal is recorded only when it stopped something: a reading whose part of the answer a structured in-order
+   // reading (a key, the code, the amount asked) also claimed would have lost anyway ("2" at PAY or LINK is the key, not
+   // an amount refused). A free-text fallback claims everything and does not count.
+   const claimed = readings.filter((r) => inOrder(r) && !r.fallback).flatMap((r) => r.spans || []);
+   const stopped = refused.filter((x) => !(x.spans || []).some(([s, e]) => claimed.some(([t, u]) => s < u && t < e))).map(({ spans, ...x }) => x);
    // Several fields from one answer: those filled out of order are a compound answer.
    if (kept.length > 1) kept.forEach((r) => { if (r.rule === 'out_of_order') r.rule = 'compound'; });
    hits.push(...kept.map(({ rule, ...r }) => strip(r)));
    // Why each field was filled other than as the current answer, kept beside the hits so their shape never changes.
    const decisions = kept.filter((r) => r.rule).map((r) => ({ form: r.form, name: r.name, rule: r.rule }));
-   return { hits, ambiguous, ...(remaining.length ? {remaining} : {}), ...(refused.length ? {refused} : {}), ...(decisions.length ? {decisions} : {}) };
+   return { hits, ambiguous, ...(remaining.length ? {remaining} : {}), ...(stopped.length ? {refused: stopped} : {}), ...(decisions.length ? {decisions} : {}) };
 }

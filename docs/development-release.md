@@ -1,3 +1,10 @@
+## 1.10.1: refusals that stopped something
+
+`matchInputs` lists a refused reading only when it stopped something: one whose part of the answer a structured in-order
+reading (a key, the code, the amount asked) also claimed would have lost anyway, so "2" at a menu is its key, not a refused
+amount, and the host's `form_acceptance` counts real leaks. A free-text fallback does not count as a claim. The
+standard-functions test recognizes named function expressions and arrow functions a flow defines for itself.
+
 ## 1.10.0: context-aware acceptance
 
 An answer given out of order fills another question's field only where it is relevant there (reference §5): a confirmation

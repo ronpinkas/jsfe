@@ -38,12 +38,15 @@ const text = fs.readFileSync(new URL('../flows/system.flows.json', import.meta.u
 const exprs = [];
 const walk = (o, key) => { if (Array.isArray(o)) { o.forEach((x) => walk(x, key)); } else if (o && typeof o === 'object') { Object.entries(o).forEach(([k, v]) => { if (k.startsWith('condition:')) { exprs.push(k); } else { /* a field */ } if (k !== 'description') { walk(v, k); } else { /* prose */ } }); } else if (typeof o === 'string' && ['value', 'value_es', 'asSpoken', 'pii'].includes(key)) { exprs.push(o); } else { /* not an expression */ } };
 walk(JSON.parse(text).map((fl) => fl.steps));
-const called = [...new Set(exprs.flatMap((e) => [...e.matchAll(/(?<![.\w$])([a-z][A-Za-z0-9]+)\(/g)].map((m) => m[1])))];
+// a name followed by '(?' is a regular expression group (have(?:…)), not a call
+const called = [...new Set(exprs.flatMap((e) => [...e.matchAll(/(?<![.\w$])([a-z][A-Za-z0-9]+)\((?!\?)/g)].map((m) => m[1])))];
 const known = new Set([...Object.keys(H.STANDARD_FUNCTIONS), ...host]);
 const jsNames = new Set(['function', 'if', 'test', 'replace', 'split', 'join', 'filter', 'map', 'indexOf', 'slice', 'trim', 'toLowerCase', 'toUpperCase', 'parseInt', 'parseFloat', 'isNaN', 'some', 'every', 'forEach', 'push', 'concat', 'match', 'exec', 'keys', 'assign', 'max', 'min', 'round', 'floor', 'abs', 'now', 'charAt', 'substring', 'lastIndexOf', 'startsWith', 'endsWith', 'includes', 'reduce', 'find', 'toFixed', 'padStart', 'sort', 'reverse', 'from', 'isArray', 'stringify', 'parse', 'getTime', 'toString', 'repeat', 'pop', 'shift', 'splice', 'values', 'entries', 'normalize', 'search', 'getDate', 'getMonth', 'getFullYear', 'getHours', 'getDay', 'toLocaleString', 'trunc', 'ceil', 'encodeURIComponent', 'decodeURIComponent', 'fromCharCode', 'charCodeAt', 'flat', 'findIndex', 'toISOString', 'setDate', 'setMonth', 'getMinutes', 'catch', 'then', 'apply', 'call', 'bind', 'fn', 'function', 'while', 'for', 'switch', 'return', 'typeof', 'new', 'take', 'date', 'd', 'n', 'p', 'k', 'f', 'g', 'add', 'set', 'has', 'get', 'hasOwnProperty']);
 const unknown = called.filter((n) => !known.has(n) && !jsNames.has(n) && !/^[a-z]$/.test(n));
-// names a flow defines for itself inside an expression (var x = function …) are not functions it needs from a host
-const local = new Set([...text.matchAll(/var ([a-zA-Z0-9_]+) = function/g)].map((m) => m[1]));
+// names a flow defines for itself inside an expression (var x = function …, or a named function expression as
+// expression() writes them: (function otpPrompt(…){…})(cargo), or an arrow assigned to a name) are not functions it
+// needs from a host
+const local = new Set([...text.matchAll(/(?:var|let|const)\s+([a-zA-Z0-9_]+)\s*=\s*(?:function|\([^)]*\)\s*=>|[a-zA-Z0-9_]+\s*=>)|function ([a-zA-Z0-9_]+)\(|[,;{(]\s*([a-zA-Z0-9_]+)\s*=\s*(?:function|\([^)]*\)\s*=>|[a-zA-Z0-9_]+\s*=>)/g)].map((m) => m[1] || m[2] || m[3]));
 eq(unknown.filter((n) => !local.has(n)), [], 'every function the system flows call is standard or a known host function');
 
 console.log(`helpers-standard: ${checks} checks passed`);
