@@ -1,3 +1,9 @@
+## 1.10.2: "account number" at the contact question
+
+At the shared contact question (`get-cell-or-email`), a caller who names the account number without giving it yet ("número
+de cuenta", "account number"; only where the tenant takes account numbers) hears the question again, acknowledged ("Claro,
+su número de cuenta."), instead of the failure menu, so the number keyed next is read as the account number.
+
 ## 1.10.1: refusals that stopped something
 
 `matchInputs` lists a refused reading only when it stopped something: one whose part of the answer a structured in-order
