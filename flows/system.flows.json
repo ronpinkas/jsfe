@@ -8666,7 +8666,7 @@
         "id": "vce_check",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(function (v) { var m = /^(0?[1-9]|1[0-2])\\D*(?:20)?(\\d{2})$/.exec(String(v).replace(/\\s+/g, '').replace(/de/gi, '')) || /^(\\d{2})(\\d{2})$/.exec(String(v).replace(/\\D/g, '')); var mm = m ? ('0' + m[1]).slice(-2) : ''; var yy = m ? m[2] : ''; cargo.inputCheck = m && validateExpiration(mm, yy) ? { ok: true, value: mm + yy } : { ok: false, message: \"That expiration date doesn't look right.\", message_es: 'Esa fecha de vencimiento no parece correcta.' }; return true; })(value)"
+        "value": "(function (v) { var m = /^(0?[1-9]|1[0-2])\\D*(?:20)?(\\d{2})$/.exec(String(v).replace(/\\s+/g, '').replace(/de/gi, '')) || /^(\\d{2})(\\d{2})$/.exec(String(v).replace(/\\D/g, '')) || /^(0[1-9])0(\\d{2})$/.exec(String(v).replace(/\\D/g, '')); var mm = m ? ('0' + m[1]).slice(-2) : ''; var yy = m ? m[2] : ''; cargo.inputCheck = m && validateExpiration(mm, yy) ? { ok: true, value: mm + yy } : { ok: false, message: \"That expiration date doesn't look right.\", message_es: 'Esa fecha de vencimiento no parece correcta.' }; return true; })(value)"
       }
     ],
     "variables": {
@@ -10279,7 +10279,7 @@
             "label_es": "fecha de vencimiento",
             "profile": {
               "kind": "pattern",
-              "regex": "\\b(0?[1-9]|1[0-2])\\s*(?:/|-|\\s|de)?\\s*(?:20)?(\\d{2})\\b"
+              "regex": "\\b(0?[1-9]|1[0-2])\\s*(?:/|-|\\s|de)?\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b"
             },
             "digits": {
               "min": 3,
@@ -11368,7 +11368,7 @@
             "label_es": "fecha de vencimiento",
             "profile": {
               "kind": "pattern",
-              "regex": "\\b(0?[1-9]|1[0-2])\\s*(?:/|-|\\s|de)?\\s*(?:20)?(\\d{2})\\b"
+              "regex": "\\b(0?[1-9]|1[0-2])\\s*(?:/|-|\\s|de)?\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b"
             },
             "digits": {
               "min": 3,
@@ -12616,7 +12616,7 @@
             "label_es": "fecha de vencimiento",
             "profile": {
               "kind": "pattern",
-              "regex": "\\b(0?[1-9]|1[0-2])\\s*(?:/|-|\\s|de)?\\s*(?:20)?(\\d{2})\\b"
+              "regex": "\\b(0?[1-9]|1[0-2])\\s*(?:/|-|\\s|de)?\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b"
             },
             "digits": {
               "min": 3,
