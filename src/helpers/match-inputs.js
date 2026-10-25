@@ -316,6 +316,10 @@ export function matchInputs(answer, candidates, current, choiceKey) {
          if (!reading.current) reading.rule = 'invited';   // the current input is the default: no rule recorded
          else { /* the current input */ }
          return true;
+      } else if (bare(reading) && fieldOf(reading).ready === false) {
+         // a bare number for a field whose prerequisites are not filled yet (the sub-account before the account is known)
+         refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'prerequisite_unmet', spans: reading.spans });
+         return false;
       } else if (bare(reading) && fieldOf(reading).profile.kind === 'amount') {
          refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'bare_amount_out_of_order', spans: reading.spans });
          return false;

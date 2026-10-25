@@ -74,7 +74,8 @@ export const FIELD_PRESETS = {
       question: 'Please say or enter your card number.', question_es: 'Por favor diga o ingrese el número de su tarjeta.',
       retry: 'Please say or enter the full card number.', retry_es: 'Por favor diga o ingrese el número completo de su tarjeta.' },
    card_expiration: { label: 'expiration date', label_es: 'fecha de vencimiento',
-      profile: { kind: 'pattern', regex: '\\b(0?[1-9]|1[0-2])\\s*(?:/|-|\\s|de)?\\s*(?:20)?(\\d{2})\\b' }, digits: { min: 3, max: 6 },
+      // MM0YY: a zero said between month and year ("020 28", prod 2026-10-25 14:10, was taken for the billing ZIP)
+      profile: { kind: 'pattern', regex: '\\b(0?[1-9]|1[0-2])\\s*(?:/|-|\\s|de)?\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b' }, digits: { min: 3, max: 6 },
       validator: 'validate-card-expiration',
       question: 'What is the expiration date, month and year?', question_es: '¿Cuál es la fecha de vencimiento, mes y año?',
       retry: 'Please say or enter the expiration as four digits, month then year, like 0 9 2 8.', retry_es: 'Por favor diga o ingrese el vencimiento en cuatro dígitos, mes y año, por ejemplo 0 9 2 8.' },
@@ -543,7 +544,7 @@ const validators = [
    { id: 'validate-card-expiration', name: 'ValidateCardExpiration', version: '1.0.0', scope: 'isolated',
       description: 'Validator: month and year, a real month, not expired (validateExpiration). Normalizes to MMYY. Params: input, value.',
       parameters: [{ name: 'input', type: 'string', description: 'input name' }, { name: 'value', type: 'string', description: 'the reading' }],
-      steps: [SIDE('vce_check', "(function (v) { var m = /^(0?[1-9]|1[0-2])\\D*(?:20)?(\\d{2})$/.exec(String(v).replace(/\\s+/g, '').replace(/de/gi, '')) || /^(\\d{2})(\\d{2})$/.exec(String(v).replace(/\\D/g, '')); var mm = m ? ('0' + m[1]).slice(-2) : ''; var yy = m ? m[2] : ''; cargo.inputCheck = m && validateExpiration(mm, yy) ? { ok: true, value: mm + yy } : { ok: false, message: \"That expiration date doesn't look right.\", message_es: 'Esa fecha de vencimiento no parece correcta.' }; return true; })(value)")] },
+      steps: [SIDE('vce_check', "(function (v) { var m = /^(0?[1-9]|1[0-2])\\D*(?:20)?(\\d{2})$/.exec(String(v).replace(/\\s+/g, '').replace(/de/gi, '')) || /^(\\d{2})(\\d{2})$/.exec(String(v).replace(/\\D/g, '')) || /^(0[1-9])0(\\d{2})$/.exec(String(v).replace(/\\D/g, '')); var mm = m ? ('0' + m[1]).slice(-2) : ''; var yy = m ? m[2] : ''; cargo.inputCheck = m && validateExpiration(mm, yy) ? { ok: true, value: mm + yy } : { ok: false, message: \"That expiration date doesn't look right.\", message_es: 'Esa fecha de vencimiento no parece correcta.' }; return true; })(value)")] },
 ];
 
 // ── field collectors and sub-forms ──────────────────────────────────────────────────────────────────────────────────

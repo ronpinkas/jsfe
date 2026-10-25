@@ -1,3 +1,10 @@
+## 1.10.3: a field is ready before an unnamed answer fills it
+
+A bare number never fills, out of order, a field whose `depends_on` prerequisites are not filled yet (`formInputChain`
+marks each candidate `ready`; refusal rule `prerequisite_unmet`): an account number keyed in pieces is no longer taken for
+the payment's sub-account before the account is known. A named answer still waits as a pending value. The shared card
+expiration also reads a zero said between month and year ("020 28" as 02/28).
+
 ## 1.10.2: "account number" at the contact question
 
 At the shared contact question (`get-cell-or-email`), a caller who names the account number without giving it yet ("número

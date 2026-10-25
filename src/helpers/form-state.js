@@ -141,7 +141,10 @@ export function formInputChain(forms, id, cargo = {}) {
             if(formCondition(input,state.values,cargo,state)!==false&&!input.form&&input.profile)out.push({...input,
                ...(prefix?{label:`${prefix}: ${input.label || input.name}`,label_es:`${prefixEs || prefix}: ${input.label_es || input.label || input.name}`} : {}),
                ...(input.choices_from&&Array.isArray(state.data?.[input.choices_from])?{profile:{...input.profile,choices:state.data[input.choices_from]}}:{}),
-               ...(activation?{activation}:{}),form:target,scope,...(spec.any_of?{group:spec.name,exclusive:spec.exclusive===true}:{}),value:state.values[input.name]});
+               ...(activation?{activation}:{}),form:target,scope,...(spec.any_of?{group:spec.name,exclusive:spec.exclusive===true}:{}),value:state.values[input.name],
+               // its declared prerequisites hold accepted values: a field that cannot be validated yet is not a context for
+               // an unnamed out-of-order answer (contract, reference §5)
+               ready:(input.depends_on||spec.depends_on||[]).every(name=>hasFormValue(state.values[name]))});
          }
       }
    };

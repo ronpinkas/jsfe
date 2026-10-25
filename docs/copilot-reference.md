@@ -216,7 +216,9 @@ Rules, in order:
    invites. A match is that answer.
 2. **A confirmation is answered only when it is asked.** Out of order it never makes sense, so no words, YES, NO or the
    option's own phrases, fill a confirmation that is not the current question.
-3. **Out of order requires the whole signature.** A digit field takes a number only when the whole number fits its
+3. **Out of order requires a ready field and the whole signature.** A bare number never fills, out of order, a field whose
+   `depends_on` prerequisites are not filled yet (the sub-account before the account is known); a named answer ("50
+   dollars") still waits as a pending value. **The whole signature:** A digit field takes a number only when the whole number fits its
    length; a pattern only when it covers the whole number; a choice only its declared or prepared values. A fragment of
    a longer number (the last four of "88 91 7112") fills nothing.
 4. **A bare number** (no money mark, no word naming a field) is an amount only at a question that is, invites or is
