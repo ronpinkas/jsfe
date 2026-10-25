@@ -977,10 +977,6 @@
       "container": {
         "type": "object",
         "description": "Session container with OTP verification status"
-      },
-      "validateIdentifier": {
-        "type": "boolean",
-        "description": "Whether to validate email/phone identifier"
       }
     },
     "required": [
