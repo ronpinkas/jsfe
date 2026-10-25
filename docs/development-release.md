@@ -1,3 +1,14 @@
+## 1.10.0: context-aware acceptance
+
+An answer given out of order fills another question's field only where it is relevant there (reference §5): a confirmation
+(`confirmation:"firm"` or `"soft"` on a choice keyed yes and no) is answered only when asked, firm by the confirm words and
+soft by the wider YES vocabulary; a bare number is an amount only at a question that is, invites (`invites`, also on a
+read-back's `confirm`) or is paired (`confirm_against`) with one; a number read out of order must be whole, never the
+fragment of a longer one; a profile may declare a narrower out-of-order signature (`out_of_order`); and one part of an
+answer never fills two fields. `matchInputs` lists `refused` readings and the `decisions` behind out-of-order fills, and
+the form workers append them to `cargo.formAcceptance` (`formAcceptanceTrace`, names and rules only) for the host to log.
+At the code question, "Otra", "Número de cuenta" and "Account number" mean ANOTHER ACCOUNT.
+
 ## 1.9.4: card groups start like a card
 
 `accumulate_first` (a regular expression) limits accumulation to a first group that matches it; the `card_number` preset

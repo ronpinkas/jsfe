@@ -194,6 +194,44 @@ Matching depends on policy. With `exact:true`, a phrase must form the whole norm
 
 JSFE resolves valid current-field evidence first, then a unique match in the nearest owning form, then ancestors; genuine competing claims are clarified. Independent spans can fill independent fields. Typed evidence outranks arbitrary text. `confirm_against` deliberately retains ambiguity. A child result uses the same acceptance/invalidation transition as a leaf. Pending dependent candidates wait for valid prerequisites; invalid data cannot authorize an action. Narrative mode does not turn fragments or bare structured identifiers into business explanations.
 
+### Context-aware acceptance
+
+A caller answers out of order, often several fields at once. That ability is kept, and every out-of-order answer is
+validated against its context: an answer fills another question's field only where it is relevant there. These are the
+standard rules for every form; the declarations below tell the engine what each field is.
+
+Declarations:
+
+| Declaration | Meaning |
+| --- | --- |
+| input `confirmation:"firm"` / `"soft"` | A yes/no decision. Firm (consent to a charge, a cancellation, storing a card, filing): YES only by `CONFIRM_WORDS` or the option's own exact phrases. Soft (an offer): the wider YES vocabulary. NO by the NO vocabulary or the option's own phrases. |
+| input `invites:[names]`, `form.confirm.invites` | The other inputs this question (or the read-back) also asks for ("NEW CARD, LINK, or a different amount" invites `amount`), in its form or an enclosing one; read as in order while it is asked. |
+| profile `out_of_order:{…}` | A narrower signature for out-of-order reading: the payment card takes a bare last four when asked, but out of order only a card word or "ending in 4242". |
+| input `choices_from` | The choice's values come from prepared data (the caller's saved cards), so its signature is those values. |
+| `form.compound:"worker"` | A parser that reads several of the form's fields from one answer (an address said in one breath). |
+
+Rules, in order:
+
+1. **The current question first.** The whole answer is read against the current input's signature and the inputs it
+   invites. A match is that answer.
+2. **A confirmation is answered only when it is asked.** Out of order it never makes sense, so no words, YES, NO or the
+   option's own phrases, fill a confirmation that is not the current question.
+3. **Out of order requires the whole signature.** A digit field takes a number only when the whole number fits its
+   length; a pattern only when it covers the whole number; a choice only its declared or prepared values. A fragment of
+   a longer number (the last four of "88 91 7112") fills nothing.
+4. **A bare number** (no money mark, no word naming a field) is an amount only at a question that is, invites or is
+   declared `confirm_against` an amount. A single digit the question offers as a key is that key; one it does not offer reaches the invited amount,
+   whose validation decides (Curacao asks for it in dollars). A bare number that does not fit the current question is
+   read out of order under rule 3.
+5. **Compound answers.** Several fields fill from one answer only through the form's compound parser, or when every
+   part of the answer fits exactly one field. **One part of an answer never fills two fields**; the engine refuses that
+   reading and records the refusal.
+6. **Scope.** Across forms the nearest form wins; two fields of the same form that fit the same part are asked about,
+   never ranked.
+
+Every result records why: `decisions` lists each field filled other than as the current answer with its rule (`invited`, `out_of_order`, `compound`), and every
+refused reading is listed with its rule, so hosts can log what was filled out of order and what was refused.
+
 ## 6. Validation, reentry and contextual uncertainty
 
 A field validator receives `{form,input,value,values,reading}` and writes `cargo.inputCheck={ok:true,value?}` or `{ok:false,message?,message_es?}`. Missing/malformed results fail closed. Activation values and conversational answers use the same validation path. `value` may normalize a valid input; never return success for a refusal to satisfy an effect's prerequisites.

@@ -1,4 +1,5 @@
-/** A pending ancestor input proposal owns consent before any nested recovery menu can act. */
+/** A pending ancestor input proposal owns consent before any nested recovery menu can act. The menu invites the
+ * owner's amount: a bare number is an amount only at a question that asks for one (owner 2026-10-25). */
 import assert from 'node:assert/strict';
 import {WorkflowEngine} from '../dist/index.js';
 import {FLOWS,defineForm,linkFormSchemas} from '../dist/forms/index.js';
@@ -8,7 +9,7 @@ const F=(id,value,parameters)=>({id,type:'FLOW',value,parameters});
 const quiet={info(){},debug(){},warn(){},error(){}};
 let checks=0;
 for(const depth of [1,2])for(const answer of ['2','no','yes']){
- const inner=defineForm({id:'inner-recovery',name:'InnerRecovery',description:'An unrelated method menu',contract:{summary:'Collect a deliberate recovery choice'},inputs:[{name:'next',profile:{kind:'choice',choices:[{key:'link',words:['2','link'],exact:true},{key:'done',words:['3','done'],exact:true}]},question:'Press2 for LINK or3 for DONE.'}],after:[S('send-link',"(cargo.links=Number(cargo.links||0)+(cargo.forms[form_instance].values.next==='link'?1:0),true)")]});
+ const inner=defineForm({id:'inner-recovery',name:'InnerRecovery',description:'An unrelated method menu',contract:{summary:'Collect a deliberate recovery choice'},inputs:[{name:'next',invites:['amount'],profile:{kind:'choice',choices:[{key:'link',words:['2','link'],exact:true},{key:'done',words:['3','done'],exact:true}]},question:'Press2 for LINK or3 for DONE, or say an amount.'}],after:[S('send-link',"(cargo.links=Number(cargo.links||0)+(cargo.forms[form_instance].values.next==='link'?1:0),true)")]});
  const outer=defineForm({id:'outer-recovery',name:'OuterRecovery',description:'A recovery context owning a nested wrapper',contract:{summary:'Own a recovery wrapper'},resume_on_parent_change:true,inputs:[],before:[F('nested-menu','inner-recovery',{parent_form:'{{form_instance}}'})]});
  const amount=defineForm({id:'payment-owner',name:'PaymentOwner',description:'A synthetic confirmed payment',contract:{summary:'Collect and confirm the exact synthetic payment'},inputs:[{name:'amount',profile:{kind:'amount'},validator:'decimal-amount',question:'What amount?'}],confirm:{question:'CHARGE THIS AMOUNT?'},before:[{id:'open-recovery-once',type:'CASE',branches:{'condition: !form_internal_resume':F('open-recovery',depth===2?'outer-recovery':'inner-recovery',{parent_form:'{{form_instance}}'}),default:S('already-recovered','true')}}],after:[S('effect',"(cargo.charges=Number(cargo.charges||0)+1,true)")]});
  if(depth===1)inner.steps.find(s=>s.id==='inner-recovery_run').parameters.rf_resume_parent=true;

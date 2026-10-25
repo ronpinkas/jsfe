@@ -1,7 +1,7 @@
 // jsfe/helpers match-inputs.js — which of a form's inputs an answer fills (the FORM convention's collect-input).
 //   node tests/helpers-match-inputs.test.mjs
 import assert from 'node:assert/strict';
-import { matchInputs } from '../dist/helpers/match-inputs.js';
+import { matchInputs, formAcceptanceTrace } from '../dist/helpers/match-inputs.js';
 
 let checks = 0;
 const reasonFree = () => ({ form: 'return', name: 'reason', profile: { kind: 'text' } });
@@ -118,4 +118,40 @@ let answer=readFormAnswer('what is my balance?', [reason], {form:'return',name:'
 eq(answer.hits,[],'question punctuation is not a text answer');eq(answer.questions,['balance'],'the question remains requested');
 answer=readFormAnswer('what is my balance? and 123456',[{form:'return',name:'code',profile:{kind:'digits',min:6,max:6}}],{form:'return',name:'code'},'',questionCatalog);
 eq(answer.hits.map(h=>h.value),['123456'],'an independent OTP clause remains collected');
+
+// Context-aware acceptance, the standard rules for every form (owner 2026-10-25; every case a prod turn of 2026-10-24).
+const C = (input) => input;
+const route = C({ form: 'pay', name: 'route', profile: { kind: 'choice', choices: [{ key: 'pay', phrases: ['pay', 'pagar'], keys: ['1'] }, { key: 'link', phrases: ['link', 'enlace'], keys: ['2'] }] } });
+const saveCard = C({ form: 'pay', name: 'save_card', confirmation: 'firm', profile: { kind: 'choice', choices: [{ key: 'yes', phrases: ['save', 'guardar'], exact: true }, { key: 'no', phrases: ['no guardar'] }] } });
+const payAmt = C({ form: 'pay', name: 'amount', profile: { kind: 'amount' } });
+const method = C({ form: 'pay', name: 'method', profile: { kind: 'pattern', regex: '\\b(?:visa|new|\\d{4})\\b' } });
+const pan = C({ form: 'card', name: 'card_number', profile: { kind: 'digits', min: 13, max: 19 } });
+const code = [C({ form: 'otp', name: 'code', profile: { kind: 'digits', min: 6, max: 6 } }), C({ form: 'otp', name: 'raw', profile: { kind: 'text' } })];
+for (const said of ['sí', 'claro', 'Yes.', 'no', 'guardar']) {
+   const r = matchInputs(said, [route, saveCard], { form: 'pay', name: 'route' });
+   eq(names(r), [], `rule 2: "${said}" at PAY or LINK fills no confirmation out of order`);
+}
+eq(matchInputs('sí', [route, saveCard], { form: 'pay', name: 'route' }).refused, [{ form: 'pay', name: 'save_card', rule: 'confirmation_out_of_order' }], 'rule 2: the refusal is recorded');
+eq(names(matchInputs('claro', [saveCard], { form: 'pay', name: 'save_card' })), ['save_card=yes'], 'rule 2: firm YES when asked (claro is a confirm word)');
+eq(names(matchInputs('ok', [saveCard], { form: 'pay', name: 'save_card' })), [], 'rule 2: an acknowledgement is not a firm YES');
+eq(names(matchInputs('ok', [{ ...saveCard, confirmation: 'soft' }], { form: 'pay', name: 'save_card' })), ['save_card=yes'], 'rule 2: a soft offer takes the wider YES');
+eq(names(matchInputs('no', [saveCard], { form: 'pay', name: 'save_card' })), ['save_card=no'], 'rule 2: NO when asked');
+eq(names(matchInputs('8528777', [route, payAmt], { form: 'pay', name: 'route' })), [], 'rule 4: a bare number is not an amount out of order');
+eq(names(matchInputs('50 dollars', [route, payAmt], { form: 'pay', name: 'route' })), ['amount=50'], 'rule 4: a marked amount out of order is taken');
+eq(matchInputs('50 dollars', [route, payAmt], { form: 'pay', name: 'route' }).decisions[0].rule, 'out_of_order', 'the rule is recorded');
+eq(names(matchInputs('45', [payAmt], { form: 'pay', name: 'amount' })), ['amount=45'], 'rule 1: a bare number at the amount question');
+const next = C({ form: 'rec', name: 'next', invites: ['revised_amount'], profile: { kind: 'choice', choices: [{ key: 'new', phrases: ['new card'], keys: ['1'] }, { key: 'link', phrases: ['link'], keys: ['2'] }] } });
+const revised = C({ form: 'rec', name: 'revised_amount', profile: { kind: 'amount' } });
+eq(names(matchInputs('50', [next, revised], { form: 'rec', name: 'next' })), ['revised_amount=50'], 'rule 1: an invited amount takes a bare number');
+eq(matchInputs('50', [next, revised], { form: 'rec', name: 'next' }).decisions[0].rule, 'invited', 'recorded as invited');
+eq(names(matchInputs('2', [next, revised], { form: 'rec', name: 'next' })), ['next=link'], 'rule 4: a single digit the question offers as a key is that key');
+eq(names(matchInputs('7', [next, revised], { form: 'rec', name: 'next' })), ['revised_amount=7'], 'rule 4: a single digit no key claims reaches the invited amount (its validator decides)');
+eq(names(matchInputs('88 91 7112', [...code, method], { form: 'otp', names: ['code', 'raw'] })), ['raw=88 91 7112'], 'rule 3: the last four of a longer number fill nothing');
+eq(matchInputs('88 91 7112', [...code, method], { form: 'otp', names: ['code', 'raw'] }).refused.map((x) => x.rule), ['fragment'], 'rule 3: the refusal is recorded');
+eq(names(matchInputs('4111111111111111', [...code, pan], { form: 'otp', names: ['code', 'raw'] })), ['card_number=4111111111111111'], 'rule 3: a whole card number at the code question is taken out of order');
+eq(names(matchInputs('my zip is 90012 and the card 4111111111111111', [C({ form: 'card', name: 'card_zip', profile: { kind: 'digits', min: 5, max: 5 } }), pan], { form: 'card', name: 'card_number' })), ['card_number=4111111111111111', 'card_zip=90012'], 'rule 5: two separate parts fill two fields');
+const trace = formAcceptanceTrace(null, matchInputs('88 91 7112', [...code, method], { form: 'otp:3', names: ['code', 'raw'] }));
+eq(trace, { filled: [], refused: [{ form: 'pay', name: 'method', rule: 'fragment' }] }, 'the trace records the refusal by field and rule, no value');
+eq(formAcceptanceTrace(trace, matchInputs('50 dollars', [route, payAmt], { form: 'pay', name: 'route' })).filled, [{ form: 'pay', name: 'amount', rule: 'out_of_order' }], 'the trace appends an out-of-order fill');
+eq(formAcceptanceTrace(null, matchInputs('45', [payAmt], { form: 'pay', name: 'amount' })), null, 'an in-order answer adds nothing');
 console.log(`match-inputs: ${checks} checks passed`);

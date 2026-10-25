@@ -97,8 +97,27 @@ const FIELD_COLLECTORS = { 'collect-phone': 'phone', 'collect-email': 'email', '
  * never an input. YES runs `after`; NO runs `declined`; a correction given there goes through the form's own matching
  * and the form runs again (so whatever the correction made missing is asked).
  */
+/**
+ * Context-aware acceptance (docs/copilot-reference.md §5) is standard for every form; its declarations are checked here,
+ * at definition time: a confirmation is a firm or soft choice keyed yes and no; invites list input names (of this form
+ * or an enclosing one, resolved at run time by scope).
+ */
+function validateAcceptanceDeclarations(id, inputs) {
+   for (const input of (inputs || []).flatMap((i) => i.any_of || [i])) {
+      if (input.confirmation !== undefined) {
+         const keys = (input.profile?.choices || []).map((choice) => choice.key);
+         if (!['firm', 'soft'].includes(input.confirmation) || input.profile?.kind !== 'choice' || !keys.includes('yes') || !keys.includes('no')) throw new Error(`FORM ${id}: ${input.name} confirmation must be "firm" or "soft" on a choice keyed yes and no`);
+      } else {
+         // not a confirmation
+      }
+      if (input.invites !== undefined && (!Array.isArray(input.invites) || !input.invites.every((name) => typeof name === 'string' && name))) throw new Error(`FORM ${id}: ${input.name} invites must list input names`);
+      else { /* no invites, or a list of names */ }
+   }
+}
+
 export function formFlow({ id, name, version, description, inputs, after = [], extraVars = {}, parameters = [], confirm = null, before_confirm = [], declined = [], stop = '', close_on_stop = false, resume_on_parent_change = false, before = [], done = true, primary = false, scope = 'isolated', validator = '', confirmation_condition = 'true', prompt = undefined, prompt_es = undefined, incomplete_outcome = null, on_exhausted = null }) {
    validateFormExhaustion(on_exhausted);
+   validateAcceptanceDeclarations(id, inputs);
    const incompleteFrom=incomplete_outcome && Object.hasOwn(incomplete_outcome,'from');
    if(incompleteFrom) {
       if(Object.keys(incomplete_outcome).length!==1||typeof incomplete_outcome.from!=='string'||!/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(incomplete_outcome.from)||!parameters.some(p=>p.name===incomplete_outcome.from.split('.')[0]&&p.type==='object'))throw new Error('FORM incomplete_outcome.from must reference a declared object parameter');
@@ -108,7 +127,7 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
       // FLOW parameters are paths only: the question is built here, as a SAY-style template, then passed by name
       SET(`${id}_confirm_q`, 'form_confirm_q', textValue(confirm.question)),
       SET(`${id}_confirm_q_es`, 'form_confirm_q_es', textValue(confirm.question_es || confirm.question)),
-      FLOW(`${id}_confirm`, 'confirm-form', 'call', { form: '{{form_instance}}', question: '{{form_confirm_q}}', question_es: '{{form_confirm_q_es}}', phrases:'{{form_confirmation.phrases}}', words:'{{form_confirmation.words}}', clarifications:'{{form_confirmation.clarifications}}', no_keys:'{{form_confirmation.no_keys}}', interrupts:'{{form_confirmation.interrupts}}', named_fields:'{{form_confirmation.named_fields}}', exit_context: '{{exit_context}}', exit_context_es: '{{exit_context_es}}' }),
+      FLOW(`${id}_confirm`, 'confirm-form', 'call', { form: '{{form_instance}}', question: '{{form_confirm_q}}', question_es: '{{form_confirm_q_es}}', phrases:'{{form_confirmation.phrases}}', words:'{{form_confirmation.words}}', clarifications:'{{form_confirmation.clarifications}}', no_keys:'{{form_confirmation.no_keys}}', interrupts:'{{form_confirmation.interrupts}}', invites:'{{form_confirmation.invites}}', named_fields:'{{form_confirmation.named_fields}}', exit_context: '{{exit_context}}', exit_context_es: '{{exit_context_es}}' }),
       { id: `${id}_confirmed`, type: 'CASE', branches: {
          [`condition: (cargo.formConfirm || {})[form_instance] === 'changed'`]: FLOW(`${id}_again`, id, 'replace', { parent_form: '{{parent_form}}', result_input: '{{result_input}}', form_instance: '{{form_instance}}' }),
          // NO: the declined flow takes the form's place, so the action below never runs
@@ -260,6 +279,7 @@ const collectInput = {
       WHEN('ci_partial_hold', "ci_partial === 'hold'", END('ci_partial_wait')),
       SET('ci_build_chain', 'ci_chain', CHAIN_JS),
       SET('ci_match', 'ci_m', "readFormAnswer(cargo.choiceText, ci_chain, Array.isArray(ci_spec.any_of) ? { form: form, names: ci_names } : { form: form, name: current }, cargo.choice, provides && Array.isArray(questions) ? questions : [])"),
+      SIDE('ci_acceptance_trace', "(cargo.formAcceptance = formAcceptanceTrace(cargo.formAcceptance, ci_m), true)"),
       // The labels and validators ride on each reading, so the presets stay in this one flow.
       SET('ci_enrich','ci_m','enrichFormMatches(ci_m, ci_chain, form, ci_names, current)'),
       SET('ci_question_key', 'ci_qkey', "ci_m.questions.length ? ci_m.questions[0] : !ci_m.hits.length && !ci_m.ambiguous.length && Array.isArray(questions) && questions.length && provides ? pickChoice(cargo.choiceText, questions.map(function(question){return Object.assign({},question,{exact:true});}), false) : ''"),
@@ -431,8 +451,8 @@ const disambiguate = {
 const confirmForm = {
    id: 'confirm-form', name: 'ConfirmForm', version: '1.0.0', scope: 'isolated',
    description: "Worker: ask a form's confirmation (exact YES / NO; keys 1 and 2). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an unclear short answer is asked again, a long unrelated one is DISPATCHed. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
-   parameters: ['form', 'question', 'question_es', 'exit_context', 'exit_context_es','phrases','words','interrupts','no_keys','clarifications'].map((n) => ({ name: n, type: ['phrases','words','interrupts','no_keys','clarifications'].includes(n)?'array':'string', description: n })).concat([{ name: 'named_fields', type: 'boolean', description: "true: an answer that names one of the form's inputs (its names) without a value re-asks only that input" }]),
-   variables: vars({ named_fields: false, cf_named: null, cf_presets: FIELD_PRESETS, cf_chain: [], cf_m: null, cf_current:null, cf_result: '',cf_prompt:'',cf_prompt_es:'', cf_words: 0, cf_tries: 0, phrases:null, words:[], clarifications:[], no_keys:['2'], interrupts:[], cf_choices:[], cf_event:'', cf_amount:false, cf_questions:[],cf_provides:null,cf_skip_gate:'' }),
+   parameters: ['form', 'question', 'question_es', 'exit_context', 'exit_context_es','phrases','words','interrupts','no_keys','clarifications','invites'].map((n) => ({ name: n, type: ['phrases','words','interrupts','no_keys','clarifications','invites'].includes(n)?'array':'string', description: n })).concat([{ name: 'named_fields', type: 'boolean', description: "true: an answer that names one of the form's inputs (its names) without a value re-asks only that input" }]),
+   variables: vars({ named_fields: false, cf_named: null, cf_presets: FIELD_PRESETS, cf_chain: [], cf_m: null, cf_current:null, cf_result: '',cf_prompt:'',cf_prompt_es:'', cf_words: 0, cf_tries: 0, phrases:null, words:[], clarifications:[], no_keys:['2'], interrupts:[], invites:[], cf_choices:[], cf_event:'', cf_amount:false, cf_questions:[],cf_provides:null,cf_skip_gate:'' }),
    steps: [
       SIDE('cf_reset', "(cargo.formConfirm = cargo.formConfirm || {}, cargo.formConfirm[form] = '', true)"),
       SET('cf_choices','cf_choices',`[{key:'yes',phrases:['1'].concat(Array.isArray(phrases)?phrases:Array.isArray(words)?words:[]),exact:true},{key:'no',phrases:(Array.isArray(no_keys)?no_keys:['2']).concat(${JSON.stringify(ANSWER_WORDS.no)}),exact:true}].concat((Array.isArray(interrupts)?interrupts:[]).map(function(event){return {key:'event:'+event.key,phrases:event.phrases ?? event.words,exact:event.exact!==false};}))`),
@@ -449,8 +469,9 @@ const confirmForm = {
       SET('cf_question_catalog','cf_questions','cargo.forms[form].questions || []'),
       SET('cf_provider_catalog','cf_provides','cargo.forms[form].providers'),
       SET('cf_gate_policy','cf_skip_gate',"!cf_provides || !cf_provides.gate || [].concat(cf_provides.gate.verified || []).every(function(p){return !!formPath({cargo:cargo},p);}) ? 'true' : ''"),
-      SET('cf_current','cf_current',"cargo.forms[form].proposalPrompt ? {form:cargo.forms[form].parent,name:cargo.forms[form].proposalPrompt.input} : {form:form,name:''}"),
+      SET('cf_current','cf_current',"cargo.forms[form].proposalPrompt ? {form:cargo.forms[form].parent,name:cargo.forms[form].proposalPrompt.input} : {form:form,name:'',invites:Array.isArray(invites)?invites:[]}"),
       SET('cf_match', 'cf_m', "cargo.choice === 'yes' || cargo.choice === 'no' && pickChoice(cargo.choiceText, [{key:'no',phrases:Array.isArray(no_keys)?no_keys:['2'],exact:true}], false) === 'no' ? { hits: [], ambiguous: [], questions:[] } : readFormAnswer(cargo.choiceText, cf_chain, cf_current, '',cf_questions)"),
+      SIDE('cf_acceptance_trace', "(cargo.formAcceptance = formAcceptanceTrace(cargo.formAcceptance, cf_m), true)"),
       SET('cf_enrich','cf_m',"(function(m){m.hits=m.hits.map(function(h){return Object.assign({},h,{silent:true});});return m;})(enrichFormMatches(cf_m, cf_chain, form))"),
       SET('cf_count_words', 'cf_words', "String(cargo.choiceText || '').split(/\\s+/).filter(function (w) { return /[a-záéíóúüñ]/i.test(w); }).length"),
       // opt-in (confirm.named_fields): 'the city is wrong' / 'la ciudad no' names exactly one input and gives no value; that

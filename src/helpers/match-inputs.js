@@ -9,11 +9,26 @@
  * the flows. Part of jsfe/helpers; imports only siblings.
  */
 import { matchesChoice } from './matches-choice.js';
-import { pickChoice, amountInAnswer, isAmountAnswer } from './answer.js';
+import { pickChoice, amountInAnswer, isAmountAnswer, ANSWER_WORDS, CONFIRM_WORDS } from './answer.js';
 import { readEmail, readPhone, readInternationalPhone, readIdentifier } from './contact.js';
 import { readSpokenMoney } from './spoken-money.js';
 import {readMoneyAmount,isPartialMoneyAnswer} from './money.js';
 import { pickProviderQuestion } from './form-sources.js';
+
+/**
+ * This turn's acceptance decisions for the host to log, appended per match: fields filled out of order, in a compound
+ * answer or as an invited input, and every refused reading, by form, field and rule. Field names and rules only, never
+ * values: the answers include card numbers and codes. The host clears it at the start of a turn.
+ */
+export function formAcceptanceTrace(previous, matches) {
+   const filled = (matches?.decisions || []).map((d) => ({ form: String(d.form).replace(/:\d+$/, ''), name: d.name, rule: d.rule }));
+   const refused = (matches?.refused || []).map((r) => ({ form: String(r.form).replace(/:\d+$/, ''), name: r.name, rule: r.rule }));
+   if (!filled.length && !refused.length) {
+      return previous ?? null;
+   } else {
+      return { filled: [...(previous?.filled || []), ...filled], refused: [...(previous?.refused || []), ...refused] };
+   }
+}
 
 /** The answer as said: jsfe stores user input escaped (don\'t). */
 function unescape(answer) {
@@ -88,6 +103,14 @@ function unclaimedSpans(raw, readings) {
  */
 export function readInputProfile(profile, answer, isCurrent = true) {
    const raw = unescape(answer);
+   // A field may declare a narrower signature for out-of-order reading: the payment card takes a bare
+   // last four when asked, but out of order only a card word or "ending in 4242".
+   if (!isCurrent && profile && profile.out_of_order && typeof profile.out_of_order === 'object') {
+      const { out_of_order, ...asked } = profile;
+      return readInputProfile({ ...asked, ...out_of_order }, answer, isCurrent);
+   } else {
+      // asked, or no out-of-order signature
+   }
    const kind = profile && profile.kind;
    if (kind === 'choice') {
       const choices = (Array.isArray(profile.choices) ? profile.choices : []).filter(c=>isCurrent||c.current_only!==true).map(c=>({...c,
@@ -238,9 +261,21 @@ export function matchInputs(answer, candidates, current, choiceKey) {
       // the current input is not among the candidates (it no longer applies): levels follow the list order
    }
    list.forEach((c) => { if (forms.indexOf(c.scope || c.form) === -1) { forms.push(c.scope || c.form); } else { /* already ranked */ } });
+   const fieldOf = (reading) => list.find((c) => c.form === reading.form && c.name === reading.name) || { profile: {} };
+   const spanText = (reading) => (reading.spans || []).map(([a, b]) => raw.slice(a, b)).join(' ');
+   const refused = [];
    let readings = [];
    for (const c of list) {
-      const profile=narrativeCurrent && c.profile.kind==='email' ? {...c.profile,literal:true} : c.profile;
+      // Rule 2: a confirmation is answered only when asked, firm by CONFIRM_WORDS, soft by the wider YES vocabulary.
+      const confirmation = ['firm', 'soft'].includes(c.confirmation) ? c.confirmation : '';
+      if (confirmation && !isCur(c)) {
+         if (readInputProfile(c.profile, raw, false)) refused.push({ form: c.form, name: c.name, rule: 'confirmation_out_of_order' });
+         continue;
+      } else {
+         // asked, or not a confirmation
+      }
+      const vocabulary = confirmation ? { ...c.profile, choices: (c.profile.choices || []).map((x) => x.key === 'yes' ? { ...x, phrases: [...(x.phrases ?? x.words ?? []), ...(confirmation === 'firm' ? CONFIRM_WORDS : ANSWER_WORDS.yes)], exact: confirmation === 'firm' || x.exact === true } : x.key === 'no' ? { ...x, phrases: [...(x.phrases ?? x.words ?? []), ...ANSWER_WORDS.no] } : x) } : c.profile;
+      const profile=narrativeCurrent && vocabulary.kind==='email' ? {...vocabulary,literal:true} : vocabulary;
       let r = readInputProfile(profile, raw, isCur(c));
       // A semantic choice supplied by ask-choice (e.g. spoken keypad keys) is a reading, not an early return.
       if (!r && c === own && choiceKey && c.profile.kind === 'choice' && (c.profile.choices || []).some(x => x.key === choiceKey)) {
@@ -260,6 +295,39 @@ export function matchInputs(answer, candidates, current, choiceKey) {
          }
       }
    }
+
+   // Context-aware acceptance (docs/copilot-reference.md §5; owner 2026-10-25): the standard rules for every form.
+   // The inputs the current question also asks for: its declared invites, or a read-back's (current names no input). An
+   // invite names an input of the asking form or of a form enclosing it; the nearest such form wins by scope.
+   const invitedNames = new Set([...list.filter(isCur).flatMap((c) => Array.isArray(c.invites) ? c.invites : []), ...(Array.isArray(cur.invites) ? cur.invites : [])]);
+   const invited = (reading) => !reading.current && invitedNames.has(reading.name);
+   // A declared confirm_against pair with the current question is relevant to it as well: the pair is asked about.
+   const pairedWithCurrent = (reading) => list.some((c) => isCur(c) && c.form === reading.form && ((c.confirm_against || []).includes(reading.name) || (fieldOf(reading).confirm_against || []).includes(c.name)));
+   const inOrder = (reading) => reading.current || invited(reading) || pairedWithCurrent(reading);
+   // Rule 3: a number read out of order must be whole: every digit run its evidence touches lies entirely inside it,
+   // so the last four of "88 91 7112" fill nothing.
+   const runs = [...raw.matchAll(/\d(?:[\s.-]?\d)*/g)].map((m) => [m.index, m.index + m[0].length]);
+   const wholeRuns = (reading) => runs.every(([a, b]) => !(reading.spans || []).some(([s, e]) => s < b && a < e) || (reading.spans || []).some(([s, e]) => s <= a && e >= b));
+   // Rule 4: a bare number has no money mark and no word in its evidence.
+   const bare = (reading) => !isAmountAnswer(raw) && (reading.spans || []).length > 0 && (reading.spans || []).every(([a, b]) => /\d/.test(raw.slice(a, b)) && !/\p{L}/u.test(raw.slice(a, b)));
+   readings = readings.filter((reading) => {
+      if (inOrder(reading)) {
+         if (!reading.current) reading.rule = 'invited';   // the current input is the default: no rule recorded
+         else { /* the current input */ }
+         return true;
+      } else if (bare(reading) && fieldOf(reading).profile.kind === 'amount') {
+         refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'bare_amount_out_of_order' });
+         return false;
+      } else if (/\d/.test(spanText(reading)) && !wholeRuns(reading)) {
+         refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'fragment' });
+         return false;
+      } else {
+         reading.rule = 'out_of_order';
+         return true;
+      }
+   });
+   // Rule 4: a single digit the current question offers as a key is that key (the keypad reading wins its group below);
+   // one it does not offer reaches the invited amount, whose own validation decides ("3 dollars?").
 
    const paired = (a, b) => a.confirm.indexOf(b.name) > -1 || b.confirm.indexOf(a.name) > -1;
    // Narrative ownership protects ancestor choices and same-form choices that reset
@@ -309,6 +377,7 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    effective.forEach((r, i) => { (groups[find(i)] = groups[find(i)] || []).push(r); });
    const strip = ({ evidence, spans, keypad, fallback, repeatedChoice, wholeChoice, choice, narrative, resetOn, level, group, exclusive, current: c, confirm, ...r }) => r;
    const hits = [];
+   const taken = [];
    let ambiguous = [];
    const remaining=[];
    for (const group of Object.values(groups)) {
@@ -329,12 +398,22 @@ export function matchInputs(answer, candidates, current, choiceKey) {
       const confirmWith = winners.length === 1 ? members.filter((m) => m !== winners[0] && paired(m, winners[0])) : [];
       const asked = confirmWith.length ? winners.concat(confirmWith) : winners;
       if (asked.length === 1) {
-         hits.push(strip(asked[0]));
+         taken.push(asked[0]);
       } else if (ambiguous.length === 0) {
          ambiguous = asked.map(strip);
       } else {
          remaining.push(asked.map(strip));
       }
    }
-   return { hits, ambiguous, ...(remaining.length ? {remaining} : {}) };
+   // Rule 5: one part of an answer never fills two fields. A reading that shares evidence with another taken reading is
+   // refused with it, never kept by order.
+   const clash = (a, b) => (a.spans || []).some(([s, e]) => (b.spans || []).some(([t, u]) => s < u && t < e));
+   const kept = taken.filter((a) => !taken.some((b) => b !== a && clash(a, b)));
+   for (const r of taken.filter((a) => !kept.includes(a))) refused.push({ form: r.form, name: r.name, value: r.value, rule: 'one_part_two_fields' });
+   // Several fields from one answer: those filled out of order are a compound answer.
+   if (kept.length > 1) kept.forEach((r) => { if (r.rule === 'out_of_order') r.rule = 'compound'; });
+   hits.push(...kept.map(({ rule, ...r }) => strip(r)));
+   // Why each field was filled other than as the current answer, kept beside the hits so their shape never changes.
+   const decisions = kept.filter((r) => r.rule).map((r) => ({ form: r.form, name: r.name, rule: r.rule }));
+   return { hits, ambiguous, ...(remaining.length ? {remaining} : {}), ...(refused.length ? {refused} : {}), ...(decisions.length ? {decisions} : {}) };
 }
