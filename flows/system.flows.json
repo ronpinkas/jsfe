@@ -1231,6 +1231,27 @@
           }
         ]
       },
+      "contact_named_options": {
+        "type": "object",
+        "value": null
+      },
+      "contact_names_account": {
+        "type": "array",
+        "value": [
+          "número de cuenta",
+          "numero de cuenta",
+          "mi número de cuenta",
+          "mi numero de cuenta",
+          "con mi número de cuenta",
+          "con mi numero de cuenta",
+          "con el número de cuenta",
+          "con el numero de cuenta",
+          "account number",
+          "my account number",
+          "with my account number",
+          "with the account number"
+        ]
+      },
       "contract": {
         "type": "object",
         "value": {
@@ -1499,7 +1520,13 @@
         "id": "identity_contact_classify",
         "type": "SET",
         "variable": "contact_kind",
-        "value": "contact_id && contact_id.kind === 'account' ? 'account' : contact_phone ? 'phone' : contact_mail ? 'email' : readInternationalPhone(contact_text) ? 'international' : isAgentRequest(contact_text) ? 'agent' : isAnswer(contact_text,'exit') && contact_text.trim().split(/\\s+/).length <= 2 ? 'exit' : contact_allowed && /^(?:no|nope|nah)\\b/i.test(contact_text.trim()) && !/[0-9@]/.test(contact_text) ? 'decline' : contact_allowed && cargo.serviceAnswer && cargo.serviceAnswer.values.caller_decision === 'yes' ? 'caller' : contact_digits ? 'invalid_phone' : contact_text.trim().split(/\\s+/).length>=3 && !/[0-9@]/.test(contact_text) ? 'unmapped' : 'invalid'"
+        "value": "contact_id && contact_id.kind === 'account' ? 'account' : contact_phone ? 'phone' : contact_mail ? 'email' : contact_options.account_pattern && !contact_digits && matchesChoice(contact_text,contact_names_account) ? 'names_account' : readInternationalPhone(contact_text) ? 'international' : isAgentRequest(contact_text) ? 'agent' : isAnswer(contact_text,'exit') && contact_text.trim().split(/\\s+/).length <= 2 ? 'exit' : contact_allowed && /^(?:no|nope|nah)\\b/i.test(contact_text.trim()) && !/[0-9@]/.test(contact_text) ? 'decline' : contact_allowed && cargo.serviceAnswer && cargo.serviceAnswer.values.caller_decision === 'yes' ? 'caller' : contact_digits ? 'invalid_phone' : contact_text.trim().split(/\\s+/).length>=3 && !/[0-9@]/.test(contact_text) ? 'unmapped' : 'invalid'"
+      },
+      {
+        "id": "identity_contact_named",
+        "type": "SET",
+        "variable": "contact_named_options",
+        "value": "Object.assign({},contact_options,{fromMenu:false,intro:'Sure, your account number.',intro_es:'Claro, su número de cuenta.'})"
       },
       {
         "id": "identity_contact_error",
@@ -1536,6 +1563,19 @@
             "callType": "replace",
             "parameters": {
               "contact_options": "{{contact_options}}"
+            },
+            "initializeDefaults": true
+          },
+          "condition: contact_kind === 'names_account'": {
+            "id": "identity_contact_names_account",
+            "type": "FLOW",
+            "value": "get-cell-or-email",
+            "callType": "replace",
+            "parameters": {
+              "contact_options": "{{contact_named_options}}",
+              "cell_number": "",
+              "email": "",
+              "acct_number": ""
             },
             "initializeDefaults": true
           },
