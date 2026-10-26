@@ -67,6 +67,15 @@ eq(readInternationalPhone('56035214'), '', 'an account number');
 eq(readInternationalPhone('4111111111111111'), '', 'a card number (16 digits, no prefix)');
 eq(readInternationalPhone('ann@gmail.com'), '', 'an email');
 eq(readIdentifier('+52 551 234 5678', '^5\\d{6,7}$'), { kind: 'international_phone', value: '525512345678' }, 'identified as an international phone');
+// a restated number: the last complete one after a sentence break or "area code" (prod 2026-10-26 07:28)
+eq(readIdentifier('Area code 21. 213 555 0147.', '^5\\d{6,7}$'), { kind: 'phone', value: '2135550147' }, 'a false start, then the number');
+eq(readIdentifier('Area code, 213 555. Area code 213-555-0147.', '^5\\d{6,7}$'), { kind: 'phone', value: '2135550147' }, 'half the number, then all of it');
+eq(readPhone('Código de área 213. 213 555 0147'), '2135550147', 'Spanish');
+eq(readPhone('818 451 5475. No, 323 555 0147.'), '3235550147', 'a correction: the last number');
+eq(readPhone('213.555.0147'), '2135550147', 'a dotted number is one number');
+eq(readPhone('Area code 21. 504 9590.'), '', 'no complete number anywhere');
+eq(readInternationalPhone('+44. 20 7946 0958'), '442079460958', 'an international prefix is never split into a US number');
+eq(readInternationalPhone('Area code 21. 213 555 0147.'), '', 'a restated US number is not international');
 eq(callerIsInternational({ voice: true, callerId: '+525512345678' }), true, 'a Mexican caller');
 eq(callerIsInternational({ voice: true, callerId: '+12135550147' }), false, 'a US caller');
 eq(callerIsInternational({ voice: true, callerId: 'anonymous' }), false, 'no caller ID');

@@ -5,6 +5,8 @@ An input may carry `question_text` / `retry_text` (and `_es`): the wording used 
 and card presets carry them, so a chat no longer reads "Por favor diga o ingrese el número de su tarjeta" (prod 2026-10-26,
 web D365 and WhatsApp).
 
+**A restated phone number is read.** `readPhone` (and so `readIdentifier`) reads the last complete North American number after a sentence break or an "area code" when the whole answer is not one number: "Area code 21. 213 555 0147." was read as a Mexican number and "Area code, 213 555. Area code 213-555-0147." as nothing (prod 2026-10-26). An answer with an international prefix is never split.
+
 ## 1.10.8: "por favor" confirms
 
 "please" / "por favor" alone are a firm YES (`CONFIRM_WORDS`; owner rule 2026-10-26: prod 21:47, "por favor" to "presione 1 o

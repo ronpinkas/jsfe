@@ -56,15 +56,24 @@ export function readEmail(text, { literal = false } = {}) {
    }
 }
 
-/** The 10-digit North American number in the answer (a leading 1 dropped), or ''. */
+const northAmerican = (digits) => digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits.length === 10 ? digits : '';
+
+/**
+ * The 10-digit North American number in the answer (a leading 1 dropped), or ''. A caller who restates the number
+ * ("Area code 21. 213 555 0147.", "Area code, 213 555. Area code 213-555-0147.") is read by the last complete number
+ * after a sentence break or an "area code": prod 2026-10-26 07:28, the first read as a Mexican number, the second as
+ * nothing. An answer with an international prefix (+, plus, más, 00) is never split, so it stays international.
+ */
 export function readPhone(text) {
-   const digits = String(text ?? '').replace(/[^0-9]/g, '');
-   if (digits.length === 11 && digits.startsWith('1')) {
-      return digits.slice(1);
-   } else if (digits.length === 10) {
-      return digits;
-   } else {
+   const t = String(text ?? '');
+   const whole = northAmerican(t.replace(/[^0-9]/g, ''));
+   if (whole) {
+      return whole;
+   } else if (/(^|[\s(])(\+|00|plus\b|m[aá]s\b)\s*\d/i.test(t)) {
       return '';
+   } else {
+      const restated = t.split(/[.!?;](?:\s+|$)|\barea\s+code\b|\bc[oó]digo\s+de\s+[aá]rea\b/i).map((part) => northAmerican(part.replace(/[^0-9]/g, ''))).filter(Boolean);
+      return restated.length ? restated[restated.length - 1] : '';
    }
 }
 
