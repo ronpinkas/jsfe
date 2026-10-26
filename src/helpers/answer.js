@@ -41,14 +41,15 @@ export const ANSWER_WORDS = {
 // The ONLY words that confirm a choice that charges or cancels (`exact`), besides the choice's own words and keys; courtesy
 // around them is allowed (owner decision 2026-10-15: "clear charge confirmation exclusively"). Left out on purpose:
 // acknowledgements ("ok", "está bien", "fine", "sounds good", "perfecto": "I heard you", not "charge me"), "bueno" (the
-// Mexican phone "hello?"), courtesy alone ("please", "por favor"), words that are questions once ASR drops the "?"
-// ("right", "seguro", "exactly", "así es"), and agreeing to continue ("continue", "continuar").
+// Mexican phone "hello?"), words that are questions once ASR drops the "?" ("right", "seguro", "exactly", "así es"), and
+// agreeing to continue ("continue", "continuar"). "please" / "por favor" alone confirm (owner rule 2026-10-26: prod
+// 21:47, "por favor" to "presione 1 o diga SÍ" at a payment offer was not taken and the payment was lost).
 export const CONFIRM_WORDS = ['yes', 'yeah', 'yep', 'yup', 'sure', 'of course', 'absolutely', 'definitely', 'confirm', 'i confirm',
    'confirmed', 'approve', 'i approve', 'approved', 'agree', 'i agree', 'agreed', 'proceed', 'go ahead', 'go ahead please', 'do it',
    'correct', "that's correct", 'that is correct', "that's right", 'that is right', 'yes i do',
    'si', 'sí', 'claro', 'claro que sí', 'claro que si', 'por supuesto', 'confirmo', 'confirmado', 'apruebo', 'aprobado', 'adelante',
    'dale', 'hazlo', 'procede', 'proceda', 'proceder', 'procedo', 'sí proceda', 'si proceda', 'correcto', 'de acuerdo',
-   'estoy de acuerdo', 'sí quiero', 'si quiero'];
+   'estoy de acuerdo', 'sí quiero', 'si quiero', 'please', 'por favor'];
 
 // Acknowledgements: never a confirmation of an `exact` choice on their own, but said beside one ("Sí, está bien", "Yes,
 // okay") they change nothing, like courtesy. Beside an exact choice's own words, a CONFIRM word is the same ("Yes, the

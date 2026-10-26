@@ -1,3 +1,9 @@
+## 1.10.8: "por favor" confirms
+
+"please" / "por favor" alone are a firm YES (`CONFIRM_WORDS`; owner rule 2026-10-26: prod 21:47, "por favor" to "presione 1 o
+diga SÍ" at a payment offer was not taken and the payment was lost). "No, por favor", "espere por favor" and "un enlace
+por favor" are still not a YES.
+
 ## 1.10.7: a firm question's key in minimal context
 
 At a firm question (a yes choice that charges or cancels), its key confirms only alone or beside please/thanks or a CONFIRM

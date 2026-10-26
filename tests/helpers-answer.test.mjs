@@ -139,9 +139,10 @@ for (const a of ['um, 1, gracias', 'ok 1', 'sí, está bien, 1', 'yes I want to 
    eq(pickChoice(a, CHARGE, false), '', `not YES: "${a}"`);
 }
 eq(pickChoice('no, cancel it', CHARGE, false), 'no', 'NO stays lenient');
-// at a choice that charges or cancels, only a clear confirmation (CONFIRM_WORDS) is YES (owner decision 2026-10-15)
+// at a choice that charges or cancels, only a clear confirmation (CONFIRM_WORDS) is YES (owner decision 2026-10-15; since
+// 2026-10-26 "please" / "por favor" alone are one)
 for (const a of ['continue', 'continuar', 'Sí, quiero continuar', 'go on', 'seguir', 'ok', 'um, okay', 'okay thank you', 'está bien',
-   "That's fine.", 'fine', 'sounds good', 'perfect', 'perfecto', 'bueno', 'please', 'por favor', 'right', 'seguro', 'exactly',
+   "That's fine.", 'fine', 'sounds good', 'perfect', 'perfecto', 'bueno', 'right', 'seguro', 'exactly',
    'así es', 'eso es', 'alright']) {
    eq(pickChoice(a, CHARGE, false), '', `not YES at a charge: "${a}"`);
 }
@@ -259,5 +260,10 @@ const FIRM_ONLY = [{ key: 'yes', words: ['1'], exact: true }, { key: 'no', words
 for (const said of ['1', 'uno', 'one', '1 por favor', '1, gracias', 'sí 1', 'yes, 1', 'sí, uno, gracias', 'sí', 'sí, por favor', 'yes please', 'sí gracias', 'sí claro', 'sí, sí', 'sí, está bien', 'okay yes', 'pues sí', 'um yes', 'sí señor'])
    eq(pickChoice(said, FIRM_ONLY), 'yes', `firm: "${said}" confirms`);
 for (const said of ['1 está bien', 'ok 1', 'sí, ok, 1', 'bueno 1', 'opción 1', 'sí, opción 1', 'el número 1', 'that one is fine', 'um 1', '1 señor', 'ok', 'está bien', 'perfecto', 'quiero 1 cosa'])
+   eq(pickChoice(said, FIRM_ONLY) === 'yes', false, `firm: "${said}" does not confirm`);
+// "please" / "por favor" alone confirm a firm question (owner rule 2026-10-26; prod 21:47 at a payment offer)
+for (const said of ['por favor', 'Por favor.', 'please', 'sí, por favor', '1 por favor'])
+   eq(pickChoice(said, FIRM_ONLY), 'yes', `firm: "${said}" confirms`);
+for (const said of ['no, por favor', 'por favor no', 'espere por favor', 'repita por favor', 'un enlace por favor'])
    eq(pickChoice(said, FIRM_ONLY) === 'yes', false, `firm: "${said}" does not confirm`);
 console.log(`answer: ${checks} checks passed`);
