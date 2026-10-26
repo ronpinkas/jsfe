@@ -24,11 +24,15 @@ export function formMustComplete(cargo,id,input) {
    }
    return false;
 }
-/** Explicit retry wins. Otherwise acknowledge only an actual unrecognized answer, once per re-ask. */
+/**
+ * Explicit retry wins. Otherwise acknowledge only an actual unrecognized answer, once per re-ask.
+ * question_text / retry_text (and _es): the written-channel wording, used only when the conversation is not a call.
+ */
 export function formInputPrompt(cargo,id,input,spec,data={},language='en') {
-   const es=language==='es',feedback=cargo.forms?.[id]?.feedback?.[input];
-   const question=spec.question_from&&(es?(data[spec.question_from+'_es']||data[spec.question_from]):data[spec.question_from]) || (es?(spec.question_es||spec.question):spec.question) || '';
-   const retry=es?spec.retry_es:spec.retry;
+   const es=language==='es',feedback=cargo.forms?.[id]?.feedback?.[input],text=!cargo?.voice;
+   const written=(key)=>text?(es?(spec[key+'_text_es']||spec[key+'_text']):spec[key+'_text']):undefined;
+   const question=spec.question_from&&(es?(data[spec.question_from+'_es']||data[spec.question_from]):data[spec.question_from]) || written('question') || (es?(spec.question_es||spec.question):spec.question) || '';
+   const retry=written('retry') || (es?spec.retry_es:spec.retry);
    if(feedback==='partial')return es?'Continúe.':'Go on.';
    if(feedback&&retry)return retry;
    return (feedback==='miss'?(es?'Disculpe, no le entendí. ':"Sorry, I didn't catch that. "):'')+question;

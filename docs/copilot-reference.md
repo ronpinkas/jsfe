@@ -160,6 +160,7 @@ Field options:
 | Fields | Meaning |
 | --- | --- |
 | `label`, `label_es`; `question`, `question_es`; `retry`, `retry_es` | Names, first prompt and explicit retry wording. Contextual question templates compile to workers automatically. |
+| `question_text`, `question_text_es`; `retry_text`, `retry_text_es` | Optional written-channel wording, used instead when the conversation is not a call (`cargo.voice` false). |
 | `description` | Public extraction guidance; `response.description`, when used, describes an open answer. |
 | `when` | Map paths to desired scalar values or arrays; siblings use field names, session paths use `cargo.*`, owner data uses `form.*`. Values prefixed `!` exclude that value. |
 | `unless` | Paths whose populated, non-false value makes the field inapplicable. |

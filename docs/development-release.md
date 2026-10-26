@@ -1,3 +1,10 @@
+## 1.10.9: written wording for a written channel
+
+An input may carry `question_text` / `retry_text` (and `_es`): the wording used when the conversation is not a call
+(`cargo.voice` false). Absent, `question` / `retry` are used on every channel, as before. The phone, ZIP, account number
+and card presets carry them, so a chat no longer reads "Por favor diga o ingrese el número de su tarjeta" (prod 2026-10-26,
+web D365 and WhatsApp).
+
 ## 1.10.8: "por favor" confirms
 
 "please" / "por favor" alone are a firm YES (`CONFIRM_WORDS`; owner rule 2026-10-26: prod 21:47, "por favor" to "presione 1 o
