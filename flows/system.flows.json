@@ -28,7 +28,7 @@
   {
     "id": "contact-support",
     "name": "ContactSupport",
-    "version": "1.2.2",
+    "version": "1.2.3",
     "description": "Worker: give the tenant's customer-service contact information. Params: support_context(_es), closing_prompt(_es).",
     "parameters": [
       {
@@ -75,13 +75,13 @@
         "id": "set_support_message",
         "type": "SET",
         "variable": "support_message",
-        "value": "(cargo.sessionResolved ? \"Thank you for contacting us! \" : \"Sorry I couldn't help! \") + (cargo.support_context ? \"For assistance with your \" + cargo.support_context + \", \" : \"\") + contact_info + \".\" + (typeof closing_prompt !== \"undefined\" && closing_prompt ? \" \" + closing_prompt : \"\")"
+        "value": "(cargo.sessionResolved ? \"Thank you for contacting us! \" : \"Sorry I couldn't help! \") + (cargo.support_context ? \"For assistance with your \" + String(cargo.support_context).replace(/^(your|my)\\s+/i, \"\") + \", \" : \"\") + contact_info + \".\" + (typeof closing_prompt !== \"undefined\" && closing_prompt ? \" \" + closing_prompt : \"\")"
       },
       {
         "id": "set_support_message_es",
         "type": "SET",
         "variable": "support_message_es",
-        "value": "(cargo.sessionResolved ? \"¡Gracias por comunicarte con nosotros! \" : \"¡Lo siento, no pude ayudar! \") + (cargo.support_context ? \"Para asistencia con tu \" + (cargo.support_context_es || cargo.support_context) + \", \" : \"\") + contact_info_es + \".\" + (typeof closing_prompt_es !== \"undefined\" && closing_prompt_es ? \" \" + closing_prompt_es : \"\")"
+        "value": "(cargo.sessionResolved ? \"¡Gracias por comunicarte con nosotros! \" : \"¡Lo siento, no pude ayudar! \") + (cargo.support_context ? \"Para asistencia con tu \" + String(cargo.support_context_es || cargo.support_context).replace(/^(su|sus|tu|tus|mi|mis)\\s+/i, \"\") + \", \" : \"\") + contact_info_es + \".\" + (typeof closing_prompt_es !== \"undefined\" && closing_prompt_es ? \" \" + closing_prompt_es : \"\")"
       },
       {
         "id": "say_support_message",
