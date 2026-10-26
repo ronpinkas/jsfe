@@ -357,6 +357,19 @@ and the decoders (`decodeFlowLlm`, `decodeFlowSystemOne`, `decodeParametersLlm`,
 a stage-2 failure starts the flow without its parameters (it asks for them). The default, `'single-call'`,
 is the original single call.
 
+**The reply ranker (contextual DISPATCH, `onResponse: "continue"`):** when a flow's question gets a reply its
+deterministic reader cannot read, jsfe asks what the reply does with the step's `responseContext` (the question):
+`answers`, `abort` or `new_request`. ONE aiCallback call whose 4th argument is `task: 'rank_reply'` with both
+executors' instructions (`llm`, `systemOne`); the host replies `{ "option": … }`. `jsfe/host` exports
+`buildReplyRank`, `decodeReplyRankLlm` and `decodeReplyRankSystemOne` (the highest option at or above 0.5, else
+`answers`). `answers` continues the flow, after extracting the step's `responseParameters` with a stage-2 request
+when it declares them; `abort` is a RETURN: every flow ends and the reply is system message `cmd_request_aborted`
+("The process has been cancelled at your request - how can I help you?"),
+outcome `user_aborted`, no recovery stamp;
+`new_request` ends the flows and routes the input through intent detection. Only a new request is routed: after
+`answers` a later ordinary DISPATCH in the same turn hands the host the turn without detection. A host that does not know the task answers the `llm`
+instructions with its text model.
+
 **Host start (`ContextEntry.start`):** `{ role: 'user', content, start: { flow, arguments } }` starts that
 flow (any flow, by id or name) with those arguments on this turn, without asking the AI. Only the host sets it;
 it is never derived from what the user typed.

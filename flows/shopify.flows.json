@@ -6511,7 +6511,7 @@
               }
             ],
             "responseVariable": "response",
-            "responseContext": "order question or selection for the verified current customer. Focused order: {{cargo.orderFocus || \"none selected\"}}. Displayed orders: {{shown.map(function(order,i){return (i+1)+\". \"+order.orderNumber;}).join(\"; \")}}. ContinueCurrent for any question about the order contents/items, arrival/delivery, tracking, status/details, listing these orders, pickup, a selection from this list, or an unreadable reply. Extract its canonical ask and the explicitly selected order_number or order_position. With no explicit selection use the focused order; with no focused order do not invent one. Positions must be shown, IDs must exactly match this list. Do not guess between conflicting selections. A different task selects its actual primary; unrelated information without a matching handler is None.",
+            "responseContext": "order question or selection for the verified current customer. Focused order: {{cargo.orderFocus || \"none selected\"}}. Displayed orders: {{shown.map(function(order,i){return (i+1)+\". \"+order.orderNumber;}).join(\"; \")}}. It answers with any question about the order contents/items, arrival/delivery, tracking, status/details, listing these orders, pickup, a selection from this list, or an unreadable reply. Extract its canonical ask and the explicitly selected order_number or order_position. With no explicit selection use the focused order; with no focused order do not invent one. Positions must be shown, IDs must exactly match this list. Do not guess between conflicting selections. A different task or unrelated information is a new request.",
             "recovery": {
               "version": 1,
               "mode": "resume",
@@ -8204,7 +8204,7 @@
           }
         ],
         "responseVariable": "response",
-        "responseContext": "The customer was asked what they want to know about store policies, such as general return, refund, exchange or shipping terms. ContinueCurrent for a response to this request, including uncertainty or inability to answer; extract policy_query only for an actual policy question or topic, otherwise leave it absent. A new question about a specific existing order, missing payment/refund, account or product belongs to its matching workflow. An unrelated request with no workflow is None.",
+        "responseContext": "The customer was asked what they want to know about store policies, such as general return, refund, exchange or shipping terms. It answers with any response to this request, including uncertainty or inability to answer; extract policy_query only for an actual policy question or topic, otherwise leave it absent. A new question about a specific existing order, missing payment/refund, account or product belongs to its matching workflow. An unrelated request is a new request.",
         "recovery": {
           "version": 1,
           "mode": "resume",

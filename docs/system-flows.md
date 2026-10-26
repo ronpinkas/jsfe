@@ -70,7 +70,7 @@ Everything below is read from the JSON. Where a flow's `description` text and it
 | Flow | Step | `outcome` / `reason` |
 |---|---|---|
 | contact-support | `say_support_message` (SAY) | `support_outcome` or `unresolved` / `support_reason` or `contact_support_fallback` |
-| get-cell-or-email | `off_topic_handoff` (DISPATCH) | `unresolved` / `auth_prompt_off_topic` (kept only when no flow matches) |
+| get-cell-or-email | `off_topic_handoff` (DISPATCH) | `unresolved` / `auth_prompt_off_topic` (kept only when no flow matches); `user_aborted` / `auth_prompt_off_topic` when the caller withdraws |
 | generic-retry-with-options | `dispatch_unrecognised` (DISPATCH) | `caller_outcome` / `caller_reason` (empty = none) |
 | ask-choice | `ac_elsewhere`, `ac_other_request` (DISPATCH) | `unresolved` / `payment_incomplete` when the exit context is `payment` (empty = none otherwise) |
 | live-agent-requested | `say_live_connect` (RETURN) | `resolved` / `live_connect_link` |
@@ -444,7 +444,7 @@ With the reference host's verbs (`cargo.verb` = say / type, `cargo.verb_es` = di
    9. `gce_caller_ok` and digits that are not a valid phone → `cell_number = cargo.callerId`.
    10. digits that are not a valid phone → FLOW `generic-retry-with-options` (`replace`): "Sorry, the phone number you provided isn't valid." / "El número de teléfono que proporcionó no es válido."
    11. `gce_caller_ok` (anything else: "este", "here", "this one"…) → `cell_number = cargo.callerId`.
-   12. nothing supplied, the answer has three or more words and no digit or `@` → contextual **`DISPATCH`** (`onResponse: "continue"`, expected contact/account information). `ContinueCurrent` retains the live collector and enters the existing retry/options menu; a named workflow starts once; `None` hands the unrelated request to the host with `outcome: "unresolved"`, `reason: "auth_prompt_off_topic"`. The continuation does not record empty contact data or restore prior authentication.
+   12. nothing supplied, the answer has three or more words and no digit or `@` → contextual **`DISPATCH`** (`onResponse: "continue"`, expected contact/account information). The reply ranker's `answers` (including "I don't have it" or asking how to provide it) retains the live collector and enters the existing retry/options menu; `new_request` routes the input through intent detection; `abort` ends every flow as a RETURN (reply `cmd_request_aborted`) with `outcome: "user_aborted"`, `reason: "auth_prompt_off_topic"`. The continuation does not record empty contact data or restore prior authentication.
    13. default → FLOW `generic-retry-with-options` (`replace`): "Sorry, I do need the phone or email associated with your account{or} to proceed." / "Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta{or} para continuar."
 
    Every retry menu here gets `retry_flow`, `cancel_flow`, `capture_patterns: "{{cargo.authCapture}}"`, `retry_call_type: "{{gce_retry_type}}"` and `gce_menu: true`. With `retry_flow: 'get-cell-or-email'` and `retry_call_type: 'replace'`, a YES (or a captured contact) at the menu re-enters this frame with `gce_menu`, so the question is asked without an intro and the rejection count starts again. Because branch 11 comes before 12, a caller whose caller ID may be used is never handed off as off-topic: any answer that is not a contact, EXIT, AGENT or NO uses the caller ID.

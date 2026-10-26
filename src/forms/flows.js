@@ -366,7 +366,7 @@ const requestCancelled={
 };
 // Open-ended answers use the same contextual intent/extraction path as other DISPATCH replies.
 const readFormResponse={
- id:'read-form-response',name:'ReadFormResponse',version:'1.0.0',scope:'isolated',description:'Read the requested field with contextual DISPATCH; uncertainty returns to the host with saved form progress.',
+ id:'read-form-response',name:'ReadFormResponse',version:'1.0.0',scope:'isolated',description:'Read the requested field with contextual DISPATCH: an answer continues, a withdrawal or a new request leaves with saved form progress.',
  parameters:[{name:'form',type:'string'},{name:'input',type:'string'}],
  variables:vars({group:null,spec:null,question:'',reply:null}),
  steps:[SET('response_group','group',"cargo.forms[form].specs.find(function(s){return s.name===input || s.any_of && s.any_of.some(function(member){return member.name===input;});})"),
@@ -374,7 +374,7 @@ const readFormResponse={
   {...SET('response_declared','noop','!!spec && !!validateFormResponse(spec.response)'),requireTrue:true},
   SET('response_question','question',"formInputPrompt(cargo,form,input,Object.assign({},group,spec,{question:spec.question || group.question,question_es:spec.question_es || group.question_es,question_from:spec.question_from || group.question_from}),cargo.forms[form].data || {},language)"),
   SET('response_clear','reply','null'),
-  { ...yieldDispatch('response_dispatch','form',"'input_not_matched'"),onResponse:'continue',responseContext:'Current question: {{question}}. Requested answer: {{spec.response.description}}. Continue only for an answer to this question. A changed request belongs to its workflow; an unrelated question or uncertain response belongs to the host.',responseParameters:[{name:'answer',type:'string',description:'{{spec.response.description}}'}],responseVariable:'reply'},
+  { ...yieldDispatch('response_dispatch','form',"'input_not_matched'"),onResponse:'continue',responseContext:'Current question: {{question}}. Requested answer: {{spec.response.description}}.',responseParameters:[{name:'answer',type:'string',description:'{{spec.response.description}}'}],responseVariable:'reply'},
   WHEN('response_missing',"!reply || typeof reply.answer !== 'string' || !reply.answer.trim()",yieldDispatch('response_handoff','form',"'input_not_matched'"))]
 };
 const collectContextualAnswer=formFlow({id:'collect-contextual-answer',name:'CollectContextualAnswer',description:'Collect one open-ended answer using contextual DISPATCH and preserve the caller wording.',

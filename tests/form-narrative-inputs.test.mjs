@@ -13,7 +13,7 @@ function fixture(language,voice,contactName='line',decision=null){
  const owner=formFlow({id:'request',name:'Request',inputs:[{name:'service',profile:{kind:'choice',choices},question:'Which service?',question_es:'¿Qué servicio?'},{name:'details',form:'details',reset_on:['service']}],after:[S('record',"(cargo.records=(cargo.records||[]).concat([{service:cargo.forms[form_instance].values.service,details:cargo.forms[form_instance].values.details}]),true)")]});
  const callback={id:'accepted',name:'Accepted',version:'1',parameters:[{name:'form',type:'string'},{name:'value',type:'string'}],steps:[S('count',"(cargo.acceptedReasons=(cargo.acceptedReasons||[]).concat([value]),true)")]};
  const calls=[];
- const engine=new WorkflowEngine(quiet,async(_s,_u,_schema,r)=>{calls.push(r);return JSON.stringify(decision || {flowName:r.flow?.name || 'ContinueCurrent',parameters:{answer:r.input}});},linkFormSchemas([...FLOWS,owner,child,callback]),[],{...STANDARD_FUNCTIONS},{});engine.disableCommands();
+ const engine=new WorkflowEngine(quiet,async(_s,_u,_schema,r)=>{calls.push(r);if(r?.task==='rank_reply')return JSON.stringify({option:decision?.flowName==='None'?'abort':'answers'});return JSON.stringify(decision || {flowName:'None',parameters:{answer:r.input}});},linkFormSchemas([...FLOWS,owner,child,callback]),[],{...STANDARD_FUNCTIONS},{});engine.disableCommands();
  let session=engine.initSession('test',crypto.randomUUID(),language);session.cargo.voice=voice;
  return {calls,get session(){return session;},async say(content,start){session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start:{flow:'request'}}:{})},session)));return String(session.response||'');},owner(){return session.cargo.forms[session.cargo.formTasks.request];}};
 }
@@ -38,7 +38,7 @@ for(const language of ['en','es'])for(const voice of [false,true]){
  });
  await test(`${language} ${voice?'voice':'text'} conversational correction yields rather than guessing a parent field`,async()=>{
   const t=fixture(language,voice,'line',{flowName:'None',parameters:{}});await t.say('begin',true);await t.say('verizon');await t.say(language==='es'?'en realidad seguro':'actually insurance');
-  assert.equal(t.owner().values.service,'verizon');assert.equal(t.session.cargo.records,undefined);assert.equal(t.session.cargo.acceptedReasons,undefined);assert.equal(t.session.flowStacks.flat().length,0);assert.equal(t.session.lastTurnDispatch.matchedFlow,null);assert.ok(t.calls.some(call=>call.task==='detect_flow'&&call.input===(language==='es'?'en realidad seguro':'actually insurance')),'Conversational correction must use the existing DISPATCH decision');
+  assert.equal(t.owner().values.service,'verizon');assert.equal(t.session.cargo.records,undefined);assert.equal(t.session.cargo.acceptedReasons,undefined);assert.equal(t.session.flowStacks.flat().length,0);assert.equal(t.session.lastTurnDispatch,undefined);assert.match(t.session.response,language==='es'?/El proceso fue cancelado a petición suya/:/The process has been cancelled at your request - how can I help you\?/);assert.ok(t.calls.some(call=>call.task==='rank_reply'&&call.input===(language==='es'?'en realidad seguro':'actually insurance')),'Conversational correction is ranked, not guessed into a parent field');
  });
 
 }

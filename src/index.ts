@@ -31,6 +31,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 **/
 import { buildFlowStage, buildParameterStage, hasStageParameters } from './host/intent-stages.js';
 import type { IntentStageRequest } from './host/intent-stages.js';
+import { buildReplyRank, REPLY_OPTIONS } from './host/reply-rank.js';
+import type { ReplyRankRequest, ReplyOption } from './host/reply-rank.js';
 
 /*
   // Deploy new version to NPM:
@@ -166,6 +168,7 @@ const DEFAULT_MESSAGE_REGISTRY: MessageRegistry = {
 
     // System Commands
     cmd_flow_exited: "Successfully exited {{flowName}}. How can I help you with something else?",
+    cmd_request_aborted: "The process has been cancelled at your request - how can I help you?",
     cmd_help_title: "Flow Help - {{flowName}}",
     cmd_help_available_commands: "Available commands while in this flow:",
     cmd_help_cancel: "• \"cancel flow\" - Exit this flow completely",
@@ -214,6 +217,7 @@ const DEFAULT_MESSAGE_REGISTRY: MessageRegistry = {
 
     // System Commands
     cmd_flow_exited: "Salió exitosamente de {{flowName}}. ¿Cómo puedo ayudarle con algo más?",
+    cmd_request_aborted: "El proceso fue cancelado a petición suya - ¿cómo puedo ayudarle?",
     cmd_help_title: "Ayuda del Flujo - {{flowName}}",
     cmd_help_available_commands: "Comandos disponibles en este flujo:",
     cmd_help_cancel: "• \"cancelar flujo\" - Salir completamente de este flujo",
@@ -498,7 +502,7 @@ export interface DetectFlowRequest {
   }[];
 }
 
-export type AiCallbackRequest = DetectFlowRequest | IntentStageRequest;
+export type AiCallbackRequest = DetectFlowRequest | IntentStageRequest | ReplyRankRequest;
 
 // Engine Session Context - Encapsulates all session-specific state
 // This object should be maintained by the host application for each user session
@@ -586,6 +590,8 @@ export interface ToolCallRecord {
  *   - 'deflected': a decoy ("fake flow") absorbed an intent-detection false
  *     positive by design — transaction completes; hosts should NOT treat it as
  *     a user struggle (stats only).
+ *   - 'user_aborted': the caller withdrew the request (the reply ranker's `abort`) — transaction failed; not a
+ *     struggle to recover from: the caller chose to stop, and jsfe already answered.
  *   - 'resolved' (or any other value): informational; transaction completes.
  *
  * Flows that declare nothing behave exactly as before.
@@ -601,8 +607,8 @@ export interface FlowStep {
   id?: string;
   type: StepType;
   recovery?: {version:1;mode:string;reason:string;form?:string;flow?:string};
-  responseParameters?: FlowParameterDefinition[]; // Opt-in typed ContinueCurrent extraction.
-  responseVariable?: string; // Declared object variable assigned only on ContinueCurrent.
+  responseParameters?: FlowParameterDefinition[]; // Opt-in typed extraction when the reply answers (rank_reply).
+  responseVariable?: string; // Declared object variable assigned only when the reply answers.
   tool?: string;
   args?: Record<string, unknown>;
   variable?: string;
@@ -750,8 +756,8 @@ export class TransactionManager {
 function finalizeFlowTransaction(engine: Engine, frame: FlowFrame, endedBy: FlowOutcome['endedBy']): void {
   const declared = frame.declaredOutcome;
   if (declared) {
-    if (declared.outcome === 'unresolved') {
-      TransactionManager.fail(frame.transaction, declared.reason || 'unresolved');
+    if (declared.outcome === 'unresolved' || declared.outcome === 'user_aborted') {
+      TransactionManager.fail(frame.transaction, declared.reason || declared.outcome);
     } else if (declared.outcome === 'pending') {
       TransactionManager.yield(frame.transaction);
     } else {
@@ -2970,8 +2976,8 @@ async function detectLanguage(input: string, engine: Engine): Promise<string> {
 }
 
 // === FLOW EXECUTION ENGINE WITH ENHANCED ERROR HANDLING ===
-async function isFlowActivated(input: string, engine: Engine, userId: string = 'anonymous', detected?: Awaited<ReturnType<typeof detectFlowWithParameters>> | null) {
-  const result = detected === undefined ? await detectFlowWithParameters(input, engine) : detected;
+async function isFlowActivated(input: string, engine: Engine, userId: string = 'anonymous') {
+  const result = await detectFlowWithParameters(input, engine);
 
   if (result && result.flow) {
     const flow = result.flow;
@@ -3329,8 +3335,8 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
 
       // DISPATCH ended every flow; processActivity routes this turn's input (see handleDispatchStep)
       if (step.type === 'DISPATCH' && step.onResponse === 'continue') {
-        // ContinueCurrent retains the stack; a workflow replaces it; None hands off to the host.
-        if (engine.pendingDispatchFrom !== null) return result;
+        // An answer retains the stack; abort (a RETURN) and a new request (intent detection) end every flow.
+        if (engine.pendingDispatchFrom !== null || getCurrentStackLength(engine) === 0) return result;
         continue;
       }
       if (step.type === 'DISPATCH') {
@@ -3752,7 +3758,7 @@ function enforceParameterTypes(flow: FlowDefinition, parameters: Record<string, 
 }
 
 /** The structured form of the intent-detection call, passed to aiCallback as its 4th argument. */
-function buildDetectFlowRequest(input: string, lastChatTurn: { user?: ContextEntry; assistant?: ContextEntry } | undefined, flows: FlowDefinition[], responseContext?: string): DetectFlowRequest {
+function buildDetectFlowRequest(input: string, lastChatTurn: { user?: ContextEntry; assistant?: ContextEntry } | undefined, flows: FlowDefinition[]): DetectFlowRequest {
   const conversation: DetectFlowRequest['conversation'] = [];
   for (const entry of [lastChatTurn?.user, lastChatTurn?.assistant]) {
     if (entry && (entry.role === 'user' || entry.role === 'assistant')) {
@@ -3761,7 +3767,6 @@ function buildDetectFlowRequest(input: string, lastChatTurn: { user?: ContextEnt
       // absent, or a role the conversation cannot carry
     }
   }
-  if (responseContext !== undefined) conversation.push({role:'assistant',content:responseContext});
   return {
     task: 'detect_flow',
     input: String(sanitizeInput(input)),
@@ -3788,8 +3793,8 @@ function buildDetectFlowRequest(input: string, lastChatTurn: { user?: ContextEnt
  * ({ flowName } / { parameters }). A stage-1 failure reaches the host as before; a stage-2 failure starts the flow
  * without its parameters (it asks for them) rather than losing the turn.
  */
-async function detectFlowInTwoStages(input: string, engine: Engine, flows: FlowDefinition[], responseContext?: string): Promise<{ flow: FlowDefinition, parameters?: Record<string, any> } | null> {
-  const { input: cleanInput, conversation } = buildDetectFlowRequest(input, engine.lastChatTurn, [], responseContext);
+async function detectFlowInTwoStages(input: string, engine: Engine, flows: FlowDefinition[]): Promise<{ flow: FlowDefinition, parameters?: Record<string, any> } | null> {
+  const { input: cleanInput, conversation } = buildDetectFlowRequest(input, engine.lastChatTurn, []);
   const stage1 = buildFlowStage(cleanInput, conversation, flows.map(f => ({ id: f.id, name: f.name, description: String(f.description ?? '') })));
   const reply1 = parseStageReply(await fetchAiResponse(stage1.llm.system, stage1.llm.user, engine.aiCallback, engine.aiTimeOut, stageSchema('detect_flow', stage1.llm.schema), stage1));
   const said = String(reply1.flowName ?? 'None');
@@ -3807,11 +3812,39 @@ async function detectFlowInTwoStages(input: string, engine: Engine, flows: FlowD
       const given = reply2.parameters && typeof reply2.parameters === 'object' ? reply2.parameters as Record<string, any> : {};
       return { flow, parameters: enforceParameterEnums(flow, enforceParameterTypes(flow, ownParametersOnly(flow, given))) };
     } catch (error: any) {
-      if(flow.id === '__jsfe_continue_current__' && responseContext !== undefined) throw error;
       logger.warn(`detectFlowWithParameters: stage 2 failed for "${flow.name}" (${error.message}) - the flow starts without its parameters`);
       return { flow, parameters: {} };
     }
   }
+}
+
+/**
+ * The reply ranker (jsfe/host reply-rank): what the latest message does with the question a contextual DISPATCH
+ * asked — `answers`, `abort` or `new_request`. ONE aiCallback call whose 4th argument carries both executors'
+ * instructions; the host answers with System One and covers it with a text model (its aiCallbackRank). A reply that
+ * is not an offered option throws, and the pending step stays for the caller's error policy.
+ */
+async function rankReply(input: string, engine: Engine, question: string): Promise<ReplyOption> {
+  const { input: cleanInput, conversation } = buildDetectFlowRequest(input, engine.lastChatTurn, []);
+  const request = buildReplyRank(cleanInput, conversation, question);
+  const reply = parseStageReply(await fetchAiResponse(request.llm.system, request.llm.user, engine.aiCallback, engine.aiTimeOut, stageSchema('rank_reply', request.llm.schema), request));
+  const option = String(reply.option ?? '') as ReplyOption;
+  if (!REPLY_OPTIONS.includes(option)) throw new Error(`rank_reply: "${option.slice(0, 40)}" is not an offered option`);
+  logger.info(`rank_reply: ${option} for ${JSON.stringify(cleanInput)}`);
+  return option;
+}
+
+/**
+ * A typed contextual response: the reply answers the question, so its declared fields are extracted with the
+ * intent stage-2 request (the question is the assistant's last turn). Missing fields stay missing; a failure throws.
+ */
+async function extractReplyParameters(input: string, engine: Engine, question: string, parameters: FlowParameterDefinition[]): Promise<Record<string, any>> {
+  const { input: cleanInput, conversation } = buildDetectFlowRequest(input, engine.lastChatTurn, []);
+  const reply: FlowDefinition = { id: '__jsfe_reply__', name: 'CurrentQuestion', version: '1.0.0', description: 'The reply to the current question', steps: [], parameters };
+  const stage2 = buildParameterStage(cleanInput, conversation.concat([{ role: 'assistant', content: question }]), reply);
+  const answer = parseStageReply(await fetchAiResponse(stage2.llm.system, stage2.llm.user, engine.aiCallback, engine.aiTimeOut, stageSchema('extract_parameters', stage2.llm.schema), stage2));
+  const given = answer.parameters && typeof answer.parameters === 'object' ? answer.parameters as Record<string, any> : {};
+  return structuredClone(enforceParameterEnums(reply, enforceParameterTypes(reply, ownParametersOnly(reply, given))));
 }
 
 /** The OpenAI-compatible response_format wrapper a host already reads from the 3rd argument. */
@@ -3831,7 +3864,7 @@ export async function getFlowForInput(input: string, engine: Engine): Promise<Fl
   return result ? result.flow : null;
 }
 
-export async function detectFlowWithParameters(input: string, engine: Engine, continuation?: FlowDefinition, responseContext?: string): Promise<{ flow: FlowDefinition, parameters?: Record<string, any> } | null> {
+export async function detectFlowWithParameters(input: string, engine: Engine): Promise<{ flow: FlowDefinition, parameters?: Record<string, any> } | null> {
   // CRITICAL: This function requires AI access via engine.aiCallback
   // Without AI, the engine cannot detect user intent and activate flows
   // Sessions would never be activated as no workflows could be triggered
@@ -3852,7 +3885,7 @@ export async function detectFlowWithParameters(input: string, engine: Engine, co
 
     // Filter to only primary flows for AI intent detection
     const primaryFlows = flowsMenu.filter(flow => flow.primary === true);
-    const flowsForIntentDetection = (primaryFlows.length > 0 ? primaryFlows : flowsMenu).concat(continuation ? [continuation] : []);
+    const flowsForIntentDetection = primaryFlows.length > 0 ? primaryFlows : flowsMenu;
 
     logger.debug(`Using ${flowsForIntentDetection.length} flows for intent detection (${primaryFlows.length} primary flows available)`);
 
@@ -3887,7 +3920,7 @@ export async function detectFlowWithParameters(input: string, engine: Engine, co
     }
 
     if (engine.intentDetection === 'two-stage') {
-      return await detectFlowInTwoStages(input, engine, flowsForIntentDetection, responseContext);
+      return await detectFlowInTwoStages(input, engine, flowsForIntentDetection);
     } else {
       // the original single call, below
     }
@@ -3923,12 +3956,11 @@ export async function detectFlowWithParameters(input: string, engine: Engine, co
     }
 
     // Let AI errors (timeout, communication failures) propagate to the host
-    if(responseContext !== undefined) context += `<current-response-context>\n${responseContext}\n</current-response-context>\n`;
-    const request = buildDetectFlowRequest(input, engine.lastChatTurn, flowsForIntentDetection, responseContext);
+    const request = buildDetectFlowRequest(input, engine.lastChatTurn, flowsForIntentDetection);
     const aiResponse = await fetchAiTask(task, rules, context, input, flowsForIntentDetection, jsonSchema, engine.aiCallback, engine.aiTimeOut, request);
 
     if (aiResponse && aiResponse.flowName && aiResponse.flowName !== 'None' && aiResponse.flowName !== 'null') {
-      const flow = flowsMenu.concat(continuation ? [continuation] : []).find(flow => flow.name.toLowerCase() === aiResponse.flowName.toLowerCase() || flow.id === aiResponse.flowName);
+      const flow = flowsMenu.find(flow => flow.name.toLowerCase() === aiResponse.flowName.toLowerCase() || flow.id === aiResponse.flowName);
       if (flow) {
         // Defensive: strip empty-string keys from AI-generated parameters.
         // AI occasionally emits { "": value } which would cascade into flow
@@ -5163,6 +5195,22 @@ async function handleDispatchStep(currentFlowFrame: FlowFrame, engine: Engine): 
     return '';
   }
   return terminateForDispatch(currentFlowFrame,engine);
+}
+
+/** A withdrawn request ends as a RETURN does: the DISPATCH step is consumed and every flow finalizes and ends. */
+function terminateForAbort(currentFlowFrame: FlowFrame, engine: Engine): void {
+  const step = currentFlowFrame.flowStepsStack.pop()!;
+  // The caller chose to stop: `user_aborted`, whatever the step declared for an unanswered question; its reason says where.
+  const declared = step.outcome !== undefined ? resolveDeclaredOutcome(step, currentFlowFrame, engine) : currentFlowFrame.declaredOutcome;
+  currentFlowFrame.declaredOutcome = { outcome: 'user_aborted', reason: declared?.reason || 'request_withdrawn' };
+  while (engine.flowStacks.length > 0) {
+    const poppedStack = engine.flowStacks.pop();
+    for (const flow of poppedStack || []) {
+      finalizeFlowTransaction(engine, flow, 'return');
+      auditLogger.logFlowExit(flow.flowName, currentFlowFrame.userId, flow.transaction.id, 'request_withdrawn');
+    }
+  }
+  initializeFlowStacks(engine);
 }
 
 function terminateForDispatch(currentFlowFrame: FlowFrame, engine: Engine): string {
@@ -7308,52 +7356,46 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
 
     // A DISPATCH is consumed within the call that raised it; never carry one into another turn.
     engine.pendingDispatchFrom = null;
-    // One routing decision for the original turn, shared by guarded and ordinary dispatch.
-    let detected: Awaited<ReturnType<typeof detectFlowWithParameters>> | undefined;
     let activatedThisTurn = false;
-    let detectedResponseContext: string | undefined;
+    // The reply ranker's verdict this turn. Only a new request is routed: after `answers` a later ordinary DISPATCH
+    // (e.g. an answer with nothing usable in it) hands the turn to the host, so an answer never restarts its own flow.
+    let ranked: ReplyOption | null = null;
+    // `abort` is a RETURN: every flow ends and this is the turn's reply.
+    let abortReply: string | null = null;
     let guardedRoutingFailed = false;
-    const route = async (continuation?: FlowDefinition, responseContext?: string) => {
-      if (detected === undefined) {
-        detected = await detectFlowWithParameters(String(sanitizedInput),engine,continuation,responseContext);
-        detectedResponseContext = responseContext;
-      } else if(continuation?.parameters?.length && (responseContext !== detectedResponseContext || JSON.stringify(continuation.parameters) !== JSON.stringify(detected?.flow.parameters))) {
-        throw new Error('A typed contextual response cannot reuse an incompatible routing decision this turn');
-      }
-      return detected;
-    };
     engine.dispatchIfMatched = async (frame,step) => {
       if(activatedThisTurn && step.responseParameters === undefined && step.responseVariable === undefined)return false;
-      if (engine.flowsMenu.some(flow=>flow.name.toLowerCase() === 'continuecurrent' || flow.id.toLowerCase() === '__jsfe_continue_current__')) throw new Error('ContinueCurrent is reserved for contextual dispatch');
       let declaration;
       try { declaration = validateContextualResponseStep(step,engine.flowsMenu.find(flow=>flow.id===frame.flowId)); if(activatedThisTurn && declaration)throw new Error('Typed contextual response cannot classify after a flow activation this turn'); } catch(error) { guardedRoutingFailed = true; throw error; }
-      const context = interpolateMessage(step.responseContext,frame.contextStack,frame.variables,engine).trim();
+      const question = interpolateMessage(step.responseContext,frame.contextStack,frame.variables,engine).trim();
       if(declaration) {
         declaration.parameters = declaration.parameters.map((parameter: FlowParameterDefinition)=>({...parameter,description:interpolateMessage(parameter.description,frame.contextStack,frame.variables,engine).trim()}));
         if(declaration.parameters.some((parameter: FlowParameterDefinition)=>!parameter.description)) { guardedRoutingFailed=true; throw new Error('Contextual response parameter description resolved empty'); }
       }
-      const continuation: FlowDefinition = {id:'__jsfe_continue_current__',name:'ContinueCurrent',version:'1.0.0',primary:true,steps:[],...(declaration?{parameters:declaration.parameters}:{}),description:`The caller is responding to the requested ${context} or reports that the requested information is invalid, unknown or unavailable; datos incorrectos o inválidos, no lo sé, no lo tengo, no puedo dar el dato. Includes asking how to provide the requested information. Not a different service request or unrelated question; choose its workflow when offered, otherwise None for the host.`};
-      let selected;
-      try { selected = await route(continuation,context); } catch (error) { guardedRoutingFailed = true; throw error; }
-      // A contextual handoff must not restart its own live workflow without new input.
-      // The host has the broader dialogue needed to clarify this otherwise empty re-entry.
-      if (selected && selected.flow.id !== continuation.id && !Object.keys(selected.parameters || {}).length && engine.flowStacks.flat().some(active => active.flowId === selected!.flow.id)) {
-        selected = null;
-        detected = null;
-      }
-      if (selected?.flow.id === continuation.id) {
-        if(declaration) frame.variables[declaration.variable] = structuredClone(selected.parameters || {});
+      // A model error leaves this live continuation pending for the caller's error policy.
+      let option: ReplyOption;
+      try { option = await rankReply(String(sanitizedInput),engine,question); } catch (error) { guardedRoutingFailed = true; throw error; }
+      ranked = option;
+      if (option === 'answers') {
+        if (declaration) {
+          try { frame.variables[declaration.variable] = await extractReplyParameters(String(sanitizedInput),engine,question,declaration.parameters); } catch (error) { guardedRoutingFailed = true; throw error; }
+        } else {
+          // no typed response: the flow reads the reply itself
+        }
+        logger.info(`Contextual DISPATCH in '${frame.flowName}': the reply answers the current question; the flow continues`);
         return false;
+      } else if (option === 'abort') {
+        // No recovery stamp: the caller chose to stop, so the host has nothing to resume or post-mortem.
+        abortReply = getSystemMessage(engine,'cmd_request_aborted');
+        terminateForAbort(frame,engine);
+        logger.info(`Contextual DISPATCH in '${frame.flowName}': the caller withdrew the request; every flow ended`);
+        return true;
+      } else {
+        stampStepRecovery(step,frame,engine);
+        terminateForDispatch(frame,engine);
+        logger.info(`Contextual DISPATCH in '${frame.flowName}': a new request; this turn's input goes to intent detection`);
+        return true;
       }
-      stampStepRecovery(step,frame,engine);
-      terminateForDispatch(frame,engine);
-      if (!selected) return true; // Real host handoff: ordinary dispatch consumes the cached None below.
-      engine.pendingDispatchFrom = null;
-      engine.recordDispatch({fromFlow:frame.flowName,matchedFlow:selected.flow.name});
-      engine.clearFlowOutcome();
-      activatedThisTurn = true;
-      await isFlowActivated(String(sanitizedInput),engine,userId,selected);
-      return true;
     };
 
     // Check if we're already in a flow (using new stack-of-stacks)
@@ -7411,7 +7453,10 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
 
       try {
         const response = await playFlowFrame(engine);
-        if (engine.pendingDispatchFrom === null) {
+        if (abortReply !== null) {
+          logger.info(`Flow response (request withdrawn): ${abortReply}`);
+          return abortReply;
+        } else if (engine.pendingDispatchFrom === null) {
           logger.info(`Flow response: ${response}`);
           return response;
         } else {
@@ -7441,8 +7486,7 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
     engine.pendingDispatchFrom = null;
 
     try {
-      const routed = await route();
-      const activatedFlow = activatedThisTurn || routed?.flow.id === '__jsfe_continue_current__' ? null : await isFlowActivated(String(sanitizedInput), engine, userId, routed);
+      const activatedFlow = activatedThisTurn || (ranked !== null && ranked !== 'new_request') ? null : await isFlowActivated(String(sanitizedInput), engine, userId);
       if (activatedFlow) activatedThisTurn = true;
 
       if (dispatchedFrom !== null) {

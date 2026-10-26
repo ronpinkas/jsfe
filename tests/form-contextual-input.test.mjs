@@ -1,4 +1,4 @@
-/** Contextual field intake uses ordinary DISPATCH, never a second model role. Fixture decisions only. */
+/** Contextual field intake: the reply ranker decides, the stage-2 extraction reads the answer. Fixture decisions only. */
 import assert from 'node:assert/strict';
 import {WorkflowEngine} from '../dist/index.js';
 import {FLOWS,defineForm,linkFormSchemas} from '../dist/forms/index.js';
@@ -14,8 +14,9 @@ function fixture({choice='ContinueCurrent',answer='A duplicate charge appeared.'
  const calls=[];
  const ai=async(system,user,schema,r)=>{
   calls.push({system,user,schema,request:r});
-  assert.ok(['detect_flow','extract_parameters'].includes(r.task),'No separate classifier task');
+  assert.ok(['rank_reply','detect_flow','extract_parameters'].includes(r.task),'Only the ranker and the intent stages');
   if(fail===r.task)throw new Error('synthetic routing failure');
+  if(r.task==='rank_reply')return JSON.stringify({option:choice==='ContinueCurrent'?'answers':choice==='None'?'abort':'new_request'});
   return JSON.stringify(r.task==='detect_flow'?{flowName:choice}:{parameters:answer===undefined?{}:{answer}});
  };
  const engine=new WorkflowEngine(quiet,ai,linkFormSchemas([...FLOWS,form,other]),[],STANDARD_FUNCTIONS,{},false,'en');engine.disableCommands();engine.intentDetection='two-stage';
@@ -47,17 +48,17 @@ await test('missing extraction yields uncertainty to host with no field commit o
  const state=t.session.cargo.forms[t.session.cargo.formTasks.case];assert.ok(state);assert.equal(state.values.details,undefined);assert.equal(t.session.lastFlowRecovery.mode,'resume');assert.equal(t.calls.length,2);
  assert.equal(t.session.lastTurnDispatch.matchedFlow,null);
 });
-await test('None gives the host the turn and retains resumable progress',async()=>{
- const t=fixture({choice:'None'});await t.say('start',true);await t.say('What does that mean?');
- assert.equal(t.session.cargo.effects,undefined);assert.equal(t.calls.length,1);assert.equal(t.session.flowStacks.flat().length,0);assert.equal(t.session.lastFlowRecovery.mode,'resume');
+await test('a withdrawn request ends every flow as a RETURN, reported user_aborted',async()=>{
+ const t=fixture({choice:'None'});await t.say('start',true);await t.say('never mind');
+ assert.equal(t.session.cargo.effects,undefined);assert.equal(t.calls.length,1);assert.equal(t.session.flowStacks.flat().length,0);assert.equal(t.session.lastFlowRecovery,undefined);assert.equal(t.session.lastFlowOutcome.outcome,'user_aborted');assert.match(t.session.response,/The process has been cancelled at your request - how can I help you\?/);
 });
-await test('same primary with no extracted input yields instead of restarting its own prompt',async()=>{
- const t=fixture({choice:'Case',answer:null});await t.say('start',true);await t.say('I have a complaint.');assert.equal(t.session.cargo.effects,undefined);assert.equal(t.session.flowStacks.flat().length,0);assert.equal(t.session.lastTurnDispatch.matchedFlow,null);assert.equal(t.calls.length,2);
+await test('a new request for the same primary starts it again',async()=>{
+ const t=fixture({choice:'Case',answer:null});await t.say('start',true);assert.match(await t.say('I want to report another issue.'),/What happened/);assert.equal(t.session.cargo.effects,undefined);assert.equal(t.session.lastTurnDispatch.matchedFlow,'Case');assert.deepEqual(t.calls.map(c=>c.request.task),['rank_reply','detect_flow','extract_parameters']);
 });
 await test('a different workflow starts without storing the old field',async()=>{
- const t=fixture({choice:'Other'});await t.say('start',true);await t.say('Instead do another service');assert.equal(t.session.cargo.other,true);assert.equal(t.session.cargo.effects,undefined);assert.equal(t.calls.length,1);
+ const t=fixture({choice:'Other'});await t.say('start',true);await t.say('Instead do another service');assert.equal(t.session.cargo.other,true);assert.equal(t.session.cargo.effects,undefined);assert.deepEqual(t.calls.map(c=>c.request.task),['rank_reply','detect_flow']);
 });
-for(const fail of ['detect_flow','extract_parameters'])await test(fail+' failure preserves the pending owner and cannot execute',async()=>{
+for(const fail of ['rank_reply','extract_parameters'])await test(fail+' failure preserves the pending owner and cannot execute',async()=>{
  const t=fixture({fail});await t.say('start',true);await assert.rejects(t.say('A duplicate charge appeared.'),/synthetic routing failure/);assert.equal(t.engine.cargo.effects,undefined);assert.ok(t.engine.flowStacks.flat().length);assert.equal(t.engine.flowStacks.flat().at(-1).flowStepsStack.at(-1).id,'response_dispatch');
 });
 await test('activation parameters use their declared extraction description without a second routing decision',async()=>{
