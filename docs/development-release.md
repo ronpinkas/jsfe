@@ -1,3 +1,9 @@
+## 1.10.5: a key named before it
+
+At a numbered choice, a word naming the key said right before it picks the key: "el número 4", "opción 2", "number 4", "the
+4" (`keyWithOnlyCourtesy`; prod 2026-10-25 18:25, "Número 4" and "El número 4" at a numbered product list were not
+understood, twice, and the caller lost the flow). A number anywhere else in a sentence is still not a key.
+
 ## 1.10.4: forms that must complete
 
 `must_complete:true` on a form or a field (a field inherits it from any enclosing form; `false` on a field opts out): an

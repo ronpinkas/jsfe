@@ -237,4 +237,11 @@ for (const t of ['voy a pagar y ya ahora mismo', 'quiero ver mi saldo y a la vez
    eq(isSpelledFragment(t), false, `not spelled: "${t}"`);
 }
 eq(isSpelledFragment('s o n n y at gmail dot com'), false, 'a whole address is not a fragment');
+// A word naming the key, right before it, picks the key (prod 2026-10-25 18:25: "Número 4" at a numbered product list).
+const LIST = ['1', '2', '3', '4', '5'].map((k) => ({ key: k, words: [k] }));
+for (const said of ['Número 4', 'El número 4', 'el 4', 'number 4', 'the number 4', 'option 4', 'opción cuatro', 'el número cuatro por favor'])
+   eq(pickChoice(said, LIST), '4', `a key named before it: "${said}"`);
+for (const said of ['4 o 5', 'número 4 y 5', 'quiero el número 4 de la otra lista', 'mi número es 4'])
+   eq(pickChoice(said, LIST) === '4', false, `not a bare key: "${said}"`);
+eq(pickChoice('opción 1', [{ key: 'yes', words: ['1'], exact: true }, { key: 'no', words: ['2'] }]), 'yes', 'a firm choice keyed 1: "opción 1" is pressing 1');
 console.log(`answer: ${checks} checks passed`);

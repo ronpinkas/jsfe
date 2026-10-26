@@ -170,13 +170,18 @@ function textRequest(input, words, extra) {
  * when `yesOk`, a YES word ("yes 1", "sí, 1"). Owner decision 2026-10-15: "Yes 1" at "tell me the product number" was
  * missed. Anything else around the key ("no 1", "1 or 2", "I paid 1 already") is not that key.
  */
+// Words that name the key itself when said right before it: "el número 4", "opción 2", "number 4", "the 4" (prod
+// 2026-10-25 18:25: "Número 4" and "El número 4" at a numbered product list were not understood, twice).
+const KEY_NAMES = new Set(['number', 'numero', 'option', 'opcion', 'item', 'choice', 'the', 'el', 'la'].map(normalize));
 function keyWithOnlyCourtesy(b, key, yesOk) {
    const tk = String(b).replace(/\./g, ' ').split(' ').filter(Boolean);
    const at = tk.reduce((acc, t, i) => (t === key ? [...acc, i] : acc), []);
    if (at.length !== 1) {
       return false;
    } else {
-      const rest = tk.filter((t, i) => i !== at[0]).join(' ');
+      let from = at[0];
+      while (from > 0 && at[0] - from < 2 && KEY_NAMES.has(tk[from - 1])) from--;
+      const rest = tk.filter((t, i) => i < from || i > at[0]).join(' ');
       return onlyAffirmative(rest, yesOk ? ANSWER_WORDS.yes : [], false);
    }
 }
