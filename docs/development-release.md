@@ -1,3 +1,11 @@
+## 1.10.4: forms that must complete
+
+`must_complete:true` on a form or a field (a field inherits it from any enclosing form; `false` on a field opts out): an
+unreadable answer, long or short, a confirmation miss and an unresolved ambiguity are asked again instead of yielding to
+DISPATCH (reference, "Retry, yield and recovery"). Prod 2026-10-25: "el número postal el código postal" at the billing-ZIP
+correction ended the payment. The form runaway guard now counts passes since the caller's last answer, so a caller who
+needs several tries is not mistaken for a loop.
+
 ## 1.10.3: a field is ready before an unnamed answer fills it
 
 A bare number never fills, out of order, a field whose `depends_on` prerequisites are not filled yet (`formInputChain`

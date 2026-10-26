@@ -9,6 +9,21 @@ export function missFormInput(cargo,id,input) {
    const state=cargo.forms?.[id];if(!state)throw new Error('Cannot record a miss without its owned form');
    state.misses ||= {};state.feedback ||= {};state.misses[input]=Number(state.misses[input]||0)+1;state.feedback[input]='miss';return state.misses[input];
 }
+/** must_complete: the field's own declaration (true or false) wins, else any enclosing form that declares it. Such an input never hands the
+ * turn away on an unreadable answer: it says it did not catch that and asks again. Its exits stay explicit (the form's
+ * stop words, max_attempts and on_exhausted, and whatever the host intercepts before the engine). */
+export function formMustComplete(cargo,id,input) {
+   const seen=new Set();let name=input;
+   while(id&&cargo.forms?.[id]&&!seen.has(id)) {
+      seen.add(id);const state=cargo.forms[id];
+      const group=(state.specs||[]).find(s=>s.name===name||s.any_of?.some(i=>i.name===name));
+      const member=group?.any_of?.find(i=>i.name===name);
+      for(const declared of [member?.must_complete,group?.must_complete])if(typeof declared==='boolean')return declared;
+      if(state.must_complete===true)return true;
+      name=state.result_input;id=state.parent;
+   }
+   return false;
+}
 /** Explicit retry wins. Otherwise acknowledge only an actual unrecognized answer, once per re-ask. */
 export function formInputPrompt(cargo,id,input,spec,data={},language='en') {
    const es=language==='es',feedback=cargo.forms?.[id]?.feedback?.[input];

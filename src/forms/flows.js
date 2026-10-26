@@ -116,8 +116,9 @@ function validateAcceptanceDeclarations(id, inputs) {
    }
 }
 
-export function formFlow({ id, name, version, description, inputs, after = [], extraVars = {}, parameters = [], confirm = null, before_confirm = [], declined = [], stop = '', close_on_stop = false, resume_on_parent_change = false, before = [], done = true, primary = false, scope = 'isolated', validator = '', confirmation_condition = 'true', prompt = undefined, prompt_es = undefined, incomplete_outcome = null, on_exhausted = null }) {
+export function formFlow({ id, name, version, description, inputs, after = [], extraVars = {}, parameters = [], confirm = null, before_confirm = [], declined = [], stop = '', close_on_stop = false, resume_on_parent_change = false, before = [], done = true, primary = false, scope = 'isolated', validator = '', confirmation_condition = 'true', prompt = undefined, prompt_es = undefined, incomplete_outcome = null, on_exhausted = null, must_complete = false }) {
    validateFormExhaustion(on_exhausted);
+   if (typeof must_complete !== 'boolean') throw new Error(`FORM ${id}: must_complete must be true or false`);
    validateAcceptanceDeclarations(id, inputs);
    const incompleteFrom=incomplete_outcome && Object.hasOwn(incomplete_outcome,'from');
    if(incompleteFrom) {
@@ -137,13 +138,13 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
    ] : [];
    return {
       id, name, version, description, scope, metadata:{formProtocol:2}, parameters: [...parameters, { name: 'form_instance', type: 'string', internal: true, description: 'Internal instance to resume' }], ...(primary ? { primary: true } : {}), ...(prompt ? { prompt, prompt_es } : {}),
-      variables: vars({ form_on_exhausted:on_exhausted, form_incomplete_outcome:incompleteFrom?null:incomplete_outcome, form_instance: '', form_internal_resume: false, form_resume_owner:'', form_arguments:{}, form_exhaustion:null, form_values: {}, form_validation: '', initial_readings: [], inputs: resolveFormInputs(inputs, FIELD_PRESETS), parent_form: '', result_input: '', questions: [], provides: null, exit_context: '', exit_context_es: '', form_confirm_q: '', form_confirm_q_es: '', form_confirmation:confirm || {}, form_should_confirm:false, ...extraVars }),
+      variables: vars({ form_on_exhausted:on_exhausted, form_must_complete:must_complete, form_incomplete_outcome:incompleteFrom?null:incomplete_outcome, form_instance: '', form_internal_resume: false, form_resume_owner:'', form_arguments:{}, form_exhaustion:null, form_values: {}, form_validation: '', initial_readings: [], inputs: resolveFormInputs(inputs, FIELD_PRESETS), parent_form: '', result_input: '', questions: [], provides: null, exit_context: '', exit_context_es: '', form_confirm_q: '', form_confirm_q_es: '', form_confirmation:confirm || {}, form_should_confirm:false, ...extraVars }),
       steps: [
          ...contextualResponseRuntimeSteps(id,[],hasFormResponse(inputs)?[CONTEXTUAL_RESPONSES_REQUIREMENT]:[]),
          ...(hasFormResponse(inputs)?[{...SET(`${id}_response_reader_required`,'noop',"typeof validateFormResponse === 'function'"),requireTrue:true}]:[]),
          ...proposalRuntimeSteps(id,[],hasInputProposals(inputs)?[INPUT_PROPOSALS_REQUIREMENT]:[]),
          SET(`${id}_resume_kind`, 'form_internal_resume', '!!form_instance'),
-         SET(`${id}_open`, 'form_instance', `openFormInstance(cargo, ${JSON.stringify(id)}, inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: ${resume_on_parent_change===true}, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[${JSON.stringify(id)}] || '' : ''), providers: provides, questions: questions, incomplete_outcome: ${incompleteExpression}, on_exhausted: form_on_exhausted })`),
+         SET(`${id}_open`, 'form_instance', `openFormInstance(cargo, ${JSON.stringify(id)}, inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: ${resume_on_parent_change===true}, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[${JSON.stringify(id)}] || '' : ''), providers: provides, questions: questions, incomplete_outcome: ${incompleteExpression}, on_exhausted: form_on_exhausted, must_complete: form_must_complete })`),
          SIDE(`${id}_task`, `(!parent_form ? (cargo.formTasks = cargo.formTasks || {}, cargo.formTasks[${JSON.stringify(id)}] = form_instance) : true, true)`),
          SIDE(`${id}_provider_reset`, '(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].providerGateActive, true)'),
          SIDE(`${id}_pass_reset`, '(cargo.forms[form_instance].replays = 0, form_internal_resume ? true : (cargo.forms[form_instance].attempts = {},cargo.forms[form_instance].misses={},cargo.forms[form_instance].feedback={}), true)'),
@@ -234,7 +235,7 @@ const collectInput = {
    id: 'collect-input', name: 'CollectInput', version: '1.0.0', scope: 'isolated',
    description: "Worker: ask the form's current input once and file the answer wherever it belongs in the form chain (matchInputs, decided by scope; a declared confirm_against pair is asked). One reading → collect-input-accept; ambiguous → disambiguate-input; a question about the form's data → provide-data; a short miss → counted, the loop re-asks; 3+ words that fit nothing → DISPATCH. Params: form, current, questions, provides, exit_context(_es).",
    parameters: ['form', 'current', 'questions', 'provides', 'exit_context', 'exit_context_es'].map((n) => ({ name: n, type: ['questions'].includes(n) ? 'array' : n === 'provides' ? 'object' : 'string', description: n })),
-   variables: vars({ ci_partial:'', ci_exhaustion:null, ci_d: {}, ci_pre: '', ci_val: '', ci_routed: '', ci_names: [], ci_chain: [], ci_spec: null, ci_choices: [], ci_q: '', ci_q_es: '', ci_missed: 0, ci_max: 3, ci_misses:0,ci_miss_limit:2, ci_m: null, ci_qkey: '', ci_skip_gate:'', ci_words: 0, ci_digits: null, ci_amount: false, ci_as_spoken:false, ci_reader:{}, ci_pii: false, ci_ctx: '', ci_ctx_es: '' }),
+   variables: vars({ ci_partial:'', ci_exhaustion:null, ci_d: {}, ci_pre: '', ci_val: '', ci_routed: '', ci_names: [], ci_chain: [], ci_spec: null, ci_choices: [], ci_q: '', ci_q_es: '', ci_missed: 0, ci_max: 3, ci_misses:0,ci_miss_limit:2,ci_must:false, ci_m: null, ci_qkey: '', ci_skip_gate:'', ci_words: 0, ci_digits: null, ci_amount: false, ci_as_spoken:false, ci_reader:{}, ci_pii: false, ci_ctx: '', ci_ctx_es: '' }),
    steps: [
       SET('ci_find_spec', 'ci_spec', "(function () { var s = ((cargo.forms[form] || {}).specs || []).filter(function (s) { return s.name === current; })[0]; return s ? (Array.isArray(s.any_of) ? Object.assign({}, s, { profile: { kind: 'group' } }) : s) : null; })()"),
       SET('ci_current_names', 'ci_names', "Array.isArray(ci_spec && ci_spec.any_of) ? ci_spec.any_of.map(function (m) { return m.name; }) : [current]"),
@@ -243,7 +244,9 @@ const collectInput = {
       SET('ci_max_attempts', 'ci_max', 'Number(ci_spec.max_attempts || 3)'),
       SET('ci_context_misses','ci_misses','Number(((cargo.forms[form] || {}).misses || {})[current] || 0)'),
       SET('ci_context_limit','ci_miss_limit','Number(ci_spec.max_misses || 2)'),
-      WHEN('ci_context_yield','ci_misses >= ci_miss_limit',yieldDispatch('ci_misses_dispatch','form',"'input_misses_exhausted'")),
+      // must_complete (the field's, else the nearest form's): an unreadable answer is never handed away; it is asked again
+      SET('ci_must_complete','ci_must','formMustComplete(cargo,form,current)'),
+      WHEN('ci_context_yield','ci_misses >= ci_miss_limit && !ci_must',yieldDispatch('ci_misses_dispatch','form',"'input_misses_exhausted'")),
       SET('ci_context', 'ci_ctx', "typeof exit_context !== 'undefined' && exit_context ? exit_context : 'your request'"),
       SET('ci_context_es', 'ci_ctx_es', "typeof exit_context_es !== 'undefined' && exit_context_es ? exit_context_es : 'su solicitud'"),
       WHEN('ci_resolve_exhausted','ci_missed >= ci_max',SET('ci_exhausted_policy','ci_exhaustion','exhaustFormInput(cargo,form,current)')),
@@ -270,6 +273,7 @@ const collectInput = {
       SET('ci_validator', 'ci_val', "ci_spec.answer_validator || ''"),
       SET('ci_reader_context','ci_reader','({form:form,current:current,names:ci_names,questions:provides && Array.isArray(questions)?questions:[]})'),
       FLOW('ci_ask', 'ask-choice', 'call', { question: '{{ci_q}}', question_es: '{{ci_q_es}}', choices: '{{ci_choices}}', accept_other: true, digits: '{{ci_digits}}', amount: '{{ci_amount}}', as_spoken:'{{ci_as_spoken}}', pii: '{{ci_pii}}', exit_context: '{{ci_ctx}}', exit_context_es: '{{ci_ctx_es}}', form_context: '{{ci_reader}}', answer_precheck: '{{ci_pre}}', answer_validator: '{{ci_val}}' }),
+      SIDE('ci_answered','answerResetsFormReplays(cargo,form)'),
       // a key the input routes to a handler of its own (route_keys: [{ prefix, flow }]): that flow takes the answer
       SET('ci_route_to', 'ci_routed', "(ci_spec.route_keys || []).filter(function (r) { return String(cargo.choice || '').indexOf(r.prefix) === 0; }).map(function (r) { return r.flow; })[0] || ''"),
       WHEN('ci_route_key', 'ci_routed', FLOW('ci_route_key_flow', '{{ci_routed}}', 'call', { form: '{{form}}', input: '{{current}}' })),
@@ -297,7 +301,7 @@ const collectInput = {
          'condition: ci_m.hits.length > 0': FLOW('ci_accept', 'collect-input-accept', 'call', { hits: '{{ci_m.hits}}' }),
          "condition: ci_m.questions.length > 0": END('ci_question_handled'),
          "condition: ci_qkey && ci_qkey.indexOf('__') !== 0": FLOW('ci_question_asked', 'provide-data', 'call', { form:'{{form}}', provides: '{{provides}}', asked: '{{ci_qkey}}', no_menu: 'true',no_gate:'{{ci_skip_gate}}' }),
-         "condition: ci_words >= 3 || ci_spec.profile.kind === 'amount' && ci_words > 0": yieldDispatch('ci_elsewhere','form',"'input_not_matched'"),
+         "condition: !ci_must && (ci_words >= 3 || ci_spec.profile.kind === 'amount' && ci_words > 0)": yieldDispatch('ci_elsewhere','form',"'input_not_matched'"),
          default: SIDE('ci_miss', "(missFormInput(cargo,form,current),true)") } },
    ],
 };
@@ -419,7 +423,7 @@ const disambiguate = {
    id: 'disambiguate-input', name: 'DisambiguateInput', version: '1.0.0', scope: 'isolated',
    description: "Worker: the answer fits two or more inputs at the same scope (or a declared confirm_against pair). Stores the unambiguous readings, asks which input the rest was for (keys 1..n, never 8), stores the pick. No pick: nothing stored, not a miss. Params: readings, hits.",
    parameters: [{ name: 'readings', type: 'array', description: 'The ambiguous readings' }, { name: 'hits', type: 'array', description: 'Readings to store as they are' }, {name:'remaining',type:'array'}],
-   variables: vars({ di_form:'',di_input:'',di_prompt:'',di_prompt_es:'',di_words:0,di_misses:0, di_keys: [], di_choices: [], di_q: '', di_q_es: '', di_pick: null, di_value: '', remaining:[], di_next:[], di_rest:[] }),
+   variables: vars({ di_must:false,di_form:'',di_input:'',di_prompt:'',di_prompt_es:'',di_words:0,di_misses:0, di_keys: [], di_choices: [], di_q: '', di_q_es: '', di_pick: null, di_value: '', remaining:[], di_next:[], di_rest:[] }),
    steps: [
       WHEN('di_store_clear', 'Array.isArray(hits) && hits.length > 0', FLOW('di_store_hits', 'collect-input-accept', 'call', { hits: '{{hits}}' })),
       SET('di_number', 'di_keys', `${KEYS_JS}(readings.length)`),
@@ -429,17 +433,19 @@ const disambiguate = {
       SET('di_question', 'di_q', "(readings.every(function (r) { return r.option === true; }) ? 'Do you mean ' + readings.map(function (r) { return r.label; }).join(' or ') : (di_value ? 'Is ' + di_value + ' your ' : 'Is that your ') + readings.map(function (r) { return r.label; }).join(' or your ')) + '? ' + readings.map(function (r, i) { return (cargo.voice ? 'Press ' + di_keys[i] + ' or say ' : 'Say ') + r.label.toUpperCase(); }).join(', ') + '.'"),
       SET('di_question_es', 'di_q_es', "(readings.every(function (r) { return r.option === true; }) ? '¿Se refiere a ' + readings.map(function (r) { return r.label_es; }).join(' o a ') : (di_value ? '¿' + di_value + ' es su ' : '¿Eso es su ') + readings.map(function (r) { return r.label_es; }).join(' o su ')) + '? ' + readings.map(function (r, i) { return (cargo.voice ? 'Presione ' + di_keys[i] + ' o diga ' : 'Diga ') + r.label_es.toUpperCase(); }).join(', ') + '.'"),
       SET('di_owner','di_form','readings[0].form'),
+      SET('di_must_complete','di_must','readings.some(function(r){return formMustComplete(cargo,r.form,r.name);})'),
       SET('di_counter','di_input',"'__ambiguity:'+readings.map(function(r){return r.form+':'+r.name;}).sort().join('|')"),
       SET('di_prompt','di_prompt',"formInputPrompt(cargo,di_form,di_input,{question:di_q,question_es:di_q_es},{},'en')"),
       SET('di_prompt_es','di_prompt_es',"formInputPrompt(cargo,di_form,di_input,{question:di_q,question_es:di_q_es},{},'es')"),
       SIDE('di_feedback_consumed','consumeFormFeedback(cargo,di_form,di_input)'),
       FLOW('di_ask', 'ask-choice', 'call', { question: '{{di_prompt}}', question_es: '{{di_prompt_es}}', choices: '{{di_choices}}', accept_other: true, digits: { min: 1, max: 1 } }),
+      SIDE('di_answered','answerResetsFormReplays(cargo,di_form)'),
       SET('di_picked', 'di_pick', "/^r\\d+$/.test(String(cargo.choice || '')) ? [readings[Number(String(cargo.choice).slice(1))]] : null"),
       WHEN('di_understood','di_pick',SIDE('di_clear_misses','clearFormMisses(cargo,di_form,di_input)')),
       SET('di_word_count','di_words',"String(cargo.choiceText || '').split(/\\s+/).filter(function(w){return /[a-záéíóúüñ]/i.test(w);}).length"),
-      WHEN('di_context','!di_pick && di_words >= 3',yieldDispatch('di_context_yield','di_form',"'ambiguity_not_resolved'")),
+      WHEN('di_context','!di_pick && di_words >= 3 && !di_must',yieldDispatch('di_context_yield','di_form',"'ambiguity_not_resolved'")),
       WHEN('di_miss','!di_pick',SET('di_miss_count','di_misses','missFormInput(cargo,di_form,di_input)')),
-      WHEN('di_exhausted','!di_pick && di_misses >= 2',yieldDispatch('di_misses_yield','di_form',"'ambiguity_misses_exhausted'")),
+      WHEN('di_exhausted','!di_pick && di_misses >= 2 && !di_must',yieldDispatch('di_misses_yield','di_form',"'ambiguity_misses_exhausted'")),
       WHEN('di_retry','!di_pick',FLOW('di_retry_question','disambiguate-input','replace',{readings:'{{readings}}',hits:[],remaining:'{{remaining}}'})),
       WHEN('di_store_pick', 'di_pick', FLOW('di_store_pick_flow', 'collect-input-accept', 'call', { hits: '{{di_pick}}' })),
       SET('di_remaining_first','di_next','Array.isArray(remaining) && remaining.length ? remaining[0] : []'),
@@ -453,7 +459,7 @@ const confirmForm = {
    id: 'confirm-form', name: 'ConfirmForm', version: '1.0.0', scope: 'isolated',
    description: "Worker: ask a form's confirmation (exact YES / NO; keys 1 and 2). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an unclear short answer is asked again, a long unrelated one is DISPATCHed. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
    parameters: ['form', 'question', 'question_es', 'exit_context', 'exit_context_es','phrases','words','interrupts','no_keys','clarifications','invites'].map((n) => ({ name: n, type: ['phrases','words','interrupts','no_keys','clarifications','invites'].includes(n)?'array':'string', description: n })).concat([{ name: 'named_fields', type: 'boolean', description: "true: an answer that names one of the form's inputs (its names) without a value re-asks only that input" }]),
-   variables: vars({ named_fields: false, cf_named: null, cf_presets: FIELD_PRESETS, cf_chain: [], cf_m: null, cf_current:null, cf_result: '',cf_prompt:'',cf_prompt_es:'', cf_words: 0, cf_tries: 0, phrases:null, words:[], clarifications:[], no_keys:['2'], interrupts:[], invites:[], cf_choices:[], cf_event:'', cf_amount:false, cf_questions:[],cf_provides:null,cf_skip_gate:'' }),
+   variables: vars({ named_fields: false, cf_must: false, cf_named: null, cf_presets: FIELD_PRESETS, cf_chain: [], cf_m: null, cf_current:null, cf_result: '',cf_prompt:'',cf_prompt_es:'', cf_words: 0, cf_tries: 0, phrases:null, words:[], clarifications:[], no_keys:['2'], interrupts:[], invites:[], cf_choices:[], cf_event:'', cf_amount:false, cf_questions:[],cf_provides:null,cf_skip_gate:'' }),
    steps: [
       SIDE('cf_reset', "(cargo.formConfirm = cargo.formConfirm || {}, cargo.formConfirm[form] = '', true)"),
       SET('cf_choices','cf_choices',`[{key:'yes',phrases:['1'].concat(Array.isArray(phrases)?phrases:Array.isArray(words)?words:[]),exact:true},{key:'no',phrases:(Array.isArray(no_keys)?no_keys:['2']).concat(${JSON.stringify(ANSWER_WORDS.no)}),exact:true}].concat((Array.isArray(interrupts)?interrupts:[]).map(function(event){return {key:'event:'+event.key,phrases:event.phrases ?? event.words,exact:event.exact!==false};}))`),
@@ -463,6 +469,7 @@ const confirmForm = {
       SET('cf_prompt_es','cf_prompt_es',"formInputPrompt(cargo,form,'__confirm',{question:question,question_es:question_es},{},'es')"),
       SIDE('cf_feedback_consumed',"consumeFormFeedback(cargo,form,'__confirm')"),
       FLOW('cf_ask', 'ask-choice', 'call', { form_context:{form:'{{form}}',current:'__confirm'}, amount:'{{cf_amount}}', question: '{{cf_prompt}}', question_es: '{{cf_prompt_es}}', choices: '{{cf_choices}}', accept_other: true, reask_long: true, digits: { min: 1, max: 1 }, exit_context: '{{exit_context}}', exit_context_es: '{{exit_context_es}}' }),
+      SIDE('cf_answered','answerResetsFormReplays(cargo,form)'),
       SET('cf_event','cf_event',"(Array.isArray(interrupts)?interrupts:[]).filter(function(event){return cargo.choice==='event:'+event.key;}).map(function(event){return event.flow;})[0] || ''"),
       WHEN('cf_interrupt','cf_event',FLOW('cf_event_flow','{{cf_event}}','reboot',{form:'{{form}}',event:'{{cargo.choice}}',text:'{{cargo.choiceText}}'})),
       SET('cf_build_chain', 'cf_chain', CHAIN_JS),
@@ -480,6 +487,7 @@ const confirmForm = {
       SET('cf_named_field','cf_named',"(named_fields === true || named_fields === 'true') && cargo.choice !== 'yes' && !cf_m.hits.length && !cf_m.ambiguous.length && !cf_m.questions.length ? (function (text, chain) { var plain = function (v) { return ' ' + String(v || '').toLowerCase().replace(/[^a-z0-9áéíóúüñ]+/g, ' ').trim() + ' '; }; var said = plain(text); var named = chain.filter(function (input) { return (input.names || []).some(function (name) { return said.indexOf(plain(name)) >= 0; }); }); return named.length === 1 ? { form: named[0].form, name: named[0].name } : null; })(cargo.choiceText, cf_chain) : null"),
       WHEN('cf_question_fields','cf_m.questions.length > 0 && cf_m.hits.length > 0',FLOW('cf_question_accept','collect-input-accept','call',{hits:'{{cf_m.hits}}'})),
       WHEN('cf_question_provide','cf_m.questions.length > 0',FLOW('cf_question_answer','provide-data','call',{form:'{{form}}',provides:'{{cf_provides}}',asked_keys:'{{cf_m.questions}}',no_menu:'true',no_gate:'{{cf_skip_gate}}'})),
+      SET('cf_must_complete','cf_must',"formMustComplete(cargo,form,'__confirm')"),
       { id: 'cf_route', type: 'CASE', branches: {
          'condition: cf_m.questions.length > 0': SET('cf_question_repeat','cf_result',"'changed'"),
          "condition: cargo.choice === 'yes'": SET('cf_answered', 'cf_result', "'yes'"),
@@ -488,12 +496,12 @@ const confirmForm = {
          'condition: cf_named': SET('cf_named_reset', 'cf_result', "(resetFormInputs(cargo, cf_named.form, [cf_named.name]), 'changed')"),
          "condition: cargo.choice === 'no'": SET('cf_declined', 'cf_result', "'no'"),
          "condition: Array.isArray(clarifications) && pickChoice(String(cargo.choiceText || '').replace(/[?¿]/g,''),[{key:'clarify',phrases:clarifications,exact:true}],false)==='clarify'": SET('cf_clarification','cf_result',"'clarification'"),
-         'condition: cf_words >= 3 || cf_amount && cf_words > 0': yieldDispatch('cf_elsewhere','form',"'confirmation_not_matched'"),
+         'condition: !cf_must && (cf_words >= 3 || cf_amount && cf_words > 0)': yieldDispatch('cf_elsewhere','form',"'confirmation_not_matched'"),
          default: SET('cf_unclear', 'cf_result', "'unclear'") } },
       SET('cf_changed', 'cf_result', "cf_result ? cf_result : 'changed'"),
       // an unclear short answer is asked again (the form runs again and reaches this question), at most twice
       SET('cf_tries_count', 'cf_tries', "cf_result === 'unclear' ? missFormInput(cargo,form,'__confirm') : (clearFormMisses(cargo,form,'__confirm'),0)"),
-      WHEN('cf_misses_exhausted','cf_tries >= 2',yieldDispatch('cf_misses_dispatch','form',"'confirmation_misses_exhausted'")),
+      WHEN('cf_misses_exhausted','cf_tries >= 2 && !cf_must',yieldDispatch('cf_misses_dispatch','form',"'confirmation_misses_exhausted'")),
       WHEN('cf_bind_revision', "cf_result === 'yes'", SIDE('cf_bind', 'confirmFormRevision(cargo, form)')),
       SIDE('cf_store', "(cargo.formConfirm[form] = cf_result === 'unclear' || cf_result === 'clarification' ? 'changed' : cf_result, true)"),
    ],

@@ -35,6 +35,7 @@ export function resolveFormInputs(inputs, presets = {}) {
          if(!input.profile || input.form || input.any_of || input.bind)throw new Error('FORM proposal requires a readable leaf input; declare it on each group member or inside the subform');
          validateFormProposalPolicy(input.proposal);
       }
+      if(input.must_complete!==undefined&&typeof input.must_complete!=='boolean')throw new Error('FORM must_complete must be true or false');
       if(input.max_misses!==undefined&&(!Number.isInteger(input.max_misses)||input.max_misses<1))throw new Error('FORM max_misses must be a positive integer');
       if (input.max_attempts !== undefined && (!Number.isInteger(input.max_attempts) || input.max_attempts < 1)) throw new Error('FORM max_attempts must be a positive integer');
       if (input.any_of) input.any_of = input.any_of.map(member=>resolve({...member,
@@ -205,7 +206,7 @@ export function settleFormActivations(batch={},cargo=null) {
       rejected:rejected.map(h=>h.activation_inferred?{...h,...h.activation_entry,activation_inferred:false}:h),pending:pending.concat(accepted.filter(h=>held.has(h.activation_group))).filter(h=>!discarded.has(h.activation_group)).map(h=>held.has(h.activation_group)?{...h,ok:undefined,outcome:'pending',silent:true}:h)};
 }
 /** Explicit ownership: unrelated tasks and sibling inputs never share an instance by definition id. */
-export function openFormInstance(cargo, definition, specs, { parent = null, input = '', resume = '', task = '', providers = null, questions = null, context = false, resume_on_parent_change = undefined, incomplete_outcome = undefined, on_exhausted = undefined } = {}) {
+export function openFormInstance(cargo, definition, specs, { parent = null, input = '', resume = '', task = '', providers = null, questions = null, context = false, resume_on_parent_change = undefined, incomplete_outcome = undefined, on_exhausted = undefined, must_complete = undefined } = {}) {
    const incomplete=validateFormIncompleteOutcome(incomplete_outcome);
    validateFormExhaustion(on_exhausted);
    cargo.forms ||= {};
@@ -216,6 +217,7 @@ export function openFormInstance(cargo, definition, specs, { parent = null, inpu
       if(resume_on_parent_change!==undefined)existing.resume_on_parent_change=resume_on_parent_change===true;
       if(incomplete_outcome!==undefined)existing.incomplete_outcome=incomplete;
       if(on_exhausted!==undefined)existing.on_exhausted=on_exhausted;
+      if(must_complete!==undefined)existing.must_complete=must_complete===true;
       return resume;
    }
    if (parent && !cargo.forms[parent]) throw new Error('FORM parent does not exist');
@@ -227,13 +229,14 @@ export function openFormInstance(cargo, definition, specs, { parent = null, inpu
          if(resume_on_parent_change!==undefined)cargo.forms[child].resume_on_parent_change=resume_on_parent_change===true;
          if(incomplete_outcome!==undefined)cargo.forms[child].incomplete_outcome=incomplete;
          if(on_exhausted!==undefined)cargo.forms[child].on_exhausted=on_exhausted;
+         if(must_complete!==undefined)cargo.forms[child].must_complete=must_complete===true;
          return child;
       }
    }
    cargo.formSequence = Number(cargo.formSequence || 0) + 1;
    const id = `${definition}:${cargo.formSequence}`;
    cargo.forms[id] = { id, definition, task: owner?.task || task || id, parent, result_input: input,
-      on_exhausted:on_exhausted || '', incomplete_outcome:incomplete, context_only:!!context, resume_on_parent_change:resume_on_parent_change===true, parent_revision:owner?.revision ?? null, specs, values: {}, accepted: {}, errors: {}, pending: {}, seeds:{}, attempts: {}, misses:{}, feedback:{}, prepared: {}, data:{}, arguments:{}, contexts:{}, children: {}, childResults:{}, revision: 0,
+      on_exhausted:on_exhausted || '', must_complete:must_complete===true, incomplete_outcome:incomplete, context_only:!!context, resume_on_parent_change:resume_on_parent_change===true, parent_revision:owner?.revision ?? null, specs, values: {}, accepted: {}, errors: {}, pending: {}, seeds:{}, attempts: {}, misses:{}, feedback:{}, prepared: {}, data:{}, arguments:{}, contexts:{}, children: {}, childResults:{}, revision: 0,
       providers: providers || owner?.providers || null, questions: questions?.length ? questions : owner?.questions || [], status: 'collecting' };
    if (owner) {if(context){owner.contexts ||= {};owner.contexts[definition]=id;}else owner.children[input]=id;}
    return id;
@@ -484,6 +487,13 @@ export function pendingFormReadings(cargo,id) {
    for(const group of groups.values()){const proposed=group.filter(h=>h.activation_inferred).map(h=>({...h,ok:true}));
       if(group.every(h=>formReadingReady(cargo,h,proposed)))out.push(...group.map(h=>({...h,fromPending:true})));}
    return orderFormReadings(cargo,out);
+}
+/** The caller answered: the runaway guard (replays > formWorkLimit) counts passes WITHOUT an answer, which is what an
+ * internal loop is, so an answer resets it on the answering form and every ancestor. Counting answers too ended a form
+ * whose caller simply needed several tries (a must_complete field re-asks every unreadable answer). */
+export function answerResetsFormReplays(cargo,id) {
+   const seen=new Set();while(id&&cargo.forms?.[id]&&!seen.has(id)){seen.add(id);cargo.forms[id].replays=0;id=cargo.forms[id].parent;}
+   return true;
 }
 export function formWorkLimit(cargo,id) {
    const ancestors=new Set();while(cargo.forms?.[id]?.parent&&!ancestors.has(id)){ancestors.add(id);id=cargo.forms[id].parent;}
