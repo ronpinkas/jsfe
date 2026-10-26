@@ -101,7 +101,7 @@ const phraseAt = (tokens, i, phrase) => phrase.every((w, j) => tokens[i + j] ===
  * words from `words` — at least one of them. A YES that acts must be the whole answer (owner rule, 2026-10-14): "Yeah, sure,
  * thank you" and "Sí, claro, por favor" are YES; "yes, pay it" and "I made payments by 1" are not.
  */
-function onlyAffirmative(b, words, needOne = true, filler = []) {
+function onlyAffirmative(b, words, needOne = true, filler = [], courtesyWords = COURTESY) {
    if (!words.length && needOne) {
       return false;
    } else {
@@ -114,7 +114,7 @@ function onlyAffirmative(b, words, needOne = true, filler = []) {
    let saw = false;
    while (i < tk.length) {
       const yes = own.filter((p) => at(i, p)).sort((x, y) => y.length - x.length)[0];
-      const courtesy = yes ? null : [...COURTESY, ...filler].filter((p) => at(i, p)).sort((x, y) => y.length - x.length)[0];
+      const courtesy = yes ? null : [...courtesyWords, ...filler].filter((p) => at(i, p)).sort((x, y) => y.length - x.length)[0];
       if (yes) {
          i += yes.length;
          saw = true;
@@ -177,6 +177,15 @@ function textRequest(input, words, extra) {
  * when `yesOk`, a YES word ("yes 1", "sí, 1"). Owner decision 2026-10-15: "Yes 1" at "tell me the product number" was
  * missed. Anything else around the key ("no 1", "1 or 2", "I paid 1 already") is not that key.
  */
+// The only words a firm YES's key may carry besides CONFIRM words (owner rule 2026-10-25): "1, por favor", "sí, 1".
+const PLEASE_THANKS = ['please', 'por favor', ...THANKS].map(normalize).map((w) => w.split(' '));
+/** A firm key: the key alone, or beside please/thanks and firm CONFIRM words only ("Sí, 1" — owner 2026-10-15 and
+ * 2026-10-25). Never a soft YES word, an acknowledgement, a key-naming word, a form of address or filler beside it. */
+function firmKey(b, key) {
+   const tk = String(b).replace(/\./g, ' ').split(' ').filter(Boolean);
+   const at = tk.reduce((acc, t, i) => (t === key ? [...acc, i] : acc), []);
+   return at.length === 1 && onlyAffirmative(tk.filter((t, i) => i !== at[0]).join(' '), CONFIRM_WORDS, false, [], PLEASE_THANKS);
+}
 // Words that name the key itself when said right before it: "el número 4", "opción 2", "number 4", "the 4" (prod
 // 2026-10-25 18:25: "Número 4" and "El número 4" at a numbered product list were not understood, twice).
 const KEY_NAMES = new Set(['number', 'numero', 'option', 'opcion', 'item', 'choice', 'the', 'el', 'la'].map(normalize));
@@ -405,7 +414,10 @@ export function pickChoice(answer, choices, acceptOther) {
       const strict = all.filter((w) => c.exact === true || /^[0-9*#]$/.test(String(w).trim()) || YES_SET.has(normalize(w)))
          .filter((w) => !(amount && /^\d+$/.test(String(w).trim())));
       const isKey = (w) => /^[0-9*#]$/.test(String(w).trim());
-      const keyed = (w) => isKey(w) && (matchesChoice(raw, [w]) || keyWithOnlyCourtesy(b, String(w).trim(), !isNoType(c)) || (spoken !== b && keyWithOnlyCourtesy(spoken, String(w).trim(), !isNoType(c))));
+      const firm = c.key === 'yes' && c.exact === true;
+      const keyed = (w) => isKey(w) && (firm
+         ? firmKey(b, String(w).trim()) || (spoken !== b && firmKey(spoken, String(w).trim()))
+         : matchesChoice(raw, [w]) || keyWithOnlyCourtesy(b, String(w).trim(), !isNoType(c)) || (spoken !== b && keyWithOnlyCourtesy(spoken, String(w).trim(), !isNoType(c))));
       // A question is not a confirmation: "sure?" or "1?" never picks a choice that charges or cancels.
       if (c.exact === true && /[?¿]/.test(raw)) {
          // not this choice

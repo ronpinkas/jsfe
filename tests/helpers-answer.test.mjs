@@ -123,15 +123,16 @@ eq(pickChoice('I want option 1', [{ key: 'a', words: ['1'] }], false), '', 'a ke
 eq(pickChoice('call me at 0', [{ key: 'x', words: ['y'] }], false), '', '0 inside a sentence is not AGENT');
 eq(pickChoice('0', [{ key: 'x', words: ['y'] }], false), '__agent', 'a bare 0 is AGENT');
 // A YES that acts is the whole answer, courtesy aside (owner rule 2026-10-14); a key is the only input; an `exact` choice
-// (one that charges or cancels) holds every one of its words to that.
+// (one that charges or cancels) holds every one of its words to that. Since 2026-10-25 a firm key carries only
+// please/thanks or CONFIRM words beside it.
 const CHARGE = [{ key: 'yes', words: ['1', 'pay', 'pay it', 'confirm'], exact: true }, { key: 'no', words: ['2', 'cancel'] }];
 for (const a of ['Yes.', 'yes please', 'Yeah, sure, thank you', 'Sí, claro, por favor', "yes ma'am",
    'I agree', 'estoy de acuerdo', 'yes, go ahead', 'Yesss', '1', '1.', 'pay it', 'approved', 'de acuerdo, gracias',
-   // a key with courtesy or a YES word around it is that key (owner decision 2026-10-15: "Yes 1" was missed)
-   'yes 1', '1 please', 'sí, 1', 'um, 1, gracias']) {
+   // a key with please/thanks or a CONFIRM word beside it is that key (owner 2026-10-15: "Yes 1" was missed; 2026-10-25)
+   'yes 1', '1 please', 'sí, 1', 'sí, 1, gracias']) {
    eq(pickChoice(a, CHARGE, false), 'yes', `YES: "${a}"`);
 }
-for (const a of ['yes I want to pay 1', 'I made payments by 1,', 'yes but only $50', 'pay 1 please', '$1', 'thanks', '1 or 2', '1 1',
+for (const a of ['um, 1, gracias', 'ok 1', 'sí, está bien, 1', 'yes I want to pay 1', 'I made payments by 1,', 'yes but only $50', 'pay 1 please', '$1', 'thanks', '1 or 2', '1 1',
    // a bare "I want" / "quiero" is never a confirmation (owner decision 2026-10-15)
    'Quiero pagar', 'quiero', 'I want to pay', 'I want', 'I would like to pay',
    'I want to pay', 'ok so how much is it']) {
@@ -243,7 +244,7 @@ for (const said of ['Número 4', 'El número 4', 'el 4', 'number 4', 'the number
    eq(pickChoice(said, LIST), '4', `a key named before it: "${said}"`);
 for (const said of ['4 o 5', 'número 4 y 5', 'quiero el número 4 de la otra lista', 'mi número es 4'])
    eq(pickChoice(said, LIST) === '4', false, `not a bare key: "${said}"`);
-eq(pickChoice('opción 1', [{ key: 'yes', words: ['1'], exact: true }, { key: 'no', words: ['2'] }]), 'yes', 'a firm choice keyed 1: "opción 1" is pressing 1');
+eq(pickChoice('opción 1', [{ key: 'yes', words: ['1'], exact: true }, { key: 'no', words: ['2'] }]), '', 'a firm YES keyed 1: "opción 1" does not confirm (owner rule 2026-10-25)');
 // At a soft question, a word pointing at the offered thing may lead the YES (prod 2026-10-25 17:46: "Ese está bien.").
 const SOFT = [{ key: 'yes', words: ['1'] }, { key: 'no', words: ['2'] }];
 for (const said of ['Ese está bien.', 'esa sí', 'ese mismo', 'eso es', 'that one is fine', "that's the one", 'this one is fine', 'ese está bien, gracias'])
@@ -253,4 +254,10 @@ for (const said of ['ese', 'ese no', 'esa no está bien', 'ese es otro', 'that o
 const FIRM = [{ key: 'yes', words: ['1'], exact: true }, { key: 'no', words: ['2'] }];
 for (const said of ['Ese está bien.', 'that is the one', 'ese mismo', 'esa sí está bien'])
    eq(pickChoice(said, FIRM) === 'yes', false, `firm stays strict: "${said}"`);
+// A firm YES takes its key or a CONFIRM word, with please/thanks and nothing else (owner rule 2026-10-25).
+const FIRM_ONLY = [{ key: 'yes', words: ['1'], exact: true }, { key: 'no', words: ['2'] }];
+for (const said of ['1', 'uno', 'one', '1 por favor', '1, gracias', 'sí 1', 'yes, 1', 'sí, uno, gracias', 'sí', 'sí, por favor', 'yes please', 'sí gracias', 'sí claro', 'sí, sí', 'sí, está bien', 'okay yes', 'pues sí', 'um yes', 'sí señor'])
+   eq(pickChoice(said, FIRM_ONLY), 'yes', `firm: "${said}" confirms`);
+for (const said of ['1 está bien', 'ok 1', 'sí, ok, 1', 'bueno 1', 'opción 1', 'sí, opción 1', 'el número 1', 'that one is fine', 'um 1', '1 señor', 'ok', 'está bien', 'perfecto', 'quiero 1 cosa'])
+   eq(pickChoice(said, FIRM_ONLY) === 'yes', false, `firm: "${said}" does not confirm`);
 console.log(`answer: ${checks} checks passed`);

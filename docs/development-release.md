@@ -1,3 +1,10 @@
+## 1.10.7: a firm question's key in minimal context
+
+At a firm question (a yes choice that charges or cancels), its key confirms only alone or beside please/thanks or a CONFIRM
+word: "1", "uno", "1, por favor", "Sí, 1" (owner rule 2026-10-25). It no longer confirms beside a soft YES word or an
+acknowledgement ("1 está bien", "ok 1"), a key-naming word ("opción 1", "el número 1", which 1.10.5 had admitted) or other
+filler ("um, 1"). Firm YES words are unchanged ("Sí, está bien" still confirms).
+
 ## 1.10.6: pointing at the offered thing
 
 At a soft question (a yes choice that does not charge or cancel), a word pointing at the offered thing may lead the YES:
