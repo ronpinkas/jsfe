@@ -1077,6 +1077,10 @@
                   "quantity": {
                     "type": "number",
                     "description": "integer"
+                  },
+                  "sku": {
+                    "type": "string",
+                    "description": "lineItem.sku; '' when the item has none"
                   }
                 },
                 "required": [
@@ -1188,6 +1192,41 @@
                     "null"
                   ],
                   "description": ""
+                }
+              }
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Order.tags as recorded, uninterpreted (a tenant flow decides what one means)"
+            },
+            "note": {
+              "type": "string",
+              "description": "Order.note as recorded, '' when none, uninterpreted"
+            },
+            "fulfillmentOrders": {
+              "type": "array",
+              "description": "Order.fulfillmentOrders (first 10)",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "description": "FulfillmentOrder.status, e.g. OPEN/CLOSED"
+                  },
+                  "deliveryMethod": {
+                    "type": "string",
+                    "description": "deliveryMethod.methodType, e.g. SHIPPING/PICK_UP/LOCAL/NONE; '' when absent"
+                  },
+                  "location": {
+                    "type": [
+                      "object",
+                      "null"
+                    ],
+                    "description": "assignedLocation {name, address1, city}; null when absent"
+                  }
                 }
               }
             }
