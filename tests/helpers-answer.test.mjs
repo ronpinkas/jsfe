@@ -244,4 +244,13 @@ for (const said of ['Número 4', 'El número 4', 'el 4', 'number 4', 'the number
 for (const said of ['4 o 5', 'número 4 y 5', 'quiero el número 4 de la otra lista', 'mi número es 4'])
    eq(pickChoice(said, LIST) === '4', false, `not a bare key: "${said}"`);
 eq(pickChoice('opción 1', [{ key: 'yes', words: ['1'], exact: true }, { key: 'no', words: ['2'] }]), 'yes', 'a firm choice keyed 1: "opción 1" is pressing 1');
+// At a soft question, a word pointing at the offered thing may lead the YES (prod 2026-10-25 17:46: "Ese está bien.").
+const SOFT = [{ key: 'yes', words: ['1'] }, { key: 'no', words: ['2'] }];
+for (const said of ['Ese está bien.', 'esa sí', 'ese mismo', 'eso es', 'that one is fine', "that's the one", 'this one is fine', 'ese está bien, gracias'])
+   eq(pickChoice(said, SOFT), 'yes', `soft: pointing at the offer is a yes: "${said}"`);
+for (const said of ['ese', 'ese no', 'esa no está bien', 'ese es otro', 'that one is wrong', 'this'])
+   eq(pickChoice(said, SOFT) === 'yes', false, `soft: not a yes: "${said}"`);
+const FIRM = [{ key: 'yes', words: ['1'], exact: true }, { key: 'no', words: ['2'] }];
+for (const said of ['Ese está bien.', 'that is the one', 'ese mismo', 'esa sí está bien'])
+   eq(pickChoice(said, FIRM) === 'yes', false, `firm stays strict: "${said}"`);
 console.log(`answer: ${checks} checks passed`);

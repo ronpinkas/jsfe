@@ -19,6 +19,9 @@ export const ANSWER_WORDS = {
       'si', 'sí', 'claro', 'claro que sí', 'claro que si', 'seguro', 'por favor', 'correcto', 'está bien', 'esta bien', 'de acuerdo',
       'estoy de acuerdo', 'dale', 'por supuesto', 'bueno', 'confirmo', 'confirmado', 'apruebo', 'aprobado', 'adelante', 'hazlo',
       'procede', 'perfecto', 'exacto', 'eso es', 'así es', 'asi es',
+      // the offered thing, pointed at (prod 2026-10-25 17:46: "Ese está bien." to "¿Se lo envío a …?" was not a yes)
+      'ese mismo', 'esa misma', 'eso mismo', 'el mismo', 'la misma', "that's the one", 'that is the one',
+      'the same one',
       // agreeing to what the question offers: "Sí, quiero continuar" to "diga SÍ para continuar" (replay of prod, 2026-10-14).
       // A bare "I want" / "quiero" is never a confirmation (owner decision 2026-10-15): "Quiero pagar" at the express offer,
       // which charges on its YES, was a YES because 'pagar' is that choice's own word.
@@ -82,6 +85,10 @@ const THANKS = ['thanks', 'thank you', 'thank you so much', 'thanks a lot', 'gra
 const ACKNOWLEDGEMENTS = ['ok', 'okay', 'okey', 'está bien', 'esta bien', 'bueno', 'fine', "that's fine", 'alright', 'all right',
    'perfect', 'perfecto', 'sounds good', 'great', 'excelente', 'muy bien'].map(normalize).map((w) => w.split(' '));
 const CONFIRM_FILLER = CONFIRM_WORDS.map(normalize).map((w) => w.split(' '));
+// At a soft question (a yes choice that does not charge or cancel), a word pointing at the offered thing may lead the YES:
+// "ese está bien", "esa sí", "that one is fine". It is never a YES alone; a firm question stays strict.
+const POINTERS = ['ese', 'esa', 'eso', 'esos', 'esas', 'ese es', 'esa es', 'that', 'this', 'that one', 'this one', 'that one is',
+   'this one is', 'that is', 'this is'].map(normalize).map((w) => w.split(' '));
 // articles and possessives in front of an exact choice's own words ("Yes, the full balance", "Sí, el saldo completo")
 const ARTICLES = ['the', 'my', 'el', 'la', 'mi'].map((w) => [w]);
 const YES_SET = new Set(ANSWER_WORDS.yes.map(normalize));
@@ -402,7 +409,7 @@ export function pickChoice(answer, choices, acceptOther) {
       // A question is not a confirmation: "sure?" or "1?" never picks a choice that charges or cancels.
       if (c.exact === true && /[?¿]/.test(raw)) {
          // not this choice
-      } else if (strict.some(keyed) || onlyAffirmative(b, [...strict.filter((w) => !isKey(w)), ...(c.key === 'yes' && c.exact !== true ? THANKS : [])], true, c.exact === true ? (c.key === 'yes' ? ACKNOWLEDGEMENTS : [...ACKNOWLEDGEMENTS, ...CONFIRM_FILLER, ...ARTICLES]) : [])) {
+      } else if (strict.some(keyed) || onlyAffirmative(b, [...strict.filter((w) => !isKey(w)), ...(c.key === 'yes' && c.exact !== true ? THANKS : [])], true, c.exact === true ? (c.key === 'yes' ? ACKNOWLEDGEMENTS : [...ACKNOWLEDGEMENTS, ...CONFIRM_FILLER, ...ARTICLES]) : (c.key === 'yes' ? POINTERS : []))) {
          found = c.key;
          break;
       } else {

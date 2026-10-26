@@ -1,3 +1,10 @@
+## 1.10.6: pointing at the offered thing
+
+At a soft question (a yes choice that does not charge or cancel), a word pointing at the offered thing may lead the YES:
+"ese está bien", "esa sí", "that one is fine" (prod 2026-10-25 17:46: "Ese está bien." to "¿Se lo envío a …?" was not a
+yes and the caller lost the flow). "ese mismo", "el mismo", "that's the one" are soft YES phrases. A pointing word alone is
+never a YES, and a firm question stays strict.
+
 ## 1.10.5: a key named before it
 
 At a numbered choice, a word naming the key said right before it picks the key: "el número 4", "opción 2", "number 4", "the
