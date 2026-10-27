@@ -1520,7 +1520,7 @@
         "id": "identity_contact_classify",
         "type": "SET",
         "variable": "contact_kind",
-        "value": "contact_id && contact_id.kind === 'account' ? 'account' : contact_phone ? 'phone' : contact_mail ? 'email' : contact_options.account_pattern && !contact_digits && matchesChoice(contact_text,contact_names_account) ? 'names_account' : readInternationalPhone(contact_text) ? 'international' : isAgentRequest(contact_text) ? 'agent' : isAnswer(contact_text,'exit') && contact_text.trim().split(/\\s+/).length <= 2 ? 'exit' : contact_allowed && /^(?:no|nope|nah)\\b/i.test(contact_text.trim()) && !/[0-9@]/.test(contact_text) ? 'decline' : contact_allowed && cargo.serviceAnswer && cargo.serviceAnswer.values.caller_decision === 'yes' ? 'caller' : contact_digits ? 'invalid_phone' : contact_text.trim().split(/\\s+/).length>=3 && !/[0-9@]/.test(contact_text) ? 'unmapped' : 'invalid'"
+        "value": "contact_id && contact_id.kind === 'account' ? 'account' : contact_phone ? 'phone' : contact_mail ? 'email' : contact_options.account_pattern && !contact_digits && matchesChoice(contact_text,contact_names_account) ? 'names_account' : readInternationalPhone(contact_text) ? 'international' : isAgentRequest(contact_text) ? 'agent' : isExitRequest(contact_text) ? 'exit' : contact_allowed && /^(?:no|nope|nah)\\b/i.test(contact_text.trim()) && !/[0-9@]/.test(contact_text) ? 'decline' : contact_allowed && cargo.serviceAnswer && cargo.serviceAnswer.values.caller_decision === 'yes' ? 'caller' : contact_digits ? 'invalid_phone' : contact_text.trim().split(/\\s+/).length>=3 && !/[0-9@]/.test(contact_text) ? 'unmapped' : 'invalid'"
       },
       {
         "id": "identity_contact_named",
@@ -2374,7 +2374,7 @@
             },
             "initializeDefaults": true
           },
-          "condition: isAnswer(user_choice,'exit')": {
+          "condition: isExitRequest(user_choice)": {
             "id": "otp_exit",
             "type": "FLOW",
             "value": "{{otp_cancel}}",
@@ -3255,7 +3255,7 @@
             "value": "live-agent-requested",
             "callType": "reboot"
           },
-          "condition: !user_choice.trim() || /^\\d$/.test(user_choice.trim()) || isAnswer(user_choice,'exit')": {
+          "condition: !user_choice.trim() || /^\\d$/.test(user_choice.trim()) || isExitRequest(user_choice)": {
             "id": "retry_cancel",
             "type": "FLOW",
             "value": "{{cancel_flow}}",
@@ -5003,7 +5003,7 @@
             "value": "live-agent-requested",
             "callType": "reboot"
           },
-          "condition: isAnswer(email_raw,'exit')": {
+          "condition: isExitRequest(email_raw)": {
             "id": "email_exit",
             "type": "FLOW",
             "value": "contact-support",
@@ -7192,6 +7192,10 @@
         "type": "string",
         "value": ""
       },
+      "ci_reply_reader": {
+        "type": "string",
+        "value": ""
+      },
       "ci_exhaustion": {
         "type": "object",
         "value": null
@@ -7890,6 +7894,12 @@
         }
       },
       {
+        "id": "ci_reply_reader",
+        "type": "SET",
+        "variable": "ci_reply_reader",
+        "value": "ci_choices.length ? 'read-form-choice' : 'read-form-reply'"
+      },
+      {
         "id": "ci_route",
         "type": "CASE",
         "branches": {
@@ -7932,15 +7942,15 @@
           },
           "condition: !ci_must && (ci_words >= 3 || ci_spec.profile.kind === 'amount' && ci_words > 0)": {
             "id": "ci_elsewhere",
-            "type": "DISPATCH",
-            "outcome": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").outcome}}",
-            "reason": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").reason}}",
-            "recovery": {
-              "version": 1,
-              "mode": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").recovery.mode}}",
-              "reason": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").recovery.reason}}",
-              "form": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").recovery.form || ''}}",
-              "flow": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").recovery.flow || ''}}"
+            "type": "FLOW",
+            "value": "{{ci_reply_reader}}",
+            "callType": "call",
+            "parameters": {
+              "form": "{{form}}",
+              "input": "{{current}}",
+              "question": "{{ci_q}}",
+              "question_es": "{{ci_q_es}}",
+              "choices": "{{ci_choices}}"
             }
           },
           "default": {
@@ -13790,7 +13800,7 @@
         "id": "vb_validator",
         "type": "CASE",
         "branches": {
-          "condition: vb_ready === true && vb_h.validator && !vb_known && !vb_h.invalid": {
+          "condition: vb_ready === true && vb_h.validator && !vb_known && !vb_h.invalid && !(cargo.inputCheck && cargo.inputCheck.ok === false)": {
             "id": "vb_validate",
             "type": "FLOW",
             "value": "{{vb_h.validator}}",
@@ -13833,7 +13843,7 @@
         "id": "vb_candidate",
         "type": "SET",
         "variable": "vb_candidate",
-        "value": "Object.assign({},vb_h,{ok:!!(cargo.inputCheck && cargo.inputCheck.ok === true),value:cargo.inputCheck && cargo.inputCheck.value !== undefined && cargo.inputCheck.value !== null ? cargo.inputCheck.value : vb_h.value,message:cargo.inputCheck && cargo.inputCheck.message,message_es:cargo.inputCheck && cargo.inputCheck.message_es})"
+        "value": "Object.assign({},vb_h,{ok:!!(cargo.inputCheck && cargo.inputCheck.ok === true),value:cargo.inputCheck && cargo.inputCheck.value !== undefined && cargo.inputCheck.value !== null ? cargo.inputCheck.value : vb_h.value,message:cargo.inputCheck && cargo.inputCheck.message,message_es:cargo.inputCheck && cargo.inputCheck.message_es,quiet:!!(cargo.inputCheck && cargo.inputCheck.quiet)})"
       },
       {
         "id": "vb_proposal_policy",
@@ -14019,13 +14029,13 @@
         "id": "ie_say_en",
         "type": "SET",
         "variable": "ca_ack",
-        "value": "ca_h.outcome === 'rejected' ? (ca_h.message || ('That ' + (ca_h.label || ca_h.name) + \" doesn't look right.\")) : ca_h.silent === true || ca_h.fromPending ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Thank you, I already have your ' + ca_h.label + '.') : ca_h.outcome === 'changed' ? ('Okay, I updated your ' + ca_h.label + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Got it, your ' + ca_h.label + '.') : ''"
+        "value": "ca_h.outcome === 'rejected' && ca_h.quiet ? '' : ca_h.outcome === 'rejected' ? (ca_h.message || ('That ' + (ca_h.label || ca_h.name) + \" doesn't look right.\")) : ca_h.silent === true || ca_h.fromPending ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Thank you, I already have your ' + ca_h.label + '.') : ca_h.outcome === 'changed' ? ('Okay, I updated your ' + ca_h.label + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Got it, your ' + ca_h.label + '.') : ''"
       },
       {
         "id": "ie_say_es",
         "type": "SET",
         "variable": "ca_ack_es",
-        "value": "ca_h.outcome === 'rejected' ? (ca_h.message_es || ca_h.message || ('Ese ' + (ca_h.label_es || ca_h.label || ca_h.name) + ' no parece correcto.')) : ca_h.silent === true || ca_h.fromPending ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Gracias, ya tengo su ' + ca_h.label_es + '.') : ca_h.outcome === 'changed' ? ('Listo, actualicé su ' + ca_h.label_es + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Entendido, su ' + ca_h.label_es + '.') : ''"
+        "value": "ca_h.outcome === 'rejected' && ca_h.quiet ? '' : ca_h.outcome === 'rejected' ? (ca_h.message_es || ca_h.message || ('Ese ' + (ca_h.label_es || ca_h.label || ca_h.name) + ' no parece correcto.')) : ca_h.silent === true || ca_h.fromPending ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Gracias, ya tengo su ' + ca_h.label_es + '.') : ca_h.outcome === 'changed' ? ('Listo, actualicé su ' + ca_h.label_es + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Entendido, su ' + ca_h.label_es + '.') : ''"
       },
       {
         "id": "ie_say",
@@ -17563,7 +17573,7 @@
     "name": "ReadFormResponse",
     "version": "1.0.0",
     "scope": "isolated",
-    "description": "Read the requested field with contextual DISPATCH: an answer continues, a withdrawal or a new request leaves with saved form progress.",
+    "description": "Read the requested field with contextual DISPATCH: an answer continues, an answer with nothing usable is asked again, a withdrawal or a new request leaves with saved form progress.",
     "parameters": [
       {
         "name": "form",
@@ -17600,7 +17610,7 @@
         "type": "object",
         "value": {
           "version": 1,
-          "summary": "Read the requested field with contextual DISPATCH: an answer continues, a withdrawal or a new request leaves with saved form progress.",
+          "summary": "Read the requested field with contextual DISPATCH: an answer continues, an answer with nothing usable is asked again, a withdrawal or a new request leaves with saved form progress.",
           "parametersFrom": "parameters",
           "role": "worker",
           "requires": [
@@ -17674,7 +17684,8 @@
           {
             "name": "answer",
             "type": "string",
-            "description": "{{spec.response.description}}"
+            "description": "{{spec.response.description}}",
+            "verbatim": true
           }
         ],
         "responseVariable": "reply"
@@ -17684,17 +17695,10 @@
         "type": "CASE",
         "branches": {
           "condition: !reply || typeof reply.answer !== 'string' || !reply.answer.trim()": {
-            "id": "response_handoff",
-            "type": "DISPATCH",
-            "outcome": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").outcome}}",
-            "reason": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").reason}}",
-            "recovery": {
-              "version": 1,
-              "mode": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").recovery.mode}}",
-              "reason": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").recovery.reason}}",
-              "form": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").recovery.form || ''}}",
-              "flow": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").recovery.flow || ''}}"
-            }
+            "id": "response_rejected",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.inputCheck={ok:false,quiet:true},true)"
           },
           "default": {
             "id": "response_missing_skip",
@@ -18155,6 +18159,343 @@
         }
       }
     },
+    "safetyRevision": "dispatch-intake-2026-10-22"
+  },
+  {
+    "id": "read-form-reply",
+    "name": "ReadFormReply",
+    "version": "1.0.0",
+    "scope": "isolated",
+    "description": "Rank an unreadable answer against its question: an answer is asked again, a withdrawal or a new request leaves with saved form progress.",
+    "parameters": [
+      {
+        "name": "form",
+        "type": "string"
+      },
+      {
+        "name": "input",
+        "type": "string"
+      },
+      {
+        "name": "question",
+        "type": "string"
+      },
+      {
+        "name": "question_es",
+        "type": "string"
+      }
+    ],
+    "variables": {
+      "noop": {
+        "type": "boolean",
+        "scope": "flow",
+        "value": false
+      },
+      "question": {
+        "type": "string",
+        "value": ""
+      },
+      "question_es": {
+        "type": "string",
+        "value": ""
+      },
+      "asked": {
+        "type": "string",
+        "value": ""
+      },
+      "contract": {
+        "type": "object",
+        "value": {
+          "version": 1,
+          "summary": "Rank an unreadable answer against its question: an answer is asked again, a withdrawal or a new request leaves with saved form progress.",
+          "parametersFrom": "parameters",
+          "role": "worker",
+          "requires": [
+            "jsfe:continuation-safety:v1"
+          ]
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "read-form-reply_continuation_safety_protocol",
+        "type": "SET",
+        "variable": "noop",
+        "value": "continuationSafetyProtocol() === 1",
+        "requireTrue": true
+      },
+      {
+        "id": "reply_asked",
+        "type": "SET",
+        "variable": "asked",
+        "value": "language === 'es' && question_es ? question_es : question"
+      },
+      {
+        "id": "reply_dispatch",
+        "type": "DISPATCH",
+        "outcome": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").outcome}}",
+        "reason": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").reason}}",
+        "recovery": {
+          "version": 1,
+          "mode": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").recovery.mode}}",
+          "reason": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").recovery.reason}}",
+          "form": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").recovery.form || ''}}",
+          "flow": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").recovery.flow || ''}}"
+        },
+        "onResponse": "continue",
+        "responseContext": "Current question: {{asked}}"
+      },
+      {
+        "id": "reply_miss",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(cargo.forms[form].attempts=cargo.forms[form].attempts || {},cargo.forms[form].attempts[input]=Number(cargo.forms[form].attempts[input] || 0)+1,cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[input]='miss',true)"
+      }
+    ],
+    "safetyRevision": "dispatch-intake-2026-10-22"
+  },
+  {
+    "id": "read-form-choice",
+    "name": "ReadFormChoice",
+    "version": "1.0.0",
+    "scope": "isolated",
+    "description": "Rank an unreadable answer to a choice question and take the offered option it picks; otherwise ask again. A withdrawal or a new request leaves with saved form progress.",
+    "parameters": [
+      {
+        "name": "form",
+        "type": "string"
+      },
+      {
+        "name": "input",
+        "type": "string"
+      },
+      {
+        "name": "question",
+        "type": "string"
+      },
+      {
+        "name": "question_es",
+        "type": "string"
+      },
+      {
+        "name": "choices",
+        "type": "array"
+      }
+    ],
+    "variables": {
+      "noop": {
+        "type": "boolean",
+        "scope": "flow",
+        "value": false
+      },
+      "question": {
+        "type": "string",
+        "value": ""
+      },
+      "question_es": {
+        "type": "string",
+        "value": ""
+      },
+      "choices": {
+        "type": "array",
+        "value": []
+      },
+      "asked": {
+        "type": "string",
+        "value": ""
+      },
+      "options": {
+        "type": "string",
+        "value": ""
+      },
+      "reply": {
+        "type": "object",
+        "value": null
+      },
+      "picked": {
+        "type": "string",
+        "value": ""
+      },
+      "chain": {
+        "type": "object",
+        "value": null
+      },
+      "reading": {
+        "type": "object",
+        "value": null
+      },
+      "contract": {
+        "type": "object",
+        "value": {
+          "version": 1,
+          "summary": "Rank an unreadable answer to a choice question and take the offered option it picks; otherwise ask again. A withdrawal or a new request leaves with saved form progress.",
+          "parametersFrom": "parameters",
+          "role": "worker",
+          "requires": [
+            "jsfe:contextual-responses:v1",
+            "jsfe:continuation-safety:v1"
+          ]
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "read-form-choice_continuation_safety_protocol",
+        "type": "SET",
+        "variable": "noop",
+        "value": "continuationSafetyProtocol() === 1",
+        "requireTrue": true
+      },
+      {
+        "id": "read-form-choice_contextual_response_protocol",
+        "type": "SET",
+        "variable": "noop",
+        "value": "contextualResponseProtocol() === 1",
+        "requireTrue": true
+      },
+      {
+        "id": "choice_asked",
+        "type": "SET",
+        "variable": "asked",
+        "value": "language === 'es' && question_es ? question_es : question"
+      },
+      {
+        "id": "choice_options",
+        "type": "SET",
+        "variable": "options",
+        "value": "(choices || []).map(function(c){return String(c.key)+' ('+String(c.label || (Array.isArray(c.phrases) && c.phrases.filter(function(p){return String(p)!==String(c.key);})[0]) || c.key)+')';}).join(', ')"
+      },
+      {
+        "id": "choice_dispatch",
+        "type": "DISPATCH",
+        "outcome": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").outcome}}",
+        "reason": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").reason}}",
+        "recovery": {
+          "version": 1,
+          "mode": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").recovery.mode}}",
+          "reason": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").recovery.reason}}",
+          "form": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").recovery.form || ''}}",
+          "flow": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").recovery.flow || ''}}"
+        },
+        "onResponse": "continue",
+        "responseContext": "Current question: {{asked}}",
+        "responseParameters": [
+          {
+            "name": "key",
+            "type": "string",
+            "description": "The key of the offered option the reply picks or says it already chose, one of: {{options}}. Leave it empty when the reply picks none of them."
+          }
+        ],
+        "responseVariable": "reply"
+      },
+      {
+        "id": "choice_picked",
+        "type": "SET",
+        "variable": "picked",
+        "value": "(function(){var k=String(reply && reply.key || '').trim().toLowerCase();var c=(choices || []).filter(function(c){return String(c.key).toLowerCase()===k;})[0];return c ? String(c.key) : '';})()"
+      },
+      {
+        "id": "choice_none",
+        "type": "CASE",
+        "branches": {
+          "condition: !picked": {
+            "id": "choice_miss",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.forms[form].attempts=cargo.forms[form].attempts || {},cargo.forms[form].attempts[input]=Number(cargo.forms[form].attempts[input] || 0)+1,cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[input]='miss',true)"
+          },
+          "default": {
+            "id": "choice_none_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "choice_none_end",
+        "type": "CASE",
+        "branches": {
+          "condition: !picked": {
+            "id": "choice_none_done",
+            "type": "END"
+          },
+          "default": {
+            "id": "choice_none_end_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "choice_take",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(cargo.choice=picked,cargo.choiceText=picked,true)"
+      },
+      {
+        "id": "choice_chain",
+        "type": "SET",
+        "variable": "chain",
+        "value": "formInputChain(cargo.forms, form, cargo)"
+      },
+      {
+        "id": "choice_read",
+        "type": "SET",
+        "variable": "reading",
+        "value": "enrichFormMatches(readFormAnswer(picked, chain, { form: form, name: input }, picked, []), chain, form, [input], input)"
+      },
+      {
+        "id": "choice_unread",
+        "type": "CASE",
+        "branches": {
+          "condition: !reading.hits.length": {
+            "id": "choice_unread_miss",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.forms[form].attempts=cargo.forms[form].attempts || {},cargo.forms[form].attempts[input]=Number(cargo.forms[form].attempts[input] || 0)+1,cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[input]='miss',true)"
+          },
+          "default": {
+            "id": "choice_unread_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "choice_unread_end",
+        "type": "CASE",
+        "branches": {
+          "condition: !reading.hits.length": {
+            "id": "choice_unread_done",
+            "type": "END"
+          },
+          "default": {
+            "id": "choice_unread_end_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "choice_clear",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "clearFormMisses(cargo,form,input)"
+      },
+      {
+        "id": "choice_accept",
+        "type": "FLOW",
+        "value": "collect-input-accept",
+        "callType": "call",
+        "parameters": {
+          "hits": "{{reading.hits}}"
+        }
+      }
+    ],
     "safetyRevision": "dispatch-intake-2026-10-22"
   }
 ]
