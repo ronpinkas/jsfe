@@ -1155,7 +1155,7 @@ their original workflow seamlessly.
 ### Flow Execution Modes
 - ✅ **Linear Flow Execution** - Sequential step processing
 - ✅ **Sub-Flow Calls** - Nested workflow execution
-- ✅ **Flow Interruption** - Suspend current flow for new task
+- ✅ **Flow Interruption** - Suspend current flow for new task: in a flow with `interruptable: true`, each reply goes through the same intent detection as a new request (two-stage when configured); a detected primary starts on a new stack with its extracted arguments
 - ✅ **Flow Resumption** - Return to previously suspended flows
 - ✅ **Flow Replacement** - Replace current flow with new flow
 - ✅ **Flow Reboot** - Nuclear option: clear all flows and restart (SAY output accumulated before the reboot is kept and delivered with the new flow's output; `discardSay: true` drops it)

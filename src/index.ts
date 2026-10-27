@@ -7051,21 +7051,11 @@ async function handleIntentInterruption(input: string, engine: Engine, userId: s
   logger.debug(`Interrupt intent analysis for: ${input} pendingVariable: ${currentFlowFrame.pendingVariable}, lastSayMessage: ${!!currentFlowFrame.lastSayMessage}, stepsLeft: ${currentFlowFrame.flowStepsStack.length}`);
 
 
-  // Use AI to detect if this is a strong intent for a different flow
-  let intentAnalysis: any = null;
-  if (engine.aiCallback) {
-    intentAnalysis = await analyzeIntentStrength(input, engine);
-    logger.debug(`Intent analysis result:`, JSON.stringify(intentAnalysis));
-  } else {
-    // Fallback to exact match for non-AI environments
-    const flowsMenu = engine.flowsMenu || [];
-    const matchingFlow = flowsMenu.find(flow => flow.id.toLowerCase() === input.toLowerCase() || flow.name.toLowerCase() === input.toLowerCase());
-    intentAnalysis = {
-      isStrongIntent: !!matchingFlow,
-      targetFlow: matchingFlow ? matchingFlow.id : null
-    };
-    logger.info(`Intent analysis (no AI):`, intentAnalysis);
-  }
+  // The same intent detection as a new request (two-stage when the host configured it): a detected flow interrupts,
+  // started with the arguments detection extracted.
+  const detected = await detectFlowWithParameters(input, engine);
+  const intentAnalysis = { isStrongIntent: !!detected, targetFlow: detected ? detected.flow.name : null, parameters: detected?.parameters || {}, originalInput: input };
+  logger.debug(`Interruption detection: ${JSON.stringify({ targetFlow: intentAnalysis.targetFlow, parameters: intentAnalysis.parameters })}`);
 
   if (intentAnalysis.isStrongIntent && intentAnalysis.targetFlow) {
     // Check if the target flow is different from current flow
@@ -7083,84 +7073,6 @@ async function handleIntentInterruption(input: string, engine: Engine, userId: s
 }
 
 // Analyze intent strength using AI
-async function analyzeIntentStrength(input: string, engine: Engine): Promise<any> {
-  const currentFlowFrame = getCurrentFlowFrame(engine);
-  const currentFlowName = currentFlowFrame.flowName;
-  const flowsMenu = engine.flowsMenu || [];
-
-  // Use the enhanced fetchAiTask worker with JSON schema
-  const task = "Analyze the user input within the current flow context to determine if it represents a STRONG intent to switch to a completely different workflow, or if it's a response to the current flow.";
-
-  const rules = `Critical Analysis Framework:
-1. Examine the flow history to understand what question or prompt the current flow is expecting
-2. Determine if the user input is:
-   - A STRONG intent for a new workflow (clear, specific action request)
-   - A response to the current flow's prompt (continue current flow)
-   - A clarification or question about the current flow (continue current flow)
-
-STRONG intent indicators (switch to new flow):
-- Explicit action requests: "I want to make a payment", "Check my account balance"
-- Complete topic changes: "What's the weather?" when in a payment flow
-- New service requests: "I need to transfer money" when in account verification
-
-WEAK intent indicators (continue current flow):
-- Direct responses to prompts: "1", "2", "Yes", "No", specific values
-- Follow-up questions: "What does that mean?", "Can you clarify?"
-- Partial information: Single words, numbers, or brief phrases that answer the current question
-- Corrections: "Actually, it's 123-456-7890" when asked for a phone number
-
-Consider the flow context carefully - if the flow just asked a specific question, treat the input as a response unless it's clearly unrelated.`;
-
-  // Use flow context when analyzing intent (we're already in a flow)
-  let context = `CURRENT SITUATION: User is in "${currentFlowName}" flow. Analyze if their input is a response to this flow or a request for a different workflow.
-
-IMPORTANT: Be very conservative about interrupting flows - only classify as STRONG intent if the input is clearly unrelated to what the current flow is asking for.`;
-
-  if (currentFlowFrame.contextStack && currentFlowFrame.contextStack.length > 0) {
-    const flowContext = flattenContextStack(currentFlowFrame.contextStack, true);
-    context = `<flow-history>
-${flowContext}
-</flow-history>
-
-${context}`;
-  }
-
-  const jsonSchema = JSON.stringify({
-    type: "json_schema",
-    json_schema: {
-      name: "intent_analysis",
-      strict: true,
-      schema: {
-        type: "object",
-        properties: {
-          isStrongIntent: { type: "boolean" },
-          targetFlow: { type: ["string", "null"] },
-          confidence: { type: "number" },
-          reasoning: { type: "string" }
-        },
-        required: ["isStrongIntent", "targetFlow", "confidence", "reasoning"],
-        additionalProperties: false
-      }
-    }
-  });
-
-  try {
-    const analysis = await fetchAiTask(task, rules, context, input, flowsMenu, jsonSchema, engine.aiCallback, engine.aiTimeOut);
-
-    // Ensure analysis is an object and add originalInput
-    if (typeof analysis === 'object' && analysis !== null) {
-      (analysis as Record<string, unknown>).originalInput = input; // Preserve the original input
-    }
-
-    logger.info(`Intent analysis:`, analysis);
-    return analysis;
-  } catch (error: any) {
-    logger.warn(`Intent analysis error:`, error.message);
-    logger.info(`Stack trace:`, error.stack);
-    return { isStrongIntent: false, targetFlow: null, confidence: 0, reasoning: `Error: ${error.message}`, originalInput: input };
-  }
-}
-
 // Handle confirmed switch from pending interruption
 async function handlePendingInterruptionSwitch(engine: Engine, userId: string): Promise<string> {
   const currentFlowFrame = getCurrentFlowFrame(engine);
@@ -7278,7 +7190,7 @@ async function handleRegularFlowInterruption(intentAnalysis: any, engine: Engine
         flowStepsStack: cloneFlowValue(targetFlowDefinition.steps).reverse(),
         contextStack: [], // Start with empty context - don't use interruption input
         inputStack: [],   // Start with empty input stack - new flow will get proper input next
-        variables: getInitialVariables(engine, targetFlowDefinition), // Fresh variables for interrupting flow activation
+        variables: { ...getInitialVariables(engine, targetFlowDefinition), ...(intentAnalysis.parameters || {}) }, // fresh variables + the arguments detection extracted
         transaction: newTransaction,
         userId: userId,
         startTime: Date.now()
