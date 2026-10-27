@@ -190,6 +190,11 @@ function firmKey(b, key) {
 // Words that name the key itself when said right before it: "el número 4", "opción 2", "number 4", "the 4" (prod
 // 2026-10-25 18:25: "Número 4" and "El número 4" at a numbered product list were not understood, twice).
 const KEY_NAMES = new Set(['number', 'numero', 'option', 'opcion', 'item', 'choice', 'the', 'el', 'la'].map(normalize));
+// Saying the key was pressed, before it: "ya oprimí el uno", "I already pressed one", "marqué el 2" (prod 2026-10-26:
+// a pressed-key sentence at a sub-account choice went to the guru).
+const PRESS_WORDS = new Set(['ya', 'already', 'i', 'yo', 'ive', 'just', 'pressed', 'press', 'pushed', 'push', 'hit', 'dialed',
+   'entered', 'chose', 'picked', 'selected', 'presione', 'presiono', 'presiona', 'oprimi', 'oprime', 'oprimo', 'marque', 'marco',
+   'marca', 'pulse', 'pulso', 'toque', 'elegi', 'escogi', 'seleccione', 'le', 'di', 'al', 'a'].map(normalize));
 function keyWithOnlyCourtesy(b, key, yesOk) {
    const tk = String(b).replace(/\./g, ' ').split(' ').filter(Boolean);
    const at = tk.reduce((acc, t, i) => (t === key ? [...acc, i] : acc), []);
@@ -198,6 +203,10 @@ function keyWithOnlyCourtesy(b, key, yesOk) {
    } else {
       let from = at[0];
       while (from > 0 && at[0] - from < 2 && KEY_NAMES.has(tk[from - 1])) from--;
+      // a press verb is required for the press words to count ("ya" alone, "a 1", are not a press)
+      let press = from;
+      while (press > 0 && from - press < 4 && PRESS_WORDS.has(tk[press - 1])) press--;
+      if (tk.slice(press, from).some((t) => !['ya', 'already', 'i', 'yo', 'ive', 'just', 'le', 'al', 'a'].includes(t))) from = press;
       const rest = tk.filter((t, i) => i < from || i > at[0]).join(' ');
       return onlyAffirmative(rest, yesOk ? ANSWER_WORDS.yes : [], false);
    }

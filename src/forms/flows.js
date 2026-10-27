@@ -241,7 +241,7 @@ const collectInput = {
    id: 'collect-input', name: 'CollectInput', version: '1.0.0', scope: 'isolated',
    description: "Worker: ask the form's current input once and file the answer wherever it belongs in the form chain (matchInputs, decided by scope; a declared confirm_against pair is asked). One reading → collect-input-accept; ambiguous → disambiguate-input; a question about the form's data → provide-data; a short miss → counted, the loop re-asks; 3+ words that fit nothing → DISPATCH. Params: form, current, questions, provides, exit_context(_es).",
    parameters: ['form', 'current', 'questions', 'provides', 'exit_context', 'exit_context_es'].map((n) => ({ name: n, type: ['questions'].includes(n) ? 'array' : n === 'provides' ? 'object' : 'string', description: n })),
-   variables: vars({ ci_partial:'', ci_exhaustion:null, ci_d: {}, ci_pre: '', ci_val: '', ci_routed: '', ci_names: [], ci_chain: [], ci_spec: null, ci_choices: [], ci_q: '', ci_q_es: '', ci_missed: 0, ci_max: 3, ci_misses:0,ci_miss_limit:2,ci_must:false, ci_m: null, ci_qkey: '', ci_skip_gate:'', ci_words: 0, ci_digits: null, ci_amount: false, ci_as_spoken:false, ci_reader:{}, ci_pii: false, ci_ctx: '', ci_ctx_es: '' }),
+   variables: vars({ ci_partial:'', ci_reply_reader:'', ci_exhaustion:null, ci_d: {}, ci_pre: '', ci_val: '', ci_routed: '', ci_names: [], ci_chain: [], ci_spec: null, ci_choices: [], ci_q: '', ci_q_es: '', ci_missed: 0, ci_max: 3, ci_misses:0,ci_miss_limit:2,ci_must:false, ci_m: null, ci_qkey: '', ci_skip_gate:'', ci_words: 0, ci_digits: null, ci_amount: false, ci_as_spoken:false, ci_reader:{}, ci_pii: false, ci_ctx: '', ci_ctx_es: '' }),
    steps: [
       SET('ci_find_spec', 'ci_spec', "(function () { var s = ((cargo.forms[form] || {}).specs || []).filter(function (s) { return s.name === current; })[0]; return s ? (Array.isArray(s.any_of) ? Object.assign({}, s, { profile: { kind: 'group' } }) : s) : null; })()"),
       SET('ci_current_names', 'ci_names', "Array.isArray(ci_spec && ci_spec.any_of) ? ci_spec.any_of.map(function (m) { return m.name; }) : [current]"),
@@ -302,12 +302,13 @@ const collectInput = {
       SET('ci_skip_gate','ci_skip_gate',"!provides || !provides.gate || [].concat(provides.gate.verified || []).every(function(p){return !!formPath({cargo:cargo},p);}) ? 'true' : ''"),
       WHEN('ci_explicit_question','ci_m.questions.length > 0',FLOW('ci_explicit_provide','provide-data','call',{form:'{{form}}',provides:'{{provides}}',asked:'{{ci_qkey}}',asked_keys:'{{ci_m.questions}}',no_menu:'true',no_gate:'{{ci_skip_gate}}'})),
       WHEN('ci_explicit_question_done','ci_m.questions.length > 0',END('ci_explicit_question_end')),
+      SET('ci_reply_reader','ci_reply_reader',"ci_choices.length ? 'read-form-choice' : 'read-form-reply'"),
       { id: 'ci_route', type: 'CASE', branches: {
          'condition: ci_m.ambiguous.length > 0': FLOW('ci_ambiguous', 'disambiguate-input', 'call', { readings: '{{ci_m.ambiguous}}', hits: '{{ci_m.hits}}', remaining:'{{ci_m.remaining}}' }),
          'condition: ci_m.hits.length > 0': FLOW('ci_accept', 'collect-input-accept', 'call', { hits: '{{ci_m.hits}}' }),
          "condition: ci_m.questions.length > 0": END('ci_question_handled'),
          "condition: ci_qkey && ci_qkey.indexOf('__') !== 0": FLOW('ci_question_asked', 'provide-data', 'call', { form:'{{form}}', provides: '{{provides}}', asked: '{{ci_qkey}}', no_menu: 'true',no_gate:'{{ci_skip_gate}}' }),
-         "condition: !ci_must && (ci_words >= 3 || ci_spec.profile.kind === 'amount' && ci_words > 0)": yieldDispatch('ci_elsewhere','form',"'input_not_matched'"),
+         "condition: !ci_must && (ci_words >= 3 || ci_spec.profile.kind === 'amount' && ci_words > 0)": FLOW('ci_elsewhere', '{{ci_reply_reader}}', 'call', { form: '{{form}}', input: '{{current}}', question: '{{ci_q}}', question_es: '{{ci_q_es}}', choices: '{{ci_choices}}' }),
          default: SIDE('ci_miss', "(missFormInput(cargo,form,current),true)") } },
    ],
 };
@@ -374,11 +375,42 @@ const readFormResponse={
   {...SET('response_declared','noop','!!spec && !!validateFormResponse(spec.response)'),requireTrue:true},
   SET('response_question','question',"formInputPrompt(cargo,form,input,Object.assign({},group,spec,{question:spec.question || group.question,question_es:spec.question_es || group.question_es,question_from:spec.question_from || group.question_from}),cargo.forms[form].data || {},language)"),
   SET('response_clear','reply','null'),
-  { ...yieldDispatch('response_dispatch','form',"'input_not_matched'"),onResponse:'continue',responseContext:'Current question: {{question}}. Requested answer: {{spec.response.description}}.',responseParameters:[{name:'answer',type:'string',description:'{{spec.response.description}}'}],responseVariable:'reply'},
+  { ...yieldDispatch('response_dispatch','form',"'input_not_matched'"),onResponse:'continue',responseContext:'Current question: {{question}}. Requested answer: {{spec.response.description}}.',responseParameters:[{name:'answer',type:'string',description:'{{spec.response.description}}',verbatim:true}],responseVariable:'reply'},
   // Nothing usable (only after a default `answers`: a confident one carries the reply as said): the reading is
   // rejected, so the form asks the question again (the question alone: it was not a wrong answer). The answer never
   // goes to the host.
   WHEN('response_missing',"!reply || typeof reply.answer !== 'string' || !reply.answer.trim()",SIDE('response_rejected','(cargo.inputCheck={ok:false,quiet:true},true)'))]
+};
+// An answer the field's reader could not read goes to the reply ranker, never straight to the host (owner 2026-10-26: a form
+// gives up only for a real new intent). `answers`: a choice field takes the offered key the reply picks, else the
+// question is asked again ("Sorry, I didn't catch that."), counted as an attempt so max_attempts still bounds it;
+// `abort` ends every flow; `new_request` goes to intent detection.
+const rankedMiss=(id)=>SIDE(id,"(cargo.forms[form].attempts=cargo.forms[form].attempts || {},cargo.forms[form].attempts[input]=Number(cargo.forms[form].attempts[input] || 0)+1,cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[input]='miss',true)");
+const readFormReply={
+ id:'read-form-reply',name:'ReadFormReply',version:'1.0.0',scope:'isolated',description:'Rank an unreadable answer against its question: an answer is asked again, a withdrawal or a new request leaves with saved form progress.',
+ parameters:[{name:'form',type:'string'},{name:'input',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'}],
+ variables:vars({question:'',question_es:'',asked:''}),
+ steps:[SET('reply_asked','asked',"language === 'es' && question_es ? question_es : question"),
+  {...yieldDispatch('reply_dispatch','form',"'input_not_matched'"),onResponse:'continue',responseContext:'Current question: {{asked}}'},
+  rankedMiss('reply_miss')]
+};
+const readFormChoice={
+ id:'read-form-choice',name:'ReadFormChoice',version:'1.0.0',scope:'isolated',description:'Rank an unreadable answer to a choice question and take the offered option it picks; otherwise ask again. A withdrawal or a new request leaves with saved form progress.',
+ parameters:[{name:'form',type:'string'},{name:'input',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'},{name:'choices',type:'array'}],
+ variables:vars({question:'',question_es:'',choices:[],asked:'',options:'',reply:null,picked:'',chain:null,reading:null}),
+ steps:[SET('choice_asked','asked',"language === 'es' && question_es ? question_es : question"),
+  SET('choice_options','options',"(choices || []).map(function(c){return String(c.key)+' ('+String(c.label || (Array.isArray(c.phrases) && c.phrases.filter(function(p){return String(p)!==String(c.key);})[0]) || c.key)+')';}).join(', ')"),
+  {...yieldDispatch('choice_dispatch','form',"'input_not_matched'"),onResponse:'continue',responseContext:'Current question: {{asked}}',responseParameters:[{name:'key',type:'string',description:'The key of the offered option the reply picks or says it already chose, one of: {{options}}. Leave it empty when the reply picks none of them.'}],responseVariable:'reply'},
+  SET('choice_picked','picked',"(function(){var k=String(reply && reply.key || '').trim().toLowerCase();var c=(choices || []).filter(function(c){return String(c.key).toLowerCase()===k;})[0];return c ? String(c.key) : '';})()"),
+  WHEN('choice_none','!picked',rankedMiss('choice_miss')),
+  WHEN('choice_none_end','!picked',END('choice_none_done')),
+  SIDE('choice_take',"(cargo.choice=picked,cargo.choiceText=picked,true)"),
+  SET('choice_chain','chain','formInputChain(cargo.forms, form, cargo)'),
+  SET('choice_read','reading',"enrichFormMatches(readFormAnswer(picked, chain, { form: form, name: input }, picked, []), chain, form, [input], input)"),
+  WHEN('choice_unread','!reading.hits.length',rankedMiss('choice_unread_miss')),
+  WHEN('choice_unread_end','!reading.hits.length',END('choice_unread_done')),
+  SIDE('choice_clear','clearFormMisses(cargo,form,input)'),
+  FLOW('choice_accept','collect-input-accept','call',{hits:'{{reading.hits}}'})]
 };
 const collectContextualAnswer=formFlow({id:'collect-contextual-answer',name:'CollectContextualAnswer',description:'Collect one open-ended answer using contextual DISPATCH and preserve the caller wording.',
  parameters:[...['question','question_es','description','context','context_es'].map(name=>({name,type:'string'})),{name:'choices',type:'array'},{name:'digits',type:'object'}],
@@ -791,7 +823,7 @@ const resumeForm={id:'resume-form',name:'ResumeForm',version:'1.0.0',scope:'isol
       SET('resume_definition','target','cargo.forms[form].definition'),SET('resume_parent','parent',"cargo.forms[form].parent || ''"),SET('resume_slot','slot',"cargo.forms[form].result_input || ''"),
       FLOW('resume_owned_form','{{target}}','replace',{form_instance:'{{form}}',parent_form:'{{parent}}',result_input:'{{slot}}'})
    ]};
-const LIBRARY_FLOWS = [confirmInputProposal,proposalDeclined,resumeForm,performAction, sendTextAction, prepareInput, runForm, collectInput, validateBatch, requestCancelled, readFormResponse, collectContextualAnswer, accept, acceptedEffects, disambiguate, confirmForm, formDone, providerMenu, ...validators, ...fieldCollectors, ...subForms, provideData, provideQueuedData, loadSource, answerFacts];
+const LIBRARY_FLOWS = [readFormReply, readFormChoice, confirmInputProposal,proposalDeclined,resumeForm,performAction, sendTextAction, prepareInput, runForm, collectInput, validateBatch, requestCancelled, readFormResponse, collectContextualAnswer, accept, acceptedEffects, disambiguate, confirmForm, formDone, providerMenu, ...validators, ...fieldCollectors, ...subForms, provideData, provideQueuedData, loadSource, answerFacts];
 const LIBRARY_CONTRACTS={
    'confirm-input-proposal':{role:'collector',requires:[INPUT_PROPOSALS_REQUIREMENT]},'confirm-input-proposal-declined':{role:'worker',requires:[INPUT_PROPOSALS_REQUIREMENT]},
    'resume-form':{role:'worker'},
@@ -800,6 +832,7 @@ const LIBRARY_CONTRACTS={
    'prepare-input':{role:'worker'},'run-form':{role:'worker'},'collect-input':{role:'worker'},
    'request-cancelled':{role:'worker'},
    'read-form-response':{role:'worker',requires:[CONTEXTUAL_RESPONSES_REQUIREMENT]},
+   'read-form-reply':{role:'worker'},'read-form-choice':{role:'worker',requires:[CONTEXTUAL_RESPONSES_REQUIREMENT]},
    'collect-contextual-answer':{role:'collector',requires:[CONTEXTUAL_RESPONSES_REQUIREMENT]},
    'validate-input-batch':{role:'worker',result:{path:'cargo.inputBatch',type:'object'}},
    'collect-input-accept':{role:'worker'},'input-accepted-effects':{role:'worker'},

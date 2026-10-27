@@ -23,7 +23,7 @@ let checks=0;const failures=[];
 async function test(name,run){try{await run();checks++;console.log('PASS '+name);}catch(error){failures.push({name,error});console.error('FAIL '+name+'\n'+error.stack);}}
 function fixture({language='en',voice=false,forms=[owner()],workers=[],subject='A',tools=[],functions={},sessionOnly=false}={}){
  const detected=[],warnings=[];const quiet={info(){},debug(){},error(){},warn(...args){warnings.push(args.join(' '));}};
- const ai=async(_s,_m,_schema,request)=>{assert.equal(request?.task,'detect_flow');detected.push(request.input);return JSON.stringify({flowName:'None',parameters:{}});};
+ const ai=async(_s,_m,_schema,request)=>{if(request?.task==='rank_reply')return JSON.stringify({option:'new_request'});assert.equal(request?.task,'detect_flow');detected.push(request.input);return JSON.stringify({flowName:'None',parameters:{}});};
  const engine=new WorkflowEngine(quiet,ai,linkFormSchemas([...FLOWS,...common,...forms,...workers]),tools,{...STANDARD_FUNCTIONS,...functions},{},false,language);engine.disableCommands();if(sessionOnly)engine.actionPersistence='session-only';
  let session=engine.initSession('fixture',crypto.randomUUID(),language);Object.assign(session.cargo,{voice,subject,policyVersion:1});
  return {detected,warnings,get session(){return session;},async say(content,start){session=clone(await engine.updateActivity({role:'user',content,...(start?{start:typeof start==='string'?{flow:start}:start}:{})},clone(session)));return session.response||'';},root(id='claim'){return session.cargo.formTasks?.[id];},state(id='claim'){return session.cargo.forms[this.root(id)];}};

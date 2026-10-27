@@ -25,7 +25,7 @@ const S=(id,value)=>({id,type:'SET',variable:'noop',value});
 const owner=formFlow({id:'money-owner',name:'MoneyOwner',version:'1',parameters:[{name:'amount',type:'string'}],extraVars:{amount:''},inputs:[{name:'amount',profile:{kind:'amount',money:USD},validator:'accept-any',question:'AMOUNT?'}],confirm:{question:'AUTHORIZE?'},after:[S('effect','(cargo.effects=Number(cargo.effects||0)+1,true)')]});
 const accept={id:'accept-any',name:'AcceptAny',version:'1',scope:'isolated',steps:[S('accept-all','(cargo.inputCheck={ok:true,value:42},true)')]};
 const warnings=[];const quiet={info(){},debug(){},error(){},warn(...a){warnings.push(a.join(' '));}};
-const engine=new WorkflowEngine(quiet,async()=>'{"flowName":"None"}',linkFormSchemas([...FLOWS,owner,accept]),[],STANDARD_FUNCTIONS,{},false,'en');engine.disableCommands();
+const engine=new WorkflowEngine(quiet,async(_s,_m,_x,request)=>request?.task==='rank_reply'?'{"option":"new_request"}':'{"flowName":"None"}',linkFormSchemas([...FLOWS,owner,accept]),[],STANDARD_FUNCTIONS,{},false,'en');engine.disableCommands();
 for(const activation of [false,true]){
  let session=engine.initSession('test','money-intent','en');session.cargo.voice=false;
  const say=async(content,start)=>{session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start:{flow:'money-owner',arguments:activation?{amount:'I cannot pay fifty dollars'}:{}}}:{})},session)));return session.response;};

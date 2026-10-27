@@ -14,7 +14,7 @@ function fixture(spec={},extra=[]) {
  const form=defineForm({id:'follow-up',name:'FollowUp',description:'Fixture follow-up.',contract:{summary:'Fixture field.'},inputs:[field],...spec});
  const completed={id:'completed',name:'Completed',version:'1',steps:[{id:'complete',type:'SAY',value:'The task completed.',...RESULT},call('optional','follow-up')]};
  const giveup={id:'give-up',name:'GiveUp',version:'1',steps:[{id:'failed',type:'SAY',value:'Unable to finish.',outcome:'unresolved',reason:'fixture_give_up'}]};
- const engine=new WorkflowEngine(quiet,async()=>JSON.stringify({flowName:'None'}),linkFormSchemas([...FLOWS,form,completed,giveup,...extra]),[],{...STANDARD_FUNCTIONS,effect:()=>{effects++;}},{},false,'en');engine.disableCommands();
+ const engine=new WorkflowEngine(quiet,async(_s,_m,_x,request)=>request?.task==='rank_reply'?JSON.stringify({option:'new_request'}):JSON.stringify({flowName:'None'}),linkFormSchemas([...FLOWS,form,completed,giveup,...extra]),[],{...STANDARD_FUNCTIONS,effect:()=>{effects++;}},{},false,'en');engine.disableCommands();
  let session=engine.initSession('user',crypto.randomUUID(),'en');
  return {get session(){return session;},async say(content,start){session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start}: {})},session)));return session;}};
 }

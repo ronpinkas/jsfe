@@ -225,10 +225,20 @@ exit; at the code prompt it gets the "Let me explain" re-ask. Before, any answer
 prompt, any answer of at most two words containing it) ended the authentication in contact-support.
 
 **A confident answer is never lost.** The host may add `fallback: true` to a `rank_reply` reply that is `answers` only
-because no option cleared the cut. Without it the answer is confident: when the step declares one open string field
-(no enum, no `jsonSchema`) and the stage-2 extraction finds nothing, or fails, the field is the reply as said (prod
+because no option cleared the cut. Without it the answer is confident: when the step declares one parameter marked `verbatim: true` (new, an open
+string only; ReadFormResponse's answer is marked) and the stage-2 extraction finds nothing, or fails, the field is the
+reply as said. An unmarked field always needs a real extraction (prod
 2026-10-26: a cancellation reason ranked `answers`, extracted empty and went to the host,
 whose guru answered it). A `fallback` answer leaves extraction as the judge; ReadFormResponse then rejects the reading
 quietly and the form asks its question again, instead of handing the turn to the host.
 
 **"asesor" / "asesora" are AGENT words.**
+
+**A form gives up only for a new intent.** An answer a field's reader cannot read (three or more words, or any words at an
+amount) no longer goes straight to the host with a plain DISPATCH: the reply ranker decides (`read-form-choice` for a
+choice field, `read-form-reply` otherwise). `answers`: a choice takes the offered key the reply picks (stage-2 extraction
+of `key`, checked against the offered keys), else the question is asked again with "Sorry, I didn't catch that.",
+counted as an attempt, so `max_attempts` still bounds it; `abort` ends every flow; `new_request` goes to intent
+detection. A host fixture that answered such turns with intent detection only must now also answer `rank_reply`.
+
+**A press verb before a key picks it:** "ya oprimí el uno", "I already pressed one", "marqué el 2" (not after a negation).

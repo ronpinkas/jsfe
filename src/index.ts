@@ -3838,12 +3838,12 @@ async function rankReply(input: string, engine: Engine, question: string): Promi
 }
 
 /**
- * The one field a confidently ranked answer can carry verbatim: a declaration of exactly one string parameter with no
- * enum (an open answer such as a reason or a description). A closed value or several fields are never guessed.
+ * The field a confidently ranked answer carries as said when extraction finds nothing: the ONE parameter of a
+ * declaration that marks it `verbatim: true` (an open answer whose words are the value, such as a reason). Opt-in:
+ * a field that names a thing to look up (a product, a city) needs a real extraction, never the whole reply.
  */
-function verbatimReplyField(parameters: FlowParameterDefinition[]): string | null {
-  const only = parameters.length === 1 ? parameters[0] : null;
-  return only && (only.type === undefined || only.type === 'string') && !only.enum?.length && !only.jsonSchema ? only.name : null;
+function verbatimReplyField(parameters: (FlowParameterDefinition & { verbatim?: boolean })[]): string | null {
+  return parameters.length === 1 && parameters[0].verbatim === true ? parameters[0].name : null;
 }
 
 /**
@@ -3852,7 +3852,7 @@ function verbatimReplyField(parameters: FlowParameterDefinition[]): string | nul
  */
 async function extractReplyParameters(input: string, engine: Engine, question: string, parameters: FlowParameterDefinition[]): Promise<Record<string, any>> {
   const { input: cleanInput, conversation } = buildDetectFlowRequest(input, engine.lastChatTurn, []);
-  const reply: FlowDefinition = { id: '__jsfe_reply__', name: 'CurrentQuestion', version: '1.0.0', description: 'The reply to the current question', steps: [], parameters };
+  const reply: FlowDefinition = { id: '__jsfe_reply__', name: 'CurrentQuestion', version: '1.0.0', description: 'The reply to the current question', steps: [], parameters: parameters.map(({ verbatim, ...parameter }: FlowParameterDefinition & { verbatim?: boolean }) => parameter) };
   const stage2 = buildParameterStage(cleanInput, conversation.concat([{ role: 'assistant', content: question }]), reply);
   const answer = parseStageReply(await fetchAiResponse(stage2.llm.system, stage2.llm.user, engine.aiCallback, engine.aiTimeOut, stageSchema('extract_parameters', stage2.llm.schema), stage2));
   const given = answer.parameters && typeof answer.parameters === 'object' ? answer.parameters as Record<string, any> : {};
@@ -7303,8 +7303,8 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
       ranked = option;
       if (option === 'answers') {
         if (declaration) {
-          // A confident answer is never lost: when extraction finds nothing (or fails) in an open single-field answer,
-          // the field is the reply as said. A default `answers` keeps extraction as the judge, so an empty field
+          // A confident answer is never lost: when extraction finds nothing (or fails) in a `verbatim` field, the
+          // field is the reply as said. A default `answers` keeps extraction as the judge, so an empty field
           // stays empty and the flow asks again.
           const verbatim = confident ? verbatimReplyField(declaration.parameters) : null;
           let extracted: Record<string, any>;

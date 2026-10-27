@@ -19,7 +19,8 @@ export function validateContextualResponseStep(step,flow) {
   if(p.enum!==undefined&&(!Array.isArray(p.enum)||!p.enum.length||p.enum.some(v=>typeof v!=='string')||p.type!==undefined&&p.type!=='string'))fail('response parameter enum must contain strings for a string parameter');
   if(p.internal!==undefined&&p.internal!==false)fail('response parameters must be public extraction parameters');
   if(own(p,'jsonSchema'))fail('response parameters support primitive types only; jsonSchema is not supported');
-  if(Object.keys(p).some(k=>!['name','description','type','enum','internal'].includes(k)))fail('responseParameters accepts only canonical parameter descriptors');
+  if(p.verbatim!==undefined&&(p.verbatim!==true||p.type!==undefined&&p.type!=='string'||p.enum!==undefined))fail('verbatim is true on an open string parameter only');
+  if(Object.keys(p).some(k=>!['name','description','type','enum','internal','verbatim'].includes(k)))fail('responseParameters accepts only canonical parameter descriptors');
  }
  try{return structuredClone({parameters:step.responseParameters,variable:step.responseVariable});}catch{fail('response parameters must be cloneable declaration data');}
 }

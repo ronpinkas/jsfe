@@ -8,7 +8,7 @@ const provides={subject:'account',facts:[{key:'balance',public:true,path:'balanc
 for(const [input,question] of [['balance',true],['what is my balance?',true],['Quiero pagar todo el saldo',false]]){
  const owner=defineForm({id:'pay',name:'Pay',description:'Choose an amount',contract:{summary:'Choose an amount'},inputs:[{name:'amount',field:'amount',profile:{kind:'amount',money:{currency:'USD',cardinals:true,intent:'payment'}},question:'AMOUNT?'}],extraVars:{provides,questions:providerQuestions(provides)},after:[{id:'effect',type:'SET',variable:'noop',value:'(cargo.effect=true,true)'}]});
  const loader={id:'facts',name:'Facts',steps:[{id:'load',type:'SET',variable:'noop',value:'(cargo.loaded=true,cargo.testFacts={balance:50},true)'}]};
- const e=new WorkflowEngine(quiet,async()=>JSON.stringify({flowName:'None',parameters:{}}),linkFormSchemas([...FLOWS,owner,loader]),[],STANDARD_FUNCTIONS,{});e.disableCommands();let session=e.initSession('synthetic',crypto.randomUUID(),'en');session.cargo.voice=false;
+ const e=new WorkflowEngine(quiet,async(_s,_m,_x,request)=>request?.task==='rank_reply'?JSON.stringify({option:'new_request'}):JSON.stringify({flowName:'None',parameters:{}}),linkFormSchemas([...FLOWS,owner,loader]),[],STANDARD_FUNCTIONS,{});e.disableCommands();let session=e.initSession('synthetic',crypto.randomUUID(),'en');session.cargo.voice=false;
  session=await e.updateActivity({role:'user',content:'start',start:{flow:'pay'}},session);session=await e.updateActivity({role:'user',content:input},session);
  assert.equal(session.cargo.effect,undefined);
  if(question){assert.equal(session.cargo.loaded,true);assert.match(session.response,/BALANCE \$50\.00/);assert.match(session.response,/AMOUNT/);}

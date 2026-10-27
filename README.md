@@ -364,8 +364,9 @@ executors' instructions (`llm`, `systemOne`); the host replies `{ "option": … 
 option is `answers` only because nothing cleared the cut (System One). `jsfe/host` exports
 `buildReplyRank`, `decodeReplyRankLlm` and `decodeReplyRankSystemOne` (the highest option at or above 0.5, else
 `answers`). `answers` continues the flow, after extracting the step's `responseParameters` with a stage-2 request
-when it declares them. A confident `answers` (no `fallback`) is never lost: when the declaration is one open string
-field (no enum, no `jsonSchema`) and extraction finds nothing or fails, the field is the reply as said. After a
+when it declares them. A confident `answers` (no `fallback`) is never lost: when the declaration is one parameter marked
+`verbatim: true` (an open string whose words are the value, such as a reason) and extraction finds nothing or fails,
+the field is the reply as said. Unmarked fields (a product, a city) always need a real extraction. After a
 `fallback` answer extraction is the judge, and ReadFormResponse asks the question again when it finds nothing; `abort` is a RETURN: every flow ends and the reply is system message `cmd_request_aborted`
 ("The process has been cancelled at your request - how can I help you?"),
 outcome `user_aborted`, no recovery stamp;

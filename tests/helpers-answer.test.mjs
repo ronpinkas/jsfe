@@ -269,6 +269,10 @@ for (const said of ['no, por favor', 'por favor no', 'espere por favor', 'repita
 // "asesor" is an agent in Spanish (prod 2026-10-26, at a verification-code prompt).
 for (const said of ['Necesito un asesor.', 'asesora', 'quiero hablar con un asesor'])
    { eq(isAnswer(said, 'agent'), true, `"${said}" asks for an agent`); eq(isAgentRequest(said), true, `"${said}" is an agent request`); }
+// A press verb before the key picks it; a negation still does not.
+{ const C = [{ key: '1', phrases: ['1', 'subcuenta 50'] }, { key: '2', phrases: ['2', 'subcuenta 62'] }];
+  for (const [said, key] of [['Ya oprimí el uno.', '1'], ['I already pressed one', '1'], ['marqué el 2', '2'], ['le di al 2', '2'], ['no presioné el uno', ''], ['a 1', '']])
+     eq(pickChoice(said, C), key, `"${said}" picks ${key || 'nothing'}`); }
 // EXIT is the whole answer (owner 2026-10-26): a sentence that names "cancel" asks for something.
 for (const said of ['exit', 'Cancelar.', 'cancel please', 'salir por favor', '*', 'Quit'])
    eq(isExitRequest(said), true, `"${said}" exits`);

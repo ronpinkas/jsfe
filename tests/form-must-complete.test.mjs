@@ -12,7 +12,7 @@ let checks=0;const failures=[];
 async function test(name,run){try{await run();checks++;console.log('PASS '+name);}catch(error){failures.push({name,error});console.error('FAIL '+name+'\n'+error.stack);}}
 function fixture(flows,{language='en'}={}){
  const calls=[];const quiet={info(){},debug(){},error(){},warn(){}};
- const ai=async(_s,_m,_schema,request)=>{if(request?.task==='detect_flow'){calls.push(request.input);return JSON.stringify({flowName:'None',parameters:{}});}throw new Error('Unexpected model task');};
+ const ai=async(_s,_m,_schema,request)=>{if(request?.task==='rank_reply')return JSON.stringify({option:'new_request'});if(request?.task==='detect_flow'){calls.push(request.input);return JSON.stringify({flowName:'None',parameters:{}});}throw new Error('Unexpected model task');};
  const engine=new WorkflowEngine(quiet,ai,linkFormSchemas([...FLOWS,...flows]),[],{...STANDARD_FUNCTIONS},{},false,language);engine.disableCommands();
  let session=engine.initSession('fixture',crypto.randomUUID(),language);Object.assign(session.cargo,{voice:true,account:'A',verified:true});
  return {calls,get session(){return session;},async say(content,start){session=clone(await engine.updateActivity({role:'user',content,...(start?{start:{flow:start}}:{})},clone(session)));return session.response||'';}};
