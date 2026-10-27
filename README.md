@@ -360,10 +360,13 @@ is the original single call.
 **The reply ranker (contextual DISPATCH, `onResponse: "continue"`):** when a flow's question gets a reply its
 deterministic reader cannot read, jsfe asks what the reply does with the step's `responseContext` (the question):
 `answers`, `abort` or `new_request`. ONE aiCallback call whose 4th argument is `task: 'rank_reply'` with both
-executors' instructions (`llm`, `systemOne`); the host replies `{ "option": … }`. `jsfe/host` exports
+executors' instructions (`llm`, `systemOne`); the host replies `{ "option": … }`, plus `"fallback": true` when the
+option is `answers` only because nothing cleared the cut (System One). `jsfe/host` exports
 `buildReplyRank`, `decodeReplyRankLlm` and `decodeReplyRankSystemOne` (the highest option at or above 0.5, else
 `answers`). `answers` continues the flow, after extracting the step's `responseParameters` with a stage-2 request
-when it declares them; `abort` is a RETURN: every flow ends and the reply is system message `cmd_request_aborted`
+when it declares them. A confident `answers` (no `fallback`) is never lost: when the declaration is one open string
+field (no enum, no `jsonSchema`) and extraction finds nothing or fails, the field is the reply as said. After a
+`fallback` answer extraction is the judge, and ReadFormResponse asks the question again when it finds nothing; `abort` is a RETURN: every flow ends and the reply is system message `cmd_request_aborted`
 ("The process has been cancelled at your request - how can I help you?"),
 outcome `user_aborted`, no recovery stamp;
 `new_request` ends the flows and routes the input through intent detection. Only a new request is routed: after
@@ -386,7 +389,7 @@ const engine = new WorkflowEngine(logger, aiCallback, flows, tools,
   { ...STANDARD_FUNCTIONS, sendSMSOTP, sendEmail /* the host's own, credentialed functions */ });
 ```
 
-- Reading answers: `matchesChoice`, `pickChoice`, `isAnswer`, `isAgentRequest`, `isOtherRequest`,
+- Reading answers: `matchesChoice`, `pickChoice`, `isAnswer`, `isAgentRequest`, `isExitRequest`, `isOtherRequest`,
   `isSpelledFragment`, `isAmountAnswer`, `amountInAnswer`, `readEmail`, `readPhone`,
   `readInternationalPhone`, `readIdentifier`, `normalizeAndFindCapture`, and `matchInputs` (which of a
   form's inputs an answer fills; ties between inputs of the same form are returned for the flow to ask).

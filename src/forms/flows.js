@@ -344,9 +344,9 @@ const validateBatch = {
       SIDE('vb_reset',"(cargo.inputCheck = vb_h.invalid ? { ok: false } : (vb_h.validator && !vb_known ? null : { ok: true, value: vb_h.value }), true)"),
       SET('vb_response','vb_response',"(function(){var state=cargo.forms[vb_h.form],spec=state && state.specs.flatMap(function(s){return s.any_of || [s];}).find(function(s){return s.name===vb_h.name;});return spec && spec.response || null;})()"),
       WHEN('vb_contextual_needed',"vb_ready === true && vb_h.current && vb_response && !vb_known && !vb_h.invalid && vb_h.origin !== 'activation' && !vb_h.fromPending",FLOW('vb_read_response','read-form-response','call',{form:'{{vb_h.form}}',input:'{{vb_h.name}}'})),
-      WHEN('vb_validator','vb_ready === true && vb_h.validator && !vb_known && !vb_h.invalid',FLOW('vb_validate','{{vb_h.validator}}','call',{form:'{{vb_h.form}}',input:'{{vb_h.name}}',value:'{{vb_h.value}}',values:'{{vb_values}}',reading:'{{vb_h}}'})),
+      WHEN('vb_validator','vb_ready === true && vb_h.validator && !vb_known && !vb_h.invalid && !(cargo.inputCheck && cargo.inputCheck.ok === false)',FLOW('vb_validate','{{vb_h.validator}}','call',{form:'{{vb_h.form}}',input:'{{vb_h.name}}',value:'{{vb_h.value}}',values:'{{vb_values}}',reading:'{{vb_h}}'})),
       WHEN('vb_refused','vb_h.refused === true || vb_h.incompleteMoney === true',SIDE('vb_withhold_refusal',"(cargo.inputCheck=Object.assign({},cargo.inputCheck || {},{ok:false}),true)")),
-      SET('vb_candidate','vb_candidate',"Object.assign({},vb_h,{ok:!!(cargo.inputCheck && cargo.inputCheck.ok === true),value:cargo.inputCheck && cargo.inputCheck.value !== undefined && cargo.inputCheck.value !== null ? cargo.inputCheck.value : vb_h.value,message:cargo.inputCheck && cargo.inputCheck.message,message_es:cargo.inputCheck && cargo.inputCheck.message_es})"),
+      SET('vb_candidate','vb_candidate',"Object.assign({},vb_h,{ok:!!(cargo.inputCheck && cargo.inputCheck.ok === true),value:cargo.inputCheck && cargo.inputCheck.value !== undefined && cargo.inputCheck.value !== null ? cargo.inputCheck.value : vb_h.value,message:cargo.inputCheck && cargo.inputCheck.message,message_es:cargo.inputCheck && cargo.inputCheck.message_es,quiet:!!(cargo.inputCheck && cargo.inputCheck.quiet)})"),
       SET('vb_proposal_policy','vb_proposal','vb_relevant === true && vb_ready === true && vb_candidate.ok && !vb_known ? formProposalPolicy(cargo,vb_candidate,cargo.inputCheck,accepted) : null'),
       SET('vb_proposal_values','vb_proposal_values','proposedFormValues(cargo,vb_h.form,accepted.concat([vb_candidate]))'),
       SIDE('vb_proposal_reset','(cargo.proposalCheck=undefined,true)'),
@@ -366,7 +366,7 @@ const requestCancelled={
 };
 // Open-ended answers use the same contextual intent/extraction path as other DISPATCH replies.
 const readFormResponse={
- id:'read-form-response',name:'ReadFormResponse',version:'1.0.0',scope:'isolated',description:'Read the requested field with contextual DISPATCH: an answer continues, a withdrawal or a new request leaves with saved form progress.',
+ id:'read-form-response',name:'ReadFormResponse',version:'1.0.0',scope:'isolated',description:'Read the requested field with contextual DISPATCH: an answer continues, an answer with nothing usable is asked again, a withdrawal or a new request leaves with saved form progress.',
  parameters:[{name:'form',type:'string'},{name:'input',type:'string'}],
  variables:vars({group:null,spec:null,question:'',reply:null}),
  steps:[SET('response_group','group',"cargo.forms[form].specs.find(function(s){return s.name===input || s.any_of && s.any_of.some(function(member){return member.name===input;});})"),
@@ -375,7 +375,10 @@ const readFormResponse={
   SET('response_question','question',"formInputPrompt(cargo,form,input,Object.assign({},group,spec,{question:spec.question || group.question,question_es:spec.question_es || group.question_es,question_from:spec.question_from || group.question_from}),cargo.forms[form].data || {},language)"),
   SET('response_clear','reply','null'),
   { ...yieldDispatch('response_dispatch','form',"'input_not_matched'"),onResponse:'continue',responseContext:'Current question: {{question}}. Requested answer: {{spec.response.description}}.',responseParameters:[{name:'answer',type:'string',description:'{{spec.response.description}}'}],responseVariable:'reply'},
-  WHEN('response_missing',"!reply || typeof reply.answer !== 'string' || !reply.answer.trim()",yieldDispatch('response_handoff','form',"'input_not_matched'"))]
+  // Nothing usable (only after a default `answers`: a confident one carries the reply as said): the reading is
+  // rejected, so the form asks the question again (the question alone: it was not a wrong answer). The answer never
+  // goes to the host.
+  WHEN('response_missing',"!reply || typeof reply.answer !== 'string' || !reply.answer.trim()",SIDE('response_rejected','(cargo.inputCheck={ok:false,quiet:true},true)'))]
 };
 const collectContextualAnswer=formFlow({id:'collect-contextual-answer',name:'CollectContextualAnswer',description:'Collect one open-ended answer using contextual DISPATCH and preserve the caller wording.',
  parameters:[...['question','question_es','description','context','context_es'].map(name=>({name,type:'string'})),{name:'choices',type:'array'},{name:'digits',type:'object'}],
@@ -416,8 +419,8 @@ const acceptedEffects = {
       WHEN('ie_none','!ca_h',END('ie_end')),
       SET('ie_rest','ca_rest','readings.slice(1)'),
       WHEN('ie_reject',"ca_h.outcome === 'rejected'",SIDE('ie_attempt',"(cargo.forms[ca_h.form].attempts[ca_h.asked || ca_h.name] = Number(cargo.forms[ca_h.form].attempts[ca_h.asked || ca_h.name] || 0) + 1, cargo.forms[ca_h.form].feedback=cargo.forms[ca_h.form].feedback || {}, cargo.forms[ca_h.form].feedback[ca_h.asked || ca_h.name]='invalid', true)")),
-      SET('ie_say_en','ca_ack',"ca_h.outcome === 'rejected' ? (ca_h.message || ('That ' + (ca_h.label || ca_h.name) + \" doesn't look right.\")) : ca_h.silent === true || ca_h.fromPending ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Thank you, I already have your ' + ca_h.label + '.') : ca_h.outcome === 'changed' ? ('Okay, I updated your ' + ca_h.label + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Got it, your ' + ca_h.label + '.') : ''"),
-      SET('ie_say_es','ca_ack_es',"ca_h.outcome === 'rejected' ? (ca_h.message_es || ca_h.message || ('Ese ' + (ca_h.label_es || ca_h.label || ca_h.name) + ' no parece correcto.')) : ca_h.silent === true || ca_h.fromPending ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Gracias, ya tengo su ' + ca_h.label_es + '.') : ca_h.outcome === 'changed' ? ('Listo, actualicé su ' + ca_h.label_es + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Entendido, su ' + ca_h.label_es + '.') : ''"),
+      SET('ie_say_en','ca_ack',"ca_h.outcome === 'rejected' && ca_h.quiet ? '' : ca_h.outcome === 'rejected' ? (ca_h.message || ('That ' + (ca_h.label || ca_h.name) + \" doesn't look right.\")) : ca_h.silent === true || ca_h.fromPending ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Thank you, I already have your ' + ca_h.label + '.') : ca_h.outcome === 'changed' ? ('Okay, I updated your ' + ca_h.label + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Got it, your ' + ca_h.label + '.') : ''"),
+      SET('ie_say_es','ca_ack_es',"ca_h.outcome === 'rejected' && ca_h.quiet ? '' : ca_h.outcome === 'rejected' ? (ca_h.message_es || ca_h.message || ('Ese ' + (ca_h.label_es || ca_h.label || ca_h.name) + ' no parece correcto.')) : ca_h.silent === true || ca_h.fromPending ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Gracias, ya tengo su ' + ca_h.label_es + '.') : ca_h.outcome === 'changed' ? ('Listo, actualicé su ' + ca_h.label_es + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Entendido, su ' + ca_h.label_es + '.') : ''"),
       WHEN('ie_say','ca_ack',SAY('ie_ack','{{ca_ack}}','{{ca_ack_es}}')),
       WHEN('ie_callback',"ca_h.after && ca_h.outcome !== 'known' && ca_h.outcome !== 'rejected' && ca_h.outcome !== 'pending'",FLOW('ie_after','{{ca_h.after}}','call',{form:'{{ca_h.form}}',input:'{{ca_h.name}}',value:'{{ca_h.value}}'})),
       WHEN('ie_more','ca_rest.length > 0',FLOW('ie_next','input-accepted-effects','replace',{readings:'{{ca_rest}}'})),

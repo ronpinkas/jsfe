@@ -32,7 +32,7 @@ export const ANSWER_WORDS = {
    agent: ['live agent', 'agent', 'agents', 'representative', 'rep', 'human', 'operator', 'manager', 'supervisor', 'someone',
       'somebody', 'real person', 'a person', 'customer service', 'support', 'agente', 'agentes', 'gente', 'representante',
       'humano', 'operador', 'operadora', 'gerente', 'alguien', 'persona', 'servicio al cliente', 'al cliente', 'servicio',
-      'recepcionista', 'recepcion', 'recepción'],
+      'recepcionista', 'recepcion', 'recepción', 'asesor', 'asesora', 'asesores'],
    exit: ['exit', 'quit', 'abort', 'salir', 'cancel', 'cancelar'],
    text: ['text', 'texto', 'sms', 'message', 'mensaje', 'text me', 'by text', 'por texto', 'mensaje de texto', 'whatsapp',
       'escríbeme', 'escribeme'],
@@ -63,7 +63,7 @@ const NEGATIONS = ['no', 'not', 'nope', 'nah', 'never', 'dont', 'doesnt', 'didnt
 // Phrases that hold a negation word but agree ("no problem", "why not").
 const AGREEING = /\b(no problem|no worries|no hay problema|no te preocupes|why not|por que no|por qué no)\b/g;
 const DEFERRAL = /\b(later|tomorrow|next week|not now|not today|another time|mañana|manana|después|despues|luego|otro día|otro dia|ahora no|hoy no)\b/;
-const AGENT_ONLY = /^(?:(?:i want|i need|i would like|id like|can i|could i|let me|please|quiero|necesito|puedo|por favor)\s+)*(?:(?:to\s+)?(?:talk|speak|hablar|comunicarme)\s+(?:to|with|con)\s+)?(?:a|an|un|una|el|la)?\s*(?:live agent|agent|representative|rep|human|operator|real person|a person|person|someone|somebody|customer service|agente|representante|humano|operador|operadora|persona|alguien|servicio al cliente|agente en vivo|gerente|manager|supervisor)(?:\s+(?:please|por favor))?$/;
+const AGENT_ONLY = /^(?:(?:i want|i need|i would like|id like|can i|could i|let me|please|quiero|necesito|puedo|por favor)\s+)*(?:(?:to\s+)?(?:talk|speak|hablar|comunicarme)\s+(?:to|with|con)\s+)?(?:a|an|un|una|el|la)?\s*(?:live agent|agent|representative|rep|human|operator|real person|a person|person|someone|somebody|customer service|agente|representante|humano|operador|operadora|persona|alguien|servicio al cliente|agente en vivo|gerente|manager|supervisor|asesor|asesora)(?:\s+(?:please|por favor))?$/;
 
 // Accents are not meaning here (owner 2026-10-16): text callers type "direccion" for "dirección", "si" for "sí". Both
 // sides of every comparison pass through normalize, so a word list matches with or without them; ñ is kept.
@@ -225,6 +225,15 @@ export function isAnswer(input, kind, extra = []) {
    } else {
       return matchesChoice(b, words);
    }
+}
+
+/**
+ * Whether the WHOLE answer is an exit word ("exit", "Cancelar.", "salir por favor", "*"), never a sentence that contains
+ * one: "Cancelar el pedido" asks for something; it does not withdraw (prod 2026-10-26, at a verification-code prompt).
+ */
+export function isExitRequest(input) {
+   const b = normalize(input).replace(/^[.\s]+|[.\s]+$/g, '');
+   return b === '*' || /^(exit|quit|salir|abort|cancel|cancelar)( please| por favor)?$/.test(b);
 }
 
 /** Whether the WHOLE answer asks for a person ("agent", "I want to talk to a representative", "0") — for free-text prompts. */

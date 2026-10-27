@@ -128,7 +128,7 @@ Everything below is read from the JSON. Where a flow's `description` text and it
 
 **Global variables** (tenant-level, optional): `global_whatsapp_invite` / `global_whatsapp_invite_es` (validate-otp-code; empty or absent = the WhatsApp invite is off), `global_live_agents_comment` / `global_live_agents_comment_es` (live-agent-requested: on non-phone channels, and on the phone when the number's schedule gives no hours).
 
-**Host functions called in expressions.** The flows call `isAnswer`, `isAgentRequest`, `isOtherRequest`, `isAmountAnswer`, `amountInAnswer`, `pickChoice`, `matchesChoice`, `readEmail`, `readPhone`, `readIdentifier`, `readInternationalPhone`, `callerIsInternational`, `callerTextNumber`, `textDestination`, `validatePhone`, `validateEmail`, `validateCardNumber`, `validateExpiration`, `normalizeAndFindCapture`, `textWithUrlToSpeech`, `last4` and `anythingElse` inside conditions, SET values and `{{…}}` templates. The engine does not provide them: the host must register them in `APPROVED_FUNCTIONS`. `demos/make-payment.js` has reference implementations of `matchesChoice` (exact word / word-sequence membership, not substring matching), `validatePhone`, `validateEmail` and `textWithUrlToSpeech`.
+**Host functions called in expressions.** The flows call `isAnswer`, `isAgentRequest`, `isExitRequest`, `isOtherRequest`, `isAmountAnswer`, `amountInAnswer`, `pickChoice`, `matchesChoice`, `readEmail`, `readPhone`, `readIdentifier`, `readInternationalPhone`, `callerIsInternational`, `callerTextNumber`, `textDestination`, `validatePhone`, `validateEmail`, `validateCardNumber`, `validateExpiration`, `normalizeAndFindCapture`, `textWithUrlToSpeech`, `last4` and `anythingElse` inside conditions, SET values and `{{…}}` templates. The engine does not provide them: the host must register them in `APPROVED_FUNCTIONS`. `demos/make-payment.js` has reference implementations of `matchesChoice` (exact word / word-sequence membership, not substring matching), `validatePhone`, `validateEmail` and `textWithUrlToSpeech`.
 
 **Contact readers** (in the reference host, hy-rag-lambdas, `foundation/text/contact.js`), one way to read a contact for every flow set:
 - `readEmail(text)` returns the email address in the answer, lower-cased, or `''`. `at` / `arroba` and `dot` / `punto` may be spoken, and the name before the @ may come in several pieces ("R. A Alvarado at aura.com", "j u a n"): every piece back to the first lead-in word ("my email is", "mi correo es", "yes", "hola") is kept and joined. Accents are dropped from the name, and only the last @ counts.
@@ -146,6 +146,7 @@ Everything below is read from the JSON. Where a flow's `description` text and it
 **Answer vocabulary.** The YES / NO / AGENT / EXIT / TEXT words are not in the flows. They live in the host's answer module (in the reference host, hy-rag-lambdas, `foundation/text/answer.js`), one list per kind shared by every flow set. Words match whole words or word runs, never substrings.
 - `isAnswer(input, kind, extra?)` returns whether the answer is a `kind` answer (for `yes`, only an answer of nothing but affirmatives, courtesy aside), `kind` being one of `yes`, `no`, `agent`, `exit`, `text`, with the caller's `extra` words added to that kind's list. `0` is AGENT and `*` is EXIT. A negated answer ("not sure", "I don't want an agent") never matches YES, AGENT or TEXT.
 - `isAgentRequest(input)` returns whether the whole answer asks for a person ("agent", "I want to talk to a representative", "hablar con una persona") or is `0`. A negated answer never does. Used at free-text prompts, where an AGENT word inside a longer answer is not a request.
+- `isExitRequest(input)` returns whether the whole answer is an EXIT word (exit, quit, abort, salir, cancel, cancelar; "please" / "por favor" allowed) or is `*`. A sentence that contains one ("Cancelar el pedido", "quiero cancelar") is not: it asks for something. Every EXIT in the authentication flows uses it.
 - `pickChoice(answer, choices, acceptOther)` is [ask-choice](#askchoice)'s matcher: it returns the key of the choice the answer picks, `__agent`, `__exit`, or `''` for no choice. Its rules are under AskChoice.
 - `isOtherRequest(input, kind)` returns whether a free-text answer to a question that expects `kind` (`number`: a digit or a number word in English or Spanish; `email`: `@`, "at", "arroba", "dot", "punto" or a common mail domain; `contact`: either) is a new request rather than an attempt: three or more words, none of that shape. ask-choice's `expect` uses it.
 - `isAmountAnswer(input)` returns whether the answer names an amount: a `$`, a currency word (dollar(s), dólar(es), buck(s), cent(s), centavo(s)), or a number with one or two decimals after `.` or `,` ("12.50"). `pickChoice` never lets such an answer pick a keypad key or `0` (agent), so "$1" is never a plain `1`. ask-choice's `amount` uses it.
@@ -438,7 +439,7 @@ With the reference host's verbs (`cargo.verb` = say / type, `cargo.verb_es` = di
    3. `validateEmail(prospective_email)` → `email` = it.
    4. `gce_caller_ok` and (the answer is `1`, or `isAnswer(answer, 'yes', ['thanks', 'thank you', 'gracias'])` with no digit and no `@`, or `matchesChoice` of `phone, cell, caller id, number, numero, número, telefono, teléfono, celular, identificador de llamadas`) → `cell_number = cargo.callerId`.
    5. `readInternationalPhone(answer)` → FLOW `generic-retry-with-options` (`replace`): "A number outside the US and Canada can't be used here. Please give the email on your account{or}, or a US or Canadian mobile number." / "Un número fuera de EE. UU. y Canadá no se puede usar aquí. Por favor indique el correo de su cuenta{or}, o un celular de EE. UU. o Canadá."
-   6. `isAnswer(answer, 'exit')` (exit, quit, abort, salir, cancel, cancelar, or `*`) in an answer of at most two words → FLOW `{{cancel_flow || 'contact-support'}}` (`reboot`).
+   6. `isExitRequest(answer)` (the whole answer is exit, quit, abort, salir, cancel or cancelar, courtesy aside, or `*`) → FLOW `{{cancel_flow || 'contact-support'}}` (`reboot`).
    7. `isAgentRequest(answer)` (the whole answer asks for a person, or is `0`) → FLOW `live-agent-requested` (`reboot`).
    8. `gce_caller_ok`, the answer is a NO (`isAnswer(answer, 'no')`, or it starts with "no", "nope" or "nah") and holds no digit and no `@` → FLOW `get-cell-or-email` (`replace`) with `caller_on_file: 'no'`, `intro` / `intro_es` = `''`, `cell_number` / `email` / `acct_number` = `''`, `gce_rejected: "{{gce_rejected}}"`, and `retry_flow`, `cancel_flow`, `account_pattern`, `account_name(_es)`, `retry_call_type`, `validate_flow`, `account_shape`, `merge_partials` passed on: the question is asked again without the caller-ID option and without the intro ("No", "Nope.", "No, use my email").
    9. `gce_caller_ok` and digits that are not a valid phone → `cell_number = cargo.callerId`.
@@ -492,7 +493,7 @@ graph TD
     branch -->|valid email| valid_email[SET: email]
     branch -->|caller_ok + 1 / yes / phone words| use_caller_id[SET: cell_number = callerId]
     branch -->|international number| international_number["FLOW replace: generic-retry-with-options"]
-    branch -->|EXIT or *, at most 2 words| abort_process["FLOW reboot: cancel_flow or contact-support"]
+    branch -->|the whole answer is EXIT, or *| abort_process["FLOW reboot: cancel_flow or contact-support"]
     branch -->|agent request or 0| goto_live_agent[FLOW reboot: live-agent-requested]
     branch -->|caller_ok + NO, no digit or @| declined_caller_id["FLOW replace: get-cell-or-email, caller_on_file no, no intro"]
     branch -->|caller_ok + invalid digits| fallback_invalid[SET: cell_number = callerId]
@@ -577,7 +578,7 @@ Reads `normalized_otp_code` and `user_choice` from `get-and-validate-otp-code`. 
 2. `validate_otp_and_lookup` (CASE, first match wins):
    - `normalized_otp_code.length === 6` → CALL-TOOL [`validate-otp`](#validate-otp) `{otp: normalized_otp_code, container: cargo}` into `otp_validation_result`. `onFail` → FLOW `get-and-validate-otp-code` (`replace`).
    - `wants_other_account` → FLOW `authenticate-user` (`replace`) with `cell_number: ''`, `email: ''`, `retrying: true`, `declined_caller: true`: the contact question again, without the caller ID.
-   - `isAnswer(…, 'exit')` (EXIT words or `*`) → FLOW `{{cargo.authCancelFlow || 'contact-support'}}` (`reboot`).
+   - `isExitRequest(…)` (the whole answer is an EXIT word, or `*`; "Cancelar el pedido" is not) → FLOW `{{cargo.authCancelFlow || 'contact-support'}}` (`reboot`).
    - `isAnswer(…, 'agent')` (an AGENT word anywhere in the answer, or `0`) → FLOW `live-agent-requested` (`reboot`).
    - `isAnswer(…, 'text')` (TEXT words) → FLOW `switch-to-text` (`reboot`).
    - "didn't receive / resend" phrases (`resend, send again, not received, didn t get, no code, no llegó, no recibí, reenviar`…) → FLOW [`resend-otp-code`](#resendotpcode) (`call`) with `resend_reason: "requested"`.
@@ -615,7 +616,7 @@ graph TD
     answer_handler --> route{input}
     route -->|6 digits| validate_otp[TOOL: validate-otp]
     route -->|another account| use_another_account["FLOW replace: authenticate-user, retrying, declined_caller"]
-    route -->|EXIT or *| abort_process[FLOW reboot: cargo.authCancelFlow or contact-support]
+    route -->|the whole answer is EXIT, or *| abort_process[FLOW reboot: cargo.authCancelFlow or contact-support]
     route -->|AGENT words or 0| goto_live_agent[FLOW reboot: live-agent-requested]
     route -->|TEXT words| goto_text[FLOW reboot: switch-to-text]
     route -->|not received / resend| code_not_arrived[FLOW call: resend-otp-code, requested]
@@ -748,7 +749,7 @@ The library's only retry menu: the authentication flows and the Shopify lookups 
    - the same YES test, or `1`, without `retry_call_type: 'replace'` (`retry_from_start`) → FLOW `{{retry_flow}}` (`reboot`) with `retrying: true`.
    - `isAnswer(…, 'text')` (TEXT words) or `9` → FLOW `switch-to-text` (`reboot`).
    - `isAnswer(…, 'agent')` (an AGENT word anywhere in the answer, or `0`) → FLOW `live-agent-requested` (`reboot`).
-   - `isAnswer(…, 'exit')` (EXIT words or `*`) → FLOW `cancel_flow`, else `contact-support` (`reboot`).
+   - `isExitRequest(…)` (the whole answer is an EXIT word, or `*`) → FLOW `cancel_flow`, else `contact-support` (`reboot`).
    - empty input or a lone digit (no intent to detect) → the same cancel target (`reboot`).
    - default → `DISPATCH` (outcome/reason = `caller_outcome`/`caller_reason`): the answer is routed through intent detection. A matching flow starts in the same turn, otherwise the host answers.
 
@@ -779,7 +780,7 @@ graph TD
     handle_choice -->|YES / contact words / 1| retry_from_start["FLOW reboot: {{retry_flow}}, retrying"]
     handle_choice -->|TEXT / 9| do_switch_text[FLOW reboot: switch-to-text]
     handle_choice -->|AGENT / 0| do_agent[FLOW reboot: live-agent-requested]
-    handle_choice -->|EXIT / *| do_abort["FLOW reboot: cancel_flow or contact-support"]
+    handle_choice -->|the whole answer is EXIT, or *| do_abort["FLOW reboot: cancel_flow or contact-support"]
     handle_choice -->|empty / lone digit| do_cancel_no_intent["FLOW reboot: cancel_flow or contact-support"]
     handle_choice -->|default| dispatch_unrecognised["DISPATCH: intent detection, else host"]
     typed_code_verified --> stop((Return to caller))
@@ -946,7 +947,7 @@ Reached by `replace` from [`otp-send-failed`](#otpsendfailed) when `cargo.otpSen
    - `choice_email` and `validateEmail(choice_email)` → FLOW `authenticate-user` (`replace`) with `email: {{choice_email}}`.
    - `validatePhone(choice_digits)` → FLOW `authenticate-user` (`replace`) with `cell_number: {{choice_digits}}`.
    - `isAgentRequest` (the whole answer asks for a person, or is `0`) → FLOW `live-agent-requested` (`reboot`).
-   - `isAnswer(…, 'exit')` (EXIT words or `*`) in an answer of at most two words → FLOW `{{cargo.authCancelFlow || 'contact-support'}}` (`reboot`).
+   - `isExitRequest(…)` (the whole answer is an EXIT word, or `*`) → FLOW `{{cargo.authCancelFlow || 'contact-support'}}` (`reboot`).
    - `readInternationalPhone(user_choice)` → FLOW `otp-text-undeliverable` (`replace`) with `note: "international"`: asks again, saying codes reach only US and Canadian numbers.
    - default → FLOW `authenticate-user` (`replace`) with no contact, so `get-cell-or-email` asks again.
 
@@ -966,7 +967,7 @@ graph TD
     handle_choice -->|valid email| try_email[FLOW replace: authenticate-user + email]
     handle_choice -->|valid phone| try_other_cell[FLOW replace: authenticate-user + cell_number]
     handle_choice -->|agent request or 0| goto_live_agent[FLOW reboot: live-agent-requested]
-    handle_choice -->|EXIT or *, at most 2 words| abort_process[FLOW reboot: cargo.authCancelFlow or contact-support]
+    handle_choice -->|the whole answer is EXIT, or *| abort_process[FLOW reboot: cargo.authCancelFlow or contact-support]
     handle_choice -->|international number| international_number["FLOW replace: otp-text-undeliverable, note international"]
     handle_choice -->|default| ask_contact_again[FLOW replace: authenticate-user]
 ```

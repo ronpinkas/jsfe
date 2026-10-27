@@ -217,3 +217,18 @@ Removed: the synthetic `ContinueCurrent` flow offered beside the primaries, its 
 ## 1.11.1 — interruption uses the primary intent detection
 
 In a flow with `interruptable: true`, a reply is checked with the same intent detection as a new request (`detectFlowWithParameters`: two-stage when `engine.intentDetection = 'two-stage'`, so Jev with its LLM hedge): a detected primary interrupts on a new stack, started with the arguments stage 2 extracted. Removed: the separate `intent_analysis` call (`analyzeIntentStrength`).
+
+**EXIT is the whole answer.** Every EXIT in the authentication flows (the contact prompt, the verification code, the
+retry menus, the email prompt) now uses `isExitRequest`: the whole answer is exit, quit, abort, salir, cancel or cancelar
+(with "please" / "por favor"), or `*`. A sentence that contains one ("Cancelar el pedido" at the code prompt) is not an
+exit; at the code prompt it gets the "Let me explain" re-ask. Before, any answer containing the word (or, at the contact
+prompt, any answer of at most two words containing it) ended the authentication in contact-support.
+
+**A confident answer is never lost.** The host may add `fallback: true` to a `rank_reply` reply that is `answers` only
+because no option cleared the cut. Without it the answer is confident: when the step declares one open string field
+(no enum, no `jsonSchema`) and the stage-2 extraction finds nothing, or fails, the field is the reply as said (prod
+2026-10-26: a cancellation reason ranked `answers`, extracted empty and went to the host,
+whose guru answered it). A `fallback` answer leaves extraction as the judge; ReadFormResponse then rejects the reading
+quietly and the form asks its question again, instead of handing the turn to the host.
+
+**"asesor" / "asesora" are AGENT words.**

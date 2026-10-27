@@ -3822,16 +3822,28 @@ async function detectFlowInTwoStages(input: string, engine: Engine, flows: FlowD
  * The reply ranker (jsfe/host reply-rank): what the latest message does with the question a contextual DISPATCH
  * asked — `answers`, `abort` or `new_request`. ONE aiCallback call whose 4th argument carries both executors'
  * instructions; the host answers with System One and covers it with a text model (its aiCallbackRank). A reply that
- * is not an offered option throws, and the pending step stays for the caller's error policy.
+ * is not an offered option throws, and the pending step stays for the caller's error policy. `confident` is false only
+ * when the host says `answers` is the default because no option cleared its cut (`fallback: true`); an answer
+ * without that flag (a text model's pick, or a host that does not send it) is a confident one.
  */
-async function rankReply(input: string, engine: Engine, question: string): Promise<ReplyOption> {
+async function rankReply(input: string, engine: Engine, question: string): Promise<{ option: ReplyOption, confident: boolean }> {
   const { input: cleanInput, conversation } = buildDetectFlowRequest(input, engine.lastChatTurn, []);
   const request = buildReplyRank(cleanInput, conversation, question);
   const reply = parseStageReply(await fetchAiResponse(request.llm.system, request.llm.user, engine.aiCallback, engine.aiTimeOut, stageSchema('rank_reply', request.llm.schema), request));
   const option = String(reply.option ?? '') as ReplyOption;
   if (!REPLY_OPTIONS.includes(option)) throw new Error(`rank_reply: "${option.slice(0, 40)}" is not an offered option`);
-  logger.info(`rank_reply: ${option} for ${JSON.stringify(cleanInput)}`);
-  return option;
+  const confident = reply.fallback !== true;
+  logger.info(`rank_reply: ${option}${confident ? '' : ' (default: no option cleared the cut)'} for ${JSON.stringify(cleanInput)}`);
+  return { option, confident };
+}
+
+/**
+ * The one field a confidently ranked answer can carry verbatim: a declaration of exactly one string parameter with no
+ * enum (an open answer such as a reason or a description). A closed value or several fields are never guessed.
+ */
+function verbatimReplyField(parameters: FlowParameterDefinition[]): string | null {
+  const only = parameters.length === 1 ? parameters[0] : null;
+  return only && (only.type === undefined || only.type === 'string') && !only.enum?.length && !only.jsonSchema ? only.name : null;
 }
 
 /**
@@ -7286,11 +7298,33 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
       }
       // A model error leaves this live continuation pending for the caller's error policy.
       let option: ReplyOption;
-      try { option = await rankReply(String(sanitizedInput),engine,question); } catch (error) { guardedRoutingFailed = true; throw error; }
+      let confident: boolean;
+      try { ({ option, confident } = await rankReply(String(sanitizedInput),engine,question)); } catch (error) { guardedRoutingFailed = true; throw error; }
       ranked = option;
       if (option === 'answers') {
         if (declaration) {
-          try { frame.variables[declaration.variable] = await extractReplyParameters(String(sanitizedInput),engine,question,declaration.parameters); } catch (error) { guardedRoutingFailed = true; throw error; }
+          // A confident answer is never lost: when extraction finds nothing (or fails) in an open single-field answer,
+          // the field is the reply as said. A default `answers` keeps extraction as the judge, so an empty field
+          // stays empty and the flow asks again.
+          const verbatim = confident ? verbatimReplyField(declaration.parameters) : null;
+          let extracted: Record<string, any>;
+          try {
+            extracted = await extractReplyParameters(String(sanitizedInput),engine,question,declaration.parameters);
+          } catch (error) {
+            if (verbatim) {
+              logger.warn(`Contextual DISPATCH in '${frame.flowName}': extraction failed (${(error as Error)?.message}); the confident answer is kept as said`);
+              extracted = {};
+            } else {
+              guardedRoutingFailed = true; throw error;
+            }
+          }
+          if (verbatim && !(typeof extracted[verbatim] === 'string' && extracted[verbatim].trim())) {
+            logger.info(`Contextual DISPATCH in '${frame.flowName}': nothing extracted from a confident answer; '${verbatim}' is the reply as said`);
+            extracted = { ...extracted, [verbatim]: String(sanitizedInput) };
+          } else {
+            // extraction carried the field, or the answer was not confident or not open
+          }
+          frame.variables[declaration.variable] = extracted;
         } else {
           // no typed response: the flow reads the reply itself
         }

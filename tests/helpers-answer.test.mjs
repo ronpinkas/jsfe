@@ -1,7 +1,7 @@
 // jsfe/helpers answer.js — the answer vocabulary every flow set shares.
 //   node tests/helpers-answer.test.mjs
 import assert from 'node:assert/strict';
-import { isAnswer, isAgentRequest, pickChoice, isOtherRequest, isSpelledFragment, isAmountAnswer, amountInAnswer } from '../dist/helpers/answer.js';
+import { isAnswer, isAgentRequest, isExitRequest, pickChoice, isOtherRequest, isSpelledFragment, isAmountAnswer, amountInAnswer } from '../dist/helpers/answer.js';
 
 let checks = 0;
 const eq = (got, want, what) => { assert.equal(got, want, what); checks++; };
@@ -266,4 +266,12 @@ for (const said of ['por favor', 'Por favor.', 'please', 'sí, por favor', '1 po
    eq(pickChoice(said, FIRM_ONLY), 'yes', `firm: "${said}" confirms`);
 for (const said of ['no, por favor', 'por favor no', 'espere por favor', 'repita por favor', 'un enlace por favor'])
    eq(pickChoice(said, FIRM_ONLY) === 'yes', false, `firm: "${said}" does not confirm`);
+// "asesor" is an agent in Spanish (prod 2026-10-26, at a verification-code prompt).
+for (const said of ['Necesito un asesor.', 'asesora', 'quiero hablar con un asesor'])
+   { eq(isAnswer(said, 'agent'), true, `"${said}" asks for an agent`); eq(isAgentRequest(said), true, `"${said}" is an agent request`); }
+// EXIT is the whole answer (owner 2026-10-26): a sentence that names "cancel" asks for something.
+for (const said of ['exit', 'Cancelar.', 'cancel please', 'salir por favor', '*', 'Quit'])
+   eq(isExitRequest(said), true, `"${said}" exits`);
+for (const said of ['Cancelar el pedido', 'cancel my order', 'quiero cancelar', 'salir de la deuda', 'no cancel', ''])
+   eq(isExitRequest(said), false, `"${said}" does not exit`);
 console.log(`answer: ${checks} checks passed`);
