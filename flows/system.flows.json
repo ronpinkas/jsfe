@@ -8810,6 +8810,8 @@
             "question_es": "¿Cuál es su número de teléfono?",
             "retry": "Please say or enter your 10-digit phone number.",
             "retry_es": "Por favor diga o ingrese su número de teléfono de 10 dígitos.",
+            "retry_text": "Please type your 10-digit phone number.",
+            "retry_text_es": "Por favor escriba su número de teléfono de 10 dígitos.",
             "name": "phone",
             "field": "phone"
           }
@@ -9314,6 +9316,8 @@
             "question_es": "¿Cuál es su código postal?",
             "retry": "Please say or enter your 5-digit ZIP code.",
             "retry_es": "Por favor diga o ingrese su código postal de 5 dígitos.",
+            "retry_text": "Please type your 5-digit ZIP code.",
+            "retry_text_es": "Por favor escriba su código postal de 5 dígitos.",
             "name": "zip",
             "field": "zip"
           }
@@ -10093,8 +10097,12 @@
             "validator": "validate-card-number",
             "question": "Please say or enter your card number.",
             "question_es": "Por favor diga o ingrese el número de su tarjeta.",
+            "question_text": "Please type your card number.",
+            "question_text_es": "Por favor escriba el número de su tarjeta.",
             "retry": "Please say or enter the full card number.",
             "retry_es": "Por favor diga o ingrese el número completo de su tarjeta.",
+            "retry_text": "Please type the full card number.",
+            "retry_text_es": "Por favor escriba el número completo de su tarjeta.",
             "name": "card_number",
             "field": "card_number"
           }
@@ -10350,6 +10358,8 @@
             "question_es": "¿Cuál es la fecha de vencimiento, mes y año?",
             "retry": "Please say or enter the expiration as four digits, month then year, like 0 9 2 8.",
             "retry_es": "Por favor diga o ingrese el vencimiento en cuatro dígitos, mes y año, por ejemplo 0 9 2 8.",
+            "retry_text": "Please type the expiration as four digits, month then year, like 0928.",
+            "retry_text_es": "Por favor escriba el vencimiento en cuatro dígitos, mes y año, por ejemplo 0928.",
             "name": "card_expiration",
             "field": "card_expiration"
           }
@@ -11149,6 +11159,8 @@
             "question_es": "¿Cuál es su código postal?",
             "retry": "Please say or enter your 5-digit ZIP code.",
             "retry_es": "Por favor diga o ingrese su código postal de 5 dígitos.",
+            "retry_text": "Please type your 5-digit ZIP code.",
+            "retry_text_es": "Por favor escriba su código postal de 5 dígitos.",
             "name": "zip",
             "field": "zip"
           }
@@ -11434,8 +11446,12 @@
             "validator": "validate-card-number",
             "question": "Please say or enter your card number.",
             "question_es": "Por favor diga o ingrese el número de su tarjeta.",
+            "question_text": "Please type your card number.",
+            "question_text_es": "Por favor escriba el número de su tarjeta.",
             "retry": "Please say or enter the full card number.",
             "retry_es": "Por favor diga o ingrese el número completo de su tarjeta.",
+            "retry_text": "Please type the full card number.",
+            "retry_text_es": "Por favor escriba el número completo de su tarjeta.",
             "name": "card_number",
             "field": "card_number"
           },
@@ -11455,6 +11471,8 @@
             "question_es": "¿Cuál es la fecha de vencimiento, mes y año?",
             "retry": "Please say or enter the expiration as four digits, month then year, like 0 9 2 8.",
             "retry_es": "Por favor diga o ingrese el vencimiento en cuatro dígitos, mes y año, por ejemplo 0 9 2 8.",
+            "retry_text": "Please type the expiration as four digits, month then year, like 0928.",
+            "retry_text_es": "Por favor escriba el vencimiento en cuatro dígitos, mes y año, por ejemplo 0928.",
             "name": "card_expiration",
             "field": "card_expiration"
           },
@@ -12541,7 +12559,9 @@
             "question": "What is your phone number?",
             "question_es": "¿Cuál es su número de teléfono?",
             "retry": "Please say or enter your 10-digit phone number.",
-            "retry_es": "Por favor diga o ingrese su número de teléfono de 10 dígitos."
+            "retry_es": "Por favor diga o ingrese su número de teléfono de 10 dígitos.",
+            "retry_text": "Please type your 10-digit phone number.",
+            "retry_text_es": "Por favor escriba su número de teléfono de 10 dígitos."
           },
           "email": {
             "label": "email address",
@@ -12569,7 +12589,9 @@
             "question": "What is your ZIP code?",
             "question_es": "¿Cuál es su código postal?",
             "retry": "Please say or enter your 5-digit ZIP code.",
-            "retry_es": "Por favor diga o ingrese su código postal de 5 dígitos."
+            "retry_es": "Por favor diga o ingrese su código postal de 5 dígitos.",
+            "retry_text": "Please type your 5-digit ZIP code.",
+            "retry_text_es": "Por favor escriba su código postal de 5 dígitos."
           },
           "account_number": {
             "label": "account number",
@@ -12585,7 +12607,9 @@
             "question": "What is your account number?",
             "question_es": "¿Cuál es su número de cuenta?",
             "retry": "Please say or enter your account number.",
-            "retry_es": "Por favor diga o ingrese su número de cuenta."
+            "retry_es": "Por favor diga o ingrese su número de cuenta.",
+            "retry_text": "Please type your account number.",
+            "retry_text_es": "Por favor escriba su número de cuenta."
           },
           "ssn_last4": {
             "label": "last four digits of your Social Security number",
@@ -12688,8 +12712,12 @@
             "validator": "validate-card-number",
             "question": "Please say or enter your card number.",
             "question_es": "Por favor diga o ingrese el número de su tarjeta.",
+            "question_text": "Please type your card number.",
+            "question_text_es": "Por favor escriba el número de su tarjeta.",
             "retry": "Please say or enter the full card number.",
-            "retry_es": "Por favor diga o ingrese el número completo de su tarjeta."
+            "retry_es": "Por favor diga o ingrese el número completo de su tarjeta.",
+            "retry_text": "Please type the full card number.",
+            "retry_text_es": "Por favor escriba el número completo de su tarjeta."
           },
           "card_expiration": {
             "label": "expiration date",
@@ -12706,7 +12734,9 @@
             "question": "What is the expiration date, month and year?",
             "question_es": "¿Cuál es la fecha de vencimiento, mes y año?",
             "retry": "Please say or enter the expiration as four digits, month then year, like 0 9 2 8.",
-            "retry_es": "Por favor diga o ingrese el vencimiento en cuatro dígitos, mes y año, por ejemplo 0 9 2 8."
+            "retry_es": "Por favor diga o ingrese el vencimiento en cuatro dígitos, mes y año, por ejemplo 0 9 2 8.",
+            "retry_text": "Please type the expiration as four digits, month then year, like 0928.",
+            "retry_text_es": "Por favor escriba el vencimiento en cuatro dígitos, mes y año, por ejemplo 0928."
           },
           "card_cvv": {
             "label": "security code",
@@ -15460,6 +15490,8 @@
             "question_es": "¿Cuál es el código postal de 5 dígitos de su nueva dirección?",
             "retry": "Please say or enter your 5-digit ZIP code.",
             "retry_es": "Por favor diga o ingrese su código postal de 5 dígitos.",
+            "retry_text": "Please type your 5-digit ZIP code.",
+            "retry_text_es": "Por favor escriba su código postal de 5 dígitos.",
             "name": "zip",
             "field": "zip",
             "names": [
@@ -17531,7 +17563,7 @@
     "name": "ReadFormResponse",
     "version": "1.0.0",
     "scope": "isolated",
-    "description": "Read the requested field with contextual DISPATCH; uncertainty returns to the host with saved form progress.",
+    "description": "Read the requested field with contextual DISPATCH: an answer continues, a withdrawal or a new request leaves with saved form progress.",
     "parameters": [
       {
         "name": "form",
@@ -17568,7 +17600,7 @@
         "type": "object",
         "value": {
           "version": 1,
-          "summary": "Read the requested field with contextual DISPATCH; uncertainty returns to the host with saved form progress.",
+          "summary": "Read the requested field with contextual DISPATCH: an answer continues, a withdrawal or a new request leaves with saved form progress.",
           "parametersFrom": "parameters",
           "role": "worker",
           "requires": [
@@ -17637,7 +17669,7 @@
           "flow": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").recovery.flow || ''}}"
         },
         "onResponse": "continue",
-        "responseContext": "Current question: {{question}}. Requested answer: {{spec.response.description}}. Continue only for an answer to this question. A changed request belongs to its workflow; an unrelated question or uncertain response belongs to the host.",
+        "responseContext": "Current question: {{question}}. Requested answer: {{spec.response.description}}.",
         "responseParameters": [
           {
             "name": "answer",
