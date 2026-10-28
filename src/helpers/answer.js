@@ -239,10 +239,12 @@ export function isAnswer(input, kind, extra = []) {
 /**
  * Whether the WHOLE answer is an exit word ("exit", "Cancelar.", "salir por favor", "*"), never a sentence that contains
  * one: "Cancelar el pedido" asks for something; it does not withdraw (prod 2026-10-26, at a verification-code prompt).
+ * The word may be repeated ("Salir salir."), echo the prompt ("Salir para cancelar") or end in "now" (prod 2026-10-28).
  */
 export function isExitRequest(input) {
    const b = normalize(input).replace(/^[.\s]+|[.\s]+$/g, '');
-   return b === '*' || /^(exit|quit|salir|abort|cancel|cancelar)( please| por favor)?$/.test(b);
+   const word = '(?:exit|quit|salir|abort|cancel|cancelar)';
+   return b === '*' || new RegExp(`^${word}(?:[ .]+${word})*(?: para cancelar| to cancel)?(?: please| por favor| ahora| now)?$`).test(b);
 }
 
 /** Whether the WHOLE answer asks for a person ("agent", "I want to talk to a representative", "0") — for free-text prompts. */

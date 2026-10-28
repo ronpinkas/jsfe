@@ -274,8 +274,8 @@ for (const said of ['Necesito un asesor.', 'asesora', 'quiero hablar con un ases
   for (const [said, key] of [['Ya oprimí el uno.', '1'], ['I already pressed one', '1'], ['marqué el 2', '2'], ['le di al 2', '2'], ['no presioné el uno', ''], ['a 1', '']])
      eq(pickChoice(said, C), key, `"${said}" picks ${key || 'nothing'}`); }
 // EXIT is the whole answer (owner 2026-10-26): a sentence that names "cancel" asks for something.
-for (const said of ['exit', 'Cancelar.', 'cancel please', 'salir por favor', '*', 'Quit'])
+for (const said of ['exit', 'Cancelar.', 'cancel please', 'salir por favor', '*', 'Quit', 'Salir salir.', 'Salir, salir', 'exit exit', 'Salir para cancelar.', 'exit to cancel', 'salir ahora.'])
    eq(isExitRequest(said), true, `"${said}" exits`);
-for (const said of ['Cancelar el pedido', 'cancel my order', 'quiero cancelar', 'salir de la deuda', 'no cancel', ''])
+for (const said of ['Cancelar el pedido', 'cancel my order', 'quiero cancelar', 'salir de la deuda', 'no cancel', '', 'salir salir de la deuda', 'Cancelar membresía', 'cancelar para cancelar el pedido'])
    eq(isExitRequest(said), false, `"${said}" does not exit`);
 console.log(`answer: ${checks} checks passed`);
