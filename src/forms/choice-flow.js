@@ -452,7 +452,7 @@ export const FLOWS = [
         "id": "ac_switch_to_text_key",
         "type": "SET",
         "variable": "ac_key",
-        "value": "ac_key === '' && !ac_other && !ac_amount && cargo.voice && String(ac_answer || '').trim() === '9' && !!callerTextNumber(cargo) ? '__text' : ac_key"
+        "value": "ac_key === '' && !ac_other && !ac_amount && cargo.voice && String(ac_answer || '').trim().replace(/[.,!?;:]+$/, '') === '9' && !!callerTextNumber(cargo) ? '__text' : ac_key"
       },
       {
         "id": "ac_keypad_again",
@@ -629,7 +629,7 @@ export const FLOWS = [
         "id": "ac_switch_to_text_key_again",
         "type": "SET",
         "variable": "ac_key",
-        "value": "ac_key === '' && !ac_other && !ac_amount && cargo.voice && String(ac_answer || '').trim() === '9' && !!callerTextNumber(cargo) ? '__text' : ac_key"
+        "value": "ac_key === '' && !ac_other && !ac_amount && cargo.voice && String(ac_answer || '').trim().replace(/[.,!?;:]+$/, '') === '9' && !!callerTextNumber(cargo) ? '__text' : ac_key"
       },
       {
         "id": "ac_keypad_done",
