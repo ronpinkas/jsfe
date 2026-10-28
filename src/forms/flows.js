@@ -390,10 +390,11 @@ const readFormResponse={
 // `answers` (picks none): asked again ("Sorry, I didn't catch that."), counted as an attempt so max_attempts still bounds
 // it; `abort` ends every flow; `new_request` goes to intent detection.
 const rankedMiss=(id)=>SIDE(id,"(cargo.forms[form].attempts=cargo.forms[form].attempts || {},cargo.forms[form].attempts[input]=Number(cargo.forms[form].attempts[input] || 0)+1,cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[input]='miss',true)");
-const ESCAPES_JS="[{key:'__agent',label:'speak with a person (a live agent)'}].concat(cargo.voice && callerTextNumber(cargo) ? [{key:'__text',label:'continue by text message'}] : [])";
+// The ranker is offered only a person. Text is never offered: its label matched "continuar", "texto" and "enlace", and a
+// call moved to text hangs up (prod 2026-10-28: 7 of 7 such picks were wrong). TEXTO and keypad 9 are read before it.
+const ESCAPES_JS="[{key:'__agent',label:'speak with a person (a live agent)'}]";
 const rankedChoices=(id,from)=>SET(id,'ranked',`(${from}).concat(${ESCAPES_JS})`);
-const escapeRoutes=(id)=>[WHEN(`${id}_agent`,"reply && reply.key === '__agent'",FLOW(`${id}_agent_flow`,'live-agent-requested','reboot')),
-  WHEN(`${id}_text`,"reply && reply.key === '__text'",FLOW(`${id}_text_flow`,'switch-to-text','reboot'))];
+const escapeRoutes=(id)=>[WHEN(`${id}_agent`,"reply && reply.key === '__agent'",FLOW(`${id}_agent_flow`,'live-agent-requested','reboot'))];
 const rankedDispatch=(id,reason)=>({...yieldDispatch(id,'form',`'${reason}'`),onResponse:'continue',responseContext:'Current question: {{asked}}',responseChoices:'ranked',responseVariable:'reply'});
 const readFormReply={
  id:'read-form-reply',name:'ReadFormReply',version:'1.1.0',scope:'isolated',description:'Rank an unreadable answer against its question: a request for a person or for text is taken; an answer is asked again; a withdrawal or a new request leaves with saved form progress.',

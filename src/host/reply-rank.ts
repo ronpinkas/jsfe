@@ -24,6 +24,11 @@ export const CHOICE_PREFIX = 'choice:';
 export const REPLY_DEFAULT: ReplyOption = 'answers';
 /** A noul at or above this is a yes. */
 export const REPLY_YES_THRESHOLD = 0.5;
+/**
+ * The cut an option must clear, by what a wrong pick costs: an option not listed here takes REPLY_YES_THRESHOLD. Set
+ * from labelled prod replies (owner 2026-10-28), never guessed.
+ */
+export const REPLY_CUTS: Partial<Record<ReplyOption, number>> = {};
 
 export interface ReplyTurn { role: 'user' | 'assistant'; content: string }
 export interface ReplyRankRequest {
@@ -102,7 +107,9 @@ export function buildReplyRank(input: string, conversation: ReplyTurn[], questio
   ].join('\n');
   const questions: Record<string, unknown> = {};
   const index: { id: string; option: ReplyOption }[] = [];
-  options.forEach((o, i) => {
+  // With declared choices, `answers` ("picks none of them") is not a question System One answers: it competes with the
+  // choices it excludes. It is what is left when no option clears its cut (owner 2026-10-28). A text model still has it.
+  options.filter(o => !(o === 'answers' && choices.length)).forEach((o, i) => {
     const id = `r${i}`;
     questions[id] = { type: 'noul', criteria: criteriaOf(o, choices), instructions: { option: o, question: `Does the latest message do what \`${o}\` describes?` } };
     index.push({ id, option: o });
@@ -132,15 +139,14 @@ export function decodeReplyRankLlm(text: string, request: ReplyRankRequest): { o
 }
 
 /**
- * System One's answers as the canonical reply: the highest-rated option when it clears the cut, else the default
- * (`answers`), with every option's probability (for logs). A declared choice that clears the cut is taken over `answers`
- * ("picks none of them") and `new_request`; only `abort` keeps its rank (owner 2026-10-28: a reply rated its menu
- * choice 0.65 and `answers` 0.81, and the menu was asked again). Throws if any question is unanswered.
+ * System One's answers as the canonical reply: the highest-rated option that clears its own cut (REPLY_CUTS, else the
+ * threshold); when none does, the default (`answers`: asked again at a choice question, the answer at an open one), with
+ * every option's probability (for logs). Throws if any question is unanswered.
  */
 export function decodeReplyRankSystemOne(
   answers: Record<string, { noul?: unknown } | undefined> | undefined,
   request: ReplyRankRequest,
-  { threshold = REPLY_YES_THRESHOLD } = {}
+  { threshold = REPLY_YES_THRESHOLD, cuts = REPLY_CUTS }: { threshold?: number; cuts?: Partial<Record<ReplyOption, number>> } = {}
 ): { option: ReplyOption; scores: Record<string, number>; fallback: boolean } {
   const scores: Record<string, number> = {};
   for (const q of request.systemOne.index) {
@@ -148,10 +154,8 @@ export function decodeReplyRankSystemOne(
     if (!Number.isFinite(noul)) throw new Error(`System One: question ${q.id} unanswered`);
     scores[q.option] = noul;
   }
-  const ranked = request.systemOne.index.map(q => q.option).sort((a, b) => scores[b] - scores[a]);
-  const choice = ranked.find(o => o.startsWith(CHOICE_PREFIX) && scores[o] >= threshold);
-  const best = choice && ranked[0] !== 'abort' ? choice : ranked[0];
-  if (best && scores[best] >= threshold) {
+  const [best] = request.systemOne.index.map(q => q.option).filter(o => scores[o] >= (cuts[o] ?? threshold)).sort((a, b) => scores[b] - scores[a]);
+  if (best) {
     return { option: best, scores, fallback: false };
   } else {
     return { option: REPLY_DEFAULT, scores, fallback: true };

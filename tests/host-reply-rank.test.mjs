@@ -30,13 +30,16 @@ test('declared choices are options before the fixed three, with their own criter
  assert.match(c.llm.system,/- choice:2: The latest message picks the option "Second account"/);assert.match(c.llm.system,/- answers: The latest message responds to the current question but picks none of the offered options\./);
  for(const q of c.systemOne.index)assert.ok(c.llm.system.includes(`- ${q.option}: ${c.systemOne.questions[q.id].criteria.true}`));
  assert.deepEqual(decodeReplyRankLlm('{"option":"choice:2"}',c),{option:'choice:2'});assert.throws(()=>decodeReplyRankLlm('{"option":"choice:3"}',c),/not an offered option/);
- assert.equal(decodeReplyRankSystemOne({r0:{noul:.2},r1:{noul:.8},r2:{noul:.3},r3:{noul:.1},r4:{noul:.1}},c).option,'choice:2');
+ // with choices, System One is not asked `answers` ("picks none of them"): it is what is left when nothing clears its cut
+ assert.deepEqual(c.systemOne.index.map(q=>q.option),['choice:1','choice:2','abort','new_request']);
+ assert.deepEqual(r.systemOne.index.map(q=>q.option),['answers','abort','new_request'],'an open question still asks it');
+ const jev=(c1,c2,abort,nr,opts)=>decodeReplyRankSystemOne({r0:{noul:c1},r1:{noul:c2},r2:{noul:abort},r3:{noul:nr}},c,opts);
+ assert.equal(jev(.2,.65,.1,.47).option,'choice:2','a choice that clears the cut is taken');
+ assert.deepEqual([jev(.2,.45,.1,.3).option,jev(.2,.45,.1,.3).fallback],['answers',true],'nothing clears: asked again');
+ assert.equal(jev(.1,.6,.9,.1).option,'abort','the highest cleared option wins');
+ assert.equal(jev(.1,.88,.02,.93).option,'new_request','the highest cleared option wins');
+ assert.equal(jev(.2,.63,.1,.1,{cuts:{'choice:2':.7}}).option,'answers','an option below its own cut is not taken');
+ assert.equal(jev(.2,.71,.1,.1,{cuts:{'choice:2':.7}}).option,'choice:2','and above it is');
  assert.equal(r.choices,undefined,'no choices, no field');
- // a declared choice that clears the cut is taken over `answers` ("picks none of them") and new_request; abort keeps its rank
- assert.equal(decodeReplyRankSystemOne({r0:{noul:.1},r1:{noul:.65},r2:{noul:.81},r3:{noul:.02},r4:{noul:.47}},c).option,'choice:2','a cleared choice outranks answers');
- assert.equal(decodeReplyRankSystemOne({r0:{noul:.1},r1:{noul:.45},r2:{noul:.81},r3:{noul:.02},r4:{noul:.1}},c).option,'answers','a choice below the cut does not');
- assert.equal(decodeReplyRankSystemOne({r0:{noul:.1},r1:{noul:.88},r2:{noul:.26},r3:{noul:.02},r4:{noul:.93}},c).option,'choice:2','a cleared choice outranks new_request');
- assert.equal(decodeReplyRankSystemOne({r0:{noul:.1},r1:{noul:.6},r2:{noul:.3},r3:{noul:.9},r4:{noul:.1}},c).option,'abort','a higher abort still wins');
- assert.equal(decodeReplyRankSystemOne({r0:{noul:.1},r1:{noul:.3},r2:{noul:.3},r3:{noul:.02},r4:{noul:.9}},c).option,'new_request','new_request wins when no choice clears');
 });
 console.log(`Reply rank: all checks passed (${checks})`);
