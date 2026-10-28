@@ -7,13 +7,19 @@
  *   answers      the reply answers the question (the default: an open question's reply that clears no option is its answer)
  *   abort        the caller withdraws the request and asks for nothing else
  *   new_request  the caller asks for something else: a different service or an unrelated question
+ *   choice:<key> the reply picks one of the question's declared choices (only when the step declares them); `answers`
+ *                is then a reply that picks none of them
  *
  * Both executors' instructions come from the same criteria. A host that does not know this task answers the `llm`
  * instructions with its text model, which is a complete answer.
  */
 
 export const REPLY_OPTIONS = ['answers', 'abort', 'new_request'] as const;
-export type ReplyOption = typeof REPLY_OPTIONS[number];
+/** The fixed options, or `choice:<key>` for a declared choice. */
+export type ReplyOption = typeof REPLY_OPTIONS[number] | `choice:${string}`;
+/** A choice the question offers: its key and the words that describe it to the ranker. */
+export interface ReplyChoice { key: string; label: string }
+export const CHOICE_PREFIX = 'choice:';
 /** An open question's reply that clears no option is its answer (owner decision 2026-10-26). */
 export const REPLY_DEFAULT: ReplyOption = 'answers';
 /** A noul at or above this is a yes. */
@@ -27,12 +33,14 @@ export interface ReplyRankRequest {
   /** the flow's question and what answers it (the step's responseContext, interpolated) */
   question: string;
   options: ReplyOption[];
+  /** the question's declared choices, when it offers any */
+  choices?: ReplyChoice[];
   llm: { system: string; user: string; schema: Record<string, unknown> };
   systemOne: { state: Record<string, unknown>; questions: Record<string, unknown>; index: { id: string; option: ReplyOption }[] };
 }
 
 // ── the criteria: written once, rendered for both executors ─────────────────────────────────────────
-const CRITERIA: Record<ReplyOption, { true: string; false: string }> = {
+const CRITERIA: Record<typeof REPLY_OPTIONS[number], { true: string; false: string }> = {
   answers: {
     true: 'The latest message responds to the current question, in any words: the requested information, a correction of it, or that the caller does not know, does not have or cannot give it (datos incorrectos, no lo sé, no lo tengo, no puedo dar el dato), including asking how to provide it.',
     false: 'It withdraws the request, or asks for a different service or an unrelated question.',
@@ -47,13 +55,31 @@ const CRITERIA: Record<ReplyOption, { true: string; false: string }> = {
   },
 };
 const TASK = 'A workflow asked the caller a question. Decide what the caller\'s latest message does with it.';
+// With declared choices, `answers` is the reply that responds without picking any of them.
+const ANSWERS_WITHOUT_CHOICE = {
+  true: 'The latest message responds to the current question but picks none of the offered options.',
+  false: 'It picks one of the offered options, withdraws the request, or asks for something else.',
+};
+const choiceCriteria = (c: ReplyChoice) => ({
+  true: `The latest message picks the option "${c.label}", in any words, or says it already chose it.`,
+  false: 'It picks another option or none of them, withdraws the request, or asks for something else.',
+});
+const criteriaOf = (option: ReplyOption, choices: ReplyChoice[]) => {
+  if (option.startsWith(CHOICE_PREFIX)) {
+    return choiceCriteria(choices.find(c => CHOICE_PREFIX + c.key === option)!);
+  } else if (option === 'answers' && choices.length) {
+    return ANSWERS_WITHOUT_CHOICE;
+  } else {
+    return CRITERIA[option as typeof REPLY_OPTIONS[number]];
+  }
+};
 
 const conversationText = (conversation: ReplyTurn[], input: string) =>
   `${conversation.length ? `<conversation>\n${conversation.map(t => `${t.role}: ${t.content}`).join('\n')}\n</conversation>\n` : ''}<latest-message>\n${input}\n</latest-message>`;
 
 /** The reply ranker's instructions for both executors. */
-export function buildReplyRank(input: string, conversation: ReplyTurn[], question: string): ReplyRankRequest {
-  const options = [...REPLY_OPTIONS];
+export function buildReplyRank(input: string, conversation: ReplyTurn[], question: string, choices: ReplyChoice[] = []): ReplyRankRequest {
+  const options: ReplyOption[] = [...choices.map(c => `${CHOICE_PREFIX}${c.key}` as ReplyOption), ...REPLY_OPTIONS];
   const schema = {
     type: 'object', additionalProperties: false, required: ['option'],
     properties: { option: { type: 'string', enum: options } },
@@ -65,7 +91,7 @@ export function buildReplyRank(input: string, conversation: ReplyTurn[], questio
     question,
     '</current-question>',
     '',
-    ...options.map(o => `- ${o}: ${CRITERIA[o].true}`),
+    ...options.map(o => `- ${o}: ${criteriaOf(o, choices).true}`),
     `When none clearly applies: ${REPLY_DEFAULT}.`,
     '',
     '<json-schema>',
@@ -78,11 +104,11 @@ export function buildReplyRank(input: string, conversation: ReplyTurn[], questio
   const index: { id: string; option: ReplyOption }[] = [];
   options.forEach((o, i) => {
     const id = `r${i}`;
-    questions[id] = { type: 'noul', criteria: CRITERIA[o], instructions: { option: o, question: `Does the latest message do what \`${o}\` describes?` } };
+    questions[id] = { type: 'noul', criteria: criteriaOf(o, choices), instructions: { option: o, question: `Does the latest message do what \`${o}\` describes?` } };
     index.push({ id, option: o });
   });
   return {
-    task: 'rank_reply', input, conversation, question, options,
+    task: 'rank_reply', input, conversation, question, options, ...(choices.length ? { choices } : {}),
     llm: { system, user: conversationText(conversation, input), schema },
     systemOne: {
       state: {

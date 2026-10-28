@@ -31,8 +31,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SO
 **/
 import { buildFlowStage, buildParameterStage, hasStageParameters } from './host/intent-stages.js';
 import type { IntentStageRequest } from './host/intent-stages.js';
-import { buildReplyRank, REPLY_OPTIONS } from './host/reply-rank.js';
-import type { ReplyRankRequest, ReplyOption } from './host/reply-rank.js';
+import { buildReplyRank, CHOICE_PREFIX } from './host/reply-rank.js';
+import type { ReplyRankRequest, ReplyOption, ReplyChoice } from './host/reply-rank.js';
 
 /*
   // Deploy new version to NPM:
@@ -609,6 +609,7 @@ export interface FlowStep {
   recovery?: {version:1;mode:string;reason:string;form?:string;flow?:string};
   responseParameters?: FlowParameterDefinition[]; // Opt-in typed extraction when the reply answers (rank_reply).
   responseVariable?: string; // Declared object variable assigned only when the reply answers.
+  responseChoices?: string; // Declared array variable of { key, label }: the ranker may pick one; responseVariable gets { key }.
   tool?: string;
   args?: Record<string, unknown>;
   variable?: string;
@@ -3826,12 +3827,12 @@ async function detectFlowInTwoStages(input: string, engine: Engine, flows: FlowD
  * when the host says `answers` is the default because no option cleared its cut (`fallback: true`); an answer
  * without that flag (a text model's pick, or a host that does not send it) is a confident one.
  */
-async function rankReply(input: string, engine: Engine, question: string): Promise<{ option: ReplyOption, confident: boolean }> {
+async function rankReply(input: string, engine: Engine, question: string, choices: ReplyChoice[] = []): Promise<{ option: ReplyOption, confident: boolean }> {
   const { input: cleanInput, conversation } = buildDetectFlowRequest(input, engine.lastChatTurn, []);
-  const request = buildReplyRank(cleanInput, conversation, question);
+  const request = buildReplyRank(cleanInput, conversation, question, choices);
   const reply = parseStageReply(await fetchAiResponse(request.llm.system, request.llm.user, engine.aiCallback, engine.aiTimeOut, stageSchema('rank_reply', request.llm.schema), request));
   const option = String(reply.option ?? '') as ReplyOption;
-  if (!REPLY_OPTIONS.includes(option)) throw new Error(`rank_reply: "${option.slice(0, 40)}" is not an offered option`);
+  if (!request.options.includes(option)) throw new Error(`rank_reply: "${option.slice(0, 40)}" is not an offered option`);
   const confident = reply.fallback !== true;
   logger.info(`rank_reply: ${option}${confident ? '' : ' (default: no option cleared the cut)'} for ${JSON.stringify(cleanInput)}`);
   return { option, confident };
@@ -3842,6 +3843,18 @@ async function rankReply(input: string, engine: Engine, question: string): Promi
  * declaration that marks it `verbatim: true` (an open answer whose words are the value, such as a reason). Opt-in:
  * a field that names a thing to look up (a product, a city) needs a real extraction, never the whole reply.
  */
+/** A step's declared choices: an array of { key, label } with unique nonempty keys; a missing label is the key. */
+function readResponseChoices(value: unknown): ReplyChoice[] {
+  if (!Array.isArray(value) || !value.length) throw new Error('Contextual response choices must be a nonempty array');
+  const keys = new Set<string>();
+  return value.map((choice: any) => {
+    const key = String(choice?.key ?? '').trim();
+    if (!key || keys.has(key)) throw new Error('Contextual response choices need unique nonempty keys');
+    keys.add(key);
+    return { key, label: String(choice?.label ?? '').trim() || key };
+  });
+}
+
 function verbatimReplyField(parameters: (FlowParameterDefinition & { verbatim?: boolean })[]): string | null {
   return parameters.length === 1 && parameters[0].verbatim === true ? parameters[0].name : null;
 }
@@ -7288,7 +7301,7 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
     let abortReply: string | null = null;
     let guardedRoutingFailed = false;
     engine.dispatchIfMatched = async (frame,step) => {
-      if(activatedThisTurn && step.responseParameters === undefined && step.responseVariable === undefined)return false;
+      if(activatedThisTurn && step.responseParameters === undefined && step.responseVariable === undefined && step.responseChoices === undefined)return false;
       let declaration;
       try { declaration = validateContextualResponseStep(step,engine.flowsMenu.find(flow=>flow.id===frame.flowId)); if(activatedThisTurn && declaration)throw new Error('Typed contextual response cannot classify after a flow activation this turn'); } catch(error) { guardedRoutingFailed = true; throw error; }
       const question = interpolateMessage(step.responseContext,frame.contextStack,frame.variables,engine).trim();
@@ -7296,13 +7309,24 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         declaration.parameters = declaration.parameters.map((parameter: FlowParameterDefinition)=>({...parameter,description:interpolateMessage(parameter.description,frame.contextStack,frame.variables,engine).trim()}));
         if(declaration.parameters.some((parameter: FlowParameterDefinition)=>!parameter.description)) { guardedRoutingFailed=true; throw new Error('Contextual response parameter description resolved empty'); }
       }
+      // The step's declared choices, as they stand now (a flow builds them for the question it asked).
+      let choices: ReplyChoice[] = [];
+      try { choices = declaration?.choices ? readResponseChoices(frame.variables[declaration.choices]) : []; } catch (error) { guardedRoutingFailed = true; throw error; }
       // A model error leaves this live continuation pending for the caller's error policy.
       let option: ReplyOption;
       let confident: boolean;
-      try { ({ option, confident } = await rankReply(String(sanitizedInput),engine,question)); } catch (error) { guardedRoutingFailed = true; throw error; }
-      ranked = option;
-      if (option === 'answers') {
-        if (declaration) {
+      try { ({ option, confident } = await rankReply(String(sanitizedInput),engine,question,choices)); } catch (error) { guardedRoutingFailed = true; throw error; }
+      ranked = option.startsWith(CHOICE_PREFIX) ? 'answers' : option;
+      if (option.startsWith(CHOICE_PREFIX)) {
+        // A declared choice is the whole answer: no extraction.
+        frame.variables[declaration!.variable] = { key: option.slice(CHOICE_PREFIX.length) };
+        logger.info(`Contextual DISPATCH in '${frame.flowName}': the reply picks '${option.slice(CHOICE_PREFIX.length)}'; the flow continues`);
+        return false;
+      } else if (option === 'answers') {
+        if (declaration && !declaration.parameters.length) {
+          // choices only: the reply picks none of them, so the flow asks again
+          frame.variables[declaration.variable] = { key: '' };
+        } else if (declaration) {
           // A confident answer is never lost: when extraction finds nothing (or fails) in a `verbatim` field, the
           // field is the reply as said. A default `answers` keeps extraction as the judge, so an empty field
           // stays empty and the flow asks again.
@@ -8900,9 +8924,9 @@ export class WorkflowEngine implements Engine {
         try { validateContextualResponseStep(step,flowDef); } catch(error:any) { state.errors.push(`DISPATCH step \"${step.id}\" in flow \"${flowDef.name}\": ${error.message}`); }
         // DISPATCH always routes the turn's own input — no value. It may declare the ending of the
         // flows it ends (`outcome` / `reason`, kept only when no flow matches).
-        const extra = Object.keys(step).filter(k => !['id', 'type', 'outcome', 'reason', 'recovery', 'onResponse', 'responseContext', 'responseParameters', 'responseVariable'].includes(k));
+        const extra = Object.keys(step).filter(k => !['id', 'type', 'outcome', 'reason', 'recovery', 'onResponse', 'responseContext', 'responseParameters', 'responseVariable', 'responseChoices'].includes(k));
         if (extra.length > 0) {
-          state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" has invalid attribute(s) ${extra.map(k => `"${k}"`).join(', ')} - DISPATCH takes only "id", "outcome", "reason", "recovery", "onResponse" "responseContext", "responseParameters" and "responseVariable"`);
+          state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" has invalid attribute(s) ${extra.map(k => `"${k}"`).join(', ')} - DISPATCH takes only "id", "outcome", "reason", "recovery", "onResponse" "responseContext", "responseParameters", "responseVariable" and "responseChoices"`);
         } else if (step.onResponse !== undefined && step.onResponse !== 'continue') {
           state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" onResponse must be "continue" when provided`);
         } else if (step.onResponse === 'continue' && (typeof step.responseContext !== 'string' || !step.responseContext.trim())) {

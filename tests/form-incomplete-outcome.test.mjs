@@ -35,11 +35,12 @@ await test('input retry exhaustion preserves only a declared fallback',async()=>
  const reject={id:'reject',name:'Reject',version:'1',steps:[set('reject_value','(cargo.inputCheck={ok:false},true)')]};
  for(const optional of [false,true]) {const t=fixture({inputs:[{...field,validator:'reject'}],...(optional?{incomplete_outcome:RESULT}:{})},[reject]);await t.say('start',{flow:'follow-up'});const s=await t.say('ok');assert.deepEqual(outcome(s),optional?RESULT:{outcome:'unresolved',reason:'fixture_give_up'});}
 });
-await test('confirmation unmatched and retry exhaustion share the owned outcome policy',async()=>{
+await test('confirmation unmatched and retry exhaustion honor the optional outcome policy',async()=>{
  for(const optional of [false,true])for(const unmatched of [false,true]) {
   const t=fixture({inputs:[],confirm:{question:'Proceed? YES or NO.'},...(optional?{incomplete_outcome:RESULT}:{})});await t.say('start',{flow:'follow-up'});
-  let s;if(unmatched)s=await t.say('I need different assistance');else for(let i=0;i<2;i++)s=await t.say('zzz');
-  if(optional)assert.deepEqual(outcome(s),RESULT);else {assert.equal(s.lastFlowOutcome.outcome,'pending');assert.equal(s.lastFlowOutcome.reason,unmatched?'confirmation_not_matched':'confirmation_misses_exhausted');assert.equal(s.lastFlowRecovery.mode,'resume');}
+  let s;if(unmatched)s=await t.say('I need different assistance');else for(let i=0;i<2;i++)s=await t.say('%%');
+  // exhausted attempts go to the give-up worker, as an input's do; an unmatched request yields resumable
+  if(optional)assert.deepEqual(outcome(s),RESULT);else if(unmatched){assert.equal(s.lastFlowOutcome.outcome,'pending');assert.equal(s.lastFlowOutcome.reason,'confirmation_not_matched');assert.equal(s.lastFlowRecovery.mode,'resume');}else assert.deepEqual(outcome(s),{outcome:'unresolved',reason:'fixture_give_up'});
  }
 });
 await test('missing specification and failed form validation honor optional policy',async()=>{

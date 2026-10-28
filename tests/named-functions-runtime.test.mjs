@@ -11,7 +11,7 @@ const simple=(id,options={})=>({declarationVersion:1,id,name:id,version:'1',desc
 let checks=0;const test=async(name,run)=>{await run();checks++;console.log('PASS '+name);};
 const warnings=[];const quiet={debug(){},info(){},warn(...args){warnings.push(args.join(' '));},error(...args){warnings.push(args.join(' '));}};
 function engine(flows,{tools=[],approved={},journal=null,mode='session-only'}={}){
- const e=new WorkflowEngine(quiet,async()=>'{"flowName":"None"}',[...FLOWS,{id:'give-up',name:'GiveUp',version:'1',description:'Fixture terminal handoff.',steps:[{id:'done',type:'END'}]},...flows],tools,{...STANDARD_FUNCTIONS,...approved},{},false,'en');
+ const e=new WorkflowEngine(quiet,async(s,u,sch,r)=>r?.task==='rank_reply'?'{"option":"answers"}':'{"flowName":"None"}',[...FLOWS,{id:'give-up',name:'GiveUp',version:'1',description:'Fixture terminal handoff.',steps:[{id:'done',type:'END'}]},...flows],tools,{...STANDARD_FUNCTIONS,...approved},{},false,'en');
  e.disableCommands();e.actionPersistence=mode;if(journal)e.actionJournal=journal;return e;
 }
 const start=(e,s,id,args={})=>e.updateActivity({role:'user',content:'begin',start:{flow:id,arguments:args}},s);

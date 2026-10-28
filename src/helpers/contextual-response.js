@@ -6,13 +6,16 @@ const safeName=value=>typeof value==='string'&&/^[A-Za-z_$][\w$]*$/.test(value)&
 const fail=message=>{throw new Error('Contextual response: '+message);};
 /** Return an isolated declaration copy; unknown response fields cannot silently become legacy dispatch. */
 export function validateContextualResponseStep(step,flow) {
- const typed=own(step,'responseParameters')||own(step,'responseVariable');
+ const typed=own(step,'responseParameters')||own(step,'responseVariable')||own(step,'responseChoices');
  if(!typed)return null;
  if(step.type!=='DISPATCH'||step.onResponse!=='continue'||typeof step.responseContext!=='string'||!step.responseContext.trim())fail('typed responses require DISPATCH onResponse:continue and nonempty responseContext');
  if(!safeName(step.responseVariable)||['cargo','currentContext','userInput','language','globalVariables'].includes(step.responseVariable)||!own(flow?.variables,step.responseVariable)||flow.variables[step.responseVariable]?.type!=='object')fail('responseVariable must name a declared object variable in this flow');
- if(!Array.isArray(step.responseParameters)||!step.responseParameters.length)fail('responseParameters must be a nonempty canonical parameter array');
+ const choices=own(step,'responseChoices');
+ if(choices&&(!safeName(step.responseChoices)||step.responseChoices===step.responseVariable||!own(flow?.variables,step.responseChoices)||flow.variables[step.responseChoices]?.type!=='array'))fail('responseChoices must name a declared array variable in this flow');
+ // With choices, extraction is optional: a reply that picks none of them is { key: '' } unless parameters are declared.
+ if(!(choices&&!own(step,'responseParameters'))&&(!Array.isArray(step.responseParameters)||!step.responseParameters.length))fail('responseParameters must be a nonempty canonical parameter array');
  const names=new Set();
- for(const p of step.responseParameters){
+ for(const p of step.responseParameters || []){
   if(!p||typeof p!=='object'||Array.isArray(p)||!safeName(p.name)||names.has(p.name))fail('response parameter names must be unique safe identifiers');names.add(p.name);
   if(typeof p.description!=='string'||!p.description.trim())fail('response parameters need a description');
   if(p.type!==undefined&&!['string','boolean','number','integer'].includes(p.type))fail('unsupported response parameter type');
@@ -22,7 +25,7 @@ export function validateContextualResponseStep(step,flow) {
   if(p.verbatim!==undefined&&(p.verbatim!==true||p.type!==undefined&&p.type!=='string'||p.enum!==undefined))fail('verbatim is true on an open string parameter only');
   if(Object.keys(p).some(k=>!['name','description','type','enum','internal','verbatim'].includes(k)))fail('responseParameters accepts only canonical parameter descriptors');
  }
- try{return structuredClone({parameters:step.responseParameters,variable:step.responseVariable});}catch{fail('response parameters must be cloneable declaration data');}
+ try{return structuredClone({parameters:step.responseParameters || [],variable:step.responseVariable,...(choices?{choices:step.responseChoices}:{})});}catch{fail('response parameters must be cloneable declaration data');}
 }
 export function contextualResponseRuntimeSteps(id,steps,requirements=[]) {
  if(!requirements.includes(CONTEXTUAL_RESPONSES_REQUIREMENT))return steps;

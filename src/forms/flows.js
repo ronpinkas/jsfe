@@ -309,7 +309,7 @@ const collectInput = {
          'condition: ci_m.hits.length > 0': FLOW('ci_accept', 'collect-input-accept', 'call', { hits: '{{ci_m.hits}}' }),
          "condition: ci_m.questions.length > 0": END('ci_question_handled'),
          "condition: ci_qkey && ci_qkey.indexOf('__') !== 0": FLOW('ci_question_asked', 'provide-data', 'call', { form:'{{form}}', provides: '{{provides}}', asked: '{{ci_qkey}}', no_menu: 'true',no_gate:'{{ci_skip_gate}}' }),
-         "condition: !ci_must && (ci_words >= 3 || ci_spec.profile.kind === 'amount' && ci_words > 0)": FLOW('ci_elsewhere', '{{ci_reply_reader}}', 'call', { form: '{{form}}', input: '{{current}}', question: '{{ci_q}}', question_es: '{{ci_q_es}}', choices: '{{ci_choices}}' }),
+         "condition: !ci_must && ci_words > 0": FLOW('ci_elsewhere', '{{ci_reply_reader}}', 'call', { form: '{{form}}', input: '{{current}}', question: '{{ci_q}}', question_es: '{{ci_q_es}}', choices: '{{ci_choices}}', firm: '{{ci_spec.confirmation}}' }),
          default: SIDE('ci_miss', "(missFormInput(cargo,form,current),true)") } },
    ],
 };
@@ -383,26 +383,36 @@ const readFormResponse={
   WHEN('response_missing',"!reply || typeof reply.answer !== 'string' || !reply.answer.trim()",SIDE('response_rejected','(cargo.inputCheck={ok:false,quiet:true},true)'))]
 };
 // An answer the field's reader could not read goes to the reply ranker, never straight to the host (owner 2026-10-26: a form
-// gives up only for a real new intent). `answers`: a choice field takes the offered key the reply picks, else the
-// question is asked again ("Sorry, I didn't catch that."), counted as an attempt so max_attempts still bounds it;
-// `abort` ends every flow; `new_request` goes to intent detection.
+// gives up only for a real new intent). The ranker is offered the question's declared choices and the two escapes every
+// question supports (owner 2026-10-28): a person, and on a call with a textable number, text. A choice that only its
+// exact words may take (exact, or the YES of a firm confirmation) is never offered; a NO is (declining takes no action).
+// `answers` (picks none): asked again ("Sorry, I didn't catch that."), counted as an attempt so max_attempts still bounds
+// it; `abort` ends every flow; `new_request` goes to intent detection.
 const rankedMiss=(id)=>SIDE(id,"(cargo.forms[form].attempts=cargo.forms[form].attempts || {},cargo.forms[form].attempts[input]=Number(cargo.forms[form].attempts[input] || 0)+1,cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[input]='miss',true)");
+const ESCAPES_JS="[{key:'__agent',label:'speak with a person (a live agent)'}].concat(cargo.voice && callerTextNumber(cargo) ? [{key:'__text',label:'continue by text message'}] : [])";
+const rankedChoices=(id,from)=>SET(id,'ranked',`(${from}).concat(${ESCAPES_JS})`);
+const escapeRoutes=(id)=>[WHEN(`${id}_agent`,"reply && reply.key === '__agent'",FLOW(`${id}_agent_flow`,'live-agent-requested','reboot')),
+  WHEN(`${id}_text`,"reply && reply.key === '__text'",FLOW(`${id}_text_flow`,'switch-to-text','reboot'))];
+const rankedDispatch=(id,reason)=>({...yieldDispatch(id,'form',`'${reason}'`),onResponse:'continue',responseContext:'Current question: {{asked}}',responseChoices:'ranked',responseVariable:'reply'});
 const readFormReply={
- id:'read-form-reply',name:'ReadFormReply',version:'1.0.0',scope:'isolated',description:'Rank an unreadable answer against its question: an answer is asked again, a withdrawal or a new request leaves with saved form progress.',
+ id:'read-form-reply',name:'ReadFormReply',version:'1.1.0',scope:'isolated',description:'Rank an unreadable answer against its question: a request for a person or for text is taken; an answer is asked again; a withdrawal or a new request leaves with saved form progress.',
  parameters:[{name:'form',type:'string'},{name:'input',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'}],
- variables:vars({question:'',question_es:'',asked:''}),
+ variables:vars({question:'',question_es:'',asked:'',ranked:[],reply:null}),
  steps:[SET('reply_asked','asked',"language === 'es' && question_es ? question_es : question"),
-  {...yieldDispatch('reply_dispatch','form',"'input_not_matched'"),onResponse:'continue',responseContext:'Current question: {{asked}}'},
+  rankedChoices('reply_ranked','[]'),
+  rankedDispatch('reply_dispatch','input_not_matched'),
+  ...escapeRoutes('reply_escape'),
   rankedMiss('reply_miss')]
 };
 const readFormChoice={
- id:'read-form-choice',name:'ReadFormChoice',version:'1.0.0',scope:'isolated',description:'Rank an unreadable answer to a choice question and take the offered option it picks; otherwise ask again. A withdrawal or a new request leaves with saved form progress.',
- parameters:[{name:'form',type:'string'},{name:'input',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'},{name:'choices',type:'array'}],
- variables:vars({question:'',question_es:'',choices:[],asked:'',options:'',reply:null,picked:'',chain:null,reading:null}),
+ id:'read-form-choice',name:'ReadFormChoice',version:'1.1.0',scope:'isolated',description:'Rank an unreadable answer to a choice question and take the offered option it picks, or a request for a person or for text; otherwise ask again. A withdrawal or a new request leaves with saved form progress.',
+ parameters:[{name:'form',type:'string'},{name:'input',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'},{name:'choices',type:'array'},{name:'firm',type:'string'}],
+ variables:vars({question:'',question_es:'',choices:[],firm:'',asked:'',ranked:[],reply:null,picked:'',chain:null,reading:null}),
  steps:[SET('choice_asked','asked',"language === 'es' && question_es ? question_es : question"),
-  SET('choice_options','options',"(choices || []).map(function(c){return String(c.key)+' ('+String(c.label || (Array.isArray(c.phrases) && c.phrases.filter(function(p){return String(p)!==String(c.key);})[0]) || c.key)+')';}).join(', ')"),
-  {...yieldDispatch('choice_dispatch','form',"'input_not_matched'"),onResponse:'continue',responseContext:'Current question: {{asked}}',responseParameters:[{name:'key',type:'string',description:'The key of the offered option the reply picks or says it already chose, one of: {{options}}. Leave it empty when the reply picks none of them.'}],responseVariable:'reply'},
-  SET('choice_picked','picked',"(function(){var k=String(reply && reply.key || '').trim().toLowerCase();var c=(choices || []).filter(function(c){return String(c.key).toLowerCase()===k;})[0];return c ? String(c.key) : '';})()"),
+  rankedChoices('choice_ranked',"(choices || []).filter(function(c){return String(c.key)==='no' || c.exact!==true && !(firm==='firm' && String(c.key)==='yes');}).map(function(c){return {key:String(c.key),label:String(c.label || (Array.isArray(c.phrases) && c.phrases.filter(function(p){return String(p)!==String(c.key);})[0]) || c.key)};})"),
+  rankedDispatch('choice_dispatch','input_not_matched'),
+  ...escapeRoutes('choice_escape'),
+  SET('choice_picked','picked',"(function(){var k=String(reply && reply.key || '');var c=(choices || []).filter(function(c){return String(c.key)===k;})[0];return c ? String(c.key) : '';})()"),
   WHEN('choice_none','!picked',rankedMiss('choice_miss')),
   WHEN('choice_none_end','!picked',END('choice_none_done')),
   SIDE('choice_take',"(cargo.choice=picked,cargo.choiceText=picked,true)"),
@@ -414,15 +424,18 @@ const readFormChoice={
   FLOW('choice_accept','collect-input-accept','call',{hits:'{{reading.hits}}'})]
 };
 // A confirmation's unread answer goes to the reply ranker with the confirmation question (owner 2026-10-27), never
-// straight to the host. The ranker is offered NO only: a confirmation is accepted only by its exact YES. Result:
-// cargo.confirmRanked = 'no' | 'none' (ConfirmForm reads it); `abort` ends every flow; `new_request` goes to intent detection.
+// straight to the host. A form's confirmation is exact (it authorizes the form's action), so the ranker is offered NO
+// and the escapes, never YES. Result: cargo.confirmRanked = 'no' | 'none' (ConfirmForm reads it); `abort` ends every
+// flow; `new_request` goes to intent detection.
 const readConfirmReply={
- id:'read-confirm-reply',name:'ReadConfirmReply',version:'1.0.0',scope:'isolated',description:'Rank an unreadable answer to a confirmation: it declines (NO) or is asked again; a withdrawal or a new request leaves with saved form progress. Never confirms.',
+ id:'read-confirm-reply',name:'ReadConfirmReply',version:'1.1.0',scope:'isolated',description:'Rank an unreadable answer to a confirmation: it declines (NO), asks for a person or for text, or is asked again; a withdrawal or a new request leaves with saved form progress. Never confirms.',
  parameters:[{name:'form',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'}],
- variables:vars({question:'',question_es:'',asked:'',reply:null}),
+ variables:vars({question:'',question_es:'',asked:'',ranked:[],reply:null}),
  steps:[SET('confirm_asked','asked',"language === 'es' && question_es ? question_es : question"),
-  {...yieldDispatch('confirm_dispatch','form',"'confirmation_not_matched'"),onResponse:'continue',responseContext:'Current question: {{asked}}',responseParameters:[{name:'key',type:'string',description:"'no' when the reply declines or refuses what the question asks to confirm. Leave it empty otherwise, including when it agrees."}],responseVariable:'reply'},
-  SIDE('confirm_ranked',"(cargo.confirmRanked=String(reply && reply.key || '').trim().toLowerCase()==='no' ? 'no' : 'none',true)")]
+  rankedChoices('confirm_ranked_choices',"[{key:'no',label:'no: declines or refuses what the question asks to confirm'}]"),
+  rankedDispatch('confirm_dispatch','confirmation_not_matched'),
+  ...escapeRoutes('confirm_escape'),
+  SIDE('confirm_ranked',"(cargo.confirmRanked=reply && reply.key==='no' ? 'no' : 'none',true)")]
 };
 const collectContextualAnswer=formFlow({id:'collect-contextual-answer',name:'CollectContextualAnswer',description:'Collect one open-ended answer using contextual DISPATCH and preserve the caller wording.',
  parameters:[...['question','question_es','description','context','context_es'].map(name=>({name,type:'string'})),{name:'choices',type:'array'},{name:'digits',type:'object'}],
@@ -510,7 +523,7 @@ const disambiguate = {
 // ── confirm-form: the exact confirmation of a finished form; a correction is matched against the form chain ───────
 const confirmForm = {
    id: 'confirm-form', name: 'ConfirmForm', version: '1.0.0', scope: 'isolated',
-   description: "Worker: ask a form's confirmation (exact YES / NO; keys 1 and 2). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an unclear short answer is asked again, a long unread one goes to the reply ranker (read-confirm-reply). Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
+   description: "Worker: ask a form's confirmation (exact YES / NO; keys 1 and 2). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
    parameters: ['form', 'question', 'question_es', 'exit_context', 'exit_context_es','phrases','words','interrupts','no_keys','clarifications','invites'].map((n) => ({ name: n, type: ['phrases','words','interrupts','no_keys','clarifications','invites'].includes(n)?'array':'string', description: n })).concat([{ name: 'named_fields', type: 'boolean', description: "true: an answer that names one of the form's inputs (its names) without a value re-asks only that input" }]),
    variables: vars({ named_fields: false, cf_must: false, cf_named: null, cf_presets: FIELD_PRESETS, cf_chain: [], cf_m: null, cf_current:null, cf_result: '',cf_prompt:'',cf_prompt_es:'', cf_words: 0, cf_tries: 0, phrases:null, words:[], clarifications:[], no_keys:['2'], interrupts:[], invites:[], cf_choices:[], cf_event:'', cf_amount:false, cf_questions:[],cf_provides:null,cf_skip_gate:'' }),
    steps: [
@@ -549,14 +562,17 @@ const confirmForm = {
          'condition: cf_named': SET('cf_named_reset', 'cf_result', "(resetFormInputs(cargo, cf_named.form, [cf_named.name]), 'changed')"),
          "condition: cargo.choice === 'no'": SET('cf_declined', 'cf_result', "'no'"),
          "condition: Array.isArray(clarifications) && pickChoice(String(cargo.choiceText || '').replace(/[?¿]/g,''),[{key:'clarify',phrases:clarifications,exact:true}],false)==='clarify'": SET('cf_clarification','cf_result',"'clarification'"),
-         'condition: !cf_must && (cf_words >= 3 || cf_amount && cf_words > 0)': FLOW('cf_elsewhere', 'read-confirm-reply', 'call', { form: '{{form}}', question: '{{cf_prompt}}', question_es: '{{cf_prompt_es}}' }),
+         'condition: !cf_must && cf_words > 0': FLOW('cf_elsewhere', 'read-confirm-reply', 'call', { form: '{{form}}', question: '{{cf_prompt}}', question_es: '{{cf_prompt_es}}' }),
          default: SET('cf_unclear', 'cf_result', "'unclear'") } },
       // the ranker's reading of an unread answer: a decline is the NO; an answer that declines nothing is asked again
       SET('cf_ranked', 'cf_result', "cf_result ? cf_result : cargo.confirmRanked === 'no' ? 'no' : cargo.confirmRanked === 'none' ? 'unclear' : ''"),
       SET('cf_changed', 'cf_result', "cf_result ? cf_result : 'changed'"),
-      // an unclear short answer is asked again (the form runs again and reaches this question), at most twice
+      // an unclear answer is asked again (the form runs again and reaches this question), at most twice
       SET('cf_tries_count', 'cf_tries', "cf_result === 'unclear' ? missFormInput(cargo,form,'__confirm') : (clearFormMisses(cargo,form,'__confirm'),0)"),
-      WHEN('cf_misses_exhausted','cf_tries >= 2 && !cf_must',yieldDispatch('cf_misses_dispatch','form',"'confirmation_misses_exhausted'")),
+      // out of attempts: the give-up worker (a person), never a silent DISPATCH that ends the request unanswered
+      optionalIncomplete('cf_optional_exhausted','cf_tries >= 2 && !cf_must','form',"'confirmation_misses_exhausted'"),
+      WHEN('cf_misses_stamp','cf_tries >= 2 && !cf_must',recoveryStamp('cf_failure_stamp','form',"'confirmation_misses_exhausted'")),
+      WHEN('cf_misses_exhausted','cf_tries >= 2 && !cf_must',FLOW('cf_give_up','give-up','reboot',{ context: '{{exit_context}}', context_es: '{{exit_context_es}}' })),
       WHEN('cf_bind_revision', "cf_result === 'yes'", SIDE('cf_bind', 'confirmFormRevision(cargo, form)')),
       SIDE('cf_store', "(cargo.formConfirm[form] = cf_result === 'unclear' || cf_result === 'clarification' ? 'changed' : cf_result, true)"),
    ],

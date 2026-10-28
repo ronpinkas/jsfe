@@ -4,7 +4,7 @@ import {FLOWS,linkFormSchemas} from '../dist/forms/index.js';
 import {STANDARD_FUNCTIONS} from '../dist/helpers/index.js';
 // A card number said in groups across turns is joined (card_number preset, accumulate): short of 13 digits the question is
 // "Go on." / "Continúe.", and an answer that is not digits drops the partial.
-const engine=new WorkflowEngine({info(){},debug(){},error(){},warn(){}},async()=>'{"flowName":"None"}',linkFormSchemas(FLOWS),[],{...STANDARD_FUNCTIONS},{},false,'en');engine.disableCommands();
+const engine=new WorkflowEngine({info(){},debug(){},error(){},warn(){}},async(s,u,sch,r)=>r?.task==='rank_reply'?'{"option":"answers"}':'{"flowName":"None"}',linkFormSchemas(FLOWS),[],{...STANDARD_FUNCTIONS},{},false,'en');engine.disableCommands();
 let session,checks=0;const say=async(content,start)=>{session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start:{flow:'collect-credit-card'}}:{})},JSON.parse(JSON.stringify(session)))));return String(session.response||'').replace(/\s+/g,' ');};
 const card=()=>Object.values(session.cargo.forms||{}).map(f=>f.values&&f.values.card_number).find(Boolean);
 const begin=async(language,voice)=>{session=engine.initSession('t',crypto.randomUUID(),language);session.cargo.voice=voice;await say('start',true);};

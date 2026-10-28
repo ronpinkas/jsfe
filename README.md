@@ -374,6 +374,15 @@ outcome `user_aborted`, no recovery stamp;
 `answers` a later ordinary DISPATCH in the same turn hands the host the turn without detection. A host that does not know the task answers the `llm`
 instructions with its text model.
 
+**Declared choices (`responseChoices`, jsfe 1.14):** a step may name a flow variable of type array holding
+`[{ key, label }]`; the ranker is then also offered `choice:<key>` for each (before the fixed three), and `answers`
+means a reply that picks none of them. A picked choice sets `responseVariable` to `{ key }` with no extraction;
+`answers` sets `{ key: '' }` unless `responseParameters` are declared too. The request carries the options it offers
+(`request.options`); a host validates a reply against those, never a fixed list. The form readers use it: an unread
+answer with any words goes to the ranker with the question's choices (never an exact choice or the YES of a firm
+confirmation; a NO always) and two escapes every question supports, `__agent` (a person) and `__text` (on a call with
+a textable number); a confirmation's exhausted attempts go to the `give-up` worker.
+
 **Host start (`ContextEntry.start`):** `{ role: 'user', content, start: { flow, arguments } }` starts that
 flow (any flow, by id or name) with those arguments on this turn, without asking the AI. Only the host sets it;
 it is never derived from what the user typed.

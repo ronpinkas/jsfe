@@ -24,4 +24,13 @@ test('System One: the highest option that clears 0.5 wins',()=>{
 });
 test('System One: nothing clears the cut is an answer (the default)',()=>{const d=decodeReplyRankSystemOne(answers(.3,.2,.4),r);assert.equal(d.option,'answers');assert.equal(d.fallback,true);});
 test('System One: an unanswered question fails the call',()=>{assert.throws(()=>decodeReplyRankSystemOne({r0:{noul:.9},r1:{noul:.1}},r),/r2 unanswered/);});
+const c=buildReplyRank('the bottom one',conversation,'Current question: Which account?',[{key:'1',label:'First account'},{key:'2',label:'Second account'}]);
+test('declared choices are options before the fixed three, with their own criteria in both executors',()=>{
+ assert.deepEqual(c.options,['choice:1','choice:2','answers','abort','new_request']);assert.deepEqual(c.llm.schema.properties.option.enum,c.options);assert.deepEqual(c.choices,[{key:'1',label:'First account'},{key:'2',label:'Second account'}]);
+ assert.match(c.llm.system,/- choice:2: The latest message picks the option "Second account"/);assert.match(c.llm.system,/- answers: The latest message responds to the current question but picks none of the offered options\./);
+ for(const q of c.systemOne.index)assert.ok(c.llm.system.includes(`- ${q.option}: ${c.systemOne.questions[q.id].criteria.true}`));
+ assert.deepEqual(decodeReplyRankLlm('{"option":"choice:2"}',c),{option:'choice:2'});assert.throws(()=>decodeReplyRankLlm('{"option":"choice:3"}',c),/not an offered option/);
+ assert.equal(decodeReplyRankSystemOne({r0:{noul:.2},r1:{noul:.8},r2:{noul:.3},r3:{noul:.1},r4:{noul:.1}},c).option,'choice:2');
+ assert.equal(r.choices,undefined,'no choices, no field');
+});
 console.log(`Reply rank: all checks passed (${checks})`);
