@@ -242,3 +242,13 @@ counted as an attempt, so `max_attempts` still bounds it; `abort` ends every flo
 detection. A host fixture that answered such turns with intent detection only must now also answer `rank_reply`.
 
 **A press verb before a key picks it:** "ya oprimí el uno", "I already pressed one", "marqué el 2" (not after a negation).
+
+## 1.12.0 — a confirmation's unread answer goes to the reply ranker
+
+ConfirmForm no longer hands a long unread answer (three or more words, or any words when the form holds an amount) to the
+host with a plain DISPATCH. The new shared worker `read-confirm-reply` ranks it against the confirmation question:
+`answers` with the reply declining (stage-2 `key` = `no`) is the confirmation's NO, so the form's decline path runs;
+`answers` with nothing declined asks the confirmation again, counted as a miss (two misses still hand off, as before);
+`abort` ends every flow; `new_request` goes to intent detection. The ranker is offered NO only: a confirmation is accepted
+only by its exact YES, never by a ranked reading. Hosts that ship the shared workers in a system set must add
+`read-confirm-reply`; a host fixture that answered such turns with intent detection only must now also answer `rank_reply`.
