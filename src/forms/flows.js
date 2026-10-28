@@ -396,6 +396,13 @@ const rankedMiss=(id)=>SIDE(id,"(cargo.forms[form].attempts=cargo.forms[form].at
 // call moved to text hangs up (prod 2026-10-28: 7 of 7 such picks were wrong). TEXTO and keypad 9 are read before it.
 const ESCAPES_JS="[{key:'__agent',label:'speak with a person (a live agent)'}]";
 const rankedChoices=(id,from)=>SET(id,'ranked',`(${from}).concat(${ESCAPES_JS})`);
+// A choice as the ranker is offered it: its key, and its label or its worded phrases.
+const RANK_LABEL_JS="function(c){var said=(Array.isArray(c.phrases) ? c.phrases : []).map(String).filter(function(p){return /[a-zà-ÿ]/i.test(p) && p!==String(c.key);}).slice(0,6);return String(c.label || (said.length ? c.key+' ('+said.join(', ')+')' : c.key));}";
+// The choices of this form's OTHER inputs that the answer could also set (the word reader reads them all: 'LO VENCIDO' at
+// the pay confirmation): the ranker is offered every choice the reader would accept (owner 2026-10-28). A confirmation
+// input is answered only when asked, and a key already offered is not offered twice. Each carries its input, so a pick is
+// read as that input's answer.
+const otherChoicesJS=(asked,taken)=>`(function(){var seen=(${taken}).map(function(c){return String(c.key);}).concat(['yes','no']);return (chain || []).filter(function(i){return i.form===form && i.name!==${asked} && !i.confirmation && i.profile && i.profile.kind==='choice' && Array.isArray(i.profile.choices);}).reduce(function(all,i){return all.concat(i.profile.choices.filter(function(c){var k=String(c.key);if(seen.indexOf(k)>=0)return false;seen.push(k);return true;}).map(function(c){return {key:String(c.key),label:(${RANK_LABEL_JS})(c),owner:{form:i.form,name:i.name}};}));},[]);})()`;
 const escapeRoutes=(id)=>[WHEN(`${id}_agent`,"reply && reply.key === '__agent'",FLOW(`${id}_agent_flow`,'live-agent-requested','reboot'))];
 const rankedDispatch=(id,reason)=>({...yieldDispatch(id,'form',`'${reason}'`),onResponse:'continue',responseContext:'Current question: {{asked}}',responseChoices:'ranked',responseVariable:'reply'});
 const readFormReply={
@@ -409,37 +416,45 @@ const readFormReply={
   rankedMiss('reply_miss')]
 };
 const readFormChoice={
- id:'read-form-choice',name:'ReadFormChoice',version:'1.2.0',scope:'isolated',description:'Rank an unreadable answer to a choice question and take the offered option it picks, or a request for a person or for text; otherwise ask again. A withdrawal or a new request leaves with saved form progress.',
+ id:'read-form-choice',name:'ReadFormChoice',version:'1.3.0',scope:'isolated',description:'Rank an unreadable answer to a choice question and take the offered option it picks, or a request for a person or for text; otherwise ask again. A withdrawal or a new request leaves with saved form progress.',
  parameters:[{name:'form',type:'string'},{name:'input',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'},{name:'choices',type:'array'},{name:'firm',type:'string'}],
- variables:vars({question:'',question_es:'',choices:[],firm:'',asked:'',ranked:[],reply:null,picked:'',chain:null,reading:null}),
+ variables:vars({question:'',question_es:'',choices:[],firm:'',asked:'',ranked:[],reply:null,picked:'',chain:null,reading:null,others:[],owner:null}),
  steps:[SET('choice_asked','asked',"language === 'es' && question_es ? question_es : question"),
-  rankedChoices('choice_ranked',"(choices || []).filter(function(c){return !(firm==='firm' && String(c.key)==='yes');}).map(function(c){var said=(Array.isArray(c.phrases) ? c.phrases : []).map(String).filter(function(p){return /[a-zà-ÿ]/i.test(p) && p!==String(c.key);}).slice(0,6);return {key:String(c.key),label:String(c.label || (said.length ? c.key+' ('+said.join(', ')+')' : c.key))};})"),
+  SET('choice_chain','chain','formInputChain(cargo.forms, form, cargo)'),
+  SET('choice_others','others',otherChoicesJS('input','choices || []')),
+  rankedChoices('choice_ranked',`(choices || []).filter(function(c){return !(firm==='firm' && String(c.key)==='yes');}).map(function(c){return {key:String(c.key),label:(${RANK_LABEL_JS})(c)};}).concat(others.map(function(c){return {key:c.key,label:c.label};}))`),
   rankedDispatch('choice_dispatch','input_not_matched'),
   ...escapeRoutes('choice_escape'),
-  SET('choice_picked','picked',"(function(){var k=String(reply && reply.key || '');var c=(choices || []).filter(function(c){return String(c.key)===k;})[0];return c ? String(c.key) : '';})()"),
+  SET('choice_picked','picked',"(function(){var k=String(reply && reply.key || '');var c=(choices || []).filter(function(c){return String(c.key)===k;})[0] || others.filter(function(c){return c.key===k;})[0];return c ? String(c.key) : '';})()"),
+  SET('choice_owner','owner',"(others.filter(function(c){return c.key===picked && !(choices || []).some(function(own){return String(own.key)===picked;});})[0] || {}).owner || null"),
   WHEN('choice_none','!picked',rankedMiss('choice_miss')),
   WHEN('choice_none_end','!picked',END('choice_none_done')),
   SIDE('choice_take',"(cargo.choice=picked,cargo.choiceText=picked,true)"),
-  SET('choice_chain','chain','formInputChain(cargo.forms, form, cargo)'),
-  SET('choice_read','reading',"enrichFormMatches(readFormAnswer(picked, chain, { form: form, name: input }, picked, []), chain, form, [input], input)"),
+  SET('choice_read','reading',"owner ? enrichFormMatches(readFormAnswer(picked, chain, owner, picked, []), chain, form, [owner.name], owner.name) : enrichFormMatches(readFormAnswer(picked, chain, { form: form, name: input }, picked, []), chain, form, [input], input)"),
   WHEN('choice_unread','!reading.hits.length',rankedMiss('choice_unread_miss')),
   WHEN('choice_unread_end','!reading.hits.length',END('choice_unread_done')),
   SIDE('choice_clear','clearFormMisses(cargo,form,input)'),
   FLOW('choice_accept','collect-input-accept','call',{hits:'{{reading.hits}}'})]
 };
 // A confirmation's unread answer goes to the reply ranker with the confirmation question (owner 2026-10-27), never
-// straight to the host. A form's confirmation is exact (it authorizes the form's action), so the ranker is offered NO
-// and the escapes, never YES. Result: cargo.confirmRanked = 'no' | 'none' (ConfirmForm reads it); `abort` ends every
-// flow; `new_request` goes to intent detection.
+// straight to the host. A form's confirmation is exact (it authorizes the form's action), so the ranker is offered NO, the
+// form's other choices (a correction) and a person, never YES. Result: cargo.confirmRanked = 'no' | 'changed' | 'none'
+// (ConfirmForm reads it); `abort` ends every flow; `new_request` goes to intent detection.
 const readConfirmReply={
- id:'read-confirm-reply',name:'ReadConfirmReply',version:'1.1.0',scope:'isolated',description:'Rank an unreadable answer to a confirmation: it declines (NO), asks for a person or for text, or is asked again; a withdrawal or a new request leaves with saved form progress. Never confirms.',
+ id:'read-confirm-reply',name:'ReadConfirmReply',version:'1.2.0',scope:'isolated',description:'Rank an unreadable answer to a confirmation: it declines (NO), picks another of the form\'s choices (a correction, read as that input\'s answer), asks for a person, or is asked again; a withdrawal or a new request leaves with saved form progress. Never confirms.',
  parameters:[{name:'form',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'}],
- variables:vars({question:'',question_es:'',asked:'',ranked:[],reply:null}),
+ variables:vars({question:'',question_es:'',asked:'',ranked:[],reply:null,chain:null,others:[],picked:null,reading:null}),
  steps:[SET('confirm_asked','asked',"language === 'es' && question_es ? question_es : question"),
-  rankedChoices('confirm_ranked_choices',"[{key:'no',label:'no: declines or refuses what the question asks to confirm'}]"),
+  SET('confirm_chain','chain','formInputChain(cargo.forms, form, cargo)'),
+  SET('confirm_others','others',otherChoicesJS("''",'[]')),
+  rankedChoices('confirm_ranked_choices',"[{key:'no',label:'no: declines or refuses what the question asks to confirm'}].concat(others.map(function(c){return {key:c.key,label:c.label};}))"),
   rankedDispatch('confirm_dispatch','confirmation_not_matched'),
   ...escapeRoutes('confirm_escape'),
-  SIDE('confirm_ranked',"(cargo.confirmRanked=reply && reply.key==='no' ? 'no' : 'none',true)")]
+  // a correction picked by the ranker is read as its input's answer: the form changes and is confirmed again, never confirmed
+  SET('confirm_picked','picked',"others.filter(function(c){return reply && c.key===reply.key;})[0] || null"),
+  SET('confirm_read','reading',"picked ? enrichFormMatches(readFormAnswer(picked.key, chain, picked.owner, picked.key, []), chain, form, [picked.owner.name], picked.owner.name) : null"),
+  WHEN('confirm_change','reading && reading.hits.length',FLOW('confirm_change_accept','collect-input-accept','call',{hits:'{{reading.hits}}'})),
+  SIDE('confirm_ranked',"(cargo.confirmRanked=reading && reading.hits.length ? 'changed' : reply && reply.key==='no' ? 'no' : 'none',true)")]
 };
 const collectContextualAnswer=formFlow({id:'collect-contextual-answer',name:'CollectContextualAnswer',description:'Collect one open-ended answer using contextual DISPATCH and preserve the caller wording.',
  parameters:[...['question','question_es','description','context','context_es'].map(name=>({name,type:'string'})),{name:'choices',type:'array'},{name:'digits',type:'object'}],
