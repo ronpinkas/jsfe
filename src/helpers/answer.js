@@ -338,8 +338,8 @@ export function numericAmountReading(input) {
    // Last-four references (including a repeated unlabelled number) do not supply an amount.
    // Mixed answers with an explicit monetary marker or payment verb still parse their independent amount.
    if (/\b(?:cards?|tarjetas?|ending|termina(?:d[ao]s?)?|visa|mastercard|amex|discover)\b/i.test(raw) && !isAmountAnswer(raw) && !/\b(?:pay|paying|pagar|abonar)(?:\b|(?=\d))/i.test(raw)) return {value:NaN,candidates:0};
-   // 1.234,56 (European) → 1234.56; 1,234.56 → 1234.56; 12,50 → 12.50
-   let t = /\d{1,3}(\.\d{3})+,\d{1,2}\b/.test(raw) ? raw.replace(/\./g, '').replace(',', '.') : raw.replace(/,(?=\d{3}\b)/g, '').replace(/(\d),(\d{1,2})\b/g, '$1.$2');
+   // 1.234,56 (European) → 1234.56; 1,234.56 → 1234.56; 12,50 → 12.50; 1.500 → 1500 (three digits after a dot are never cents)
+   let t = /\d{1,3}(\.\d{3})+,\d{1,2}\b/.test(raw) ? raw.replace(/\./g, '').replace(',', '.') : raw.replace(/,(?=\d{3}\b)/g, '').replace(/\b\d{1,3}(?:\.\d{3})+\b(?![.,]\d)/g, (m) => m.replace(/\./g, '')).replace(/(\d),(\d{1,2})\b/g, '$1.$2');
    const dc = t.match(DOLLARS_AND_CENTS);
    if (dc) {
       t = t.replace(DOLLARS_AND_CENTS, () => ` $${dc[1]}.${dc[2].padStart(2, '0')} `);

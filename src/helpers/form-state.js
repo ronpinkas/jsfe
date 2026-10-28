@@ -50,17 +50,20 @@ export function resolveFormInputs(inputs, presets = {}) {
    return resolved;
 }
 
-/** Dormant entry is explicit: named descendant fields may propose local controllers, never ambient state. */
+/** Dormant entry is explicit: named descendant fields may propose local controllers, never ambient state. A subform
+ * names its entry fields (activate_on); a plain input is its own entry ("NEW CARD, LINK, or a different amount": an
+ * amount said there chooses the amount option), so it declares no activate_on. */
 function validateFormActivation(input,specs) {
-   if(!input.form||!input.activate||typeof input.activate!=='object'||Array.isArray(input.activate)||!Object.keys(input.activate).length||!Array.isArray(input.activate_on)||!input.activate_on.length)
-      throw new Error(`FORM activation ${input.name} needs a subform, controllers and activate_on fields`);
+   const plain=!input.form&&!!input.profile&&input.activate_on===undefined;
+   if(!input.activate||typeof input.activate!=='object'||Array.isArray(input.activate)||!Object.keys(input.activate).length||!plain&&(!input.form||!Array.isArray(input.activate_on)||!input.activate_on.length))
+      throw new Error(`FORM activation ${input.name} needs controllers, and a subform with activate_on fields or a plain input without them`);
    for(const [name,value] of Object.entries(input.activate)) {
       const controller=specs.flatMap(s=>s.any_of||[s]).find(s=>s.name===name);
       if(!controller?.profile||controller.form||controller.bind||name===input.name||!hasFormValue(value)||typeof value==='object')throw new Error(`FORM activation ${input.name} has invalid controller ${name}`);
       const reading=controller.profile.kind==='choice'&&(controller.profile.choices||[]).some(choice=>choice.key===value)?{value}:readInputProfile({...controller.profile,marked:false},value,true);
       if(!reading||!own(reading,'value')||!hasFormValue(reading.value)||!formValuesEqual(reading.value,value))throw new Error(`FORM activation ${input.name} has invalid controller value ${name}`);
    }
-   for(const path of input.activate_on) {
+   for(const path of input.activate_on || []) {
       if(typeof path!=='string'||!path||path.split('.').some(name=>!name||forbidden.has(name)))throw new Error(`FORM activation ${input.name} has invalid entry field`);
       if(input.schema){let inputs=input.schema.inputs,entry;
          for(const name of path.split('.')){const group=inputs?.find(s=>s.name===name||s.any_of?.some(i=>i.name===name));entry=group?.any_of?.find(i=>i.name===name)||group;if(entry?.prepare||group?.prepare)throw new Error(`FORM activation ${input.name} entry ${path} requires preparation`);inputs=entry?.schema?.inputs;}
@@ -139,10 +142,13 @@ export function formInputChain(forms, id, cargo = {}) {
             walk(child,scope,spec.label || prefix,spec.label_es || spec.label || prefixEs,activation||dormant,dormant?spec.activate_on:childEntries);
          } else for(const input of spec.any_of || [spec]) {
             if(entries&&!entries.includes(input.name))continue;
-            if(formCondition(input,state.values,cargo,state)!==false&&!input.form&&input.profile)out.push({...input,
+            const inputCondition=formCondition(input,state.values,cargo,state);
+            // A dormant plain input that declares activate proposes its controllers when it is answered.
+            const inputDormant=inputCondition!==true&&!activation&&!input.form&&input.activate!==undefined?dormantActivation(input,state,cargo):null;
+            if((inputCondition!==false||inputDormant)&&!input.form&&input.profile)out.push({...input,
                ...(prefix?{label:`${prefix}: ${input.label || input.name}`,label_es:`${prefixEs || prefix}: ${input.label_es || input.label || input.name}`} : {}),
                ...(input.choices_from&&Array.isArray(state.data?.[input.choices_from])?{profile:{...input.profile,choices:state.data[input.choices_from]}}:{}),
-               ...(activation?{activation}:{}),form:target,scope,...(spec.any_of?{group:spec.name,exclusive:spec.exclusive===true}:{}),value:state.values[input.name],
+               ...(activation||inputDormant?{activation:activation||inputDormant}:{}),form:target,scope,...(spec.any_of?{group:spec.name,exclusive:spec.exclusive===true}:{}),value:state.values[input.name],
                // its declared prerequisites hold accepted values: a field that cannot be validated yet is not a context for
                // an unnamed out-of-order answer (contract, reference §5)
                ready:(input.depends_on||spec.depends_on||[]).every(name=>hasFormValue(state.values[name]))});
@@ -162,7 +168,7 @@ export function enrichFormMatches(matches,chain,form,names=[],asked='') {
    const enrich=h=>{
       const spec=chain.find(c=>c.form===h.form&&c.name===h.name)||{};
       return {...h,label:h.option_label||spec.label||h.name,label_es:h.option_label_es||spec.label_es||spec.label||h.name,...(h.option_label?{option:true}:{}),
-         validator:spec.validator||'',...(spec.response?{response:spec.response}:{}),after:spec.after||'',validate_always:spec.validate_always===true,...(spec.activation?{activation:spec.activation}:{}),pii:spec.pii===true,current:h.form===form&&names.includes(h.name),asked};
+         validator:spec.validator||'',...(spec.response?{response:spec.response}:{}),after:spec.after||'',validate_always:spec.validate_always===true,...(spec.activation?{activation:spec.activation}:{}),...(spec.silent===true?{silent:true}:{}),pii:spec.pii===true,current:h.form===form&&names.includes(h.name),asked};
    };
    return {...matches,hits:matches.hits.map(enrich),ambiguous:matches.ambiguous.map(enrich),remaining:(matches.remaining||[]).map(group=>group.map(enrich))};
 }

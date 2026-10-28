@@ -86,6 +86,7 @@ export const FIELD_PRESETS = {
       retry: 'Please say or enter the expiration as four digits, month then year, like 0 9 2 8.', retry_es: 'Por favor diga o ingrese el vencimiento en cuatro dígitos, mes y año, por ejemplo 0 9 2 8.',
       retry_text: 'Please type the expiration as four digits, month then year, like 0928.', retry_text_es: 'Por favor escriba el vencimiento en cuatro dígitos, mes y año, por ejemplo 0928.' },
    card_cvv: { label: 'security code', label_es: 'código de seguridad', profile: { kind: 'digits', min: 3, max: 4 }, digits: { min: 3, max: 4 }, pii: true,
+      validator: 'validate-card-cvv',
       question: 'What is the security code on the back of the card?', question_es: '¿Cuál es el código de seguridad al reverso de la tarjeta?' },
    card_zip: { label: 'billing ZIP code', label_es: 'código postal de facturación', profile: { kind: 'digits', min: 5, max: 5 }, digits: { min: 5, max: 5 },
       question: 'What is the billing ZIP code for the card?', question_es: '¿Cuál es el código postal de facturación de la tarjeta?' },
@@ -607,6 +608,10 @@ const validators = [
       description: 'Validator: month and year, a real month, not expired (validateExpiration). Normalizes to MMYY. Params: input, value.',
       parameters: [{ name: 'input', type: 'string', description: 'input name' }, { name: 'value', type: 'string', description: 'the reading' }],
       steps: [SIDE('vce_check', "(function (v) { var m = /^(0?[1-9]|1[0-2])\\D*(?:20)?(\\d{2})$/.exec(String(v).replace(/\\s+/g, '').replace(/de/gi, '')) || /^(\\d{2})(\\d{2})$/.exec(String(v).replace(/\\D/g, '')) || /^(0[1-9])0(\\d{2})$/.exec(String(v).replace(/\\D/g, '')); var mm = m ? ('0' + m[1]).slice(-2) : ''; var yy = m ? m[2] : ''; cargo.inputCheck = m && validateExpiration(mm, yy) ? { ok: true, value: mm + yy } : { ok: false, message: \"That expiration date doesn't look right.\", message_es: 'Esa fecha de vencimiento no parece correcta.' }; return true; })(value)")] },
+   { id: 'validate-card-cvv', name: 'ValidateCardCvv', version: '1.0.0', scope: 'isolated',
+      description: 'Validator: the security code has the length of its card brand, 4 digits for American Express (34, 37) and 3 for every other brand; with no card number yet, 3 or 4. Params: input, value, values.',
+      parameters: [{ name: 'input', type: 'string', description: 'input name' }, { name: 'value', type: 'string', description: 'the reading' }, { name: 'values', type: 'object', description: "the form's values, for the card number" }],
+      steps: [SIDE('vcc_check', "(function (v, n) { var d = String(v).replace(/\\D/g, ''); var pan = String(n || '').replace(/\\D/g, ''); var want = pan ? (/^3[47]/.test(pan) ? 4 : 3) : 0; var ok = want ? d.length === want : d.length === 3 || d.length === 4; cargo.inputCheck = ok ? { ok: true, value: d } : want === 4 ? { ok: false, message: \"That security code doesn't look right. It is the 4 digits on the front of the card.\", message_es: 'Ese código de seguridad no parece correcto. Son los 4 dígitos al frente de la tarjeta.' } : { ok: false, message: \"That security code doesn't look right. It is the 3 digits on the back of the card.\", message_es: 'Ese código de seguridad no parece correcto. Son los 3 dígitos al reverso de la tarjeta.' }; return true; })(value, typeof values !== 'undefined' && values ? values.card_number : '')")] },
 ];
 
 // ── field collectors and sub-forms ──────────────────────────────────────────────────────────────────────────────────
@@ -854,6 +859,7 @@ const LIBRARY_CONTRACTS={
    'load-source':{role:'worker'},'answer-facts':{role:'worker'},
    'validate-card-number':{role:'worker',result:{path:'cargo.inputCheck',type:'object'}},
    'validate-card-expiration':{role:'worker',result:{path:'cargo.inputCheck',type:'object'}},
+   'validate-card-cvv':{role:'worker',result:{path:'cargo.inputCheck',type:'object'}},
    'collect-phone':{role:'collector'},'collect-email':{role:'collector'},'collect-zip':{role:'collector'},
    'collect-street-address':{role:'collector'},'collect-city':{role:'collector'},'collect-card-number':{role:'collector'},
    'collect-card-expiration':{role:'collector'},'collect-card-cvv':{role:'collector'},'collect-card-zip':{role:'collector'},

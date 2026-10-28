@@ -265,6 +265,9 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    const spanText = (reading) => (reading.spans || []).map(([a, b]) => raw.slice(a, b)).join(' ');
    const refused = [];
    let readings = [];
+   // An invited input is read as in order while it is asked (docs/copilot-reference.md §5): its asked signature, not
+   // its narrower out-of-order one ("40" at "NEW CARD, LINK, or a different amount" is the amount).
+   const invitedInput = new Set([...list.filter(isCur).flatMap((c) => Array.isArray(c.invites) ? c.invites : []), ...(Array.isArray(cur.invites) ? cur.invites : [])]);
    for (const c of list) {
       // Rule 2: a confirmation is answered only when asked, firm by CONFIRM_WORDS, soft by the wider YES vocabulary.
       const confirmation = ['firm', 'soft'].includes(c.confirmation) ? c.confirmation : '';
@@ -277,7 +280,7 @@ export function matchInputs(answer, candidates, current, choiceKey) {
       }
       const vocabulary = confirmation ? { ...c.profile, choices: (c.profile.choices || []).map((x) => x.key === 'yes' ? { ...x, phrases: [...(x.phrases ?? x.words ?? []), ...(confirmation === 'firm' ? CONFIRM_WORDS : ANSWER_WORDS.yes)], exact: confirmation === 'firm' || x.exact === true } : x.key === 'no' ? { ...x, phrases: [...(x.phrases ?? x.words ?? []), ...ANSWER_WORDS.no] } : x) } : c.profile;
       const profile=narrativeCurrent && vocabulary.kind==='email' ? {...vocabulary,literal:true} : vocabulary;
-      let r = readInputProfile(profile, raw, isCur(c));
+      let r = readInputProfile(profile, raw, isCur(c) || invitedInput.has(c.name) && c.confirmation === undefined);
       // A semantic choice supplied by ask-choice (e.g. spoken keypad keys) is a reading, not an early return.
       if (!r && c === own && choiceKey && c.profile.kind === 'choice' && (c.profile.choices || []).some(x => x.key === choiceKey)) {
          r = { ...(r || {}), value: choiceKey, spans: r?.spans?.length ? r.spans : [[0, raw.length]] };
@@ -311,6 +314,19 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    const wholeRuns = (reading) => runs.every(([a, b]) => !(reading.spans || []).some(([s, e]) => s < b && a < e) || (reading.spans || []).some(([s, e]) => s <= a && e >= b));
    // Rule 4: a bare number has no money mark and no word in its evidence.
    const bare = (reading) => !isAmountAnswer(raw) && (reading.spans || []).length > 0 && (reading.spans || []).every(([a, b]) => /\d/.test(raw.slice(a, b)) && !/\p{L}/u.test(raw.slice(a, b)));
+   // Rule 1 by shape: a bare number whose length is the current question's own keypad length (`digits`) answers that
+   // question even when its reader rejects it (an expiration "1320" is month 13); its validation decides and the
+   // question is asked again. It is never read out of order as another field (that "1320" is not a security code).
+   // A choice is excluded (a digit it does not offer reaches the invited amount, rule 4), and so is an amount.
+   const bareDigits = raw.replace(/\D/g, '');
+   const shapeOf = own && own.digits && !['choice', 'amount', 'text'].includes(own.profile.kind) ? own.digits : null;
+   if (shapeOf && bareDigits && /^[\d\s./-]+$/.test(raw.trim()) && !isAmountAnswer(raw) && bareDigits.length >= Number(shapeOf.min || 1) && bareDigits.length <= Number(shapeOf.max || shapeOf.min || 1)
+      && !readings.some((reading) => reading.current || invited(reading))) {
+      readings.push({ form: own.form, name: own.name, value: bareDigits, ...(own.validator ? {} : { invalid: true }), known: false, repeatedChoice: false, wholeChoice: false, choice: false, narrative: false, resetOn: [], spans: [[0, raw.length]], keypad: false, fallback: false,
+         group: own.group, exclusive: own.exclusive === true, level: forms.indexOf(own.scope || own.form), current: true, confirm: Array.isArray(own.confirm_against) ? own.confirm_against : [] });
+   } else {
+      // not a bare number of the current question's shape, or the current question read it
+   }
    readings = readings.filter((reading) => {
       if (inOrder(reading)) {
          if (!reading.current) reading.rule = 'invited';   // the current input is the default: no rule recorded

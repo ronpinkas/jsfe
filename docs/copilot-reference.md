@@ -149,7 +149,7 @@ Use one of these input shapes:
 
 | Shape | Fields |
 | --- | --- |
-| Preset field | `name`, `field`; optional overrides. Presets: `phone`, `email`, `zip`, `account_number`, `ssn_last4`, `amount`, `street_address`, `city`, `state`, `card_number`, `card_expiration`, `card_cvv`, `card_zip`. |
+| Preset field | `name`, `field`; optional overrides. Presets: `phone`, `email`, `zip`, `account_number`, `ssn_last4`, `amount`, `street_address`, `city`, `state`, `card_number`, `card_expiration`, `card_cvv`, `card_zip`. `card_cvv` takes its card brand's length (`validate-card-cvv`: 4 digits for American Express, 3 for every other brand). |
 | Inline field | `name`, `profile`, questions and business validation. |
 | Child form | `name`, `form:"installed-child-id"`, optional `parameters`. JSFE links its schema; do not copy the derived `schema` into editable source. |
 | Alternative group | `name`, `any_of:[leaf-or-child declarations]`; optional `exclusive:true`. At least one applicable member satisfies the group; exclusive competing answers require clarification. |
@@ -172,7 +172,8 @@ Field options:
 | `choices_from`, `question_from` | Read prepared choices/question from the owner's `data`; corresponding localized question storage is handled by shared workers. |
 | `digits`, `pii`, `as_spoken` | Collection hints. FORM preserves original speech by default; false explicitly opts into cleanup. |
 | `confirm_against` | Declare overlapping field interpretations that require clarification even when normal current-field priority applies. |
-| `activate`, `activate_on` | Narrow dormant-child activation: proposed controller assignments plus nominated descendant entry paths. Controller and entry validate atomically; a rejected entry must not flip a controller. |
+| `activate`, `activate_on` | Narrow dormant activation: proposed controller assignments plus, for a subform, nominated descendant entry paths (`activate_on`). A dormant plain input declares `activate` alone and is its own entry: an amount said at "NEW CARD, LINK, or a different amount" chooses the amount option (`revised_amount` with `when:{next:'amount'}`, `activate:{next:'amount'}`). Controller and entry validate atomically; a rejected entry must not flip a controller. |
+| `silent` | An accepted answer is not acknowledged. For an input that hands its value on to another form's input (its `after` flow), whose own acceptance or rejection is what the caller hears. |
 | `response` | `{description}` on a readable leaf; use existing contextual DISPATCH extraction before accepting an open-ended answer. |
 | `proposal` | Optional approval of an inferred field candidate, independent of final action consent. |
 | `max_misses`, `max_attempts`, `on_exhausted` | Bounds for unreadable responses, validator rejections and deliberate branch recovery. |
@@ -214,7 +215,10 @@ Declarations:
 Rules, in order:
 
 1. **The current question first.** The whole answer is read against the current input's signature and the inputs it
-   invites. A match is that answer.
+   invites (an invited input with its asked signature, not its out-of-order one). A match is that answer. A bare number
+   whose length is the current input's keypad length (`digits`) is its answer even when its reader rejects it: its
+   validation decides and the question is asked again, so an expiration "1320" (month 13) is never a security code.
+   A choice keeps rule 4, and an amount is read by its own profile.
 2. **A confirmation is answered only when it is asked.** Out of order it never makes sense, so no words, YES, NO or the
    option's own phrases, fill a confirmation that is not the current question.
 3. **Out of order requires a ready field and the whole signature.** A bare number never fills, out of order, a field whose
