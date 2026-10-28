@@ -269,7 +269,9 @@ const collectInput = {
       SET('ci_question','ci_q',"formInputPrompt(cargo,form,current,ci_spec,ci_d,'en')"),
       SET('ci_question_es','ci_q_es',"formInputPrompt(cargo,form,current,ci_spec,ci_d,'es')"),
       SIDE('ci_feedback_consumed','consumeFormFeedback(cargo,form,current)'),
-      SET('ci_own_choices', 'ci_choices', "ci_spec.choices_from && Array.isArray(ci_d[ci_spec.choices_from]) ? ci_d[ci_spec.choices_from] : (ci_spec.profile.kind === 'choice' && Array.isArray(ci_spec.profile.choices) ? ci_spec.profile.choices : [])"),
+      // A grouped input (any_of: a plan option, an amount...) offers the ranker every choice its members declare (prod 2026-10-28:
+      // the pay offer offered none, so a caller's own words for a listed option were not understood).
+      SET('ci_own_choices', 'ci_choices', "ci_spec.choices_from && Array.isArray(ci_d[ci_spec.choices_from]) ? ci_d[ci_spec.choices_from] : (ci_spec.profile.kind === 'choice' && Array.isArray(ci_spec.profile.choices) ? ci_spec.profile.choices : (Array.isArray(ci_spec.any_of) ? ci_spec.any_of.reduce(function(all,m){return all.concat(m && m.profile && m.profile.kind === 'choice' && Array.isArray(m.profile.choices) ? m.profile.choices.filter(function(c){return !all.some(function(a){return String(a.key)===String(c.key);});}) : []);},[]) : []))"),
       SET('ci_keypad', 'ci_digits', 'ci_spec.digits || null'),
       SET('ci_is_amount', 'ci_amount', "ci_spec.amount === 'marked' ? 'marked' : (ci_spec.amount === true || ci_spec.profile.kind === 'amount')"),
       // FORM profile readers own normalization and compound matching. Never discard other
