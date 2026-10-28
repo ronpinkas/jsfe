@@ -32,5 +32,11 @@ test('declared choices are options before the fixed three, with their own criter
  assert.deepEqual(decodeReplyRankLlm('{"option":"choice:2"}',c),{option:'choice:2'});assert.throws(()=>decodeReplyRankLlm('{"option":"choice:3"}',c),/not an offered option/);
  assert.equal(decodeReplyRankSystemOne({r0:{noul:.2},r1:{noul:.8},r2:{noul:.3},r3:{noul:.1},r4:{noul:.1}},c).option,'choice:2');
  assert.equal(r.choices,undefined,'no choices, no field');
+ // a declared choice that clears the cut is taken over `answers` ("picks none of them") and new_request; abort keeps its rank
+ assert.equal(decodeReplyRankSystemOne({r0:{noul:.1},r1:{noul:.65},r2:{noul:.81},r3:{noul:.02},r4:{noul:.47}},c).option,'choice:2','a cleared choice outranks answers');
+ assert.equal(decodeReplyRankSystemOne({r0:{noul:.1},r1:{noul:.45},r2:{noul:.81},r3:{noul:.02},r4:{noul:.1}},c).option,'answers','a choice below the cut does not');
+ assert.equal(decodeReplyRankSystemOne({r0:{noul:.1},r1:{noul:.88},r2:{noul:.26},r3:{noul:.02},r4:{noul:.93}},c).option,'choice:2','a cleared choice outranks new_request');
+ assert.equal(decodeReplyRankSystemOne({r0:{noul:.1},r1:{noul:.6},r2:{noul:.3},r3:{noul:.9},r4:{noul:.1}},c).option,'abort','a higher abort still wins');
+ assert.equal(decodeReplyRankSystemOne({r0:{noul:.1},r1:{noul:.3},r2:{noul:.3},r3:{noul:.02},r4:{noul:.9}},c).option,'new_request','new_request wins when no choice clears');
 });
 console.log(`Reply rank: all checks passed (${checks})`);

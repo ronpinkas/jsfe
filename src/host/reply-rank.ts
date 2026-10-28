@@ -133,7 +133,9 @@ export function decodeReplyRankLlm(text: string, request: ReplyRankRequest): { o
 
 /**
  * System One's answers as the canonical reply: the highest-rated option when it clears the cut, else the default
- * (`answers`), with every option's probability (for logs). Throws if any question is unanswered.
+ * (`answers`), with every option's probability (for logs). A declared choice that clears the cut is taken over `answers`
+ * ("picks none of them") and `new_request`; only `abort` keeps its rank (owner 2026-10-28: a reply rated its menu
+ * choice 0.65 and `answers` 0.81, and the menu was asked again). Throws if any question is unanswered.
  */
 export function decodeReplyRankSystemOne(
   answers: Record<string, { noul?: unknown } | undefined> | undefined,
@@ -146,7 +148,9 @@ export function decodeReplyRankSystemOne(
     if (!Number.isFinite(noul)) throw new Error(`System One: question ${q.id} unanswered`);
     scores[q.option] = noul;
   }
-  const [best] = request.systemOne.index.map(q => q.option).sort((a, b) => scores[b] - scores[a]);
+  const ranked = request.systemOne.index.map(q => q.option).sort((a, b) => scores[b] - scores[a]);
+  const choice = ranked.find(o => o.startsWith(CHOICE_PREFIX) && scores[o] >= threshold);
+  const best = choice && ranked[0] !== 'abort' ? choice : ranked[0];
   if (best && scores[best] >= threshold) {
     return { option: best, scores, fallback: false };
   } else {
