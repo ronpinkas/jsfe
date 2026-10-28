@@ -8,6 +8,11 @@ const eq = (got, want, what) => { assert.deepEqual(got, want, what); checks++; }
 eq(readEmail('my email is Ron@Example.com.'), 'ron@example.com', 'in a sentence, lowercased, trailing period dropped');
 eq(readEmail('juan at gmail dot com'), 'juan@gmail.com', 'spoken');
 eq(readEmail('j u a n arroba gmail punto com'), 'juan@gmail.com', 'spelled, Spanish');
+eq(readEmail('J u a, n p, e r. E z 1985@gm a i l.com.'), 'juanperez1985@gmail.com', 'spelled with commas and a period, the domain spelled too (prod 2026-10-28)');
+eq(readEmail('j u a n @ y a h o o . c o m'), 'juan@yahoo.com', 'a spelled top-level domain');
+eq(readEmail('maria@hot mail.com.mx'), 'maria@hotmail.com.mx', 'a domain in two pieces, two-level top-level domain');
+eq(readEmail('juan@gmail.com and my phone is 555'), 'juan@gmail.com', 'words after the domain are not joined to it');
+eq(readEmail('juan@gmail.com y ya'), 'juan@gmail.com', 'single letters after the domain are not joined to it');
 eq(readEmail('my email is ron'), '', 'no address');
 eq(readEmail('a@b'), '', 'no domain');
 // A local part spoken in several pieces keeps every piece (dev voice calls 2026-10-13 lost all but the last).

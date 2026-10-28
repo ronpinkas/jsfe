@@ -40,7 +40,10 @@ export function readEmail(text, { literal = false } = {}) {
    if (at < 0) {
       return '';
    } else {
-      const domain = (spoken.slice(at + 1).trim().match(/^[^\s@]+/) || [''])[0].replace(/[.,;:!?]+$/, '');
+      // a spelled domain arrives in pieces ("gm a i l.com", "y a h o o . c o m"): join them up to its top-level domain
+      const after = spoken.slice(at + 1).trim();
+      const spelled = after.match(/^[a-z0-9-]+(?:\s+[a-z0-9-]+){1,12}?(?:\s*\.\s*(?:[a-z]{2,}|[a-z](?:\s+[a-z]){1,2})\b){1,2}/i);
+      const domain = (spelled ? spelled[0].replace(/\s+/g, '') : (after.match(/^[^\s@]+/) || [''])[0]).replace(/[.,;:!?]+$/, '');
       const pieces = spoken.slice(0, at).replace(/@/g, ' ').normalize('NFD').replace(/[\u0300-\u036f]/g, '').split(/[\s,;:!?]+/).map((w) => w.replace(/^[^a-z0-9]+|[^a-z0-9]+$/gi, '')).filter(Boolean);
       const local = [];
       for (let k = pieces.length - 1; k >= 0 && local.join('').length < 64; k--) {
