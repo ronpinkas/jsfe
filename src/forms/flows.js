@@ -384,8 +384,9 @@ const readFormResponse={
 };
 // An answer the field's reader could not read goes to the reply ranker, never straight to the host (owner 2026-10-26: a form
 // gives up only for a real new intent). The ranker is offered the question's declared choices and the two escapes every
-// question supports (owner 2026-10-28): a person, and on a call with a textable number, text. A choice that only its
-// exact words may take (exact, or the YES of a firm confirmation) is never offered; a NO is (declining takes no action).
+// question supports (owner 2026-10-28): a person, and on a call with a textable number, text. Every declared choice is
+// offered, `exact` ones too (exact is how WORDS match a choice, not a confirmation); only the YES of a firm (hard)
+// confirmation never is. A choice without a label is described by its key and its worded phrases (keys are digits).
 // `answers` (picks none): asked again ("Sorry, I didn't catch that."), counted as an attempt so max_attempts still bounds
 // it; `abort` ends every flow; `new_request` goes to intent detection.
 const rankedMiss=(id)=>SIDE(id,"(cargo.forms[form].attempts=cargo.forms[form].attempts || {},cargo.forms[form].attempts[input]=Number(cargo.forms[form].attempts[input] || 0)+1,cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[input]='miss',true)");
@@ -405,11 +406,11 @@ const readFormReply={
   rankedMiss('reply_miss')]
 };
 const readFormChoice={
- id:'read-form-choice',name:'ReadFormChoice',version:'1.1.0',scope:'isolated',description:'Rank an unreadable answer to a choice question and take the offered option it picks, or a request for a person or for text; otherwise ask again. A withdrawal or a new request leaves with saved form progress.',
+ id:'read-form-choice',name:'ReadFormChoice',version:'1.2.0',scope:'isolated',description:'Rank an unreadable answer to a choice question and take the offered option it picks, or a request for a person or for text; otherwise ask again. A withdrawal or a new request leaves with saved form progress.',
  parameters:[{name:'form',type:'string'},{name:'input',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'},{name:'choices',type:'array'},{name:'firm',type:'string'}],
  variables:vars({question:'',question_es:'',choices:[],firm:'',asked:'',ranked:[],reply:null,picked:'',chain:null,reading:null}),
  steps:[SET('choice_asked','asked',"language === 'es' && question_es ? question_es : question"),
-  rankedChoices('choice_ranked',"(choices || []).filter(function(c){return String(c.key)==='no' || c.exact!==true && !(firm==='firm' && String(c.key)==='yes');}).map(function(c){return {key:String(c.key),label:String(c.label || (Array.isArray(c.phrases) && c.phrases.filter(function(p){return String(p)!==String(c.key);})[0]) || c.key)};})"),
+  rankedChoices('choice_ranked',"(choices || []).filter(function(c){return !(firm==='firm' && String(c.key)==='yes');}).map(function(c){var said=(Array.isArray(c.phrases) ? c.phrases : []).map(String).filter(function(p){return /[a-zà-ÿ]/i.test(p) && p!==String(c.key);}).slice(0,6);return {key:String(c.key),label:String(c.label || (said.length ? c.key+' ('+said.join(', ')+')' : c.key))};})"),
   rankedDispatch('choice_dispatch','input_not_matched'),
   ...escapeRoutes('choice_escape'),
   SET('choice_picked','picked',"(function(){var k=String(reply && reply.key || '');var c=(choices || []).filter(function(c){return String(c.key)===k;})[0];return c ? String(c.key) : '';})()"),

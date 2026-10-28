@@ -15,7 +15,7 @@ function fixture({option='answers',key='1',fallback=false,choices=null,confirmat
  const agent={id:'live-agent-requested',name:'LiveAgentRequested',description:'A person',steps:[{id:'agent-ran',type:'SET',variable:'noop',value:'(cargo.agent=true,true)'}]};
  const calls=[],cfg={option,key,fallback};
  const ai=async(system,user,schema,r)=>{calls.push(r.task);
-  if(r.task==='rank_reply'){cfg.offered=r.options;const picked=cfg.option==='answers'&&cfg.key!==null?'choice:'+cfg.key:cfg.option;return JSON.stringify({option:picked,...(cfg.fallback?{fallback:true}:{})});}
+  if(r.task==='rank_reply'){cfg.offered=r.options;cfg.labels=Object.fromEntries((r.choices||[]).map(c=>[c.key,c.label]));const picked=cfg.option==='answers'&&cfg.key!==null?'choice:'+cfg.key:cfg.option;return JSON.stringify({option:picked,...(cfg.fallback?{fallback:true}:{})});}
   if(r.task==='detect_flow')return JSON.stringify({flowName:'Other'});
   return JSON.stringify({parameters:cfg.key===null?{}:{key:cfg.key}});};
  const engine=new WorkflowEngine(quiet,ai,linkFormSchemas([...FLOWS,form,other,agent]),[],STANDARD_FUNCTIONS,{},false,'en');engine.disableCommands();engine.intentDetection='two-stage';
@@ -34,7 +34,17 @@ await test('a request for a person is taken at any question',async()=>{
  const t=fixture({key:'__agent'});await t.say('start',true);await t.say('can I talk to somebody');
  assert.equal(t.session.cargo.agent,true);assert.equal(t.session.cargo.paid,undefined);
 });
-await test('an exact choice and the YES of a firm confirmation are never offered; a NO is',async()=>{
+await test('an exact choice is offered and taken; its label is its key and its worded phrases (prod 10-28: exact choices were dropped)',async()=>{
+ const menu=[{key:'pay',phrases:['1','pay','pagar','pay here'],exact:true},{key:'card-77',phrases:['4242','ending in 4242'],label:'Visa ending in 4242',exact:true},{key:'link',phrases:['2','link','enlace'],exact:true}];
+ let t=fixture({choices:menu,key:'pay'});await t.say('start',true);
+ assert.match(await t.say('I would like to pay in advance before I travel'),/./);
+ assert.deepEqual(t.cfg.offered.filter(o=>o.startsWith('choice:')),['choice:pay','choice:card-77','choice:link','choice:__agent']);
+ assert.equal(t.session.cargo.paid,'pay');
+ assert.deepEqual([t.cfg.labels.pay,t.cfg.labels['card-77'],t.cfg.labels.link],['pay (pagar, pay here)','Visa ending in 4242','link (enlace)']);
+ t=fixture({choices:menu,key:'card-77'});await t.say('start',true);await t.say('use the visa I have on file');
+ assert.equal(t.session.cargo.paid,'card-77','a choice whose key is not one of its phrases is taken');
+});
+await test('the YES of a firm confirmation is never offered; a NO is',async()=>{
  const yn=[{key:'yes',phrases:['yes'],exact:true},{key:'no',phrases:['no'],exact:true}];
  let t=fixture({choices:yn,confirmation:'firm',key:'no'});await t.say('start',true);await t.say('nah not really');
  assert.deepEqual(t.cfg.offered.filter(o=>o.startsWith('choice:')),['choice:no','choice:__agent']);assert.equal(t.session.cargo.paid,'no');
