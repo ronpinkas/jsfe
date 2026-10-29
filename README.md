@@ -334,7 +334,7 @@ const body = buildAiRequest(
   `toParameterRequest` / `fromParameterAnswers` (its enum and boolean parameters),
   `freeTextParameters`, `mergeTextParameters`, `INTENT_YES_THRESHOLD`: these map the structured
   intent-detection request to TypeSafe System One and back. The host sends the requests.
-  - Stage 1 asks one yes/no probability per flow and picks the highest if it reaches
+  - (The single-call mapping; two-stage detection uses `buildFlowStage`, below.) Stage 1 asks one yes/no probability per flow and picks the highest if it reaches
     `INTENT_YES_THRESHOLD` (0.5), else `"None"`. Stage 2, for the chosen flow only, asks one per enum
     value and one per boolean parameter. Below the threshold a parameter is omitted (the flow asks for
     it), never set to `false`.

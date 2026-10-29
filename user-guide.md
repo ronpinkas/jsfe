@@ -487,7 +487,8 @@ const body = buildAiRequest(
   `freeTextParameters`, `mergeTextParameters` and `INTENT_YES_THRESHOLD` (0.5) map the structured
   `request` to System One questions and the answers back to `{ flowName, parameters }`. The host
   sends the requests and owns the HTTP, the key and the timeouts.
-  - **Stage 1** asks one probability per flow and picks the highest if it reaches the threshold,
+  - (The single-call mapping; two-stage detection uses `buildFlowStage`: one `choice` among the primaries and one
+    `any` noul.) **Stage 1** asks one probability per flow and picks the highest if it reaches the threshold,
     else `"None"`.
   - **Stage 2**, for the chosen flow only, asks one per enum value and one per boolean parameter.
     Below the threshold a parameter is omitted (the flow asks for it), never set to `false`.
