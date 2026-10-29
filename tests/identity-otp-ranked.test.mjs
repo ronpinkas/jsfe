@@ -40,7 +40,7 @@ assert.doesNotMatch(r.s.response,/Let me explain/);assert.notEqual(r.s.cargo.otp
 r=await at('blue sky','answers');
 assert.match(r.s.response,/Let me explain\. I sent you a message with a six-digit code/);console.log('PASS anything else is explained again');
 r=await at('I just want to pay my bill','choice:usecase:pay');
-assert.match(r.s.response,/Let me explain\. I sent you a message with a six-digit code/);assert.equal(r.s.cargo.balanceRan,undefined);console.log('PASS a use case authentication serves is explained again, never routed');
+assert.match(r.s.response,/^Understood\. First we need to finish verifying your identity\. I sent you a message with a six-digit code/);assert.doesNotMatch(r.s.response,/Let me explain/);assert.equal(r.s.cargo.balanceRan,undefined);console.log('PASS a use case authentication serves is acknowledged (verification first), never routed');
 r=await at('just text me the link to pay','choice:exit:payment_link');
 assert.ok(r.calls.includes('detect_flow'),'a declared exit goes to intent detection');assert.equal(r.s.cargo.balanceRan,true);assert.doesNotMatch(r.s.response,/Let me explain/);console.log('PASS a declared exit leaves as a new request');
 r=await at('quiere comer ya','new_request','None');
