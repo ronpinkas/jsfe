@@ -79,8 +79,9 @@ export const FIELD_PRESETS = {
       retry: 'Please say or enter the full card number.', retry_es: 'Por favor diga o ingrese el número completo de su tarjeta.',
       retry_text: 'Please type the full card number.', retry_text_es: 'Por favor escriba el número completo de su tarjeta.' },
    card_expiration: { label: 'expiration date', label_es: 'fecha de vencimiento',
-      // MM0YY: a zero said between month and year ("020 28", prod 2026-10-25 14:10, was taken for the billing ZIP)
-      profile: { kind: 'pattern', regex: '\\b(0?[1-9]|1[0-2])\\s*(?:/|-|\\s|de)?\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b' }, digits: { min: 3, max: 6 },
+      // MM0YY: a zero said between month and year ("020 28", prod 2026-10-25 14:10, was taken for the billing ZIP).
+      // Up to two words between month and year ("el mes 06 año 31", prod 2026-10-28 21:54, was asked again).
+      profile: { kind: 'pattern', regex: '\\b(0?[1-9]|1[0-2])(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b' }, digits: { min: 3, max: 6 },
       validator: 'validate-card-expiration',
       question: 'What is the expiration date, month and year?', question_es: '¿Cuál es la fecha de vencimiento, mes y año?',
       retry: 'Please say or enter the expiration as four digits, month then year, like 0 9 2 8.', retry_es: 'Por favor diga o ingrese el vencimiento en cuatro dígitos, mes y año, por ejemplo 0 9 2 8.',
