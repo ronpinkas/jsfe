@@ -48,4 +48,15 @@ assert.ok(r.calls.includes('detect_flow'));assert.match(r.s.response,/Let me exp
 assert.equal(r.calls.filter(t=>t==='detect_flow').length,1,'intent detection asked once');
 r=await at('what is my balance','new_request');
 assert.equal(r.calls.filter(t=>t==='detect_flow').length,1,'a served request: intent detection asked once, its decision reused');
+{ // the code question asked again in the same frame offers each choice once (the offers are rebuilt, never appended)
+ const offers=[];
+ const ai=async(system,user,schema,q)=>{if(q?.task==='rank_reply'){offers.push(q.options);return JSON.stringify({option:'answers'});}return '{"flowName":"None"}';};
+ const engine=new WorkflowEngine(quiet,ai,[...FLOWS,probe,resend,other,agent,pay,data],[],STANDARD_FUNCTIONS,{},false,'en');engine.disableCommands();
+ let s=engine.initSession('u','otp-twice','en');Object.assign(s.cargo,{voice:false,verb:'type',verb_es:'escriba',authOptions:{parent_form:''},authCancelFlow:'contact-support',otpVerified:false,otp_cell_number:'8185550000',otpSentOn:'cell'});
+ s=await engine.updateActivity({role:'user',content:'start',start:{flow:'otp-probe',arguments:{}}},JSON.parse(JSON.stringify(s)));
+ for(const answer of ['blue sky','green grass','red sun'])s=await engine.updateActivity({role:'user',content:answer},JSON.parse(JSON.stringify(s)));
+ assert.ok(offers.length>=2,'ranked more than once: '+offers.length);
+ for(const o of offers)assert.equal(new Set(o).size,o.length,'unique options '+JSON.stringify(o));
+ assert.deepEqual(offers[1],offers[0]);checks++;console.log('PASS asked again, each choice is offered once');
+}
 console.log(`OTP ranked: ${checks} ranked answers, every case passed`);
