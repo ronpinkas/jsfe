@@ -43,6 +43,13 @@ const optionalIncomplete=(id,condition,form,reason)=>WHEN(id,`(${condition}) && 
 export const textValue = (text) => (String(text).includes('{{') ? String(text) : JSON.stringify(String(text)));
 // Keys for a numbered menu: 1..9 without 8, the language key (owner rule 2026-10-19).
 const KEYS_JS = "(function (n) { var k = []; for (var i = 1; k.length < n && i <= 9; i++) { if (i !== 8) { k.push(String(i)); } } return k; })";
+// Month names a card expiration may be said with (English, Spanish), longest first so 'sept' is not read as 'sep'.
+const MONTH_NAMES = [['september',9],['septiembre',9],['setiembre',9],['february',2],['febrero',2],['november',11],['noviembre',11],
+   ['december',12],['diciembre',12],['january',1],['octubre',10],['october',10],['august',8],['agosto',8],['enero',1],['marzo',3],
+   ['march',3],['abril',4],['april',4],['junio',6],['julio',7],['mayo',5],['june',6],['july',7],['sept',9],['jan',1],['ene',1],
+   ['feb',2],['mar',3],['apr',4],['abr',4],['may',5],['jun',6],['jul',7],['aug',8],['ago',8],['sep',9],['oct',10],['nov',11],
+   ['dec',12],['dic',12]];
+const MONTH_RE = MONTH_NAMES.map(([n]) => n).join('|');
 
 // ── field presets (decision 2A): ONE library, read only by collect-input ─────────────────────────────────────────
 // A form uses a preset by name ({ name, field }); keys it gives override the preset's (e.g. a tenant's account pattern).
@@ -80,8 +87,8 @@ export const FIELD_PRESETS = {
       retry_text: 'Please type the full card number.', retry_text_es: 'Por favor escriba el número completo de su tarjeta.' },
    card_expiration: { label: 'expiration date', label_es: 'fecha de vencimiento',
       // MM0YY: a zero said between month and year ("020 28", prod 2026-10-25 14:10, was taken for the billing ZIP).
-      // Up to two words between month and year ("el mes 06 año 31", prod 2026-10-28 21:54, was asked again).
-      profile: { kind: 'pattern', regex: '\\b(0?[1-9]|1[0-2])(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b' }, digits: { min: 3, max: 6 },
+      // Up to two words between month and year ("el mes 06 año 31", prod 2026-10-28 21:54, was asked again); a month by name.
+      profile: { kind: 'pattern', regex: `\\b(0?[1-9]|1[0-2]|${MONTH_RE})\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b` }, digits: { min: 3, max: 6 },
       validator: 'validate-card-expiration',
       question: 'What is the expiration date, month and year?', question_es: '¿Cuál es la fecha de vencimiento, mes y año?',
       retry: 'Please say or enter the expiration as four digits, month then year, like 0 9 2 8.', retry_es: 'Por favor diga o ingrese el vencimiento en cuatro dígitos, mes y año, por ejemplo 0 9 2 8.',
@@ -641,9 +648,9 @@ const validators = [
       parameters: [{ name: 'input', type: 'string', description: 'input name' }, { name: 'value', type: 'string', description: 'the reading' }],
       steps: [SIDE('vcn_check', "(cargo.inputCheck = validateCardNumber(value) ? { ok: true, value: String(value).replace(/\\D/g, '') } : { ok: false, message: \"That card number doesn't look right.\", message_es: 'Ese número de tarjeta no parece correcto.' }, true)")] },
    { id: 'validate-card-expiration', name: 'ValidateCardExpiration', version: '1.0.0', scope: 'isolated',
-      description: 'Validator: month and year, a real month, not expired (validateExpiration). Normalizes to MMYY. Params: input, value.',
+      description: 'Validator: month (a number or its English or Spanish name) and year, a real month, not expired (validateExpiration). Normalizes to MMYY. Params: input, value.',
       parameters: [{ name: 'input', type: 'string', description: 'input name' }, { name: 'value', type: 'string', description: 'the reading' }],
-      steps: [SIDE('vce_check', "(function (v) { var m = /^(0?[1-9]|1[0-2])\\D*(?:20)?(\\d{2})$/.exec(String(v).replace(/\\s+/g, '').replace(/de/gi, '')) || /^(\\d{2})(\\d{2})$/.exec(String(v).replace(/\\D/g, '')) || /^(0[1-9])0(\\d{2})$/.exec(String(v).replace(/\\D/g, '')); var mm = m ? ('0' + m[1]).slice(-2) : ''; var yy = m ? m[2] : ''; cargo.inputCheck = m && validateExpiration(mm, yy) ? { ok: true, value: mm + yy } : { ok: false, message: \"That expiration date doesn't look right.\", message_es: 'Esa fecha de vencimiento no parece correcta.' }; return true; })(value)")] },
+      steps: [SIDE('vce_check', "(function (v) { var names = " + JSON.stringify(MONTH_NAMES.map(([n]) => n)) + "; var nums = " + JSON.stringify(MONTH_NAMES.map(([, k]) => k)) + "; var w = new RegExp('\\\\b(' + names.join('|') + ')\\\\b', 'i').exec(String(v)); if (w) { v = String(v).replace(w[0], ' ' + nums[names.indexOf(w[1].toLowerCase())] + ' '); } var m = /^(0?[1-9]|1[0-2])\\D*(?:20)?(\\d{2})$/.exec(String(v).replace(/\\s+/g, '').replace(/de/gi, '')) || /^(\\d{2})(\\d{2})$/.exec(String(v).replace(/\\D/g, '')) || /^(0[1-9])0(\\d{2})$/.exec(String(v).replace(/\\D/g, '')); var mm = m ? ('0' + m[1]).slice(-2) : ''; var yy = m ? m[2] : ''; cargo.inputCheck = m && validateExpiration(mm, yy) ? { ok: true, value: mm + yy } : { ok: false, message: \"That expiration date doesn't look right.\", message_es: 'Esa fecha de vencimiento no parece correcta.' }; return true; })(value)")] },
    { id: 'validate-card-cvv', name: 'ValidateCardCvv', version: '1.0.0', scope: 'isolated',
       description: 'Validator: the security code has the length of its card brand, 4 digits for American Express (34, 37) and 3 for every other brand; with no card number yet, 3 or 4. Params: input, value, values.',
       parameters: [{ name: 'input', type: 'string', description: 'input name' }, { name: 'value', type: 'string', description: 'the reading' }, { name: 'values', type: 'object', description: "the form's values, for the card number" }],
