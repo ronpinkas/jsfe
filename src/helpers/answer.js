@@ -321,13 +321,17 @@ const DOLLARS_AND_CENTS = /(\d+)\s*(?:dollars?|d[oó]lar(?:es)?|bucks?)?\s*(?:an
 // cents is allowed ("171 con un 06").
 const CENTS_JOINERS = ['con', 'and'];   // 'and' too (owner 2026-10-18: "87 and 21" = $87.21)
 const DOLLARS_JOINED_CENTS = /(\$\s*)?(\d+)(\s*(?:dollars?|d[oó]lar(?:es)?|bucks?))?\s*(and|con|y)\s*(?:un\s+)?(\d{1,2})\b(?!\s*\d)/gi;
+// Dollars and two cent digits said with no word between them, as speech-to-text writes "ciento cincuenta y siete noventa y
+// cinco": "157 95", "$157 95", "1 50" (owner 2026-10-29; prod 10-28 callers re-asked). Never after a decimal or before more
+// digits, and never two-digit dollars: "95 52" is four digits, a card's last four read in pairs.
+const DOLLARS_SPACE_CENTS = /(?<![\d.,])(\$\s*)?(\d|\d{3,})\s+(\d{2})(?![\d.,]|\s*(?:dollars?|d[oó]lar(?:es)?|bucks?|cents?|centavos?)\b)/gi;
 
 /**
  * The amount an answer names, or NaN when it names none or is ambiguous. Prod replay 2026-10-14: the first number in the
  * answer was taken, so "pagar cuenta 50, ciento treinta y cuatro…" paid $50, "$10 con 18 centavos" paid $10.00 and an
  * offer read back with "terminada en 2 4 8 6" paid $2. Numbers that name an account, card, code or ZIP, and digits spoken
  * one by one, are not amounts; two different remaining numbers are ambiguous unless exactly one is marked as money ($,
- * dollars, cents or decimals). "50 cents" alone is $0.50; "82 dollars and 50" and "82 con 50" are $82.50. Amounts said only in words are NaN (not parsed yet).
+ * dollars, cents or decimals). "50 cents" alone is $0.50; "82 dollars and 50" and "82 con 50" are $82.50, "157 95" is $157.95. Amounts said only in words are NaN (not parsed yet).
  */
 export function amountInAnswer(input) { return numericAmountReading(input).value; }
 
@@ -348,7 +352,8 @@ export function numericAmountReading(input) {
    } else {
       // no dollars-and-cents phrase
    }
-   t = t.replace(IDENTIFIER_NUMBER, ' ').replace(SPELLED_DIGITS, ' ').replace(DOLLARS_JOINED_CENTS, (m, sign, d, word, joiner, c) => (sign || word || (CENTS_JOINERS.includes(joiner.toLowerCase()) && c.length === 2) ? ` $${d}.${c.padStart(2, '0')} ` : m));
+   t = t.replace(IDENTIFIER_NUMBER, ' ').replace(SPELLED_DIGITS, ' ').replace(DOLLARS_JOINED_CENTS, (m, sign, d, word, joiner, c) => (sign || word || (CENTS_JOINERS.includes(joiner.toLowerCase()) && c.length === 2) ? ` $${d}.${c.padStart(2, '0')} ` : m))
+      .replace(DOLLARS_SPACE_CENTS, (m, sign, d, c) => ` $${d}.${c} `);
    const found = [...t.matchAll(/(\$\s*)?(\d+(?:\.\d{1,2})?)(\s*(?:dollars?|d[oó]lar(?:es)?|bucks?|cents?|centavos?)\b)?/gi)]
       .map((m) => ({ v: parseFloat(m[2]), marked: !!(m[1] || m[3] || m[2].includes('.')), cents: !m[1] && /cent/i.test(m[3] || '') }));
    const values = [...new Set(found.map((f) => f.v))];

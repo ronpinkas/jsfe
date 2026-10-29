@@ -8,8 +8,9 @@ export function validateMoneyOptions(options) {
    return options;
 }
 // This is an input grammar, not a conversation classifier. Anything outside one complete
-// monetary answer belongs to DISPATCH, including refusals, corrections with context and reports.
-const NUMERIC_MONEY=/^(?:\$\s*)?(?:\d{1,3}(?:[,.]\d{3})+|\d+)(?:[.,]\d{1,2})?(?:\s*(?:dollars?|d[oó]lar(?:es)?|bucks?))?(?:\s*(?:and|con|y)\s*(?:un\s*)?\d{1,2}(?:\s*(?:cents?|centavos?))?)?$|^\d{1,2}\s*(?:cents?|centavos?)$/i;
+// monetary answer belongs to DISPATCH, including refusals, corrections with context and reports. "157 95" is dollars and
+// cents said with no word between them (owner 2026-10-29); "95 52" is not (a card's last four read in pairs).
+const NUMERIC_MONEY=/^(?:\$\s*)?(?:\d{1,3}(?:[,.]\d{3})+|\d+)(?:[.,]\d{1,2})?(?:\s*(?:dollars?|d[oó]lar(?:es)?|bucks?))?(?:\s*(?:and|con|y)\s*(?:un\s*)?\d{1,2}(?:\s*(?:cents?|centavos?))?)?$|^\d{1,2}\s*(?:cents?|centavos?)$|^(?:\$\s*)?(?:\d|\d{3,})\s+\d{2}$/i;
 const PAYMENT_PREFIX=/^(?:(?:i (?:want to|would like to|can|am able to|will) |i['’]d like to )?pay|(?:quiero |quisiera |puedo |s[ií] puedo |voy a )?(?:pagar|abonar)|(?:no,?\s+)?make it)\s*(?=\$|\d|[a-záéíóúüñ])/i;
 const ACCOUNT_PREFIX=/^(?:(?:sub[ -]?account|subcuenta|cuenta)\s+\d{1,8}\s*,\s*)/i;
 const DIGIT_WORD='(?:zero|one|two|three|four|five|six|seven|eight|nine|cero|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve)';

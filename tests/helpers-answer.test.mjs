@@ -87,7 +87,7 @@ for (const [s, want] of [['pagar cuenta 50, Ciento Treinta y Cuatro Dólares', N
    ['Pagar 61.50 ahora con tarjeta nueva', 61.5], ['50 cents', 0.5], ['$1', 1], ['2500', 2500], ['pagar 100 a la subcuenta 51', 100],
    ['pay $40 on sub account 50', 40], ['1.234,56', 1234.56], ['12,50', 12.5], ['1,234.56', 1234.56], ['pagar 40 o 50', NaN], ['quiero pagar', NaN],
    // dollars joined to two cent digits without a word for cents (prod 2026-10-15: "82 con 50 82 con 50" was refused)
-   ['82 con 50 82 con 50', 82.5], ['82 con 50', 82.5], ['pagar 1,234 con 05', 1234.05], ['subcuenta 70 con 82', 82], ['82 con 5', NaN], ['100 50', NaN], ['82 y 50', NaN], ['82 and 50', 82.5],
+   ['82 con 50 82 con 50', 82.5], ['82 con 50', 82.5], ['pagar 1,234 con 05', 1234.05], ['subcuenta 70 con 82', 82], ['82 con 5', NaN], ['82 y 50', NaN], ['82 and 50', 82.5],
    // a joiner after a marked dollar amount is cents in any language
    ['82 dollars and 50', 82.5], ['$82 and 50', 82.5], ['82 dólares y 50', 82.5], ['$82 y 50', 82.5], ['82 dollars and 5', 82.05],
    // speech-to-text joins the words (prod 2026-10-15: "76 con50 centavos" was offered as $0.50); cents are never taken alone beside another number
@@ -95,7 +95,10 @@ for (const [s, want] of [['pagar cuenta 50, Ciento Treinta y Cuatro Dólares', N
    // an "un" before the cents (owner 2026-10-18; prod CAe900b39 21:41 went to the guru)
    ['171 con un 6 centavos', 171.06], ['10 y un 5 centavos', 10.05], ['171 con un 06', 171.06], ['171 con 06', 171.06], ['171 con 6', NaN],
    // 'and' plus two digits is cents (owner 2026-10-18)
-   ['87 and 21', 87.21], ['102 con 21', 102.21], ['87 and 2', NaN]]) {
+   ['87 and 21', 87.21], ['102 con 21', 102.21], ['87 and 2', NaN],
+   // dollars and two cent digits with no word between them, as speech-to-text writes them (owner 2026-10-29)
+   ['157 95', 157.95], ['$157 95', 157.95], ['pagar 157 95 por favor', 157.95], ['100 50', 100.5], ['1 50', 1.5], ['95 52', NaN], ['15 00', NaN], ['157 9', NaN],
+   ['157 95 o 160 20', NaN], ['10 18 centavos', NaN], ['157 950', NaN], ['157.95 20', 157.95]]) {
    const got = amountInAnswer(s);
    eq(Number.isNaN(want) ? Number.isNaN(got) : got === want, true, `amountInAnswer("${s}") = ${got}`);
 }
