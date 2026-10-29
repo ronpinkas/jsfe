@@ -7,7 +7,7 @@
     "name": "ShopifyQLProductSearch",
     "prompt": "product search",
     "prompt_es": "buscar producto",
-    "description": "Find a product, price, or online/store availability. Follow-up questions about those products, which are in stock, their price, the second one, or the cheapest use the shown-result context. Extract a new search_query only when the caller names a new product or changed features. Explicit variant or color changes are a new search, not permission to drop those constraints. Store availability requires a chosen product and city/state/ZIP. Not placed orders (ShopifyQLTrackOrder), policies (ShopifyQLStorePolicies), advice or greetings (None).",
+    "description": "Find a product, price, or online/store availability, including a product named alone ('a Minions costume', 'tires'). Follow-up questions about those products, which are in stock, their price, the second one, or the cheapest use the shown-result context. Extract a new search_query only when the caller names a new product or changed features. Explicit variant or color changes are a new search, not permission to drop those constraints. Store availability requires a chosen product and city/state/ZIP. Not placed orders (ShopifyQLTrackOrder), policies (ShopifyQLStorePolicies), advice or greetings (None).",
     "parameters": [
       {
         "name": "search_query",

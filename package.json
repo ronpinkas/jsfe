@@ -27,6 +27,10 @@
       "types": "./dist/helpers/index.d.ts",
       "import": "./dist/helpers/index.js"
     },
+    "./docs": {
+      "types": "./dist/docs/flow-docs.d.ts",
+      "import": "./dist/docs/flow-docs.js"
+    },
     "./forms": {
       "types": "./dist/forms/index.d.ts",
       "import": "./dist/forms/index.js"

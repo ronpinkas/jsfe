@@ -1371,13 +1371,13 @@
         "id": "identity_contact_question",
         "type": "SET",
         "variable": "contact_question",
-        "value": "(function contactPrompt(cargo, options, callerAllowed, partial = false, es = false) {\n    if (partial)\n        return es ? 'Continúe.' : 'Go on.';\n    const verb = es ? cargo.verb_es : cargo.verb;\n    const account = options.account_pattern ? (es ? options.account_name_es || options.account_name : options.account_name) : '';\n    const alternative = account ? (es ? ', o ' : ', or ') + account : '';\n    const lead = cargo.contactIntroSkip || options.fromMenu ? '' : (es ? options.intro_es || options.intro : options.intro) || '';\n    const key = cargo.voice ? (es ? callerAllowed ? ' seguido de la tecla numeral' : ' seguido de la tecla numeral si se ingresó usando el teclado de marcación' : callerAllowed ? ' followed by the pound key' : ' followed by the pound key if entered using the dial pad') : '';\n    const question = callerAllowed ? (es ? `Para usar su identificador de llamadas, por favor ${verb} sí. De lo contrario, por favor ${verb}${cargo.voice ? ' o ingrese' : ''} el teléfono o correo electrónico asociado con su cuenta${alternative}${key}.` : `To use your caller id, please ${verb} yes. Otherwise, please ${verb}${cargo.voice ? ' or enter' : ''} the phone or email associated with your account${alternative}${key}.`) : (es ? `Por favor ${verb}${cargo.voice ? ' o ingrese' : ''} el teléfono o correo electrónico asociado con su cuenta${alternative}${key}.` : `Please ${verb}${cargo.voice ? ' or enter' : ''} the phone or email associated with your account${alternative}${key}.`);\n    return (lead ? lead + ' ' : '') + question + (es ? ` Para salir en cualquier momento, puede ${cargo.voice ? 'presionar la tecla de asterisco o decir' : 'escribir'} SALIR.` : ` To exit anytime you can ${cargo.voice ? 'press the asterisk key or ' : ''}${verb} EXIT.`);\n})(cargo,contact_options,contact_allowed,contact_partial)"
+        "value": "(function contactPrompt(cargo,options,callerAllowed,partial=false,es=false) {\n   if(partial)return es?'Continúe.':'Go on.';\n   const verb=es?cargo.verb_es:cargo.verb;const account=options.account_pattern?(es?options.account_name_es || options.account_name:options.account_name):'';\n   const alternative=account?(es?', o ':', or ')+account:'';\n   const lead=cargo.contactIntroSkip || options.fromMenu?'':(es?options.intro_es || options.intro:options.intro)||'';\n   const key=cargo.voice?(es?callerAllowed?' seguido de la tecla numeral':' seguido de la tecla numeral si se ingresó usando el teclado de marcación':callerAllowed?' followed by the pound key':' followed by the pound key if entered using the dial pad'):'';\n   const question=callerAllowed?(es?`Para usar su identificador de llamadas, por favor ${verb} sí. De lo contrario, por favor ${verb}${cargo.voice?' o ingrese':''} el teléfono o correo electrónico asociado con su cuenta${alternative}${key}.`:`To use your caller id, please ${verb} yes. Otherwise, please ${verb}${cargo.voice?' or enter':''} the phone or email associated with your account${alternative}${key}.`):(es?`Por favor ${verb}${cargo.voice?' o ingrese':''} el teléfono o correo electrónico asociado con su cuenta${alternative}${key}.`:`Please ${verb}${cargo.voice?' or enter':''} the phone or email associated with your account${alternative}${key}.`);\n   return (lead?lead+' ':'')+question+(es?` Para salir en cualquier momento, puede ${cargo.voice?'presionar la tecla de asterisco o decir':'escribir'} SALIR.`:` To exit anytime you can ${cargo.voice?'press the asterisk key or ':''}${verb} EXIT.`);\n})(cargo,contact_options,contact_allowed,contact_partial)"
       },
       {
         "id": "identity_contact_question_es",
         "type": "SET",
         "variable": "contact_question_es",
-        "value": "(function contactPrompt(cargo, options, callerAllowed, partial = false, es = false) {\n    if (partial)\n        return es ? 'Continúe.' : 'Go on.';\n    const verb = es ? cargo.verb_es : cargo.verb;\n    const account = options.account_pattern ? (es ? options.account_name_es || options.account_name : options.account_name) : '';\n    const alternative = account ? (es ? ', o ' : ', or ') + account : '';\n    const lead = cargo.contactIntroSkip || options.fromMenu ? '' : (es ? options.intro_es || options.intro : options.intro) || '';\n    const key = cargo.voice ? (es ? callerAllowed ? ' seguido de la tecla numeral' : ' seguido de la tecla numeral si se ingresó usando el teclado de marcación' : callerAllowed ? ' followed by the pound key' : ' followed by the pound key if entered using the dial pad') : '';\n    const question = callerAllowed ? (es ? `Para usar su identificador de llamadas, por favor ${verb} sí. De lo contrario, por favor ${verb}${cargo.voice ? ' o ingrese' : ''} el teléfono o correo electrónico asociado con su cuenta${alternative}${key}.` : `To use your caller id, please ${verb} yes. Otherwise, please ${verb}${cargo.voice ? ' or enter' : ''} the phone or email associated with your account${alternative}${key}.`) : (es ? `Por favor ${verb}${cargo.voice ? ' o ingrese' : ''} el teléfono o correo electrónico asociado con su cuenta${alternative}${key}.` : `Please ${verb}${cargo.voice ? ' or enter' : ''} the phone or email associated with your account${alternative}${key}.`);\n    return (lead ? lead + ' ' : '') + question + (es ? ` Para salir en cualquier momento, puede ${cargo.voice ? 'presionar la tecla de asterisco o decir' : 'escribir'} SALIR.` : ` To exit anytime you can ${cargo.voice ? 'press the asterisk key or ' : ''}${verb} EXIT.`);\n})(cargo,contact_options,contact_allowed,contact_partial,true)"
+        "value": "(function contactPrompt(cargo,options,callerAllowed,partial=false,es=false) {\n   if(partial)return es?'Continúe.':'Go on.';\n   const verb=es?cargo.verb_es:cargo.verb;const account=options.account_pattern?(es?options.account_name_es || options.account_name:options.account_name):'';\n   const alternative=account?(es?', o ':', or ')+account:'';\n   const lead=cargo.contactIntroSkip || options.fromMenu?'':(es?options.intro_es || options.intro:options.intro)||'';\n   const key=cargo.voice?(es?callerAllowed?' seguido de la tecla numeral':' seguido de la tecla numeral si se ingresó usando el teclado de marcación':callerAllowed?' followed by the pound key':' followed by the pound key if entered using the dial pad'):'';\n   const question=callerAllowed?(es?`Para usar su identificador de llamadas, por favor ${verb} sí. De lo contrario, por favor ${verb}${cargo.voice?' o ingrese':''} el teléfono o correo electrónico asociado con su cuenta${alternative}${key}.`:`To use your caller id, please ${verb} yes. Otherwise, please ${verb}${cargo.voice?' or enter':''} the phone or email associated with your account${alternative}${key}.`):(es?`Por favor ${verb}${cargo.voice?' o ingrese':''} el teléfono o correo electrónico asociado con su cuenta${alternative}${key}.`:`Please ${verb}${cargo.voice?' or enter':''} the phone or email associated with your account${alternative}${key}.`);\n   return (lead?lead+' ':'')+question+(es?` Para salir en cualquier momento, puede ${cargo.voice?'presionar la tecla de asterisco o decir':'escribir'} SALIR.`:` To exit anytime you can ${cargo.voice?'press the asterisk key or ':''}${verb} EXIT.`);\n})(cargo,contact_options,contact_allowed,contact_partial,true)"
       },
       {
         "id": "identity_contact_collect",
@@ -1405,7 +1405,7 @@
         "id": "identity_contact_spoken",
         "type": "SET",
         "variable": "contact_digits",
-        "value": "(function serviceDigits(text) {\n    const words = { zero: '0', cero: '0', one: '1', uno: '1', two: '2', dos: '2', three: '3', tres: '3', four: '4', cuatro: '4', five: '5', cinco: '5', six: '6', seis: '6', seven: '7', siete: '7', eight: '8', ocho: '8', nine: '9', nueve: '9' };\n    return String(text || '').replace(/[a-záéíóúñ]+/gi, word => Object.hasOwn(words, word.toLowerCase()) ? words[word.toLowerCase()] : word);\n})(contact_text)"
+        "value": "(function serviceDigits(text) {\n   const words={zero:'0',cero:'0',one:'1',uno:'1',two:'2',dos:'2',three:'3',tres:'3',four:'4',cuatro:'4',five:'5',cinco:'5',six:'6',seis:'6',seven:'7',siete:'7',eight:'8',ocho:'8',nine:'9',nueve:'9'};\n   return String(text || '').replace(/[a-záéíóúñ]+/gi,word=>Object.hasOwn(words,word.toLowerCase())?words[word.toLowerCase()]:word);\n})(contact_text)"
       },
       {
         "id": "identity_contact_piece",
@@ -1532,13 +1532,13 @@
         "id": "identity_contact_error",
         "type": "SET",
         "variable": "contact_error",
-        "value": "(function contactError(kind, options, es = false) {\n    const account = options.account_pattern ? (es ? options.account_name_es || options.account_name : options.account_name) : '';\n    if (kind === 'international')\n        return es ? \"Un número fuera de EE. UU. y Canadá no se puede usar aquí. Por favor indique el correo de su cuenta\" + (account ? ', o ' + account : '') + \", o un celular de EE. UU. o Canadá.\" : \"A number outside the US and Canada can't be used here. Please give the email on your account\" + (account ? ', or ' + account : '') + \", or a US or Canadian mobile number.\";\n    if (kind === 'invalid_phone')\n        return es ? 'El número de teléfono que proporcionó no es válido.' : \"Sorry, the phone number you provided isn't valid.\";\n    return es ? 'Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta' + (account ? ', o ' + account : '') + ' para continuar.' : 'Sorry, I do need the phone or email associated with your account' + (account ? ', or ' + account : '') + ' to proceed.';\n})(contact_kind,contact_options)"
+        "value": "(function contactError(kind,options,es=false) {\n   const account=options.account_pattern?(es?options.account_name_es || options.account_name:options.account_name):'';\n   if(kind==='international')return es?\"Un número fuera de EE. UU. y Canadá no se puede usar aquí. Por favor indique el correo de su cuenta\"+(account?', o '+account:'')+\", o un celular de EE. UU. o Canadá.\":\"A number outside the US and Canada can't be used here. Please give the email on your account\"+(account?', or '+account:'')+\", or a US or Canadian mobile number.\";\n   if(kind==='invalid_phone')return es?'El número de teléfono que proporcionó no es válido.':\"Sorry, the phone number you provided isn't valid.\";\n   return es?'Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta'+(account?', o '+account:'')+' para continuar.':'Sorry, I do need the phone or email associated with your account'+(account?', or '+account:'')+' to proceed.';\n})(contact_kind,contact_options)"
       },
       {
         "id": "identity_contact_error_es",
         "type": "SET",
         "variable": "contact_error_es",
-        "value": "(function contactError(kind, options, es = false) {\n    const account = options.account_pattern ? (es ? options.account_name_es || options.account_name : options.account_name) : '';\n    if (kind === 'international')\n        return es ? \"Un número fuera de EE. UU. y Canadá no se puede usar aquí. Por favor indique el correo de su cuenta\" + (account ? ', o ' + account : '') + \", o un celular de EE. UU. o Canadá.\" : \"A number outside the US and Canada can't be used here. Please give the email on your account\" + (account ? ', or ' + account : '') + \", or a US or Canadian mobile number.\";\n    if (kind === 'invalid_phone')\n        return es ? 'El número de teléfono que proporcionó no es válido.' : \"Sorry, the phone number you provided isn't valid.\";\n    return es ? 'Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta' + (account ? ', o ' + account : '') + ' para continuar.' : 'Sorry, I do need the phone or email associated with your account' + (account ? ', or ' + account : '') + ' to proceed.';\n})(contact_kind,contact_options,true)"
+        "value": "(function contactError(kind,options,es=false) {\n   const account=options.account_pattern?(es?options.account_name_es || options.account_name:options.account_name):'';\n   if(kind==='international')return es?\"Un número fuera de EE. UU. y Canadá no se puede usar aquí. Por favor indique el correo de su cuenta\"+(account?', o '+account:'')+\", o un celular de EE. UU. o Canadá.\":\"A number outside the US and Canada can't be used here. Please give the email on your account\"+(account?', or '+account:'')+\", or a US or Canadian mobile number.\";\n   if(kind==='invalid_phone')return es?'El número de teléfono que proporcionó no es válido.':\"Sorry, the phone number you provided isn't valid.\";\n   return es?'Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta'+(account?', o '+account:'')+' para continuar.':'Sorry, I do need the phone or email associated with your account'+(account?', or '+account:'')+' to proceed.';\n})(contact_kind,contact_options,true)"
       },
       {
         "id": "identity_contact_route",
@@ -1874,13 +1874,13 @@
         "id": "otp_question",
         "type": "SET",
         "variable": "otp_question",
-        "value": "(function otpPrompt(cargo, es = false) {\n    const verb = es ? cargo.verb_es : cargo.verb, number = String(cargo.otp_cell_number || '').replace(/\\D/g, '').slice(-4), tail = cargo.voice ? number.split('').join(', ') : number;\n    const where = cargo.otpSentOn === 'whatsapp' ? (es ? 'que le acabo de enviar aquí en este chat' : 'I just sent you here in this chat') : (es ? 'que recibió en ' : 'you received at ') + (cargo.otp_cell_number ? (es ? 'celular que termina con ' : 'cell ending with ') + tail : (es ? 'correo electrónico: ' : 'email: ') + String(cargo.otp_email || ''));\n    const name = cargo.callerPreselected && cargo.callerNamed && cargo.displayName ? cargo.displayName : '';\n    return (name ? name + (es ? ', por favor' : ', please') : es ? 'Por favor' : 'Please') + ' ' + verb + ' ' + (cargo.voice ? es ? 'o ingrese ' : 'or enter ' : '') + (es ? 'el código de verificación de 6 dígitos ' : 'the 6-digit verification code ') + where + '. ' + (es ? `También puede ${cargo.voice ? 'presionar * o decir' : 'escribir'} SALIR para cancelar.` : `You can also ${cargo.voice ? 'press * or ' : ''}${verb} EXIT to cancel.`) + (cargo.callerPreselected ? (es ? ` Para usar otra cuenta, ${verb} OTRA CUENTA.` : ` To use another account, ${verb} ANOTHER ACCOUNT.`) : '');\n})(cargo)"
+        "value": "(function otpPrompt(cargo,es=false) {\n   const verb=es?cargo.verb_es:cargo.verb,number=String(cargo.otp_cell_number || '').replace(/\\D/g,'').slice(-4),tail=cargo.voice?number.split('').join(', '):number;\n   const where=cargo.otpSentOn==='whatsapp'?(es?'que le acabo de enviar aquí en este chat':'I just sent you here in this chat'):(es?'que recibió en ':'you received at ')+(cargo.otp_cell_number?(es?'celular que termina con ':'cell ending with ')+tail:(es?'correo electrónico: ':'email: ')+String(cargo.otp_email || ''));\n   const name=cargo.callerPreselected && cargo.callerNamed && cargo.displayName?cargo.displayName:'';\n   return (name?name+(es?', por favor':', please'):es?'Por favor':'Please')+' '+verb+' '+(cargo.voice?es?'o ingrese ':'or enter ':'')+(es?'el código de verificación de 6 dígitos ':'the 6-digit verification code ')+where+'. '+(es?`También puede ${cargo.voice?'presionar * o decir':'escribir'} SALIR para cancelar.`:`You can also ${cargo.voice?'press * or ':''}${verb} EXIT to cancel.`)+(cargo.callerPreselected?(es?` Para usar otra cuenta, ${verb} OTRA CUENTA.`:` To use another account, ${verb} ANOTHER ACCOUNT.`):'');\n})(cargo)"
       },
       {
         "id": "otp_question_es",
         "type": "SET",
         "variable": "otp_question_es",
-        "value": "(function otpPrompt(cargo, es = false) {\n    const verb = es ? cargo.verb_es : cargo.verb, number = String(cargo.otp_cell_number || '').replace(/\\D/g, '').slice(-4), tail = cargo.voice ? number.split('').join(', ') : number;\n    const where = cargo.otpSentOn === 'whatsapp' ? (es ? 'que le acabo de enviar aquí en este chat' : 'I just sent you here in this chat') : (es ? 'que recibió en ' : 'you received at ') + (cargo.otp_cell_number ? (es ? 'celular que termina con ' : 'cell ending with ') + tail : (es ? 'correo electrónico: ' : 'email: ') + String(cargo.otp_email || ''));\n    const name = cargo.callerPreselected && cargo.callerNamed && cargo.displayName ? cargo.displayName : '';\n    return (name ? name + (es ? ', por favor' : ', please') : es ? 'Por favor' : 'Please') + ' ' + verb + ' ' + (cargo.voice ? es ? 'o ingrese ' : 'or enter ' : '') + (es ? 'el código de verificación de 6 dígitos ' : 'the 6-digit verification code ') + where + '. ' + (es ? `También puede ${cargo.voice ? 'presionar * o decir' : 'escribir'} SALIR para cancelar.` : `You can also ${cargo.voice ? 'press * or ' : ''}${verb} EXIT to cancel.`) + (cargo.callerPreselected ? (es ? ` Para usar otra cuenta, ${verb} OTRA CUENTA.` : ` To use another account, ${verb} ANOTHER ACCOUNT.`) : '');\n})(cargo,true)"
+        "value": "(function otpPrompt(cargo,es=false) {\n   const verb=es?cargo.verb_es:cargo.verb,number=String(cargo.otp_cell_number || '').replace(/\\D/g,'').slice(-4),tail=cargo.voice?number.split('').join(', '):number;\n   const where=cargo.otpSentOn==='whatsapp'?(es?'que le acabo de enviar aquí en este chat':'I just sent you here in this chat'):(es?'que recibió en ':'you received at ')+(cargo.otp_cell_number?(es?'celular que termina con ':'cell ending with ')+tail:(es?'correo electrónico: ':'email: ')+String(cargo.otp_email || ''));\n   const name=cargo.callerPreselected && cargo.callerNamed && cargo.displayName?cargo.displayName:'';\n   return (name?name+(es?', por favor':', please'):es?'Por favor':'Please')+' '+verb+' '+(cargo.voice?es?'o ingrese ':'or enter ':'')+(es?'el código de verificación de 6 dígitos ':'the 6-digit verification code ')+where+'. '+(es?`También puede ${cargo.voice?'presionar * o decir':'escribir'} SALIR para cancelar.`:`You can also ${cargo.voice?'press * or ':''}${verb} EXIT to cancel.`)+(cargo.callerPreselected?(es?` Para usar otra cuenta, ${verb} OTRA CUENTA.`:` To use another account, ${verb} ANOTHER ACCOUNT.`):'');\n})(cargo,true)"
       },
       {
         "id": "otp_collect",
@@ -1933,7 +1933,7 @@
         "id": "otp_digits",
         "type": "SET",
         "variable": "normalized_otp_code",
-        "value": "(function otpDigits(text) {\n    const map = { zero: '0', cero: '0', one: '1', uno: '1', two: '2', dos: '2', three: '3', tres: '3', four: '4', cuatro: '4', five: '5', cinco: '5', six: '6', seis: '6', seven: '7', siete: '7', eight: '8', ocho: '8', nine: '9', nueve: '9' };\n    const filler = new Set(['el', 'mi', 'es', 'codigo', 'code', 'is', 'my', 'the', 'numero', 'number', 'a', 'ver']);\n    const tokens = String(text || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').split(/[\\s,.;:!?-]+/).filter(t => t && !filler.has(t));\n    const spoken = tokens.length && tokens.some(t => Object.hasOwn(map, t)) && tokens.every(t => /^\\d+$/.test(t) || Object.hasOwn(map, t)) ? tokens.map(t => map[t] ?? t).join('') : '';\n    return spoken.length === 6 ? spoken : String(text || '').replace(/\\D/g, '');\n})(otp_code)"
+        "value": "(function otpDigits(text) {\n   const map={zero:'0',cero:'0',one:'1',uno:'1',two:'2',dos:'2',three:'3',tres:'3',four:'4',cuatro:'4',five:'5',cinco:'5',six:'6',seis:'6',seven:'7',siete:'7',eight:'8',ocho:'8',nine:'9',nueve:'9'};\n   const filler=new Set(['el','mi','es','codigo','code','is','my','the','numero','number','a','ver']);\n   const tokens=String(text || '').toLowerCase().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').split(/[\\s,.;:!?-]+/).filter(t=>t&&!filler.has(t));\n   const spoken=tokens.length && tokens.some(t=>Object.hasOwn(map,t)) && tokens.every(t=>/^\\d+$/.test(t)||Object.hasOwn(map,t))?tokens.map(t=>map[t]??t).join(''):'';\n   return spoken.length===6?spoken:String(text || '').replace(/\\D/g,'');\n})(otp_code)"
       },
       {
         "id": "otp_validate",
@@ -1981,6 +1981,17 @@
             "otro",
             "another",
             "other"
+          ],
+          "email": [
+            "email",
+            "e-mail",
+            "e mail",
+            "emails",
+            "correo",
+            "correos",
+            "correo electrónico",
+            "correo electronico",
+            "imeil"
           ],
           "resend": [
             "resend",
@@ -2374,6 +2385,19 @@
             },
             "initializeDefaults": true
           },
+          "condition: !!cargo.otp_cell_number && normalized_otp_code.length !== 6 && matchesChoice(user_choice,otp_phrases.email)": {
+            "id": "otp_use_email",
+            "type": "FLOW",
+            "value": "authenticate-user",
+            "callType": "replace",
+            "parameters": {
+              "cell_number": "",
+              "email": "",
+              "retrying": true,
+              "declined_caller": true
+            },
+            "initializeDefaults": true
+          },
           "condition: isExitRequest(user_choice)": {
             "id": "otp_exit",
             "type": "FLOW",
@@ -2419,7 +2443,7 @@
             "variable": "noop",
             "value": "true"
           },
-          "condition: matchesChoice(user_choice,otp_phrases.noPhone) || (function otpPhoneUnavailable(value) {\n    const text = String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g, '').toLowerCase().replace(/[’]/g, \"'\");\n    return /\\b(?:no longer|cannot|can't|dont|don't|do not)\\s+(?:have(?:\\s+access\\s+to)?|access|use)\\b[^.!?]{0,70}\\b(?:phone|number|mobile|cellphone)\\b/.test(text)\n        || /\\b(?:ya\\s+no|no)\\s+(?:tengo|puedo\\s+(?:usar|acceder))\\b[^.!?]{0,70}\\b(?:telefono|numero|celular|movil)\\b/.test(text);\n})(user_choice)": {
+          "condition: matchesChoice(user_choice,otp_phrases.noPhone) || (function otpPhoneUnavailable(value) {\n   const text=String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[’]/g,\"'\");\n   return /\\b(?:no longer|cannot|can't|dont|don't|do not)\\s+(?:have(?:\\s+access\\s+to)?|access|use)\\b[^.!?]{0,70}\\b(?:phone|number|mobile|cellphone)\\b/.test(text)\n      || /\\b(?:ya\\s+no|no)\\s+(?:tengo|puedo\\s+(?:usar|acceder))\\b[^.!?]{0,70}\\b(?:telefono|numero|celular|movil)\\b/.test(text);\n})(user_choice)": {
             "id": "otp_no_phone",
             "type": "FLOW",
             "value": "generic-retry-with-options",
@@ -2961,6 +2985,37 @@
         "type": "string",
         "value": ""
       },
+      "retry_yes_words": {
+        "type": "array",
+        "value": [
+          "phone",
+          "email",
+          "cell",
+          "mobile",
+          "teléfono",
+          "telefono",
+          "celular",
+          "móvil",
+          "movil",
+          "correo electrónico",
+          "correo",
+          "try again",
+          "try it again",
+          "retry",
+          "intentar",
+          "intentarlo",
+          "intentar de nuevo",
+          "intentar nuevamente",
+          "intentarlo de nuevo",
+          "intentarlo otra vez",
+          "de nuevo",
+          "nuevamente",
+          "otra vez",
+          "reintentar",
+          "volver a intentar",
+          "volver a intentarlo"
+        ]
+      },
       "retry_profiles": {
         "type": "array",
         "value": [
@@ -3059,7 +3114,7 @@
         "id": "retry_answer",
         "type": "SET",
         "variable": "user_choice",
-        "value": "String(cargo.serviceAnswer.raw || \"\")"
+        "value": "String(cargo.serviceAnswer.raw || \"\").trim().replace(/[.,!?;:]+$/,\"\")"
       },
       {
         "id": "retry_default_cancel",
@@ -3135,7 +3190,7 @@
         "id": "retry_latest_answer",
         "type": "SET",
         "variable": "user_choice",
-        "value": "String(cargo.serviceAnswer.raw || \"\")"
+        "value": "String(cargo.serviceAnswer.raw || \"\").trim().replace(/[.,!?;:]+$/,\"\")"
       },
       {
         "id": "retry_capture",
@@ -3218,7 +3273,7 @@
             "id": "retry_verified",
             "type": "END"
           },
-          "condition: (user_choice.trim() === '1' || isAnswer(user_choice,'yes',['phone','email','cell','mobile','teléfono','telefono','celular','móvil','movil','correo electrónico','correo'])) && retry_call_type === 'replace'": {
+          "condition: (user_choice.trim() === '1' || isAnswer(user_choice,'yes',retry_yes_words)) && retry_call_type === 'replace'": {
             "id": "retry_yes_replace",
             "type": "FLOW",
             "value": "{{retry_flow}}",
@@ -3232,7 +3287,7 @@
             },
             "initializeDefaults": true
           },
-          "condition: user_choice.trim() === '1' || isAnswer(user_choice,'yes',['phone','email','cell','mobile','teléfono','telefono','celular','móvil','movil','correo electrónico','correo'])": {
+          "condition: user_choice.trim() === '1' || isAnswer(user_choice,'yes',retry_yes_words)": {
             "id": "retry_yes_reboot",
             "type": "FLOW",
             "value": "{{retry_flow}}",
@@ -3512,8 +3567,8 @@
   {
     "id": "otp-text-undeliverable",
     "name": "OtpTextUndeliverable",
-    "version": "1.0.8",
-    "description": "Worker for authenticate-user: the number cannot receive texts; ask for an email or a mobile number.",
+    "version": "1.1.0",
+    "description": "Worker for authenticate-user: the number cannot receive texts; ask for an email or a mobile number. The question is a form question (collect-service-answer): the answer is kept as spoken, so an email with digits in it is never reduced to its digits.",
     "variables": {
       "user_choice": {
         "type": "string",
@@ -3530,6 +3585,14 @@
       "choice_email": {
         "type": "string",
         "description": "Email address in the answer, if any"
+      },
+      "other_contact_question": {
+        "type": "string",
+        "description": "The question, English"
+      },
+      "other_contact_question_es": {
+        "type": "string",
+        "description": "The question, Spanish"
       }
     },
     "parameters": [
@@ -3548,19 +3611,43 @@
         "value": "last4(cargo.otpUndeliverableTo, cargo.voice)"
       },
       {
+        "id": "other_contact_question",
+        "type": "SET",
+        "variable": "other_contact_question",
+        "value": "(typeof note !== 'undefined' && note === 'international' ? \"I can only text codes to US and Canadian numbers. \" : '') + \"The number ending with \" + undeliverable_last4 + \" can't receive text messages, so I can't text it a code. Please \" + cargo.verb + \" the email address on your account, or \" + (cargo.voice ? 'say or enter' : cargo.verb) + \" a mobile number that can receive texts. To talk to an agent \" + (cargo.voice ? 'press 0 or ' : '') + cargo.verb + \" AGENT. To exit \" + (cargo.voice ? 'press the asterisk key or ' : '') + cargo.verb + \" EXIT.\""
+      },
+      {
+        "id": "other_contact_question_es",
+        "type": "SET",
+        "variable": "other_contact_question_es",
+        "value": "(typeof note !== 'undefined' && note === 'international' ? \"Solo puedo enviar códigos por texto a números de EE. UU. y Canadá. \" : '') + \"El número que termina con \" + undeliverable_last4 + \" no puede recibir mensajes de texto, así que no puedo enviarle un código. Por favor \" + cargo.verb_es + \" el correo electrónico de su cuenta, o \" + (cargo.voice ? 'diga o ingrese' : cargo.verb_es) + \" un número de celular que pueda recibir textos. Para hablar con un agente \" + (cargo.voice ? 'presione 0 o ' : '') + cargo.verb_es + \" AGENTE. Para salir \" + (cargo.voice ? 'presione la tecla de asterisco o ' : '') + cargo.verb_es + \" SALIR.\""
+      },
+      {
         "id": "ask_other_contact",
-        "type": "SAY-GET",
-        "variable": "user_choice",
-        "value": "{{typeof note !== 'undefined' && note === 'international' ? 'I can only text codes to US and Canadian numbers. ' : ''}}The number ending with {{undeliverable_last4}} can't receive text messages, so I can't text it a code. Please {{cargo.verb}} the email address on your account, or {{cargo.voice ? 'say or enter' : cargo.verb}} a mobile number that can receive texts. To talk to an agent {{cargo.voice ? 'press 0 or ' : ''}}{{cargo.verb}} AGENT. To exit {{cargo.voice ? 'press the asterisk key or ' : ''}}{{cargo.verb}} EXIT.",
-        "value_es": "{{typeof note !== 'undefined' && note === 'international' ? 'Solo puedo enviar códigos por texto a números de EE. UU. y Canadá. ' : ''}}El número que termina con {{undeliverable_last4}} no puede recibir mensajes de texto, así que no puedo enviarle un código. Por favor {{cargo.verb_es}} el correo electrónico de su cuenta, o {{cargo.voice ? 'diga o ingrese' : cargo.verb_es}} un número de celular que pueda recibir textos. Para hablar con un agente {{cargo.voice ? 'presione 0 o ' : ''}}{{cargo.verb_es}} AGENTE. Para salir {{cargo.voice ? 'presione la tecla de asterisco o ' : ''}}{{cargo.verb_es}} SALIR.",
-        "digits": {
-          "min": 1,
-          "max": 12,
-          "autoSubmitChars": [
-            "0"
-          ],
-          "autoSubmitMs": 2500
+        "type": "FLOW",
+        "value": "collect-service-answer",
+        "callType": "call",
+        "parameters": {
+          "question": "{{other_contact_question}}",
+          "question_es": "{{other_contact_question_es}}",
+          "keypad": {
+            "min": 1,
+            "max": 12,
+            "autoSubmitChars": [
+              "0"
+            ],
+            "autoSubmitMs": 2500
+          },
+          "parent_form": "{{cargo.authOptions.parent_form}}",
+          "context": "account verification",
+          "context_es": "verificación de cuenta"
         }
+      },
+      {
+        "id": "other_contact_answer",
+        "type": "SET",
+        "variable": "user_choice",
+        "value": "String(cargo.serviceAnswer && cargo.serviceAnswer.raw || '')"
       },
       {
         "id": "read_digits",
@@ -3642,8 +3729,8 @@
   {
     "id": "live-agent-requested",
     "name": "LiveAgentRequested",
-    "version": "1.7.2",
-    "description": "Customer wants to talk to a person, or says just 'agent' / 'AGENT': a live agent, a representative, customer service ('agent', 'speak to an agent', 'customer service representative', 'transfer me', 'I need to talk to someone', 'can I talk to a human', 'agente', 'representante', 'servicio al cliente', 'atención al cliente', 'transfiéreme', 'hablar con una persona', 'comunicarme con alguien', 'operator', 'manager', 'supervisor'), including a cut-off 'service' or 'al cliente' said alone. Not: continuing by text (SwitchToText); only asking for a phone number, email or hours (None). The offer to continue with the assistant is made once per conversation; a later request transfers (owner 2026-10-24).",
+    "version": "1.8.0",
+    "description": "Customer wants to talk to a person, or says just 'agent' / 'AGENT': a live agent, a representative, customer service ('agent', 'speak to an agent', 'customer service representative', 'transfer me', 'I need to talk to someone', 'can I talk to a human', 'agente', 'representante', 'servicio al cliente', 'atención al cliente', 'transfiéreme', 'hablar con una persona', 'comunicarme con alguien', 'operator', 'manager', 'supervisor'), including a cut-off 'service' or 'al cliente' said alone. Not: continuing by text (SwitchToText); only asking for a phone number, email or hours (None). Transfers at once: no offer to continue with the assistant (the tenant's own interception covers it; owner 2026-10-28).",
     "prompt": "live agent confirmation",
     "prompt_es": "confirmación de agente en vivo",
     "primary": true,
@@ -3655,7 +3742,7 @@
       },
       "user_choice": {
         "type": "string",
-        "description": "User choice to continue with AI or transfer to live agent"
+        "description": "Unused placeholder of the channel checks"
       },
       "live_connect_link": {
         "type": "string",
@@ -3673,10 +3760,6 @@
             "jsfe:continuation-safety:v1"
           ]
         }
-      },
-      "already_pitched": {
-        "type": "boolean",
-        "value": false
       }
     },
     "steps": [
@@ -3692,12 +3775,6 @@
         "type": "SET",
         "variable": "after_give_up",
         "value": "(function() { var g = !!cargo.giveUp; cargo.giveUp = false; return g; })()"
-      },
-      {
-        "id": "take_pitched",
-        "type": "SET",
-        "variable": "already_pitched",
-        "value": "(function() { var p = !!cargo.agentPitched; cargo.agentPitched = true; return p; })()"
       },
       {
         "id": "get_live_connect",
@@ -3787,68 +3864,22 @@
         }
       },
       {
-        "id": "offer_unless_give_up",
+        "id": "transfer_to_agent",
         "type": "CASE",
         "branches": {
-          "condition: after_give_up || already_pitched": {
-            "id": "no_offer_after_give_up",
-            "type": "SET",
-            "variable": "user_choice",
-            "value": "'agent'"
+          "condition: cargo.agentPhoneNumber": {
+            "id": "confirm_transfer",
+            "type": "RETURN",
+            "value": "after_give_up ? (language == 'es' ? 'Te transfiero a un agente en vivo.' : 'Let me transfer you to a live agent.') : (language == 'es' ? 'Entendido. Te transfiero a un agente en vivo.' : 'Understood. Let me transfer you to a live agent.')",
+            "keepSay": true
           },
           "default": {
-            "id": "ask_user_choice",
-            "type": "SAY-GET",
-            "variable": "user_choice",
-            "value": "Before I try to transfer you, I want you to know that I can help you faster with many inquiries, including account information even if you don't have your account number. I can also locate and provide directions to our nearest location. Many customers find it faster to continue with me. Please wait for my questions and listen to the options before choosing. To have me help you now {{cargo.voice ? 'Press 1 or ' : ''}}{{cargo.verb}} YES. For a live agent {{cargo.voice ? 'Press 0 or ' : ''}}{{cargo.verb}} LIVE AGENT.",
-            "value_es": "Antes de intentar transferirte, quiero que sepas que puedo ayudarte más rápido con muchas consultas, incluida la información de la cuenta incluso si no tienes tu número de cuenta. También puedo localizar y proporcionar direcciones a nuestra ubicación más cercana. Muchos clientes encuentran que es más rápido continuar conmigo. Por favor espera mis preguntas y escucha las opciones antes de elegir. Para que te ayude ahora {{cargo.voice ? 'Presiona 1 o ' : ''}}{{cargo.verb_es}} SÍ. Para un agente en vivo {{cargo.voice ? 'Presiona 0 o ' : ''}}{{cargo.verb_es}} AGENTE EN VIVO.",
-            "digits": {
-              "min": 1,
-              "max": 1
-            }
-          }
-        }
-      },
-      {
-        "id": "normalize_choice",
-        "type": "SET",
-        "variable": "user_choice",
-        "value": "user_choice.trim().toLowerCase().replace(/[^\\w\\s\\*áéíóúüñ]+/g, '')"
-      },
-      {
-        "id": "handle_choice",
-        "type": "CASE",
-        "branches": {
-          "condition: after_give_up || already_pitched || isAgentRequest(user_choice)": {
-            "id": "transfer_to_agent",
-            "type": "CASE",
-            "branches": {
-              "condition: cargo.agentPhoneNumber": {
-                "id": "confirm_transfer",
-                "type": "RETURN",
-                "value": "after_give_up ? (language == 'es' ? 'Te transfiero a un agente en vivo.' : 'Let me transfer you to a live agent.') : (language == 'es' ? 'Entendido. Te transfiero a un agente en vivo.' : 'Understood. Let me transfer you to a live agent.')",
-                "keepSay": true
-              },
-              "default": {
-                "id": "no_agents_available",
-                "type": "RETURN",
-                "value": "[language == 'es' ? 'Nuestro equipo de agentes no está disponible en este momento.' : \"Our live agent team isn't available right now.\", language == 'es' ? (cargo.agentHours_es || (typeof global_live_agents_comment_es !== 'undefined' && global_live_agents_comment_es ? global_live_agents_comment_es : '')) : (cargo.agentHours || (typeof global_live_agents_comment !== 'undefined' && global_live_agents_comment ? global_live_agents_comment : '')), cargo.agentUnavailableMessage || (language == 'es' ? (cargo.voice ? 'Aún puedo ayudarle con muchas preguntas. Solo dígame qué necesita.' : 'Aún puedo ayudarle con muchas preguntas. Solo escríbame qué necesita.') : 'I can still help with many questions. Just tell me what you need.')].filter(Boolean).join(' ')",
-                "outcome": "unresolved",
-                "reason": "agent_unavailable",
-                "keepSay": true
-              }
-            }
-          },
-          "condition: isAnswer(user_choice, 'yes', ['continue', 'continuemos']) || user_choice === '1'": {
-            "id": "continue_with_ai",
-            "type": "SAY",
-            "value": "Great! I'm glad to help. What would you like assistance with today?",
-            "value_es": "¡Excelente! Me alegra ayudarle. ¿Con qué le gustaría ayuda hoy?"
-          },
-          "default": {
-            "id": "agent_offer_yield",
-            "type": "DISPATCH",
-            "reason": "agent_offer_context_changed"
+            "id": "no_agents_available",
+            "type": "RETURN",
+            "value": "[language == 'es' ? 'Nuestro equipo de agentes no está disponible en este momento.' : \"Our live agent team isn't available right now.\", language == 'es' ? (cargo.agentHours_es || (typeof global_live_agents_comment_es !== 'undefined' && global_live_agents_comment_es ? global_live_agents_comment_es : '')) : (cargo.agentHours || (typeof global_live_agents_comment !== 'undefined' && global_live_agents_comment ? global_live_agents_comment : '')), cargo.agentUnavailableMessage || (language == 'es' ? (cargo.voice ? 'Aún puedo ayudarle con muchas preguntas. Solo dígame qué necesita.' : 'Aún puedo ayudarle con muchas preguntas. Solo escríbame qué necesita.') : 'I can still help with many questions. Just tell me what you need.')].filter(Boolean).join(' ')",
+            "outcome": "unresolved",
+            "reason": "agent_unavailable",
+            "keepSay": true
           }
         }
       }
@@ -4376,7 +4407,7 @@
         "id": "ac_switch_to_text_key",
         "type": "SET",
         "variable": "ac_key",
-        "value": "ac_key === '' && !ac_other && !ac_amount && cargo.voice && String(ac_answer || '').trim() === '9' && !!callerTextNumber(cargo) ? '__text' : ac_key"
+        "value": "ac_key === '' && !ac_other && !ac_amount && cargo.voice && String(ac_answer || '').trim().replace(/[.,!?;:]+$/, '') === '9' && !!callerTextNumber(cargo) ? '__text' : ac_key"
       },
       {
         "id": "ac_keypad_again",
@@ -4553,7 +4584,7 @@
         "id": "ac_switch_to_text_key_again",
         "type": "SET",
         "variable": "ac_key",
-        "value": "ac_key === '' && !ac_other && !ac_amount && cargo.voice && String(ac_answer || '').trim() === '9' && !!callerTextNumber(cargo) ? '__text' : ac_key"
+        "value": "ac_key === '' && !ac_other && !ac_amount && cargo.voice && String(ac_answer || '').trim().replace(/[.,!?;:]+$/, '') === '9' && !!callerTextNumber(cargo) ? '__text' : ac_key"
       },
       {
         "id": "ac_keypad_done",
@@ -5123,13 +5154,13 @@
         "id": "email_readback",
         "type": "SET",
         "variable": "email_readback",
-        "value": "(function emailReadback(address, voice, es = false) {\n    let said = String(address || '');\n    if (voice)\n        said = said.split('').join(' ').replace(/ @ /, es ? ' arroba ' : ' at ').replace(/ \\. /g, es ? ' punto ' : ' dot ').replace(/ _ /g, es ? ' guion bajo ' : ' underscore ').replace(/ - /g, es ? ' guion ' : ' dash ');\n    return (es ? 'Tengo ' : 'I have ') + said + (es ? '. ¿Es correcto? ' : '. Is that right? ') + (es ? voice ? 'Presione 1 o diga' : 'Escriba' : voice ? 'Press 1 or say' : 'Type') + (es ? ' SÍ, o ' : ' YES, or ') + (es ? voice ? 'presione 2 o diga' : 'escriba' : voice ? 'press 2 or say' : 'type') + (es ? ' NO.' : ' NO.');\n})(email_found,cargo.voice)"
+        "value": "(function emailReadback(address,voice,es=false) {\n   let said=String(address || '');if(voice)said=said.split('').join(' ').replace(/ @ /,es?' arroba ':' at ').replace(/ \\. /g,es?' punto ':' dot ').replace(/ _ /g,es?' guion bajo ':' underscore ').replace(/ - /g,es?' guion ':' dash ');\n   return (es?'Tengo ':'I have ')+said+(es?'. ¿Es correcto? ':'. Is that right? ')+(es?voice?'Presione 1 o diga':'Escriba':voice?'Press 1 or say':'Type')+(es?' SÍ, o ':' YES, or ')+(es?voice?'presione 2 o diga':'escriba':voice?'press 2 or say':'type')+(es?' NO.':' NO.');\n})(email_found,cargo.voice)"
       },
       {
         "id": "email_readback_es",
         "type": "SET",
         "variable": "email_readback_es",
-        "value": "(function emailReadback(address, voice, es = false) {\n    let said = String(address || '');\n    if (voice)\n        said = said.split('').join(' ').replace(/ @ /, es ? ' arroba ' : ' at ').replace(/ \\. /g, es ? ' punto ' : ' dot ').replace(/ _ /g, es ? ' guion bajo ' : ' underscore ').replace(/ - /g, es ? ' guion ' : ' dash ');\n    return (es ? 'Tengo ' : 'I have ') + said + (es ? '. ¿Es correcto? ' : '. Is that right? ') + (es ? voice ? 'Presione 1 o diga' : 'Escriba' : voice ? 'Press 1 or say' : 'Type') + (es ? ' SÍ, o ' : ' YES, or ') + (es ? voice ? 'presione 2 o diga' : 'escriba' : voice ? 'press 2 or say' : 'type') + (es ? ' NO.' : ' NO.');\n})(email_found,cargo.voice,true)"
+        "value": "(function emailReadback(address,voice,es=false) {\n   let said=String(address || '');if(voice)said=said.split('').join(' ').replace(/ @ /,es?' arroba ':' at ').replace(/ \\. /g,es?' punto ':' dot ').replace(/ _ /g,es?' guion bajo ':' underscore ').replace(/ - /g,es?' guion ':' dash ');\n   return (es?'Tengo ':'I have ')+said+(es?'. ¿Es correcto? ':'. Is that right? ')+(es?voice?'Presione 1 o diga':'Escriba':voice?'Press 1 or say':'Type')+(es?' SÍ, o ':' YES, or ')+(es?voice?'presione 2 o diga':'escriba':voice?'press 2 or say':'type')+(es?' NO.':' NO.');\n})(email_found,cargo.voice,true)"
       },
       {
         "id": "email_verify_new",
@@ -6856,7 +6887,7 @@
         "id": "rf_deferred",
         "type": "SET",
         "variable": "rf_deferred",
-        "value": "(function takeReadyProviderRequests(cargo, form) {\n    const current = cargo.forms && cargo.forms[form];\n    const owner = current && cargo.forms[current.task];\n    if (!owner || !owner.providerRequests || owner.providerGateActive)\n        return [];\n    const read = path => String(path || '').split('.').reduce((value, key) => value == null ? undefined : value[key], { cargo });\n    const ready = [], waiting = [];\n    const gateActive = Object.keys(owner.activeGates || {}).length > 0;\n    for (const request of owner.providerRequests) {\n        const paths = [].concat(request.provides.gate && request.provides.gate.verified || []);\n        (!gateActive || paths.length && paths.every(path => !!read(path)) ? ready : waiting).push(request);\n    }\n    if (waiting.length)\n        owner.providerRequests = waiting;\n    else\n        delete owner.providerRequests;\n    return ready;\n})(cargo,rf_form)"
+        "value": "(function takeReadyProviderRequests(cargo,form) {\n   const current=cargo.forms && cargo.forms[form];\n   const owner=current && cargo.forms[current.task];\n   if(!owner || !owner.providerRequests || owner.providerGateActive)return [];\n   const read=path=>String(path || '').split('.').reduce((value,key)=>value==null?undefined:value[key],{cargo});\n   const ready=[],waiting=[];\n   const gateActive=Object.keys(owner.activeGates || {}).length > 0;\n   for(const request of owner.providerRequests){\n      const paths=[].concat(request.provides.gate && request.provides.gate.verified || []);\n      (!gateActive || paths.length && paths.every(path=>!!read(path))?ready:waiting).push(request);\n   }\n   if(waiting.length)owner.providerRequests=waiting;else delete owner.providerRequests;\n   return ready;\n})(cargo,rf_form)"
       },
       {
         "id": "rf_deferred_answer",
@@ -7610,7 +7641,7 @@
         "id": "ci_own_choices",
         "type": "SET",
         "variable": "ci_choices",
-        "value": "ci_spec.choices_from && Array.isArray(ci_d[ci_spec.choices_from]) ? ci_d[ci_spec.choices_from] : (ci_spec.profile.kind === 'choice' && Array.isArray(ci_spec.profile.choices) ? ci_spec.profile.choices : [])"
+        "value": "ci_spec.choices_from && Array.isArray(ci_d[ci_spec.choices_from]) ? ci_d[ci_spec.choices_from] : (ci_spec.profile.kind === 'choice' && Array.isArray(ci_spec.profile.choices) ? ci_spec.profile.choices : (Array.isArray(ci_spec.any_of) ? ci_spec.any_of.reduce(function(all,m){return all.concat(m && m.profile && m.profile.kind === 'choice' && Array.isArray(m.profile.choices) ? m.profile.choices.filter(function(c,i,own){return !all.some(function(a){return String(a.key)===String(c.key);}) && own.findIndex(function(o){return String(o.key)===String(c.key);})===i;}) : []);},[]) : []))"
       },
       {
         "id": "ci_keypad",
@@ -7940,7 +7971,7 @@
               "no_gate": "{{ci_skip_gate}}"
             }
           },
-          "condition: !ci_must && (ci_words >= 3 || ci_spec.profile.kind === 'amount' && ci_words > 0)": {
+          "condition: !ci_must && ci_words > 0": {
             "id": "ci_elsewhere",
             "type": "FLOW",
             "value": "{{ci_reply_reader}}",
@@ -7950,7 +7981,8 @@
               "input": "{{current}}",
               "question": "{{ci_q}}",
               "question_es": "{{ci_q_es}}",
-              "choices": "{{ci_choices}}"
+              "choices": "{{ci_choices}}",
+              "firm": "{{ci_spec.confirmation}}"
             }
           },
           "default": {
@@ -8683,7 +8715,7 @@
     "name": "ValidateCardExpiration",
     "version": "1.0.0",
     "scope": "isolated",
-    "description": "Validator: month and year, a real month, not expired (validateExpiration). Normalizes to MMYY. Params: input, value.",
+    "description": "Validator: month (a number or its English or Spanish name) and year, a real month, not expired (validateExpiration). Normalizes to MMYY. Params: input, value.",
     "parameters": [
       {
         "name": "input",
@@ -8708,7 +8740,7 @@
         "id": "vce_check",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(function (v) { var m = /^(0?[1-9]|1[0-2])\\D*(?:20)?(\\d{2})$/.exec(String(v).replace(/\\s+/g, '').replace(/de/gi, '')) || /^(\\d{2})(\\d{2})$/.exec(String(v).replace(/\\D/g, '')) || /^(0[1-9])0(\\d{2})$/.exec(String(v).replace(/\\D/g, '')); var mm = m ? ('0' + m[1]).slice(-2) : ''; var yy = m ? m[2] : ''; cargo.inputCheck = m && validateExpiration(mm, yy) ? { ok: true, value: mm + yy } : { ok: false, message: \"That expiration date doesn't look right.\", message_es: 'Esa fecha de vencimiento no parece correcta.' }; return true; })(value)"
+        "value": "(function (v) { var names = [\"september\",\"septiembre\",\"setiembre\",\"february\",\"febrero\",\"november\",\"noviembre\",\"december\",\"diciembre\",\"january\",\"octubre\",\"october\",\"august\",\"agosto\",\"enero\",\"marzo\",\"march\",\"abril\",\"april\",\"junio\",\"julio\",\"mayo\",\"june\",\"july\",\"sept\",\"jan\",\"ene\",\"feb\",\"mar\",\"apr\",\"abr\",\"may\",\"jun\",\"jul\",\"aug\",\"ago\",\"sep\",\"oct\",\"nov\",\"dec\",\"dic\"]; var nums = [9,9,9,2,2,11,11,12,12,1,10,10,8,8,1,3,3,4,4,6,7,5,6,7,9,1,1,2,3,4,4,5,6,7,8,8,9,10,11,12,12]; var w = new RegExp('\\\\b(' + names.join('|') + ')\\\\b', 'i').exec(String(v)); if (w) { v = String(v).replace(w[0], ' ' + nums[names.indexOf(w[1].toLowerCase())] + ' '); } var m = /^(0?[1-9]|1[0-2])\\D*(?:20)?(\\d{2})$/.exec(String(v).replace(/\\s+/g, '').replace(/de/gi, '')) || /^(\\d{2})(\\d{2})$/.exec(String(v).replace(/\\D/g, '')) || /^(0[1-9])0(\\d{2})$/.exec(String(v).replace(/\\D/g, '')); var mm = m ? ('0' + m[1]).slice(-2) : ''; var yy = m ? m[2] : ''; cargo.inputCheck = m && validateExpiration(mm, yy) ? { ok: true, value: mm + yy } : { ok: false, message: \"That expiration date doesn't look right.\", message_es: 'Esa fecha de vencimiento no parece correcta.' }; return true; })(value)"
       }
     ],
     "variables": {
@@ -8721,7 +8753,7 @@
         "type": "object",
         "value": {
           "version": 1,
-          "summary": "Validator: month and year, a real month, not expired (validateExpiration). Normalizes to MMYY. Params: input, value.",
+          "summary": "Validator: month (a number or its English or Spanish name) and year, a real month, not expired (validateExpiration). Normalizes to MMYY. Params: input, value.",
           "parametersFrom": "parameters",
           "role": "worker",
           "result": {
@@ -10357,7 +10389,7 @@
             "label_es": "fecha de vencimiento",
             "profile": {
               "kind": "pattern",
-              "regex": "\\b(0?[1-9]|1[0-2])\\s*(?:/|-|\\s|de)?\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b"
+              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b"
             },
             "digits": {
               "min": 3,
@@ -10622,6 +10654,7 @@
               "max": 4
             },
             "pii": true,
+            "validator": "validate-card-cvv",
             "question": "What is the security code on the back of the card?",
             "question_es": "¿Cuál es el código de seguridad al reverso de la tarjeta?",
             "name": "card_cvv",
@@ -11470,7 +11503,7 @@
             "label_es": "fecha de vencimiento",
             "profile": {
               "kind": "pattern",
-              "regex": "\\b(0?[1-9]|1[0-2])\\s*(?:/|-|\\s|de)?\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b"
+              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b"
             },
             "digits": {
               "min": 3,
@@ -11499,6 +11532,7 @@
               "max": 4
             },
             "pii": true,
+            "validator": "validate-card-cvv",
             "question": "What is the security code on the back of the card?",
             "question_es": "¿Cuál es el código de seguridad al reverso de la tarjeta?",
             "name": "card_cvv",
@@ -11948,7 +11982,7 @@
         "id": "pd_request",
         "type": "SET",
         "variable": "pd_request",
-        "value": "pd_gated && no_gate !== 'true' ? (function beginProviderRequest(cargo, form, provides, keys, gateParams) {\n    const current = cargo.forms && cargo.forms[form];\n    const owner = current && cargo.forms[current.task];\n    if (!owner)\n        return { owner: '', queued: false };\n    const waiting = !!owner.providerRequests || Object.keys(owner.activeGates || {}).length > 0;\n    const queue = owner.providerRequests || (owner.providerRequests = []);\n    if (!waiting)\n        owner.providerGateActive = true;\n    const catalog = JSON.stringify(provides);\n    let request = queue.find(entry => entry.catalog === catalog);\n    if (!request) {\n        request = { catalog, provides, keys: [], gate_params: gateParams };\n        queue.push(request);\n    }\n    for (const key of keys)\n        if (!request.keys.includes(key))\n            request.keys.push(key);\n    return { owner: owner.id, queued: waiting };\n})(cargo,form,provides,pd_keys,gate_params) : {owner:'',queued:false}"
+        "value": "pd_gated && no_gate !== 'true' ? (function beginProviderRequest(cargo,form,provides,keys,gateParams) {\n   const current=cargo.forms && cargo.forms[form];\n   const owner=current && cargo.forms[current.task];\n   if(!owner)return {owner:'',queued:false};\n   const waiting=!!owner.providerRequests || Object.keys(owner.activeGates || {}).length > 0;\n   const queue=owner.providerRequests || (owner.providerRequests=[]);\n   if(!waiting)owner.providerGateActive=true;\n   const catalog=JSON.stringify(provides);\n   let request=queue.find(entry=>entry.catalog===catalog);\n   if(!request){request={catalog,provides,keys:[],gate_params:gateParams};queue.push(request);}\n   for(const key of keys)if(!request.keys.includes(key))request.keys.push(key);\n   return {owner:owner.id,queued:waiting};\n})(cargo,form,provides,pd_keys,gate_params) : {owner:'',queued:false}"
       },
       {
         "id": "pd_queued",
@@ -11992,7 +12026,7 @@
         "id": "pd_deferred",
         "type": "SET",
         "variable": "pd_deferred",
-        "value": "(function finishProviderRequest(cargo, owner, provides, keys) {\n    const state = cargo.forms && cargo.forms[owner];\n    const queue = state && state.providerRequests || [];\n    if (state) {\n        delete state.providerRequests;\n        delete state.providerGateActive;\n    }\n    const catalog = JSON.stringify(provides);\n    const own = queue.find(entry => entry.catalog === catalog);\n    return { keys: own ? own.keys : keys, remaining: queue.filter(entry => entry.catalog !== catalog) };\n})(cargo,pd_request.owner,provides,pd_keys)"
+        "value": "(function finishProviderRequest(cargo,owner,provides,keys) {\n   const state=cargo.forms && cargo.forms[owner];\n   const queue=state && state.providerRequests || [];\n   if(state){delete state.providerRequests;delete state.providerGateActive;}\n   const catalog=JSON.stringify(provides);\n   const own=queue.find(entry=>entry.catalog===catalog);\n   return {keys:own?own.keys:keys,remaining:queue.filter(entry=>entry.catalog!==catalog)};\n})(cargo,pd_request.owner,provides,pd_keys)"
       },
       {
         "id": "pd_merged_keys",
@@ -12086,7 +12120,7 @@
         "id": "pd_ready",
         "type": "SET",
         "variable": "pd_ready",
-        "value": "(function takeReadyProviderRequests(cargo, form) {\n    const current = cargo.forms && cargo.forms[form];\n    const owner = current && cargo.forms[current.task];\n    if (!owner || !owner.providerRequests || owner.providerGateActive)\n        return [];\n    const read = path => String(path || '').split('.').reduce((value, key) => value == null ? undefined : value[key], { cargo });\n    const ready = [], waiting = [];\n    const gateActive = Object.keys(owner.activeGates || {}).length > 0;\n    for (const request of owner.providerRequests) {\n        const paths = [].concat(request.provides.gate && request.provides.gate.verified || []);\n        (!gateActive || paths.length && paths.every(path => !!read(path)) ? ready : waiting).push(request);\n    }\n    if (waiting.length)\n        owner.providerRequests = waiting;\n    else\n        delete owner.providerRequests;\n    return ready;\n})(cargo,form)"
+        "value": "(function takeReadyProviderRequests(cargo,form) {\n   const current=cargo.forms && cargo.forms[form];\n   const owner=current && cargo.forms[current.task];\n   if(!owner || !owner.providerRequests || owner.providerGateActive)return [];\n   const read=path=>String(path || '').split('.').reduce((value,key)=>value==null?undefined:value[key],{cargo});\n   const ready=[],waiting=[];\n   const gateActive=Object.keys(owner.activeGates || {}).length > 0;\n   for(const request of owner.providerRequests){\n      const paths=[].concat(request.provides.gate && request.provides.gate.verified || []);\n      (!gateActive || paths.length && paths.every(path=>!!read(path))?ready:waiting).push(request);\n   }\n   if(waiting.length)owner.providerRequests=waiting;else delete owner.providerRequests;\n   return ready;\n})(cargo,form)"
       },
       {
         "id": "pd_ready_more",
@@ -12472,7 +12506,7 @@
     "name": "ConfirmForm",
     "version": "1.0.0",
     "scope": "isolated",
-    "description": "Worker: ask a form's confirmation (exact YES / NO; keys 1 and 2). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an unclear short answer is asked again, a long unrelated one is DISPATCHed. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
+    "description": "Worker: ask a form's confirmation (exact YES / NO; keys 1 and 2). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
     "parameters": [
       {
         "name": "form",
@@ -12734,7 +12768,7 @@
             "label_es": "fecha de vencimiento",
             "profile": {
               "kind": "pattern",
-              "regex": "\\b(0?[1-9]|1[0-2])\\s*(?:/|-|\\s|de)?\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b"
+              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b"
             },
             "digits": {
               "min": 3,
@@ -12761,6 +12795,7 @@
               "max": 4
             },
             "pii": true,
+            "validator": "validate-card-cvv",
             "question": "What is the security code on the back of the card?",
             "question_es": "¿Cuál es el código de seguridad al reverso de la tarjeta?"
           },
@@ -12867,7 +12902,7 @@
         "type": "object",
         "value": {
           "version": 1,
-          "summary": "Worker: ask a form's confirmation (exact YES / NO; keys 1 and 2). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an unclear short answer is asked again, a long unrelated one is DISPATCHed. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
+          "summary": "Worker: ask a form's confirmation (exact YES / NO; keys 1 and 2). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
           "parametersFrom": "parameters",
           "role": "worker",
           "requires": [
@@ -12888,7 +12923,7 @@
         "id": "cf_reset",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(cargo.formConfirm = cargo.formConfirm || {}, cargo.formConfirm[form] = '', true)"
+        "value": "(cargo.formConfirm = cargo.formConfirm || {}, cargo.formConfirm[form] = '', cargo.confirmRanked = '', true)"
       },
       {
         "id": "cf_choices",
@@ -13151,17 +13186,15 @@
             "variable": "cf_result",
             "value": "'clarification'"
           },
-          "condition: !cf_must && (cf_words >= 3 || cf_amount && cf_words > 0)": {
+          "condition: !cf_must && cf_words > 0": {
             "id": "cf_elsewhere",
-            "type": "DISPATCH",
-            "outcome": "{{formConversationOutcome(cargo,form,'confirmation_not_matched',false,\"resume\").outcome}}",
-            "reason": "{{formConversationOutcome(cargo,form,'confirmation_not_matched',false,\"resume\").reason}}",
-            "recovery": {
-              "version": 1,
-              "mode": "{{formConversationOutcome(cargo,form,'confirmation_not_matched',false,\"resume\").recovery.mode}}",
-              "reason": "{{formConversationOutcome(cargo,form,'confirmation_not_matched',false,\"resume\").recovery.reason}}",
-              "form": "{{formConversationOutcome(cargo,form,'confirmation_not_matched',false,\"resume\").recovery.form || ''}}",
-              "flow": "{{formConversationOutcome(cargo,form,'confirmation_not_matched',false,\"resume\").recovery.flow || ''}}"
+            "type": "FLOW",
+            "value": "read-confirm-reply",
+            "callType": "call",
+            "parameters": {
+              "form": "{{form}}",
+              "question": "{{cf_prompt}}",
+              "question_es": "{{cf_prompt_es}}"
             }
           },
           "default": {
@@ -13171,6 +13204,12 @@
             "value": "'unclear'"
           }
         }
+      },
+      {
+        "id": "cf_ranked",
+        "type": "SET",
+        "variable": "cf_result",
+        "value": "cf_result ? cf_result : cargo.confirmRanked === 'no' ? 'no' : cargo.confirmRanked === 'none' ? 'unclear' : ''"
       },
       {
         "id": "cf_changed",
@@ -13185,20 +13224,67 @@
         "value": "cf_result === 'unclear' ? missFormInput(cargo,form,'__confirm') : (clearFormMisses(cargo,form,'__confirm'),0)"
       },
       {
+        "id": "cf_optional_exhausted",
+        "type": "CASE",
+        "branches": {
+          "condition: (cf_tries >= 2 && !cf_must) && !!formIncompleteOutcome(cargo,form,{outcome:'unresolved',reason:'confirmation_misses_exhausted'}).owner": {
+            "id": "cf_optional_exhausted_dispatch",
+            "type": "DISPATCH",
+            "outcome": "{{formConversationOutcome(cargo,form,'confirmation_misses_exhausted',true,\"none\").outcome}}",
+            "reason": "{{formConversationOutcome(cargo,form,'confirmation_misses_exhausted',true,\"none\").reason}}",
+            "recovery": {
+              "version": 1,
+              "mode": "{{formConversationOutcome(cargo,form,'confirmation_misses_exhausted',true,\"none\").recovery.mode}}",
+              "reason": "{{formConversationOutcome(cargo,form,'confirmation_misses_exhausted',true,\"none\").recovery.reason}}",
+              "form": "{{formConversationOutcome(cargo,form,'confirmation_misses_exhausted',true,\"none\").recovery.form || ''}}",
+              "flow": "{{formConversationOutcome(cargo,form,'confirmation_misses_exhausted',true,\"none\").recovery.flow || ''}}"
+            }
+          },
+          "default": {
+            "id": "cf_optional_exhausted_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "cf_misses_stamp",
+        "type": "CASE",
+        "branches": {
+          "condition: cf_tries >= 2 && !cf_must": {
+            "id": "cf_failure_stamp",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true",
+            "recovery": {
+              "version": 1,
+              "mode": "{{formConversationOutcome(cargo,form,'confirmation_misses_exhausted',true,\"resume\").recovery.mode}}",
+              "reason": "{{formConversationOutcome(cargo,form,'confirmation_misses_exhausted',true,\"resume\").recovery.reason}}",
+              "form": "{{formConversationOutcome(cargo,form,'confirmation_misses_exhausted',true,\"resume\").recovery.form || ''}}",
+              "flow": "{{formConversationOutcome(cargo,form,'confirmation_misses_exhausted',true,\"resume\").recovery.flow || ''}}"
+            }
+          },
+          "default": {
+            "id": "cf_misses_stamp_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "cf_misses_exhausted",
         "type": "CASE",
         "branches": {
           "condition: cf_tries >= 2 && !cf_must": {
-            "id": "cf_misses_dispatch",
-            "type": "DISPATCH",
-            "outcome": "{{formConversationOutcome(cargo,form,'confirmation_misses_exhausted',false,\"resume\").outcome}}",
-            "reason": "{{formConversationOutcome(cargo,form,'confirmation_misses_exhausted',false,\"resume\").reason}}",
-            "recovery": {
-              "version": 1,
-              "mode": "{{formConversationOutcome(cargo,form,'confirmation_misses_exhausted',false,\"resume\").recovery.mode}}",
-              "reason": "{{formConversationOutcome(cargo,form,'confirmation_misses_exhausted',false,\"resume\").recovery.reason}}",
-              "form": "{{formConversationOutcome(cargo,form,'confirmation_misses_exhausted',false,\"resume\").recovery.form || ''}}",
-              "flow": "{{formConversationOutcome(cargo,form,'confirmation_misses_exhausted',false,\"resume\").recovery.flow || ''}}"
+            "id": "cf_give_up",
+            "type": "FLOW",
+            "value": "give-up",
+            "callType": "reboot",
+            "parameters": {
+              "context": "{{exit_context}}",
+              "context_es": "{{exit_context_es}}"
             }
           },
           "default": {
@@ -15769,7 +15855,7 @@
         "id": "address_draft",
         "type": "SET",
         "variable": "draft",
-        "value": "(function addressDraft(raw) {\n    const said = String(raw || '').trim();\n    const zip = /(?:^|\\D)(\\d{5})(?:-\\d{4})?(?:\\D|$)/.exec(said)?.[1] || '';\n    const unit = /(?:\\bapt\\.?|\\bunit|#)\\s*([\\w-]+)/i.exec(said)?.[1] || '';\n    let street = said.split(/[,\\n]/)[0].replace(/\\s*(?:apt\\.?|unit|#)\\s*[\\w-]+.*$/i, '').trim();\n    street = street.replace(/\\s+\\d{5}(?:-\\d{4})?$/, '').replace(/\\s+[A-Z]{2}$/, '').trim();\n    if (!/^\\d{1,6}\\s+\\S/.test(street))\n        street = '';\n    return { zip, street, unit, said: street };\n})(given || (cargo.forms[form_instance].seeds && cargo.forms[form_instance].seeds.given) || '')"
+        "value": "(function addressDraft(raw) {\n   const said=String(raw || '').trim();\n   const zip=/(?:^|\\D)(\\d{5})(?:-\\d{4})?(?:\\D|$)/.exec(said)?.[1] || '';\n   const unit=/(?:\\bapt\\.?|\\bunit|#)\\s*([\\w-]+)/i.exec(said)?.[1] || '';\n   let street=said.split(/[,\\n]/)[0].replace(/\\s*(?:apt\\.?|unit|#)\\s*[\\w-]+.*$/i,'').trim();\n   street=street.replace(/\\s+\\d{5}(?:-\\d{4})?$/,'').replace(/\\s+[A-Z]{2}$/,'').trim();\n   if(!/^\\d{1,6}\\s+\\S/.test(street))street='';\n   return {zip,street,unit,said:street};\n})(given || (cargo.forms[form_instance].seeds && cargo.forms[form_instance].seeds.given) || '')"
       },
       {
         "id": "address_seed_zip",
@@ -15851,7 +15937,7 @@
         "id": "address_resolved",
         "type": "SET",
         "variable": "address_result",
-        "value": "(function resolvedAddress(values, data) {\n    const unit = /^(none|no|ninguno|ninguna|sin|no hay)$/i.test(String(values.unit || '')) ? '' : String(values.unit || '').replace(/^(apt\\.?|unit|#)\\s*/i, '');\n    const street = data.street?.street || values.street || '', city = values.city && data.location?.state ? values.city + ', ' + data.location.state : data.location?.line || values.city_state || '';\n    return { street, unit, city, zip: String(values.zip || ''), line: street + (unit ? ' Apt ' + unit : '') + ', ' + city + ' ' + values.zip, verified: data.street?.verified === true, said: data.street?.said || values.street || '' };\n})(cargo.forms[form_instance].values,cargo.forms[form_instance].data)"
+        "value": "(function resolvedAddress(values,data) {\n   const unit=/^(none|no|ninguno|ninguna|sin|no hay)$/i.test(String(values.unit || ''))?'':String(values.unit || '').replace(/^(apt\\.?|unit|#)\\s*/i,'');\n   const street=data.street?.street || values.street || '',city=values.city && data.location?.state ? values.city+', '+data.location.state : data.location?.line || values.city_state || '';\n   return {street,unit,city,zip:String(values.zip || ''),line:street+(unit?' Apt '+unit:'')+', '+city+' '+values.zip,verified:data.street?.verified===true,said:data.street?.said || values.street || ''};\n})(cargo.forms[form_instance].values,cargo.forms[form_instance].data)"
       },
       {
         "id": "collect-geocoded-address_confirmation_applicable",
@@ -16081,13 +16167,13 @@
         "id": "address_zip_location",
         "type": "SET",
         "variable": "location",
-        "value": "(function zipLocation(result) {\n    const components = result?.components || result?.results?.[0]?.address_components || [];\n    const part = (kind, short = false) => { const row = components.find(c => (c.types || []).includes(kind)); return row ? String(short ? row.short_name || row.long_name : row.long_name || row.short_name) : ''; };\n    const city = part('locality') || part('postal_town') || part('sublocality'), state = part('administrative_area_level_1', true);\n    // A ZIP code can belong to several places (90023: Commerce, East Los Angeles, Los Angeles, Vernon); each is a name its\n    // mail may carry, so the caller picks one. Google lists them as postcode_localities; at most 7 (8 is a reserved key).\n    const listed = [].concat(result?.localities || result?.results?.[0]?.postcode_localities || []).map(String).filter(Boolean);\n    const cities = listed.length > 1 ? [...new Set(listed)].slice(0, 7) : [];\n    return result?.status === 'OK' && city && state ? { city, state, line: city + ', ' + state, cities } : null;\n})(result)"
+        "value": "(function zipLocation(result) {\n   const components=result?.components || result?.results?.[0]?.address_components || [];\n   const part=(kind,short=false)=>{const row=components.find(c=>(c.types || []).includes(kind));return row ? String(short?row.short_name || row.long_name:row.long_name || row.short_name) : '';};\n   const city=part('locality')||part('postal_town')||part('sublocality'),state=part('administrative_area_level_1',true);\n   // A ZIP code can belong to several places (90023: Commerce, East Los Angeles, Los Angeles, Vernon); each is a name its\n   // mail may carry, so the caller picks one. Google lists them as postcode_localities; at most 7 (8 is a reserved key).\n   const listed=[].concat(result?.localities || result?.results?.[0]?.postcode_localities || []).map(String).filter(Boolean);\n   const cities=listed.length>1?[...new Set(listed)].slice(0,7):[];\n   return result?.status==='OK'&&city&&state?{city,state,line:city+', '+state,cities}:null;\n})(result)"
       },
       {
         "id": "address_zip_result",
         "type": "SET",
         "variable": "noop",
-        "value": "(cargo.forms[form].data=Object.assign({},cargo.forms[form].data,{location:location,need_city:!location,city_known:!!location,city_choice:!!(location&&location.cities.length),city_choices:(function cityChoices(location) {\n    return (location?.cities || []).map((name, index) => ({ key: name, keys: [String(index + 1)], phrases: [name], label: name, neutral: true }));\n})(location)}), location&&!location.cities.length&&cargo.forms[form].values.city===undefined?(cargo.forms[form].values.city=location.city,cargo.forms[form].accepted.city={origin:'derived',revision:cargo.forms[form].revision||0}):null, cargo.inputCheck={ok:true,value:String(value)}, true)"
+        "value": "(cargo.forms[form].data=Object.assign({},cargo.forms[form].data,{location:location,need_city:!location,city_known:!!location,city_choice:!!(location&&location.cities.length),city_choices:(function cityChoices(location) {\n   return (location?.cities || []).map((name,index)=>({key:name,keys:[String(index+1)],phrases:[name],label:name,neutral:true}));\n})(location)}), location&&!location.cities.length&&cargo.forms[form].values.city===undefined?(cargo.forms[form].values.city=location.city,cargo.forms[form].accepted.city={origin:'derived',revision:cargo.forms[form].revision||0}):null, cargo.inputCheck={ok:true,value:String(value)}, true)"
       }
     ],
     "safetyRevision": "dispatch-intake-2026-10-22"
@@ -16221,7 +16307,7 @@
         "id": "address_street_projection",
         "type": "SET",
         "variable": "location",
-        "value": "(function streetLocation(result, said, zip) {\n    const row = result?.results?.[0] || result || {}, components = row.components || row.address_components || [];\n    const part = kind => components.find(c => (c.types || []).includes(kind))?.long_name || '';\n    const types = row.types || [], locationType = row.location_type || row.geometry?.location_type || '';\n    const exact = result?.status === 'OK' && row.partial_match !== true && types.includes('street_address') && locationType === 'ROOFTOP' && part('street_number') && part('route') && (!part('postal_code') || part('postal_code') === zip);\n    return { street: exact ? part('street_number') + ' ' + part('route') : String(said).trim(), said: String(said).trim(), verified: !!exact };\n})(result,value,values.zip)"
+        "value": "(function streetLocation(result,said,zip) {\n   const row=result?.results?.[0] || result || {},components=row.components || row.address_components || [];\n   const part=kind=>components.find(c=>(c.types || []).includes(kind))?.long_name || '';\n   const types=row.types || [],locationType=row.location_type || row.geometry?.location_type || '';\n   const exact=result?.status==='OK'&&row.partial_match!==true&&types.includes('street_address')&&locationType==='ROOFTOP'&&part('street_number')&&part('route')&&(!part('postal_code')||part('postal_code')===zip);\n   return {street:exact?part('street_number')+' '+part('route'):String(said).trim(),said:String(said).trim(),verified:!!exact};\n})(result,value,values.zip)"
       },
       {
         "id": "address_street_result",
@@ -16600,7 +16686,7 @@
         "id": "identity_resume_context",
         "type": "SET",
         "variable": "resume_context",
-        "value": "(function identityResumeContext(forms, owner, target, identifiers = {}) {\n    const state = forms && forms[owner];\n    if (state && state.definition === target && ['acct_number', 'cell_number', 'email'].some(key => !!identifiers[key])) {\n        state.arguments ||= {};\n        for (const key of ['acct_number', 'cell_number', 'email'])\n            state.arguments[key] = String(identifiers[key] || '');\n    }\n    return state && state.definition === target ? { form_instance: owner, parent_form: state.parent || '', result_input: state.result_input || '' } : { form_instance: '', parent_form: owner || '', result_input: '' };\n})(cargo.forms,parent_form,retry_flow,{acct_number:acct_number,cell_number:cell_number,email:email})"
+        "value": "(function identityResumeContext(forms,owner,target,identifiers={}) {\n   const state=forms && forms[owner];\n   if(state && state.definition===target && ['acct_number','cell_number','email'].some(key=>!!identifiers[key])){\n      state.arguments ||= {};\n      for(const key of ['acct_number','cell_number','email'])state.arguments[key]=String(identifiers[key] || '');\n   }\n   return state && state.definition===target?{form_instance:owner,parent_form:state.parent || '',result_input:state.result_input || ''}:{form_instance:'',parent_form:owner || '',result_input:''};\n})(cargo.forms,parent_form,retry_flow,{acct_number:acct_number,cell_number:cell_number,email:email})"
       },
       {
         "id": "identity_resume_caller",
@@ -16820,7 +16906,7 @@
         "id": "task_gate_state",
         "type": "SET",
         "variable": "noop",
-        "value": "(function setTaskGate(cargo, form, gate, active) {\n    const state = cargo.forms && cargo.forms[form];\n    const owner = state && cargo.forms[state.task];\n    if (!owner || !gate)\n        return false;\n    if (active) {\n        owner.activeGates ||= {};\n        owner.activeGates[gate] = true;\n    }\n    else if (owner.activeGates) {\n        delete owner.activeGates[gate];\n        if (!Object.keys(owner.activeGates).length)\n            delete owner.activeGates;\n    }\n    return true;\n})(cargo,form,gate,active === true || active === 'true')"
+        "value": "(function setTaskGate(cargo,form,gate,active) {\n   const state=cargo.forms && cargo.forms[form];\n   const owner=state && cargo.forms[state.task];\n   if(!owner || !gate)return false;\n   if(active){owner.activeGates ||= {};owner.activeGates[gate]=true;}\n   else if(owner.activeGates){delete owner.activeGates[gate];if(!Object.keys(owner.activeGates).length)delete owner.activeGates;}\n   return true;\n})(cargo,form,gate,active === true || active === 'true')"
       }
     ],
     "safetyRevision": "dispatch-intake-2026-10-22"
@@ -18164,9 +18250,9 @@
   {
     "id": "read-form-reply",
     "name": "ReadFormReply",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "scope": "isolated",
-    "description": "Rank an unreadable answer against its question: an answer is asked again, a withdrawal or a new request leaves with saved form progress.",
+    "description": "Rank an unreadable answer against its question: a request for a person or for text is taken; an answer is asked again; a withdrawal or a new request leaves with saved form progress.",
     "parameters": [
       {
         "name": "form",
@@ -18203,11 +18289,19 @@
         "type": "string",
         "value": ""
       },
+      "ranked": {
+        "type": "array",
+        "value": []
+      },
+      "reply": {
+        "type": "object",
+        "value": null
+      },
       "contract": {
         "type": "object",
         "value": {
           "version": 1,
-          "summary": "Rank an unreadable answer against its question: an answer is asked again, a withdrawal or a new request leaves with saved form progress.",
+          "summary": "Rank an unreadable answer against its question: a request for a person or for text is taken; an answer is asked again; a withdrawal or a new request leaves with saved form progress.",
           "parametersFrom": "parameters",
           "role": "worker",
           "requires": [
@@ -18231,6 +18325,12 @@
         "value": "language === 'es' && question_es ? question_es : question"
       },
       {
+        "id": "reply_ranked",
+        "type": "SET",
+        "variable": "ranked",
+        "value": "([]).concat([{key:'__agent',label:'speak with a person (a live agent)'}])"
+      },
+      {
         "id": "reply_dispatch",
         "type": "DISPATCH",
         "outcome": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").outcome}}",
@@ -18243,7 +18343,27 @@
           "flow": "{{formConversationOutcome(cargo,form,'input_not_matched',false,\"resume\").recovery.flow || ''}}"
         },
         "onResponse": "continue",
-        "responseContext": "Current question: {{asked}}"
+        "responseContext": "Current question: {{asked}}",
+        "responseChoices": "ranked",
+        "responseVariable": "reply"
+      },
+      {
+        "id": "reply_escape_agent",
+        "type": "CASE",
+        "branches": {
+          "condition: reply && reply.key === '__agent'": {
+            "id": "reply_escape_agent_flow",
+            "type": "FLOW",
+            "value": "live-agent-requested",
+            "callType": "reboot"
+          },
+          "default": {
+            "id": "reply_escape_agent_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
       },
       {
         "id": "reply_miss",
@@ -18257,9 +18377,9 @@
   {
     "id": "read-form-choice",
     "name": "ReadFormChoice",
-    "version": "1.0.0",
+    "version": "1.3.0",
     "scope": "isolated",
-    "description": "Rank an unreadable answer to a choice question and take the offered option it picks; otherwise ask again. A withdrawal or a new request leaves with saved form progress.",
+    "description": "Rank an unreadable answer to a choice question and take the offered option it picks, or a request for a person or for text; otherwise ask again. A withdrawal or a new request leaves with saved form progress.",
     "parameters": [
       {
         "name": "form",
@@ -18280,6 +18400,10 @@
       {
         "name": "choices",
         "type": "array"
+      },
+      {
+        "name": "firm",
+        "type": "string"
       }
     ],
     "variables": {
@@ -18300,13 +18424,17 @@
         "type": "array",
         "value": []
       },
+      "firm": {
+        "type": "string",
+        "value": ""
+      },
       "asked": {
         "type": "string",
         "value": ""
       },
-      "options": {
-        "type": "string",
-        "value": ""
+      "ranked": {
+        "type": "array",
+        "value": []
       },
       "reply": {
         "type": "object",
@@ -18324,11 +18452,19 @@
         "type": "object",
         "value": null
       },
+      "others": {
+        "type": "array",
+        "value": []
+      },
+      "owner": {
+        "type": "object",
+        "value": null
+      },
       "contract": {
         "type": "object",
         "value": {
           "version": 1,
-          "summary": "Rank an unreadable answer to a choice question and take the offered option it picks; otherwise ask again. A withdrawal or a new request leaves with saved form progress.",
+          "summary": "Rank an unreadable answer to a choice question and take the offered option it picks, or a request for a person or for text; otherwise ask again. A withdrawal or a new request leaves with saved form progress.",
           "parametersFrom": "parameters",
           "role": "worker",
           "requires": [
@@ -18360,10 +18496,22 @@
         "value": "language === 'es' && question_es ? question_es : question"
       },
       {
-        "id": "choice_options",
+        "id": "choice_chain",
         "type": "SET",
-        "variable": "options",
-        "value": "(choices || []).map(function(c){return String(c.key)+' ('+String(c.label || (Array.isArray(c.phrases) && c.phrases.filter(function(p){return String(p)!==String(c.key);})[0]) || c.key)+')';}).join(', ')"
+        "variable": "chain",
+        "value": "formInputChain(cargo.forms, form, cargo)"
+      },
+      {
+        "id": "choice_others",
+        "type": "SET",
+        "variable": "others",
+        "value": "(function(){var seen=(choices || []).map(function(c){return String(c.key);}).concat(['yes','no']);return (chain || []).filter(function(i){return i.form===form && i.name!==input && !i.confirmation && i.profile && i.profile.kind==='choice' && Array.isArray(i.profile.choices);}).reduce(function(all,i){return all.concat(i.profile.choices.filter(function(c){var k=String(c.key);if(seen.indexOf(k)>=0)return false;seen.push(k);return true;}).map(function(c){return {key:String(c.key),label:(function(c){var said=(Array.isArray(c.phrases) ? c.phrases : []).map(String).filter(function(p){return /[a-zà-ÿ]/i.test(p) && p!==String(c.key);}).slice(0,6);return String(c.label || (said.length ? c.key+' ('+said.join(', ')+')' : c.key));})(c),owner:{form:i.form,name:i.name}};}));},[]);})()"
+      },
+      {
+        "id": "choice_ranked",
+        "type": "SET",
+        "variable": "ranked",
+        "value": "((choices || []).filter(function(c,i,all){return !(firm==='firm' && String(c.key)==='yes') && all.findIndex(function(o){return String(o.key)===String(c.key);})===i;}).map(function(c){return {key:String(c.key),label:(function(c){var said=(Array.isArray(c.phrases) ? c.phrases : []).map(String).filter(function(p){return /[a-zà-ÿ]/i.test(p) && p!==String(c.key);}).slice(0,6);return String(c.label || (said.length ? c.key+' ('+said.join(', ')+')' : c.key));})(c)};}).concat(others.map(function(c){return {key:c.key,label:c.label};}))).concat([{key:'__agent',label:'speak with a person (a live agent)'}])"
       },
       {
         "id": "choice_dispatch",
@@ -18379,20 +18527,38 @@
         },
         "onResponse": "continue",
         "responseContext": "Current question: {{asked}}",
-        "responseParameters": [
-          {
-            "name": "key",
-            "type": "string",
-            "description": "The key of the offered option the reply picks or says it already chose, one of: {{options}}. Leave it empty when the reply picks none of them."
-          }
-        ],
+        "responseChoices": "ranked",
         "responseVariable": "reply"
+      },
+      {
+        "id": "choice_escape_agent",
+        "type": "CASE",
+        "branches": {
+          "condition: reply && reply.key === '__agent'": {
+            "id": "choice_escape_agent_flow",
+            "type": "FLOW",
+            "value": "live-agent-requested",
+            "callType": "reboot"
+          },
+          "default": {
+            "id": "choice_escape_agent_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
       },
       {
         "id": "choice_picked",
         "type": "SET",
         "variable": "picked",
-        "value": "(function(){var k=String(reply && reply.key || '').trim().toLowerCase();var c=(choices || []).filter(function(c){return String(c.key).toLowerCase()===k;})[0];return c ? String(c.key) : '';})()"
+        "value": "(function(){var k=String(reply && reply.key || '');var c=(choices || []).filter(function(c){return String(c.key)===k;})[0] || others.filter(function(c){return c.key===k;})[0];return c ? String(c.key) : '';})()"
+      },
+      {
+        "id": "choice_owner",
+        "type": "SET",
+        "variable": "owner",
+        "value": "(others.filter(function(c){return c.key===picked && !(choices || []).some(function(own){return String(own.key)===picked;});})[0] || {}).owner || null"
       },
       {
         "id": "choice_none",
@@ -18435,16 +18601,10 @@
         "value": "(cargo.choice=picked,cargo.choiceText=picked,true)"
       },
       {
-        "id": "choice_chain",
-        "type": "SET",
-        "variable": "chain",
-        "value": "formInputChain(cargo.forms, form, cargo)"
-      },
-      {
         "id": "choice_read",
         "type": "SET",
         "variable": "reading",
-        "value": "enrichFormMatches(readFormAnswer(picked, chain, { form: form, name: input }, picked, []), chain, form, [input], input)"
+        "value": "owner ? enrichFormMatches(readFormAnswer(picked, chain, owner, picked, []), chain, form, [owner.name], owner.name) : enrichFormMatches(readFormAnswer(picked, chain, { form: form, name: input }, picked, []), chain, form, [input], input)"
       },
       {
         "id": "choice_unread",
@@ -18496,6 +18656,261 @@
         }
       }
     ],
+    "safetyRevision": "dispatch-intake-2026-10-22"
+  },
+  {
+    "id": "read-confirm-reply",
+    "name": "ReadConfirmReply",
+    "version": "1.2.0",
+    "scope": "isolated",
+    "description": "Rank an unreadable answer to a confirmation: it declines (NO), picks another of the form's choices (a correction, read as that input's answer), asks for a person, or is asked again; a withdrawal or a new request leaves with saved form progress. Never confirms.",
+    "parameters": [
+      {
+        "name": "form",
+        "type": "string"
+      },
+      {
+        "name": "question",
+        "type": "string"
+      },
+      {
+        "name": "question_es",
+        "type": "string"
+      }
+    ],
+    "variables": {
+      "noop": {
+        "type": "boolean",
+        "scope": "flow",
+        "value": false
+      },
+      "question": {
+        "type": "string",
+        "value": ""
+      },
+      "question_es": {
+        "type": "string",
+        "value": ""
+      },
+      "asked": {
+        "type": "string",
+        "value": ""
+      },
+      "ranked": {
+        "type": "array",
+        "value": []
+      },
+      "reply": {
+        "type": "object",
+        "value": null
+      },
+      "chain": {
+        "type": "object",
+        "value": null
+      },
+      "others": {
+        "type": "array",
+        "value": []
+      },
+      "picked": {
+        "type": "object",
+        "value": null
+      },
+      "reading": {
+        "type": "object",
+        "value": null
+      },
+      "contract": {
+        "type": "object",
+        "value": {
+          "version": 1,
+          "summary": "Rank an unreadable answer to a confirmation: it declines (NO), picks another of the form's choices (a correction, read as that input's answer), asks for a person, or is asked again; a withdrawal or a new request leaves with saved form progress. Never confirms.",
+          "parametersFrom": "parameters",
+          "role": "worker",
+          "requires": [
+            "jsfe:contextual-responses:v1",
+            "jsfe:continuation-safety:v1"
+          ]
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "read-confirm-reply_continuation_safety_protocol",
+        "type": "SET",
+        "variable": "noop",
+        "value": "continuationSafetyProtocol() === 1",
+        "requireTrue": true
+      },
+      {
+        "id": "read-confirm-reply_contextual_response_protocol",
+        "type": "SET",
+        "variable": "noop",
+        "value": "contextualResponseProtocol() === 1",
+        "requireTrue": true
+      },
+      {
+        "id": "confirm_asked",
+        "type": "SET",
+        "variable": "asked",
+        "value": "language === 'es' && question_es ? question_es : question"
+      },
+      {
+        "id": "confirm_chain",
+        "type": "SET",
+        "variable": "chain",
+        "value": "formInputChain(cargo.forms, form, cargo)"
+      },
+      {
+        "id": "confirm_others",
+        "type": "SET",
+        "variable": "others",
+        "value": "(function(){var seen=([]).map(function(c){return String(c.key);}).concat(['yes','no']);return (chain || []).filter(function(i){return i.form===form && i.name!=='' && !i.confirmation && i.profile && i.profile.kind==='choice' && Array.isArray(i.profile.choices);}).reduce(function(all,i){return all.concat(i.profile.choices.filter(function(c){var k=String(c.key);if(seen.indexOf(k)>=0)return false;seen.push(k);return true;}).map(function(c){return {key:String(c.key),label:(function(c){var said=(Array.isArray(c.phrases) ? c.phrases : []).map(String).filter(function(p){return /[a-zà-ÿ]/i.test(p) && p!==String(c.key);}).slice(0,6);return String(c.label || (said.length ? c.key+' ('+said.join(', ')+')' : c.key));})(c),owner:{form:i.form,name:i.name}};}));},[]);})()"
+      },
+      {
+        "id": "confirm_ranked_choices",
+        "type": "SET",
+        "variable": "ranked",
+        "value": "([{key:'no',label:'no: declines or refuses what the question asks to confirm'}].concat(others.map(function(c){return {key:c.key,label:c.label};}))).concat([{key:'__agent',label:'speak with a person (a live agent)'}])"
+      },
+      {
+        "id": "confirm_dispatch",
+        "type": "DISPATCH",
+        "outcome": "{{formConversationOutcome(cargo,form,'confirmation_not_matched',false,\"resume\").outcome}}",
+        "reason": "{{formConversationOutcome(cargo,form,'confirmation_not_matched',false,\"resume\").reason}}",
+        "recovery": {
+          "version": 1,
+          "mode": "{{formConversationOutcome(cargo,form,'confirmation_not_matched',false,\"resume\").recovery.mode}}",
+          "reason": "{{formConversationOutcome(cargo,form,'confirmation_not_matched',false,\"resume\").recovery.reason}}",
+          "form": "{{formConversationOutcome(cargo,form,'confirmation_not_matched',false,\"resume\").recovery.form || ''}}",
+          "flow": "{{formConversationOutcome(cargo,form,'confirmation_not_matched',false,\"resume\").recovery.flow || ''}}"
+        },
+        "onResponse": "continue",
+        "responseContext": "Current question: {{asked}}",
+        "responseChoices": "ranked",
+        "responseVariable": "reply"
+      },
+      {
+        "id": "confirm_escape_agent",
+        "type": "CASE",
+        "branches": {
+          "condition: reply && reply.key === '__agent'": {
+            "id": "confirm_escape_agent_flow",
+            "type": "FLOW",
+            "value": "live-agent-requested",
+            "callType": "reboot"
+          },
+          "default": {
+            "id": "confirm_escape_agent_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "confirm_picked",
+        "type": "SET",
+        "variable": "picked",
+        "value": "others.filter(function(c){return reply && c.key===reply.key;})[0] || null"
+      },
+      {
+        "id": "confirm_read",
+        "type": "SET",
+        "variable": "reading",
+        "value": "picked ? enrichFormMatches(readFormAnswer(picked.key, chain, picked.owner, picked.key, []), chain, form, [picked.owner.name], picked.owner.name) : null"
+      },
+      {
+        "id": "confirm_change",
+        "type": "CASE",
+        "branches": {
+          "condition: reading && reading.hits.length": {
+            "id": "confirm_change_accept",
+            "type": "FLOW",
+            "value": "collect-input-accept",
+            "callType": "call",
+            "parameters": {
+              "hits": "{{reading.hits}}"
+            }
+          },
+          "default": {
+            "id": "confirm_change_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "confirm_ranked",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(cargo.confirmRanked=reading && reading.hits.length ? 'changed' : reply && reply.key==='no' ? 'no' : 'none',true)"
+      }
+    ],
+    "safetyRevision": "dispatch-intake-2026-10-22"
+  },
+  {
+    "id": "validate-card-cvv",
+    "name": "ValidateCardCvv",
+    "version": "1.0.0",
+    "scope": "isolated",
+    "description": "Validator: the security code has the length of its card brand, 4 digits for American Express (34, 37) and 3 for every other brand; with no card number yet, 3 or 4. Params: input, value, values.",
+    "parameters": [
+      {
+        "name": "input",
+        "type": "string",
+        "description": "input name"
+      },
+      {
+        "name": "value",
+        "type": "string",
+        "description": "the reading"
+      },
+      {
+        "name": "values",
+        "type": "object",
+        "description": "the form's values, for the card number"
+      }
+    ],
+    "steps": [
+      {
+        "id": "validate-card-cvv_continuation_safety_protocol",
+        "type": "SET",
+        "variable": "noop",
+        "value": "continuationSafetyProtocol() === 1",
+        "requireTrue": true
+      },
+      {
+        "id": "vcc_check",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(function (v, n) { var d = String(v).replace(/\\D/g, ''); var pan = String(n || '').replace(/\\D/g, ''); var want = pan ? (/^3[47]/.test(pan) ? 4 : 3) : 0; var ok = want ? d.length === want : d.length === 3 || d.length === 4; cargo.inputCheck = ok ? { ok: true, value: d } : want === 4 ? { ok: false, message: \"That security code doesn't look right. It is the 4 digits on the front of the card.\", message_es: 'Ese código de seguridad no parece correcto. Son los 4 dígitos al frente de la tarjeta.' } : { ok: false, message: \"That security code doesn't look right. It is the 3 digits on the back of the card.\", message_es: 'Ese código de seguridad no parece correcto. Son los 3 dígitos al reverso de la tarjeta.' }; return true; })(value, typeof values !== 'undefined' && values ? values.card_number : '')"
+      }
+    ],
+    "variables": {
+      "noop": {
+        "type": "boolean",
+        "scope": "flow",
+        "value": false
+      },
+      "contract": {
+        "type": "object",
+        "value": {
+          "version": 1,
+          "summary": "Validator: the security code has the length of its card brand, 4 digits for American Express (34, 37) and 3 for every other brand; with no card number yet, 3 or 4. Params: input, value, values.",
+          "parametersFrom": "parameters",
+          "role": "worker",
+          "result": {
+            "path": "cargo.inputCheck",
+            "type": "object"
+          },
+          "requires": [
+            "jsfe:continuation-safety:v1"
+          ]
+        }
+      }
+    },
     "safetyRevision": "dispatch-intake-2026-10-22"
   }
 ]

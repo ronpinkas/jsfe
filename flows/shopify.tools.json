@@ -945,6 +945,18 @@
                     "description": ""
                   }
                 }
+              },
+              "items": {
+                "type": "array",
+                "description": "Order.lineItems (first 10): what was bought, by product title",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "title": { "type": "string", "description": "LineItem.title" },
+                    "quantity": { "type": "integer", "description": "LineItem.quantity" }
+                  },
+                  "required": ["title", "quantity"]
+                }
               }
             },
             "required": [
