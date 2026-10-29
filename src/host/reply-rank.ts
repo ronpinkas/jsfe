@@ -18,7 +18,8 @@ export const REPLY_OPTIONS = ['answers', 'abort', 'new_request'] as const;
 /** The fixed options, or `choice:<key>` for a declared choice. */
 export type ReplyOption = typeof REPLY_OPTIONS[number] | `choice:${string}`;
 /** A choice the question offers: its key and the words that describe it to the ranker. */
-export interface ReplyChoice { key: string; label: string }
+// route 'new_request': a pick of this choice is a new request, routed by intent detection (an exit the flow declares).
+export interface ReplyChoice { key: string; label: string; route?: 'new_request' }
 export const CHOICE_PREFIX = 'choice:';
 /** An open question's reply that clears no option is its answer (owner decision 2026-10-26). */
 export const REPLY_DEFAULT: ReplyOption = 'answers';

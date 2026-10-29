@@ -2977,8 +2977,9 @@ async function detectLanguage(input: string, engine: Engine): Promise<string> {
 }
 
 // === FLOW EXECUTION ENGINE WITH ENHANCED ERROR HANDLING ===
-async function isFlowActivated(input: string, engine: Engine, userId: string = 'anonymous') {
-  const result = await detectFlowWithParameters(input, engine);
+async function isFlowActivated(input: string, engine: Engine, userId: string = 'anonymous', detected?: any) {
+  // detected: this turn's intent decision, already made by a contextual DISPATCH (onNoIntent: 'stay'); never asked twice
+  const result = detected !== undefined ? detected : await detectFlowWithParameters(input, engine);
 
   if (result && result.flow) {
     const flow = result.flow;
@@ -3851,7 +3852,7 @@ function readResponseChoices(value: unknown): ReplyChoice[] {
     const key = String(choice?.key ?? '').trim();
     if (!key || keys.has(key)) throw new Error('Contextual response choices need unique nonempty keys');
     keys.add(key);
-    return { key, label: String(choice?.label ?? '').trim() || key };
+    return { key, label: String(choice?.label ?? '').trim() || key, ...(choice?.route === 'new_request' ? { route: 'new_request' as const } : {}) };
   });
 }
 
@@ -6759,6 +6760,8 @@ function createSimplifiedEvaluationContext(
   const functions = engine.getNamedFunctionNamespace();
   if (functions) context.fn = functions;
   if (engine.sharedData) context.$data = engine.sharedData;
+  if (engine.primaryCallers) context.$callers = engine.primaryCallers;
+  context.$gateExits = engine.gateExits || {};
 
   return context;
 }
@@ -7300,6 +7303,7 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
     // `abort` is a RETURN: every flow ends and this is the turn's reply.
     let abortReply: string | null = null;
     let guardedRoutingFailed = false;
+    let preDetected: any = undefined;
     engine.dispatchIfMatched = async (frame,step) => {
       if(activatedThisTurn && step.responseParameters === undefined && step.responseVariable === undefined && step.responseChoices === undefined)return false;
       let declaration;
@@ -7316,6 +7320,14 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
       let option: ReplyOption;
       let confident: boolean;
       try { ({ option, confident } = await rankReply(String(sanitizedInput),engine,question,choices)); } catch (error) { guardedRoutingFailed = true; throw error; }
+      // A declared choice routed as a new request (route: 'new_request') leaves like one.
+      const pickedChoice = option.startsWith(CHOICE_PREFIX) ? choices.find(c => CHOICE_PREFIX + c.key === option) : undefined;
+      if (pickedChoice?.route === 'new_request') {
+        logger.info(`Contextual DISPATCH in '${frame.flowName}': the reply picks '${pickedChoice.key}', declared a new request`);
+        option = 'new_request';
+      } else {
+        // an ordinary option or choice
+      }
       ranked = option.startsWith(CHOICE_PREFIX) ? 'answers' : option;
       if (option.startsWith(CHOICE_PREFIX)) {
         // A declared choice is the whole answer: no extraction.
@@ -7361,6 +7373,23 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         logger.info(`Contextual DISPATCH in '${frame.flowName}': the caller withdrew the request; every flow ended`);
         return true;
       } else {
+        if (step.onNoIntent === 'stay') {
+          // Only a request a flow serves leaves (onNoIntent: 'stay'): intent detection decides now, and a reply it routes to
+          // no flow (noise, a remark) is an answer to this question, so the flow continues. The decision is reused below.
+          let detected: any;
+          try { detected = await detectFlowWithParameters(String(sanitizedInput), engine); } catch (error) { guardedRoutingFailed = true; throw error; }
+          if (!detected || !detected.flow) {
+            ranked = 'answers';
+            if (declaration) frame.variables[declaration.variable] = declaration.parameters.length ? {} : { key: '' };
+            else { /* no typed response: the flow reads the reply itself */ }
+            logger.info(`Contextual DISPATCH in '${frame.flowName}': a new request no flow serves; the flow continues (onNoIntent: stay)`);
+            return false;
+          } else {
+            preDetected = detected;
+          }
+        } else {
+          // the ordinary new request: intent detection runs after the flows end
+        }
         stampStepRecovery(step,frame,engine);
         terminateForDispatch(frame,engine);
         logger.info(`Contextual DISPATCH in '${frame.flowName}': a new request; this turn's input goes to intent detection`);
@@ -7456,7 +7485,7 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
     engine.pendingDispatchFrom = null;
 
     try {
-      const activatedFlow = activatedThisTurn || (ranked !== null && ranked !== 'new_request') ? null : await isFlowActivated(String(sanitizedInput), engine, userId);
+      const activatedFlow = activatedThisTurn || (ranked !== null && ranked !== 'new_request') ? null : await isFlowActivated(String(sanitizedInput), engine, userId, preDetected);
       if (activatedFlow) activatedThisTurn = true;
 
       if (dispatchedFrom !== null) {
@@ -7582,6 +7611,52 @@ export function templateExpressionNames(expression: string): string[] {
  * description kept in one place. Copies are returned; the host's flow objects are not changed. A `wraps` that names no
  * flow in the menu is logged and ignored. Without any `wraps`, the menu is returned as given.
  */
+/**
+ * For each flow, the primaries whose call graph reaches it, each with its description up to its 'Not:' list as a label.
+ * Edges are a flow's literal references to another flow (a FLOW step's value, a gate's or a call's flow, wraps); a
+ * templated target is not followed. Frozen: read in expressions as $callers['<flow>'].
+ */
+/** $data.gate_exits, validated: {'<gate flow>': [{key, label}]}. Malformed fails at load; absent is {}. */
+export function gateExitsOf(data: Record<string, unknown> | undefined): Record<string, { key: string; label: string }[]> {
+  const declared = (data as any)?.gate_exits;
+  if (declared === undefined) return Object.freeze({}) as Record<string, { key: string; label: string }[]>;
+  if (!declared || typeof declared !== 'object' || Array.isArray(declared)) throw new Error('$data.gate_exits must be an object keyed by gate flow');
+  const out: Record<string, { key: string; label: string }[]> = {};
+  for (const [gate, exits] of Object.entries(declared)) {
+    if (!Array.isArray(exits) || exits.some((e: any) => !e || typeof e.key !== 'string' || !e.key.trim() || typeof e.label !== 'string' || !e.label.trim())) throw new Error(`$data.gate_exits['${gate}'] must be a list of {key, label}`);
+    out[gate] = Object.freeze(exits.map((e: any) => Object.freeze({ key: String(e.key).trim(), label: String(e.label).trim() }))) as { key: string; label: string }[];
+  }
+  return Object.freeze(out);
+}
+
+export function primaryCallersOf(flowsMenu: FlowDefinition[]): Record<string, { id: string; label: string }[]> {
+  const ids = new Set(flowsMenu.map(f => f?.id).filter(Boolean));
+  const edges = new Map<string, string[]>();
+  for (const flow of flowsMenu) {
+    if (!flow?.id) continue;
+    const refs = new Set<string>();
+    JSON.stringify(flow, (key, value) => {
+      if (['value', 'flow', 'wraps', 'call'].includes(key) && typeof value === 'string' && ids.has(value) && value !== flow.id) refs.add(value);
+      return value;
+    });
+    edges.set(flow.id, [...refs]);
+  }
+  const callers: Record<string, { id: string; label: string }[]> = {};
+  for (const primary of flowsMenu.filter(f => f?.primary === true)) {
+    const label = String(primary.description || primary.name || primary.id).split(/\s+Not:/)[0].trim().slice(0, 240);
+    const seen = new Set<string>([primary.id]);
+    const queue = [...(edges.get(primary.id) || [])];
+    while (queue.length) {
+      const id = queue.shift()!;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      (callers[id] = callers[id] || []).push({ id: primary.id, label });
+      queue.push(...(edges.get(id) || []));
+    }
+  }
+  return Object.freeze(Object.fromEntries(Object.entries(callers).map(([k, v]) => [k, Object.freeze(v.map(c => Object.freeze(c)))]))) as Record<string, { id: string; label: string }[]>;
+}
+
 export function applyWraps(flowsMenu: FlowDefinition[]): FlowDefinition[] {
   if (!Array.isArray(flowsMenu) || !flowsMenu.some(f => f && typeof f.wraps === 'string' && f.wraps)) {
     return flowsMenu;
@@ -7651,6 +7726,11 @@ export class WorkflowEngine implements Engine {
   private readonly namedFunctionNamespaces = new Map<string, Record<string, unknown>>();
   /** The flow set's shared data, read in expressions as $data.<name>: deep-frozen, never persisted in session variables. */
   public sharedData?: Record<string, unknown>;
+  // $callers: for each flow, the primaries whose call graph reaches it ({id, label}); a gate offers them as its use cases.
+  public primaryCallers?: Record<string, { id: string; label: string }[]>;
+  // $gateExits: the set's declared exits from a gate ($data.gate_exits: {'<gate flow>': [{key, label}]}), what needs no
+  // passage through it (a payment link); a gate offers them as choices that leave as a new request.
+  public gateExits?: Record<string, { key: string; label: string }[]>;
   /** A detached authoring copy; engine compilation and validation never become editor source. */
   public getFlowDeclarations(): Array<FlowDefinition | FlowDeclaration> {
     return cloneFlowValue(this.sourceFlowDeclarations);
@@ -7847,7 +7927,9 @@ export class WorkflowEngine implements Engine {
       this.namedFunctionNamespaces.set(flow.id, functions);
     }
     this.sharedData = flowSetData(this.sourceFlowDeclarations, this.flowsMenu);
-    if (Object.prototype.hasOwnProperty.call(this.APPROVED_FUNCTIONS, '$data') || Object.prototype.hasOwnProperty.call(globalVariables || {}, '$data')) throw new Error('$data is a reserved evaluation namespace');
+    this.primaryCallers = primaryCallersOf(this.flowsMenu);
+    this.gateExits = gateExitsOf(this.sharedData);
+    if (['$data', '$callers', '$gateExits'].some(name => Object.prototype.hasOwnProperty.call(this.APPROVED_FUNCTIONS, name) || Object.prototype.hasOwnProperty.call(globalVariables || {}, name))) throw new Error('$data is a reserved evaluation namespace');
     this.globalVariables = globalVariables ? { ...globalVariables } : {}; // Copy global variables to prevent external mutations
     this.aiTimeOut = aiTimeOut ?? 2000; // Default to 2000ms (2 seconds)
 
@@ -8924,13 +9006,15 @@ export class WorkflowEngine implements Engine {
         try { validateContextualResponseStep(step,flowDef); } catch(error:any) { state.errors.push(`DISPATCH step \"${step.id}\" in flow \"${flowDef.name}\": ${error.message}`); }
         // DISPATCH always routes the turn's own input — no value. It may declare the ending of the
         // flows it ends (`outcome` / `reason`, kept only when no flow matches).
-        const extra = Object.keys(step).filter(k => !['id', 'type', 'outcome', 'reason', 'recovery', 'onResponse', 'responseContext', 'responseParameters', 'responseVariable', 'responseChoices'].includes(k));
+        const extra = Object.keys(step).filter(k => !['id', 'type', 'outcome', 'reason', 'recovery', 'onResponse', 'responseContext', 'responseParameters', 'responseVariable', 'responseChoices', 'onNoIntent'].includes(k));
         if (extra.length > 0) {
-          state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" has invalid attribute(s) ${extra.map(k => `"${k}"`).join(', ')} - DISPATCH takes only "id", "outcome", "reason", "recovery", "onResponse" "responseContext", "responseParameters", "responseVariable" and "responseChoices"`);
+          state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" has invalid attribute(s) ${extra.map(k => `"${k}"`).join(', ')} - DISPATCH takes only "id", "outcome", "reason", "recovery", "onResponse" "responseContext", "responseParameters", "responseVariable", "responseChoices" and "onNoIntent"`);
         } else if (step.onResponse !== undefined && step.onResponse !== 'continue') {
           state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" onResponse must be "continue" when provided`);
         } else if (step.onResponse === 'continue' && (typeof step.responseContext !== 'string' || !step.responseContext.trim())) {
           state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" requires a non-empty responseContext for contextual dispatch`);
+        } else if (step.onNoIntent !== undefined && (step.onNoIntent !== 'stay' || step.onResponse !== 'continue')) {
+          state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}": onNoIntent takes only "stay", on a contextual dispatch (onResponse:"continue")`);
         } else if (step.responseContext !== undefined && step.onResponse !== 'continue') {
           state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" responseContext requires onResponse:"continue"`);
         }

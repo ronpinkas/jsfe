@@ -212,13 +212,20 @@ const validateCode=worker('validate-otp-code','ValidateOtpCode','Validate a chal
       'condition: normalized_otp_code.length > 0':effect('otp_format_cap_next','true'),
       ['condition: matchesChoice(user_choice,otp_phrases.noPhone) || '+expression(otpPhoneUnavailable,'user_choice')]:otpMenu('otp_no_phone',"No problem. Then the code can't reach you there. You can use the email on your account instead, or {{cargo.verb}} AGENT to reach a person.",'No hay problema. Entonces el código no le puede llegar ahí. Puede usar el correo electrónico de su cuenta, o {{cargo.verb_es}} AGENTE para hablar con una persona.',false),
       default:set('otp_words_missing','no_code_given','true')}),
-   // An answer none of the above reads goes to the reply ranker, offered the step's offers (owner 2026-10-29: prod 10-28,
-   // 128 of 238 such replies were explained again, whatever they asked): an offer said in other words is taken, a new
-   // request leaves through intent detection, a withdrawal ends, and anything else is a miss, explained again.
+   // An answer none of the above reads goes to the reply ranker (owner 2026-10-29: prod 10-28, 128 of 238 such replies were
+   // explained again, whatever they asked): an offer said in other words is taken; a use case authentication serves, or
+   // anything else it cannot place, is explained again; an abort case or a request authentication does not serve leaves
+   // through intent detection; a withdrawal ends.
    set('otp_reset_reply','otp_reply','({})'),
-   set('otp_offers','otp_reply_choices',"otp_reply_choices.filter(function(c){return (c.key !== 'email' || !!cargo.otp_cell_number) && (c.key !== 'another_account' || !!cargo.callerPreselected);})"),
-   when('otp_off_topic','no_code_given',{id:'otp_reply_rank',type:'DISPATCH',onResponse:'continue',responseContext:'Please say the 6-digit verification code I sent you. (Por favor diga el código de verificación de 6 dígitos que le envié.)',responseChoices:'otp_reply_choices',responseVariable:'otp_reply'}),
-   set('otp_reply_picked','no_code_given',"no_code_given && !(otp_reply && otp_reply.key)"),
+   // The step's offers, then the use cases authentication serves (the primaries that reach it, $callers): a caller who
+   // states why they called is told again how to give the code, never sent to intent detection. Then the set's declared exits
+   // ($data.gate_exits['authenticate-user'], read as $gateExits: what needs no code, e.g. a payment link), which leave as a
+   // new request.
+   set('otp_offers','otp_reply_choices',"otp_reply_choices.filter(function(c){return (c.key !== 'email' || !!cargo.otp_cell_number) && (c.key !== 'another_account' || !!cargo.callerPreselected);})"
+      +".concat(((typeof $callers !== 'undefined' && $callers && $callers['authenticate-user']) || []).map(function(c){return {key:'usecase:'+c.id,label:'states the reason for the call: '+c.label};}))"
+      +".concat(((typeof $gateExits !== 'undefined' && $gateExits && $gateExits['authenticate-user']) || []).map(function(a){return {key:'exit:'+a.key,label:a.label,route:'new_request'};}))"),
+   when('otp_off_topic','no_code_given',{id:'otp_reply_rank',type:'DISPATCH',onResponse:'continue',responseContext:'Please say the 6-digit verification code I sent you. (Por favor diga el código de verificación de 6 dígitos que le envié.)',responseChoices:'otp_reply_choices',responseVariable:'otp_reply',onNoIntent:'stay'}),
+   set('otp_reply_picked','no_code_given',"no_code_given && !(otp_reply && otp_reply.key && String(otp_reply.key).indexOf('usecase:') !== 0)"),
    cases('otp_reply_route',{
       "condition: !no_code_given && otp_reply && otp_reply.key === 'email'":call('otp_ranked_email','authenticate-user',{cell_number:'',email:'',retrying:true,declined_caller:true},'replace'),
       "condition: !no_code_given && otp_reply && otp_reply.key === 'another_account'":call('otp_ranked_account','authenticate-user',{cell_number:'',email:'',retrying:true,declined_caller:true},'replace'),

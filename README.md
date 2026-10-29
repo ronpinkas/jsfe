@@ -386,6 +386,18 @@ answer with any words goes to the ranker with the question's choices (never an e
 confirmation; a NO always) and two escapes every question supports, `__agent` (a person) and `__text` (on a call with
 a textable number); a confirmation's exhausted attempts go to the `give-up` worker.
 
+**Choices that leave (`route: 'new_request'`) and staying on noise (`onNoIntent: 'stay'`, jsfe 1.15.3):** a choice
+declared `{ key, label, route: 'new_request' }` is offered like any other, and picking it leaves like a new request
+(intent detection decides where to). A contextual DISPATCH declared `onNoIntent: 'stay'` asks intent detection BEFORE
+ending the flows on a new request (a picked leaving choice included): when no flow serves it, the reply is taken as
+`answers` and the flow continues (a remark, noise); when one does, that decision is used, never asked again.
+
+**Gate context (`$callers`, `$gateExits`, jsfe 1.15.3):** expressions may read `$callers[flowId]`, the primaries that
+reach that flow through FLOW steps (`[{ id, label }]`, label = the description before its `Not:` list), and
+`$gateExits[flowId]`, the exits a set declares from that gate in its data entry (`gate_exits: { <flowId>: [{ key,
+label }] }`). validate-otp-code offers both to the ranker: a reason for the call authentication already serves is
+explained again, never routed; a declared exit leaves. Its DISPATCH stays on noise.
+
 **Host start (`ContextEntry.start`):** `{ role: 'user', content, start: { flow, arguments } }` starts that
 flow (any flow, by id or name) with those arguments on this turn, without asking the AI. Only the host sets it;
 it is never derived from what the user typed.
