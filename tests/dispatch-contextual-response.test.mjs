@@ -20,7 +20,7 @@ function setup({flows=[owner(),other],mode='two-stage',choice='ContinueCurrent',
   calls.push({system,user,schema,request:structuredClone(request)});
   if(failStage===(request?.task==='rank_reply'?'rank':request?.stage || 'single'))throw new Error('synthetic stage failure');
   if(request?.task==='rank_reply'){if(jev){const answers=Object.fromEntries(request.systemOne.index.map(q=>[q.id,{noul:cut?.3:q.option===optionFor(choice)?.99:.01}]));const d=decodeReplyRankSystemOne(answers,request);return JSON.stringify({option:d.option,fallback:d.fallback});}return JSON.stringify({option:optionFor(choice)});}
-  if(request?.stage===1){if(jev){const answers=Object.fromEntries(request.systemOne.index.map(q=>[q.id,{noul:request.flows[q.flow].name===choice?.99:.01}]));return JSON.stringify(decodeFlowSystemOne(answers,request));}return JSON.stringify({flowName:choice});}
+  if(request?.stage===1){if(jev){const names=request.flows.map(f=>f.name);const answers={any:{noul:names.includes(choice)?.99:.01},route:{type:'choice',choice:names.includes(choice)?choice:names[0],probabilities:Object.fromEntries(names.map(n=>[n,n===choice?.99:.01/names.length]))}};return JSON.stringify(decodeFlowSystemOne(answers,request));}return JSON.stringify({flowName:choice});}
   if(request?.stage===2){if(jev){const answers=Object.fromEntries((request.systemOne?.index || []).map(q=>[q.id,{noul:(q.kind==='boolean'?parameters[q.param]===true:parameters[q.param]===q.value)?.99:.01}]));return JSON.stringify({...decodeParametersSystemOne(answers,request),parameters:{...parameters,...decodeParametersSystemOne(answers,request).parameters}});}return JSON.stringify({parameters});}
   return JSON.stringify({flowName:choice,parameters});
  };

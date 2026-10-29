@@ -67,7 +67,10 @@ async function run(replies, input, mode = 'two-stage') {
   ok(!/payment_amount|parameterInstructions|card number/.test(system1), 'stage 1 reads no parameter text');
   ok(system1 === req1.llm.system && user1 === req1.llm.user, 'the positional arguments ARE the LLM instructions');
   eq(JSON.parse(schema1).json_schema.schema.properties.flowName.enum, ['MakePayment', 'AccountInfo', 'None'], 'stage 1 schema: the names or None');
-  eq(Object.keys(req1.systemOne.questions).length, 2, 'System One: one question per primary');
+  eq(Object.keys(req1.systemOne.questions).sort(), ['any', 'route'], 'System One: one choice among the primaries, one noul whether any starts');
+  eq(req1.systemOne.questions.route.type, 'choice', 'route is a choice');
+  eq(Object.keys(req1.systemOne.questions.route.criteria), ['MakePayment', 'AccountInfo'], 'route weighs every primary by its description');
+  ok(/A question usually asks for information/.test(req1.systemOne.questions.any.criteria.false) && /A question usually asks for information/.test(system1), 'both executors weigh a question before taking it as a trigger');
   ok(/I want to pay 50/.test(user1) && req1.systemOne.state.latest_message === 'I want to pay 50', 'both executors read the same message');
 
   // ── 2. Stage 2: the selected flow only, internal parameters left out, parameterInstructions read here only ─
@@ -116,11 +119,14 @@ async function run(replies, input, mode = 'two-stage') {
   eq(decodeFlowLlm('```json\n{"flowName":"makepayment"}\n```', s1), { flowName: 'MakePayment' }, 'LLM: name normalised, fences stripped');
   eq(decodeFlowLlm('{"flowName":"none"}', s1), { flowName: 'None' }, 'LLM: None');
   assert.throws(() => decodeFlowLlm('{"flowName":"Other"}', s1)); checks++;
-  eq(decodeFlowSystemOne({ f0: { noul: 0.8 }, f1: { noul: 0.1 } }, s1).flowName, 'MakePayment', 'System One: argmax above the cut');
-  const pair = decodeFlowSystemOne({ f0: { noul: 0.42 }, f1: { noul: 0.35 } }, s1);
-  ok(pair.flowName === 'MakePayment' && pair.pair, 'System One: two close candidates pick the higher');
-  eq(decodeFlowSystemOne({ f0: { noul: 0.3 }, f1: { noul: 0.1 } }, s1).flowName, 'None', 'System One: None below both cuts');
-  assert.throws(() => decodeFlowSystemOne({ f0: { noul: 0.8 } }, s1)); checks++;
+  const route = (mp, ai) => ({ type: 'choice', choice: mp >= ai ? 'MakePayment' : 'AccountInfo', probabilities: { MakePayment: mp, AccountInfo: ai } });
+  const yes = decodeFlowSystemOne({ any: { noul: 0.8 }, route: route(0.9, 0.1) }, s1);
+  ok(yes.flowName === 'MakePayment' && yes.any === 0.8 && Math.abs(yes.scores[0].p - 0.72) < 1e-9, 'System One: any above the cut starts the routed flow; score = any x route');
+  eq(decodeFlowSystemOne({ any: { noul: 0.6 }, route: route(0.3, 0.7) }, s1).flowName, 'AccountInfo', 'System One: the choice picks among the flows');
+  eq(decodeFlowSystemOne({ any: { noul: 0.3 }, route: route(0.95, 0.05) }, s1).flowName, 'None', 'System One: any below the cut is None, however sure the route');
+  assert.throws(() => decodeFlowSystemOne({ any: { noul: 0.8 } }, s1)); checks++;
+  assert.throws(() => decodeFlowSystemOne({ route: route(0.9, 0.1) }, s1)); checks++;
+  assert.throws(() => decodeFlowSystemOne({ any: { noul: 0.8 }, route: { choice: 'Other', probabilities: { Other: 1 } } }, s1)); checks++;
   ok(isNearMiss([{ p: 0.48 }, { p: 0.42 }]) && !isNearMiss([{ p: 0.2 }, { p: 0.1 }]), 'near miss');
 
   const s2 = buildParameterStage('pay 50', [], pay);

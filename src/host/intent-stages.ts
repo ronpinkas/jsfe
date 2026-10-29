@@ -25,15 +25,14 @@ import type { FlowParameterDefinition } from '../index.js';
 
 /** A noul at or above this is a yes. */
 export const STAGE_YES_THRESHOLD = 0.5;
-/** Stage 1, System One: two top flows that together reach this pick the higher one (prod 10-17). */
-export const STAGE_PAIR_SUM = 0.7;
 
 export interface StageTurn { role: 'user' | 'assistant'; content: string }
 export interface StageFlow { id: string; name: string; description: string }
 export interface StageParameter { name: string; type?: string; enum?: string[]; description?: string; internal?: boolean; jsonSchema?: Record<string, unknown> }
 export interface StageLlm { system: string; user: string; schema: Record<string, unknown> }
 export interface StageSystemOne<I> { state: Record<string, unknown>; questions: Record<string, unknown>; index: I[] }
-export interface FlowQuestionRef { id: string; flow: number }
+/** Stage 1, System One: `route` is the choice among the flows, `any` whether the message starts one at all. */
+export interface FlowQuestionRef { id: 'route' | 'any' }
 export type ParameterQuestionRef =
   | { id: string; kind: 'enum'; param: string; value: string }
   | { id: string; kind: 'boolean'; param: string };
@@ -66,6 +65,8 @@ export type StageSystemOneAnswers = Record<string, { noul?: unknown } | undefine
 // ── the rules: written once, rendered for both executors ─────────────────────────────────────────────
 const FLOW_TRUE = "The latest message, read with the conversation, is what the workflow's description says should start it: the user asks for its action or information, or raises the problem it exists to handle. Also when it accepts the assistant's offer in the conversation to start or resume it (assistant: \"Shall I try the payment again?\" → user: \"yes\").";
 const FLOW_FALSE = "It only shares a topic with the workflow, is not what the workflow's description covers, or is a greeting, an acknowledgement or a fragment that asks for nothing.";
+/** A question usually asks for information the assistant gives itself; it is weighed before it is taken as a trigger. */
+const QUESTION_RULE = "A question usually asks for information the assistant can give itself. Consider it carefully: it starts a workflow only when it asks for that workflow's action or raises the problem it exists to handle, never because it mentions the workflow's subject (\"can I pay with this card at a store?\" asks how the card is used, not to make a payment).";
 const PARAMETER_RULES = [
   'Give a value only when the user gave it, in the latest message or earlier in the conversation. Never guess.',
   "Write it as the parameter's rule says; otherwise the value alone, in the user's words (never the whole sentence around it).",
@@ -94,33 +95,45 @@ const jsonTail = (schema: Record<string, unknown>) =>
   `\n\n<json-schema>\n${JSON.stringify(schema)}\n</json-schema>\n\nRespond ONLY with valid JSON matching the schema. No other text.`;
 
 // ── stage 1 ───────────────────────────────────────────────────────────────────────────────────────────
-/** Stage 1's instructions for both executors. `flows` are the primaries offered. */
+/**
+ * Stage 1's instructions for both executors. `flows` are the primaries offered.
+ *
+ * System One gets ONE request with two questions over the same list: `route`, a `choice` among the flows (each
+ * option's criterion is its description, so every flow is weighed against the others), and `any`, a `noul`
+ * asking whether the message starts any of them. TypeSafe documents that a "none of the above" option may not
+ * work well and advises the companion noul.
+ */
 export function buildFlowStage(input: string, conversation: StageTurn[], flows: StageFlow[]): FlowStageRequest {
   const names = flows.map(f => f.name);
   const schema = {
     type: 'object', additionalProperties: false, required: ['flowName'],
     properties: { flowName: { type: 'string', enum: [...names, 'None'] } },
   };
+  const list = flows.map(f => `- ${f.name}: ${f.description}`);
   const system = [
     'Decide which workflow, if any, the latest message starts.',
     `A workflow is chosen when: ${FLOW_TRUE}`,
     `"None" when: ${FLOW_FALSE}`,
+    QUESTION_RULE,
     'Answer with the exact workflow name, or "None".',
     '',
     '<workflows>',
-    ...flows.map(f => `- ${f.name}: ${f.description}`),
+    ...list,
     '</workflows>',
   ].join('\n') + jsonTail(schema);
-  const questions: Record<string, unknown> = {};
-  const index: FlowQuestionRef[] = [];
-  flows.forEach((f, i) => {
-    const id = `f${i}`;
-    questions[id] = {
-      type: 'noul', criteria: { true: FLOW_TRUE, false: FLOW_FALSE },
-      instructions: { flow: { name: f.name, description: f.description }, question: 'Should the latest message start the workflow in `flow`?' },
-    };
-    index.push({ id, flow: i });
-  });
+  const workflows = Object.fromEntries(flows.map(f => [f.name, f.description]));
+  const questions: Record<string, unknown> = {
+    any: {
+      type: 'noul',
+      criteria: { true: `${FLOW_TRUE} The workflow is one of \`workflows\`.`, false: `${FLOW_FALSE} ${QUESTION_RULE}` },
+      instructions: { workflows, question: 'Should the latest message start one of the workflows in `workflows`?' },
+    },
+  };
+  questions.route = {
+    type: 'choice', criteria: workflows,
+    instructions: 'Which workflow does the latest message, read with the conversation, come closest to starting?',
+  };
+  const index: FlowQuestionRef[] = [{ id: 'any' }, { id: 'route' }];
   return {
     task: 'detect_flow', stage: 1, input, conversation, flows,
     llm: { system, user: conversationText(conversation, input), schema },
@@ -142,25 +155,28 @@ export function decodeFlowLlm(text: string, stage: FlowStageRequest): { flowName
 }
 
 /**
- * System One's stage-1 answers as the canonical reply, with the top three scores (for logs and a host's hedge
- * policy) and `pair` when two close candidates picked the higher. Throws if any question is unanswered.
+ * System One's stage-1 answers as the canonical reply. `any` at or above the threshold starts the flow `route`
+ * chose; below it, "None". `scores` are the top three flows by the chance that each is the one started,
+ * any × its route probability (for logs and the host's near-miss hedge); `any` is logged with them. Throws when
+ * either answer is missing or names no offered flow.
  */
 export function decodeFlowSystemOne(
   answers: StageSystemOneAnswers,
   stage: FlowStageRequest,
-  { threshold = STAGE_YES_THRESHOLD, pairSum = STAGE_PAIR_SUM } = {}
-): { flowName: string; scores: { name: string; p: number }[]; pair: boolean } {
-  const p = answered(answers, stage.systemOne.index);
-  const ranked = stage.systemOne.index.map(q => ({ name: stage.flows[q.flow].name, p: p.get(q.id) as number })).sort((a, b) => b.p - a.p);
+  { threshold = STAGE_YES_THRESHOLD } = {}
+): { flowName: string; scores: { name: string; p: number }[]; any: number } {
+  const any = Number((answers?.any as { noul?: unknown } | undefined)?.noul);
+  if (!Number.isFinite(any)) throw new Error('System One: question any unanswered');
+  const names = stage.flows.map(f => f.name);
+  const route = answers?.route as { choice?: unknown; probabilities?: Record<string, unknown> } | undefined;
+  const raw = route?.probabilities;
+  if (!raw || typeof raw !== 'object') throw new Error('System One: question route unanswered');
+  if (!names.includes(String(route?.choice))) throw new Error(`System One: route chose "${String(route?.choice).slice(0, 60)}", not an offered workflow`);
+  const probabilities: Record<string, number> = Object.fromEntries(names.map(n => [n, Number(raw[n]) || 0]));
+  const ranked = names.map(n => ({ name: n, p: any * probabilities[n] })).sort((a, b) => b.p - a.p);
   const scores = ranked.slice(0, 3);
-  const [a, b] = ranked;
-  if (a && a.p >= threshold) {
-    return { flowName: a.name, scores, pair: false };
-  } else if (a && b && a.p + b.p >= pairSum) {
-    return { flowName: a.name, scores, pair: true };
-  } else {
-    return { flowName: 'None', scores, pair: false };
-  }
+  const flowName = any >= threshold && ranked[0] ? ranked[0].name : 'None';
+  return { flowName, scores, any };
 }
 
 /**

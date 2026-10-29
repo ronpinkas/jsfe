@@ -354,7 +354,10 @@ The host runs either, or both as a hedge, and replies with the canonical JSON: `
 stage 1, `{ "parameters": { … } }` for stage 2. `jsfe/host` exports `buildFlowStage`, `buildParameterStage`
 and the decoders (`decodeFlowLlm`, `decodeFlowSystemOne`, `decodeParametersLlm`, `decodeParametersSystemOne`,
 `isNearMiss`), so a host never interprets an answer itself. Only primaries are ever activated by detection;
-a stage-2 failure starts the flow without its parameters (it asks for them). The default, `'single-call'`,
+a stage-2 failure starts the flow without its parameters (it asks for them). Stage 1's System One request
+is one `choice` over the primaries (`route`) and one `noul` (`any`): does the message start any of them; the
+routed flow starts when `any` reaches 0.5, else `"None"`. Both executors are told that a question starts a flow
+only when it asks for the flow's action, never because it mentions its subject. The default, `'single-call'`,
 is the original single call.
 
 **The reply ranker (contextual DISPATCH, `onResponse: "continue"`):** when a flow's question gets a reply its
