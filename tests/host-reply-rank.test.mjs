@@ -37,9 +37,20 @@ test('declared choices are options before the fixed three, with their own criter
  assert.equal(jev(.2,.65,.1,.47).option,'choice:2','a choice that clears the cut is taken');
  assert.deepEqual([jev(.2,.45,.1,.3).option,jev(.2,.45,.1,.3).fallback],['answers',true],'nothing clears: asked again');
  assert.equal(jev(.1,.6,.9,.1).option,'abort','the highest cleared option wins');
- assert.equal(jev(.1,.88,.02,.93).option,'new_request','the highest cleared option wins');
+ assert.equal(jev(.1,.88,.02,.93).option,'choice:2','a cleared choice is taken over a higher new_request ("Representative." at a menu is the agent)');
+ assert.equal(jev(.1,.3,.02,.93).option,'new_request','new_request wins when no choice clears');
  assert.equal(jev(.2,.63,.1,.1,{cuts:{'choice:2':.7}}).option,'answers','an option below its own cut is not taken');
  assert.equal(jev(.2,.71,.1,.1,{cuts:{'choice:2':.7}}).option,'choice:2','and above it is');
  assert.equal(r.choices,undefined,'no choices, no field');
+ // the measured cuts: a NO and a new request must each clear more than the threshold
+ const yn=buildReplyRank('imposible',conversation,'Current question: Shall I file it?',[{key:'no',label:'no'},{key:'__agent',label:'a live agent'}]);
+ const ynj=(no,agent,abort,nr)=>decodeReplyRankSystemOne({r0:{noul:no},r1:{noul:agent},r2:{noul:abort},r3:{noul:nr}},yn);
+ assert.deepEqual([ynj(.57,.05,.1,.1).option,ynj(.57,.05,.1,.1).fallback],['answers',true],'"imposible" at NO 0.57: asked again');
+ assert.equal(ynj(.67,.05,.1,.1).option,'choice:no','"No me interesa" at NO 0.67: a NO');
+ assert.equal(ynj(.15,.05,.1,.53).option,'answers','a new request at 0.53 is asked again');
+ assert.equal(ynj(.15,.05,.1,.61).option,'new_request','and at 0.61 it is a new request');
+ // an escape is not the question's own choice: offering only `__agent` leaves it an open question, `answers` still asked
+ const open=buildReplyRank('chino',conversation,'Current question: Say the product number to check nearby stores.',[{key:'__agent',label:'a live agent'}]);
+ assert.deepEqual(open.systemOne.index.map(q=>q.option),['choice:__agent','answers','abort','new_request']);
 });
 console.log(`Reply rank: all checks passed (${checks})`);

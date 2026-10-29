@@ -28,7 +28,14 @@ export const REPLY_YES_THRESHOLD = 0.5;
  * The cut an option must clear, by what a wrong pick costs: an option not listed here takes REPLY_YES_THRESHOLD. Set
  * from labelled prod replies (owner 2026-10-28), never guessed.
  */
-export const REPLY_CUTS: Partial<Record<ReplyOption, number>> = {};
+export const REPLY_CUTS: Partial<Record<ReplyOption, number>> = {
+  // a NO cancels what the caller was confirming. Measured 2026-10-28: replies that are not a NO ("imposible", "no es un")
+  // rated 0.51-0.63, real NOs ("No me interesa", "No de verdad", "mejor no") 0.67-0.95
+  'choice:no': 0.65,
+  // a new request leaves the question unanswered. Unclear replies at a question ("la curazán" at a confirmation, "Es que
+  // mi tarjeta se cambió" at the pay menu) rated 0.47-0.58 and vary ±0.04 between calls; they are asked again
+  new_request: 0.6,
+};
 
 export interface ReplyTurn { role: 'user' | 'assistant'; content: string }
 export interface ReplyRankRequest {
@@ -109,7 +116,10 @@ export function buildReplyRank(input: string, conversation: ReplyTurn[], questio
   const index: { id: string; option: ReplyOption }[] = [];
   // With declared choices, `answers` ("picks none of them") is not a question System One answers: it competes with the
   // choices it excludes. It is what is left when no option clears its cut (owner 2026-10-28). A text model still has it.
-  options.filter(o => !(o === 'answers' && choices.length)).forEach((o, i) => {
+  // An escape (`__agent`) is not the question's own choice: a question that offers only escapes is an open question,
+  // where `answers` is the reply (prod 2026-10-28: a city named at "check nearby stores" went to intent detection).
+  const ownChoices = choices.some(c => !c.key.startsWith('__'));
+  options.filter(o => !(o === 'answers' && ownChoices)).forEach((o, i) => {
     const id = `r${i}`;
     questions[id] = { type: 'noul', criteria: criteriaOf(o, choices), instructions: { option: o, question: `Does the latest message do what \`${o}\` describes?` } };
     index.push({ id, option: o });
@@ -140,7 +150,7 @@ export function decodeReplyRankLlm(text: string, request: ReplyRankRequest): { o
 
 /**
  * System One's answers as the canonical reply: the highest-rated option that clears its own cut (REPLY_CUTS, else the
- * threshold); when none does, the default (`answers`: asked again at a choice question, the answer at an open one), with
+ * threshold), a cleared choice before `answers` and `new_request`; when none does, the default (`answers`: asked again at a choice question, the answer at an open one), with
  * every option's probability (for logs). Throws if any question is unanswered.
  */
 export function decodeReplyRankSystemOne(
@@ -154,7 +164,11 @@ export function decodeReplyRankSystemOne(
     if (!Number.isFinite(noul)) throw new Error(`System One: question ${q.id} unanswered`);
     scores[q.option] = noul;
   }
-  const [best] = request.systemOne.index.map(q => q.option).filter(o => scores[o] >= (cuts[o] ?? threshold)).sort((a, b) => scores[b] - scores[a]);
+  const cleared = request.systemOne.index.map(q => q.option).filter(o => scores[o] >= (cuts[o] ?? threshold)).sort((a, b) => scores[b] - scores[a]);
+  // A cleared choice is taken over `answers` and `new_request` (owner 2026-10-28: a request that names an offered option
+  // is that option, "Representative." is the agent); only `abort` keeps its rank.
+  const choice = cleared.find(o => o.startsWith(CHOICE_PREFIX));
+  const best = choice && (cleared[0] === 'answers' || cleared[0] === 'new_request') ? choice : cleared[0];
   if (best) {
     return { option: best, scores, fallback: false };
   } else {
