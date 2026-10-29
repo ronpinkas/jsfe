@@ -6,7 +6,7 @@
 > Validate a challenge response with explicit bounded retries, alternate-contact handling and tenant callbacks.
 
 - **Parameters:** none
-- **Calls:** [contact-support](contact-support.md) (value, by name), {{cargo.authOptions.code_validator}} (call), {{cargo.authOptions.answer_handler}} (call), [get-and-validate-otp-code](get-and-validate-otp-code.md) (replace), [authenticate-user](authenticate-user.md) (replace, retry_flow of generic-retry-with-options, retry_flow), {{otp_cancel}} (reboot), [live-agent-requested](live-agent-requested.md) (reboot), [switch-to-text](switch-to-text.md) (reboot), [resend-otp-code](resend-otp-code.md) (call), [generic-retry-with-options](generic-retry-with-options.md) (replace)
+- **Calls:** [contact-support](contact-support.md) (value, by name), {{cargo.authOptions.code_validator}} (call), {{cargo.authOptions.answer_handler}} (call), [get-and-validate-otp-code](get-and-validate-otp-code.md) (replace), [authenticate-user](authenticate-user.md) (replace, retry_flow of generic-retry-with-options, retry_flow, by name), {{otp_cancel}} (reboot), [live-agent-requested](live-agent-requested.md) (reboot), [switch-to-text](switch-to-text.md) (reboot), [resend-otp-code](resend-otp-code.md) (call), [generic-retry-with-options](generic-retry-with-options.md) (replace)
 - **Tools:** `validate-otp`, `send-whatsapp-invite`
 - **Called by:** [get-and-validate-otp-code](get-and-validate-otp-code.md), [generic-retry-with-options](generic-retry-with-options.md)
 
@@ -66,7 +66,7 @@ flowchart TD
    c6 -- "matchesChoice(user_choice,otp_phrases.noPhone) #124;#124; (function otpPhoneU…" --> b16
    b17["set no_code_given"]
    c6 -- "else" --> b17
-   n18["set noop"]
+   n18["set otp_reply, otp_offers"]
    b7 --> n18
    b13 --> n18
    b14 --> n18
@@ -75,67 +75,99 @@ flowchart TD
    b17 --> n18
    c19{"case"}
    n18 --> c19
-   b20(["replace → generic-retry-with-options"])
+   b20(["dispatch: intent detection"])
    class b20 endstep
-   c19 -- "no_code_given && cargo.otpWordMisses #gt;= 3" --> b20
-   c21{"case"}
-   c19 -- "else" --> c21
-   b22["say: Let me explain. I sent you a message with a six-digit code …"]
-   c21 -- "no_code_given" --> b22
-   n23["set noop"]
-   b22 --> n23
-   c21 -- "else" --> n23
-   c24{"case"}
-   n23 --> c24
-   b25(["replace → generic-retry-with-options"])
-   class b25 endstep
-   c24 -- "normalized_otp_code.length !== 6 && cargo.otpFormatMisses #gt;= 3" --> b25
-   c26{"case"}
-   c24 -- "else" --> c26
-   b27(["replace → get-and-validate-otp-code"])
+   c19 -- "no_code_given" --> b20
+   n21["set no_code_given"]
+   c19 -- "else" --> n21
+   c22{"case"}
+   n21 --> c22
+   b23(["replace → authenticate-user"])
+   class b23 endstep
+   c22 -- "!no_code_given && otp_reply && otp_reply.key === 'email'" --> b23
+   b24(["replace → authenticate-user"])
+   class b24 endstep
+   c22 -- "!no_code_given && otp_reply && otp_reply.key === 'another_account'" --> b24
+   b25[["call resend-otp-code"]]
+   class b25 flowstep
+   c22 -- "!no_code_given && otp_reply && otp_reply.key === 'resend'" --> b25
+   b26(["replace → generic-retry-with-options"])
+   class b26 endstep
+   c22 -- "!no_code_given && otp_reply && otp_reply.key === 'no_phone'" --> b26
+   b27(["reboot → live-agent-requested"])
    class b27 endstep
-   c26 -- "normalized_otp_code.length !== 6" --> b27
+   c22 -- "!no_code_given && otp_reply && otp_reply.key === '__agent'" --> b27
    n28["set noop"]
-   c26 -- "else" --> n28
+   b25 --> n28
+   c22 -- "else" --> n28
    c29{"case"}
    n28 --> c29
-   c30{"case"}
-   c29 -- "!cargo.otpVerified && cargo.otpFailure === 'mismatch' && cargo.otpMis…" --> c30
-   c29 -- "else" --> c30
-   b31[["call resend-otp-code"]]
-   class b31 flowstep
-   c30 -- "cargo.otpFailure === 'expired' #124;#124; cargo.otpFailure === 'missing'" --> b31
-   b32(["replace → generic-retry-with-options"])
-   class b32 endstep
-   c30 -- "cargo.otpFailure === 'mismatch' && cargo.otpMismatches #gt;= 3" --> b32
-   b33["say: That code didn't match. Let's try again."]
-   c30 -- "else" --> b33
-   n34["set invite_text"]
-   c30 -- "cargo.otpVerified === true" --> n34
-   b31 --> n34
-   b33 --> n34
-   c35{"case"}
-   n34 --> c35
-   b36[/"tool: send-whatsapp-invite"/]
-   class b36 toolstep
-   c35 -- "!cargo.otpVerified && cargo.otpFailure === 'mismatch'" --> b36
-   b36f["set whatsapp_invite_sent"]
-   b36 -- "fails" --> b36f
-   c37{"case"}
-   b36 --> c37
-   b36f --> c37
-   c35 -- "else" --> c37
-   b38["say: I texted you a WhatsApp link so you can try again on WhatsA…"]
-   c37 -- "whatsapp_invite_sent === true" --> b38
-   c39{"case"}
-   b38 --> c39
-   c37 -- "else" --> c39
-   b40(["replace → get-and-validate-otp-code"])
-   class b40 endstep
-   c39 -- "cargo.otpVerified !== true" --> b40
+   b30(["replace → generic-retry-with-options"])
+   class b30 endstep
+   c29 -- "no_code_given && cargo.otpWordMisses #gt;= 3" --> b30
+   c31{"case"}
+   c29 -- "else" --> c31
+   b32["say: Understood. First we need to finish verifying your identity…"]
+   c31 -- "no_code_given && otp_reply && String(otp_reply.key #124;#124; '').indexOf('us…" --> b32
+   c33{"case"}
+   b32 --> c33
+   c31 -- "else" --> c33
+   b34["say: Let me explain. I sent you a message with a six-digit code …"]
+   c33 -- "no_code_given && !(no_code_given && otp_reply && String(otp_reply.key…" --> b34
+   n35["set noop"]
+   b34 --> n35
+   c33 -- "else" --> n35
+   c36{"case"}
+   n35 --> c36
+   b37(["replace → generic-retry-with-options"])
+   class b37 endstep
+   c36 -- "normalized_otp_code.length !== 6 && cargo.otpFormatMisses #gt;= 3" --> b37
+   c38{"case"}
+   c36 -- "else" --> c38
+   b39(["replace → get-and-validate-otp-code"])
+   class b39 endstep
+   c38 -- "normalized_otp_code.length !== 6" --> b39
+   n40["set noop"]
+   c38 -- "else" --> n40
+   c41{"case"}
+   n40 --> c41
+   c42{"case"}
+   c41 -- "!cargo.otpVerified && cargo.otpFailure === 'mismatch' && cargo.otpMis…" --> c42
+   c41 -- "else" --> c42
+   b43[["call resend-otp-code"]]
+   class b43 flowstep
+   c42 -- "cargo.otpFailure === 'expired' #124;#124; cargo.otpFailure === 'missing'" --> b43
+   b44(["replace → generic-retry-with-options"])
+   class b44 endstep
+   c42 -- "cargo.otpFailure === 'mismatch' && cargo.otpMismatches #gt;= 3" --> b44
+   b45["say: That code didn't match. Let's try again."]
+   c42 -- "else" --> b45
+   n46["set invite_text"]
+   c42 -- "cargo.otpVerified === true" --> n46
+   b43 --> n46
+   b45 --> n46
+   c47{"case"}
+   n46 --> c47
+   b48[/"tool: send-whatsapp-invite"/]
+   class b48 toolstep
+   c47 -- "!cargo.otpVerified && cargo.otpFailure === 'mismatch'" --> b48
+   b48f["set whatsapp_invite_sent"]
+   b48 -- "fails" --> b48f
+   c49{"case"}
+   b48 --> c49
+   b48f --> c49
+   c47 -- "else" --> c49
+   b50["say: I texted you a WhatsApp link so you can try again on WhatsA…"]
+   c49 -- "whatsapp_invite_sent === true" --> b50
+   c51{"case"}
+   b50 --> c51
+   c49 -- "else" --> c51
+   b52(["replace → get-and-validate-otp-code"])
+   class b52 endstep
+   c51 -- "cargo.otpVerified !== true" --> b52
    DONE(["end (back to caller)"])
    class DONE endstep
-   c39 -- "else" --> DONE
+   c51 -- "else" --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80
