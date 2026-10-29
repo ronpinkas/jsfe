@@ -186,7 +186,11 @@ function otpPhoneUnavailable(value) {
    return /\b(?:no longer|cannot|can't|dont|don't|do not)\s+(?:have(?:\s+access\s+to)?|access|use)\b[^.!?]{0,70}\b(?:phone|number|mobile|cellphone)\b/.test(text)
       || /\b(?:ya\s+no|no)\s+(?:tengo|puedo\s+(?:usar|acceder))\b[^.!?]{0,70}\b(?:telefono|numero|celular|movil)\b/.test(text);
 }
-const validateCode=worker('validate-otp-code','ValidateOtpCode','Validate a challenge response with explicit bounded retries, alternate-contact handling and tenant callbacks.',{variables:vars({otp_phrases:OTP_WORDS,no_code_given:false,wants_other_account:false,other_account_given:false,otp_validation_result:false,whatsapp_invite_sent:false,invite_text:'',otp_cancel:'contact-support',answer_key:'',answer_value:''}),contract:{role:'gate',summary:'Validate the active one-time challenge',tools:['validate-otp','send-whatsapp-invite'],result:{path:'cargo.otpVerified',type:'boolean'}},steps:[
+// What the reply ranker may take at the code question beside the code: the step's offers. Email and another account are
+// offered only where the step offers them (a code sent by text; a caller-ID preselection).
+const OTP_REPLY_CHOICES=[{key:'email',label:'use the email on the account instead of the phone'},{key:'another_account',label:'use another account'},
+   {key:'resend',label:'the code did not arrive; send it again'},{key:'no_phone',label:'no longer has that phone or number'},{key:'__agent',label:'speak with a person (a live agent)'}];
+const validateCode=worker('validate-otp-code','ValidateOtpCode','Validate a challenge response with explicit bounded retries, alternate-contact handling and tenant callbacks.',{variables:vars({otp_phrases:OTP_WORDS,no_code_given:false,wants_other_account:false,other_account_given:false,otp_validation_result:false,whatsapp_invite_sent:false,invite_text:'',otp_cancel:'contact-support',answer_key:'',answer_value:'',otp_reply_choices:OTP_REPLY_CHOICES,otp_reply:{}}),contract:{role:'gate',summary:'Validate the active one-time challenge',tools:['validate-otp','send-whatsapp-invite'],result:{path:'cargo.otpVerified',type:'boolean'}},steps:[
    set('otp_cancel','otp_cancel',"cargo.authCancelFlow || 'contact-support'"),
    set('otp_reset_no_code','no_code_given','false'),set('otp_reset_invite','whatsapp_invite_sent','false'),set('otp_reset_callback','answer_key',"''"),
    when('otp_tenant_code','cargo.authOptions && cargo.authOptions.code_validator && normalized_otp_code.length !== 6 && /[0-9]/.test(user_choice)',call('otp_tenant_code_call','{{cargo.authOptions.code_validator}}',{answer:'{{user_choice}}'})),
@@ -208,6 +212,20 @@ const validateCode=worker('validate-otp-code','ValidateOtpCode','Validate a chal
       'condition: normalized_otp_code.length > 0':effect('otp_format_cap_next','true'),
       ['condition: matchesChoice(user_choice,otp_phrases.noPhone) || '+expression(otpPhoneUnavailable,'user_choice')]:otpMenu('otp_no_phone',"No problem. Then the code can't reach you there. You can use the email on your account instead, or {{cargo.verb}} AGENT to reach a person.",'No hay problema. Entonces el código no le puede llegar ahí. Puede usar el correo electrónico de su cuenta, o {{cargo.verb_es}} AGENTE para hablar con una persona.',false),
       default:set('otp_words_missing','no_code_given','true')}),
+   // An answer none of the above reads goes to the reply ranker, offered the step's offers (owner 2026-10-29: prod 10-28,
+   // 128 of 238 such replies were explained again, whatever they asked): an offer said in other words is taken, a new
+   // request leaves through intent detection, a withdrawal ends, and anything else is a miss, explained again.
+   set('otp_reset_reply','otp_reply','({})'),
+   set('otp_offers','otp_reply_choices',"otp_reply_choices.filter(function(c){return (c.key !== 'email' || !!cargo.otp_cell_number) && (c.key !== 'another_account' || !!cargo.callerPreselected);})"),
+   when('otp_off_topic','no_code_given',{id:'otp_reply_rank',type:'DISPATCH',onResponse:'continue',responseContext:'Please say the 6-digit verification code I sent you. (Por favor diga el código de verificación de 6 dígitos que le envié.)',responseChoices:'otp_reply_choices',responseVariable:'otp_reply'}),
+   set('otp_reply_picked','no_code_given',"no_code_given && !(otp_reply && otp_reply.key)"),
+   cases('otp_reply_route',{
+      "condition: !no_code_given && otp_reply && otp_reply.key === 'email'":call('otp_ranked_email','authenticate-user',{cell_number:'',email:'',retrying:true,declined_caller:true},'replace'),
+      "condition: !no_code_given && otp_reply && otp_reply.key === 'another_account'":call('otp_ranked_account','authenticate-user',{cell_number:'',email:'',retrying:true,declined_caller:true},'replace'),
+      "condition: !no_code_given && otp_reply && otp_reply.key === 'resend'":call('otp_ranked_resend','resend-otp-code',{resend_reason:'requested'}),
+      "condition: !no_code_given && otp_reply && otp_reply.key === 'no_phone'":otpMenu('otp_ranked_no_phone',"No problem. Then the code can't reach you there. You can use the email on your account instead, or {{cargo.verb}} AGENT to reach a person.",'No hay problema. Entonces el código no le puede llegar ahí. Puede usar el correo electrónico de su cuenta, o {{cargo.verb_es}} AGENTE para hablar con una persona.',false),
+      "condition: !no_code_given && otp_reply && otp_reply.key === '__agent'":call('otp_ranked_agent','live-agent-requested',undefined,'reboot'),
+      default:effect('otp_reply_route_none','true')}),
    effect('otp_word_count','(cargo.otpWordMisses=Number(cargo.otpWordMisses || 0)+(no_code_given?1:0),true)'),
    when('otp_word_cap','no_code_given && cargo.otpWordMisses >= 3',otpMenu('otp_word_menu',"I still don't have the code. To reach a person, {{cargo.verb}} AGENT.",'Todavía no tengo el código. Para hablar con una persona, {{cargo.verb_es}} AGENTE.',true)),
    when('otp_explanation','no_code_given',say('otp_explain','Let me explain. I sent you a message with a six-digit code in it. Read those six digits back to me. You can also {{cargo.verb}} AGENT to reach a person, or EXIT to cancel.',"Le explico. Le envié un mensaje con un código de seis dígitos. Dígame esos seis dígitos. También puede {{cargo.voice ? 'decir' : 'escribir'}} AGENTE para hablar con una persona, o SALIR para cancelar.")),
