@@ -447,6 +447,14 @@
         "type": "string",
         "value": ""
       },
+      "otp_ranked_no_phone_message": {
+        "type": "string",
+        "value": ""
+      },
+      "otp_ranked_no_phone_message_es": {
+        "type": "string",
+        "value": ""
+      },
       "otp_word_menu_message": {
         "type": "string",
         "value": ""
@@ -502,6 +510,18 @@
         "id": "otp_no_phone_message_es",
         "type": "SET",
         "variable": "otp_no_phone_message_es",
+        "value": "No hay problema. Entonces el código no le puede llegar ahí. Puede usar el correo electrónico de su cuenta, o {{cargo.verb_es}} AGENTE para hablar con una persona."
+      },
+      {
+        "id": "otp_ranked_no_phone_message",
+        "type": "SET",
+        "variable": "otp_ranked_no_phone_message",
+        "value": "No problem. Then the code can't reach you there. You can use the email on your account instead, or {{cargo.verb}} AGENT to reach a person."
+      },
+      {
+        "id": "otp_ranked_no_phone_message_es",
+        "type": "SET",
+        "variable": "otp_ranked_no_phone_message_es",
         "value": "No hay problema. Entonces el código no le puede llegar ahí. Puede usar el correo electrónico de su cuenta, o {{cargo.verb_es}} AGENTE para hablar con una persona."
       },
       {
@@ -2144,6 +2164,39 @@
         "type": "string",
         "value": ""
       },
+      "otp_reply_choices": {
+        "type": "array",
+        "value": [
+          {
+            "key": "email",
+            "label": "use the email on the account instead of the phone"
+          },
+          {
+            "key": "another_account",
+            "label": "use another account"
+          },
+          {
+            "key": "resend",
+            "label": "the code did not arrive; send it again"
+          },
+          {
+            "key": "no_phone",
+            "label": "no longer has that phone or number"
+          },
+          {
+            "key": "__agent",
+            "label": "speak with a person (a live agent)"
+          }
+        ]
+      },
+      "otp_offers": {
+        "type": "array",
+        "value": []
+      },
+      "otp_reply": {
+        "type": "object",
+        "value": {}
+      },
       "contract": {
         "type": "object",
         "value": {
@@ -2160,6 +2213,7 @@
           },
           "parametersFrom": "parameters",
           "requires": [
+            "jsfe:contextual-responses:v1",
             "jsfe:continuation-safety:v1"
           ]
         }
@@ -2177,6 +2231,14 @@
         "value": ""
       },
       "otp_no_phone_message_es": {
+        "type": "string",
+        "value": ""
+      },
+      "otp_ranked_no_phone_message": {
+        "type": "string",
+        "value": ""
+      },
+      "otp_ranked_no_phone_message_es": {
         "type": "string",
         "value": ""
       },
@@ -2238,6 +2300,18 @@
         "value": "No hay problema. Entonces el código no le puede llegar ahí. Puede usar el correo electrónico de su cuenta, o {{cargo.verb_es}} AGENTE para hablar con una persona."
       },
       {
+        "id": "otp_ranked_no_phone_message",
+        "type": "SET",
+        "variable": "otp_ranked_no_phone_message",
+        "value": "No problem. Then the code can't reach you there. You can use the email on your account instead, or {{cargo.verb}} AGENT to reach a person."
+      },
+      {
+        "id": "otp_ranked_no_phone_message_es",
+        "type": "SET",
+        "variable": "otp_ranked_no_phone_message_es",
+        "value": "No hay problema. Entonces el código no le puede llegar ahí. Puede usar el correo electrónico de su cuenta, o {{cargo.verb_es}} AGENTE para hablar con una persona."
+      },
+      {
         "id": "otp_word_menu_message",
         "type": "SET",
         "variable": "otp_word_menu_message",
@@ -2272,6 +2346,13 @@
         "type": "SET",
         "variable": "otp_mismatch_menu_message_es",
         "value": "Ese código no coincidió tres veces, así que no puedo aceptar otro intento con él. Para hablar con una persona, {{cargo.verb_es}} AGENTE."
+      },
+      {
+        "id": "validate-otp-code_contextual_response_protocol",
+        "type": "SET",
+        "variable": "noop",
+        "value": "contextualResponseProtocol() === 1",
+        "requireTrue": true
       },
       {
         "id": "otp_cancel",
@@ -2471,6 +2552,117 @@
         }
       },
       {
+        "id": "otp_reset_reply",
+        "type": "SET",
+        "variable": "otp_reply",
+        "value": "({})"
+      },
+      {
+        "id": "otp_offers",
+        "type": "SET",
+        "variable": "otp_offers",
+        "value": "otp_reply_choices.filter(function(c){return (c.key !== 'email' || !!cargo.otp_cell_number) && (c.key !== 'another_account' || !!cargo.callerPreselected);}).concat(((typeof $callers !== 'undefined' && $callers && $callers['authenticate-user']) || []).map(function(c){return {key:'usecase:'+c.id,label:'states the reason for the call: '+c.label};})).concat(((typeof $gateExits !== 'undefined' && $gateExits && $gateExits['authenticate-user']) || []).map(function(a){return {key:'exit:'+a.key,label:a.label,route:'new_request'};}))"
+      },
+      {
+        "id": "otp_off_topic",
+        "type": "CASE",
+        "branches": {
+          "condition: no_code_given": {
+            "id": "otp_reply_rank",
+            "type": "DISPATCH",
+            "onResponse": "continue",
+            "responseContext": "Please say the 6-digit verification code I sent you. (Por favor diga el código de verificación de 6 dígitos que le envié.)",
+            "responseChoices": "otp_offers",
+            "responseVariable": "otp_reply",
+            "onNoIntent": "stay"
+          },
+          "default": {
+            "id": "otp_off_topic_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "otp_reply_picked",
+        "type": "SET",
+        "variable": "no_code_given",
+        "value": "no_code_given && !(otp_reply && otp_reply.key && String(otp_reply.key).indexOf('usecase:') !== 0)"
+      },
+      {
+        "id": "otp_reply_route",
+        "type": "CASE",
+        "branches": {
+          "condition: !no_code_given && otp_reply && otp_reply.key === 'email'": {
+            "id": "otp_ranked_email",
+            "type": "FLOW",
+            "value": "authenticate-user",
+            "callType": "replace",
+            "parameters": {
+              "cell_number": "",
+              "email": "",
+              "retrying": true,
+              "declined_caller": true
+            },
+            "initializeDefaults": true
+          },
+          "condition: !no_code_given && otp_reply && otp_reply.key === 'another_account'": {
+            "id": "otp_ranked_account",
+            "type": "FLOW",
+            "value": "authenticate-user",
+            "callType": "replace",
+            "parameters": {
+              "cell_number": "",
+              "email": "",
+              "retrying": true,
+              "declined_caller": true
+            },
+            "initializeDefaults": true
+          },
+          "condition: !no_code_given && otp_reply && otp_reply.key === 'resend'": {
+            "id": "otp_ranked_resend",
+            "type": "FLOW",
+            "value": "resend-otp-code",
+            "callType": "call",
+            "parameters": {
+              "resend_reason": "requested"
+            }
+          },
+          "condition: !no_code_given && otp_reply && otp_reply.key === 'no_phone'": {
+            "id": "otp_ranked_no_phone",
+            "type": "FLOW",
+            "value": "generic-retry-with-options",
+            "callType": "replace",
+            "parameters": {
+              "error_message": "{{otp_ranked_no_phone_message}}",
+              "error_message_es": "{{otp_ranked_no_phone_message_es}}",
+              "retry_flow": "authenticate-user",
+              "retry_call_type": "replace",
+              "cancel_flow": "{{cargo.authCancelFlow}}",
+              "allow_code_entry": false,
+              "capture_patterns": "{{cargo.authCapture}}",
+              "parent_form": "{{cargo.authOptions.parent_form}}",
+              "question": "Would you like to try again to get access to your account?",
+              "question_es": "¿Le gustaría intentar nuevamente obtener acceso a su cuenta?"
+            },
+            "initializeDefaults": true
+          },
+          "condition: !no_code_given && otp_reply && otp_reply.key === '__agent'": {
+            "id": "otp_ranked_agent",
+            "type": "FLOW",
+            "value": "live-agent-requested",
+            "callType": "reboot"
+          },
+          "default": {
+            "id": "otp_reply_route_none",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "otp_word_count",
         "type": "SET",
         "variable": "noop",
@@ -2508,10 +2700,28 @@
         }
       },
       {
+        "id": "otp_usecase_ack",
+        "type": "CASE",
+        "branches": {
+          "condition: no_code_given && otp_reply && String(otp_reply.key || '').indexOf('usecase:') === 0": {
+            "id": "otp_usecase_explain",
+            "type": "SAY",
+            "value": "Understood. First we need to finish verifying your identity. I sent you a message with a six-digit code in it. Read those six digits back to me. You can also {{cargo.verb}} AGENT to reach a person, or EXIT to cancel.",
+            "value_es": "Entendido. Primero necesitamos completar la verificación de su identidad. Le envié un mensaje con un código de seis dígitos. Dígame esos seis dígitos. También puede {{cargo.voice ? 'decir' : 'escribir'}} AGENTE para hablar con una persona, o SALIR para cancelar."
+          },
+          "default": {
+            "id": "otp_usecase_ack_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "otp_explanation",
         "type": "CASE",
         "branches": {
-          "condition: no_code_given": {
+          "condition: no_code_given && !(no_code_given && otp_reply && String(otp_reply.key || '').indexOf('usecase:') === 0)": {
             "id": "otp_explain",
             "type": "SAY",
             "value": "Let me explain. I sent you a message with a six-digit code in it. Read those six digits back to me. You can also {{cargo.verb}} AGENT to reach a person, or EXIT to cancel.",
