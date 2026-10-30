@@ -3226,25 +3226,9 @@
           "volver a intentarlo"
         ]
       },
-      "retry_profiles": {
+      "retry_otp_profiles": {
         "type": "array",
         "value": [
-          {
-            "name": "phone",
-            "label": "phone number",
-            "label_es": "número de teléfono",
-            "profile": {
-              "kind": "phone"
-            }
-          },
-          {
-            "name": "email_address",
-            "label": "email address",
-            "label_es": "correo electrónico",
-            "profile": {
-              "kind": "email"
-            }
-          },
           {
             "name": "code",
             "label": "verification code",
@@ -3264,6 +3248,31 @@
             }
           }
         ]
+      },
+      "retry_profiles_base": {
+        "type": "array",
+        "value": [
+          {
+            "name": "phone",
+            "label": "phone number",
+            "label_es": "número de teléfono",
+            "profile": {
+              "kind": "phone"
+            }
+          },
+          {
+            "name": "email_address",
+            "label": "email address",
+            "label_es": "correo electrónico",
+            "profile": {
+              "kind": "email"
+            }
+          }
+        ]
+      },
+      "retry_profiles": {
+        "type": "array",
+        "value": []
       },
       "contract": {
         "type": "object",
@@ -3291,6 +3300,12 @@
         "type": "SET",
         "variable": "parent_form",
         "value": "parent_form || cargo.authOptions && cargo.authOptions.parent_form || cargo.contactOptions && cargo.contactOptions.parent_form || ''"
+      },
+      {
+        "id": "retry_profiles",
+        "type": "SET",
+        "variable": "retry_profiles",
+        "value": "retry_profiles_base.concat((Array.isArray(capture_patterns) ? capture_patterns : []).filter(function (c) {return c && c.variable === 'acct_number' && c.regex;}).slice(0,1).map(function (c) {return {name:'account',label:'account number',label_es:'número de cuenta',profile:{kind:'identifier',pattern:c.regex}};}),retry_otp_profiles)"
       },
       {
         "id": "retry_question",
@@ -8534,13 +8549,13 @@
         "id": "di_question",
         "type": "SET",
         "variable": "di_q",
-        "value": "(readings.every(function (r) { return r.option === true; }) ? 'Do you mean ' + readings.map(function (r) { return r.label; }).join(' or ') : (di_value ? 'Is ' + di_value + ' your ' : 'Is that your ') + readings.map(function (r) { return r.label; }).join(' or your ')) + '? ' + readings.map(function (r, i) { return (cargo.voice ? 'Press ' + di_keys[i] + ' or say ' : 'Say ') + r.label.toUpperCase(); }).join(', ') + '.'"
+        "value": "(readings.every(function (r) { return r.option === true; }) ? 'Do you mean ' + readings.map(function (r) { return r.label; }).join(' or ') : (di_value ? 'Is ' + di_value + ' your ' : 'Is that your ') + readings.map(function (r) { return r.label; }).join(' or your ')) + '? ' + readings.map(function (r, i) { return (cargo.voice ? 'Press ' + di_keys[i] + ' or say ' : (i ? String(cargo.verb || 'type') : String(cargo.verb || 'type').charAt(0).toUpperCase() + String(cargo.verb || 'type').slice(1)) + ' ') + r.label.toUpperCase(); }).join(', ') + '.'"
       },
       {
         "id": "di_question_es",
         "type": "SET",
         "variable": "di_q_es",
-        "value": "(readings.every(function (r) { return r.option === true; }) ? '¿Se refiere a ' + readings.map(function (r) { return r.label_es; }).join(' o a ') : (di_value ? '¿' + di_value + ' es su ' : '¿Eso es su ') + readings.map(function (r) { return r.label_es; }).join(' o su ')) + '? ' + readings.map(function (r, i) { return (cargo.voice ? 'Presione ' + di_keys[i] + ' o diga ' : 'Diga ') + r.label_es.toUpperCase(); }).join(', ') + '.'"
+        "value": "(readings.every(function (r) { return r.option === true; }) ? '¿Se refiere a ' + readings.map(function (r) { return r.label_es; }).join(' o a ') : (di_value ? '¿' + di_value + ' es su ' : '¿Eso es su ') + readings.map(function (r) { return r.label_es; }).join(' o su ')) + '? ' + readings.map(function (r, i) { return (cargo.voice ? 'Presione ' + di_keys[i] + ' o diga ' : (i ? String(cargo.verb_es || 'escriba') : String(cargo.verb_es || 'escriba').charAt(0).toUpperCase() + String(cargo.verb_es || 'escriba').slice(1)) + ' ') + r.label_es.toUpperCase(); }).join(', ') + '.'"
       },
       {
         "id": "di_owner",
