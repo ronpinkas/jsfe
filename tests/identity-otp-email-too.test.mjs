@@ -54,6 +54,9 @@ for(const lang of ['en','es'])for(const voice of [false,true]){
    await begin(lang,voice,'');
    r=await say(SAID[lang][0]);ok(!emails.length&&/^(I sent it by text message|Se lo envié por mensaje de texto)/.test(r),`${tag}: no email on file, where the code went [${r}]`);
    r=await say(SAID[lang][1]);ok(!emails.length&&/(To reach a person, (say|type) AGENT\.|Para hablar con una persona, (diga|escriba) AGENTE\.)/.test(r),`${tag}: another way with no email names the agent [${r}]`);
+   // an address stored in capitals is read in lowercase (prod accounts: R…@GMAIL.COM, spelled out on a call)
+   await begin(lang,voice,'ROBIN@EXAMPLE.COM');
+   r=await say(SAID[lang][0]);ok(r.startsWith(voice?w.voice:w.text)&&!/EXAMPLE/.test(r)&&emails[0].to==='ROBIN@EXAMPLE.COM',`${tag}: a capitalised address is said in lowercase, sent as stored [${r}]`);
    // a refused address: where the code went, and no second attempt
    await begin(lang,voice);refuse=true;
    r=await say(SAID[lang][0]);ok(emails.length===1&&s.cargo.otpAltSent==='failed'&&/^(I sent it by text message|Se lo envié por mensaje de texto)/.test(r)&&!/also|también/.test(r.split('.')[0]),`${tag}: a refused address says where the code went [${r}]`);
