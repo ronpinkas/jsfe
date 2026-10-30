@@ -28,7 +28,7 @@
 ```mermaid
 flowchart TD
    START(("start"))
-   n0["set parent_form, retry_question, retry_question_es"]
+   n0["set parent_form, retry_profiles, retry_question, retry_question_es"]
    START --> n0
    n1[["call collect-service-answer"]]
    class n1 flowstep

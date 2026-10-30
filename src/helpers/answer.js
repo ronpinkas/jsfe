@@ -236,6 +236,12 @@ export function isAnswer(input, kind, extra = []) {
    }
 }
 
+/** Whether the WHOLE answer is a NO ("No.", "no gracias", "nope, thanks"), never a sentence that starts with one. */
+export function isWholeNo(input) {
+   const b = normalize(input);
+   return !!b && onlyAffirmative(b, ANSWER_WORDS.no);
+}
+
 /**
  * Whether the WHOLE answer is an exit word ("exit", "Cancelar.", "salir por favor", "*"), never a sentence that contains
  * one: "Cancelar el pedido" asks for something; it does not withdraw (prod 2026-10-26, at a verification-code prompt).

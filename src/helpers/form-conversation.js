@@ -1,5 +1,7 @@
 /** Shared FORM retry, contextual yield and recovery policy; all state is conversation-owned. */
 import {formIncompleteOutcome,closeFormInstance} from './form-state.js';
+import {isWholeNo} from './answer.js';
+import {readInputProfile} from './match-inputs.js';
 
 export function clearFormMisses(cargo,id,input) {
    const state=cargo.forms?.[id];if(!state)return true;
@@ -68,4 +70,15 @@ export function cancelFormTask(cargo,id) {
  const owner=outcome.recovery.form || root?.id || id;
  closeFormInstance(cargo,owner,false);
  return {outcome:'resolved',reason:'request_cancelled',recovery:{version:1,mode:'none',reason:'request_cancelled'}};
+}
+
+/** The form that answers a whole NO said at this question: the nearest form up the chain (this one, or a sub-form's owner)
+ * that declares `on_no`, when the question is not a yes/no or confirmation and does not read the NO itself. '' if none. */
+export function formNoOwner(cargo,id,spec,answer) {
+   const raw=String(answer ?? '').replace(/\\(['"\\])/g,'$1').trim();
+   if(!raw || !isWholeNo(raw) || !spec || spec.confirmation || spec.proposal)return '';
+   if([spec,...(Array.isArray(spec.any_of)?spec.any_of:[])].some(s=>s && s.profile && readInputProfile(s.profile,raw,true)))return '';   // the question offers NO itself
+   const seen=new Set();
+   for(let f=id;f&&cargo.forms?.[f]&&!seen.has(f);f=cargo.forms[f].parent){seen.add(f);if(cargo.forms[f].on_no)return f;}
+   return '';
 }

@@ -74,6 +74,8 @@ const PARAMETER_RULES = [
   'Give a value only when the user gave it, in the latest message or earlier in the conversation. Never guess.',
   "Write it as the parameter's rule says; otherwise the value alone, in the user's words (never the whole sentence around it).",
   'A short answer to the assistant\'s last message ("1", "yes", "the first one") chooses what that message offered.',
+  'A plain yes to the assistant\'s last message, when it asked the user to confirm values, gives those values as the user\'s own (assistant: "You want to pay $40 to sub account 80?" → user: "yes": 40 and 80; "¿Desea pagar $40 a la subcuenta 80?" → "sí": 40 and 80). A yes to a question that confirmed no value gives none ("Your payment of $40 was successful. Anything else?" → "yes": none).',
+  'When the user gave a value more than once, the latest one counts.',
   'A value the user did not give is null.',
 ];
 const ENUM_TRUE = (value: string) => `The parameter's rule makes \`${value}\` its value for what the user said.`;

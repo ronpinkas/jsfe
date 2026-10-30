@@ -3,7 +3,7 @@ import {continuationSafetyProtocol} from '../forms/continuation-safety.js';
 import {contextualResponseProtocol,validateFormResponse,hasFormResponse} from './contextual-response.js';
 import {formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation} from './form-proposals.js';
 import {formProposalProtocol,validateFormProposalPolicy,validateFormProposalDescriptor,formProposalDescriptor} from './proposal-contract.js';
-import {cancelFormTask,clearFormMisses,missFormInput,formMustComplete,formInputPrompt,consumeFormFeedback,formConversationOutcome} from './form-conversation.js';
+import {cancelFormTask,clearFormMisses,formNoOwner,missFormInput,formMustComplete,formInputPrompt,consumeFormFeedback,formConversationOutcome} from './form-conversation.js';
 import { takeChoiceOffer } from './choice-offer.js';
 import { consumeActionReceipt, authorizeFormActionRetry, formSignature, selectFormAction, confirmFormRevision, prepareFormAction, actionConfirmationValid, beginFormAction, finishFormAction, actionGateVerified } from './form-actions.js';
 /**
@@ -39,7 +39,7 @@ import { urlToSpeech, textWithUrlToSpeech } from './url-speech.js';
 export {
    continuationSafetyProtocol,cancelFormTask, contextualResponseProtocol,validateFormResponse,hasFormResponse,
    formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation,formProposalProtocol,validateFormProposalPolicy,validateFormProposalDescriptor,formProposalDescriptor,
-   clearFormMisses,missFormInput,formMustComplete,formInputPrompt,consumeFormFeedback,formConversationOutcome,
+   clearFormMisses,formNoOwner,missFormInput,formMustComplete,formInputPrompt,consumeFormFeedback,formConversationOutcome,
    readMoneyAmount, isMoneyAmount, moneyIntentAllows, isPastPaymentStatement, isPartialMoneyAnswer, validateMoneyOptions, takeChoiceOffer, matchesChoice, ANSWER_WORDS, CONFIRM_WORDS, isAnswer, isAgentRequest, isExitRequest, isOtherRequest, isSpelledFragment, isAmountAnswer, amountInAnswer,
    pickChoice, readEmail, readPhone, readInternationalPhone, readIdentifier, last4, maskEmail, callerTextNumber, textDestination,
    callerIsInternational, normalizeAndFindCapture, anythingElse, goodbye, sayName, dateToWords, amountToSpeech, validateCardNumber,
@@ -51,7 +51,7 @@ export {
 export const STANDARD_FUNCTIONS = {
    continuationSafetyProtocol,cancelFormTask, contextualResponseProtocol,validateFormResponse,hasFormResponse,
    formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation,formProposalProtocol,validateFormProposalPolicy,validateFormProposalDescriptor,formProposalDescriptor,
-   clearFormMisses,missFormInput,formMustComplete,formInputPrompt,consumeFormFeedback,formConversationOutcome,
+   clearFormMisses,formNoOwner,missFormInput,formMustComplete,formInputPrompt,consumeFormFeedback,formConversationOutcome,
    readMoneyAmount, isMoneyAmount, moneyIntentAllows, isPastPaymentStatement, isPartialMoneyAnswer, validateMoneyOptions, takeChoiceOffer, matchesChoice, isAnswer, isAgentRequest, isExitRequest, isOtherRequest, isSpelledFragment, isAmountAnswer, amountInAnswer, pickChoice,
    readEmail, readPhone, readInternationalPhone, readIdentifier, last4, maskEmail, callerTextNumber, textDestination, callerIsInternational,
    normalizeAndFindCapture, anythingElse, goodbye, sayName, dateToWords, amountToSpeech, validateCardNumber, validateExpiration, consumeActionReceipt, authorizeFormActionRetry, formSignature, selectFormAction, confirmFormRevision, prepareFormAction, actionConfirmationValid, beginFormAction, finishFormAction, actionGateVerified, sourceNeedsLoad, beginSourceRefresh, completeSourceRefresh, pickProviderQuestion, matchInputs, readFormAnswer, readInputProfile, formAcceptanceTrace, resolveFormInputs, formInputApplies, formInputFilled, nextFormInput, formInputChain, openFormInstance, validateFormIncompleteOutcome, formIncompleteOutcome, validateFormExhaustion, exhaustFormInput, formInitialReadings, orderFormReadings, proposedFormValues, applyFormValidation, formReadingDependencies, exclusiveFormReadings, enrichFormMatches, expandFormActivations, settleFormActivations, rememberFormArguments, resetFormInputs, hasFormValue, formPath, formValuesEqual, formReadingReady, formReadingRelevant, formPreparation, queueFormReadings, pendingFormReadings, formWorkLimit,answerResetsFormReplays, rejectFormReadings, invalidateFormInputs, acceptFormReadings, formInstanceApplies, formParentResume, closeFormInstance,
