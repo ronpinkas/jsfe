@@ -49,6 +49,18 @@ await test('provider catalog questions derive from its facts rather than another
  for(const f of forms){assert.deepEqual(f.variables.questions.value,[{key:'balance',phrases:['balance']}]);assert.deepEqual(f.variables.provides.value,provides);assert.equal(f.variables.contract.value.role,f.id==='collect'?'collector':'performer');}
  assert.deepEqual(provides,{facts:[{key:'balance',words:['balance'],path:'balance'}]});
 });
+await test('a form or performer catalog is validated like a provider catalog, menu targets included',()=>{
+ const good={facts:[{key:'balance',words:['balance'],path:'balance',public:true}],menu:{choices:[{key:'pay',phrases:['pay'],flow:'collect'}]}};
+ const collect=provides=>Form({id:'collect',description:'Collect with account questions',provides,inputs:[{name:'zip',field:'zip'}]});
+ for(const f of [make({provides:good}),collect(good)])assert.equal(f.variables.contract.value.catalog,'provides');
+ assert.equal(Form({id:'plain',description:'No catalog',inputs:[{name:'zip',field:'zip'}]}).variables.contract.value.catalog,undefined);
+ const check=provides=>validateFlowContracts([collect(provides)],[],{requireAll:false,externalFlows:FLOWS.map(f=>f.id)});
+ assert.ok(check(good));
+ assert.throws(()=>check({facts:[{key:'balance',path:'balance',public:true},{key:'balance',path:'other',public:true}]}),/duplicate fact key/);
+ assert.throws(()=>check({facts:[{key:'balance',public:true}]}),/needs a source path or worker/);
+ assert.throws(()=>check({facts:[{key:'balance',path:'balance'}]}),/explicit gate/);
+ assert.throws(()=>check({...good,menu:{choices:[{key:'pay',phrases:['pay'],flow:'no-such-flow'}]}}),/unknown menu worker no-such-flow/);
+});
 await test('compound calculations share build-time serialization without changing runtime guards',async()=>{
  const value=compileExpression(function (value,offset){return {total:value+offset};},'cargo.values[0]','2');
  const f=Worker({id:'compound',steps:[{id:'sum',type:'SET',variable:'noop',value:`(cargo.total=${value},true)`,requireTrue:true}]});

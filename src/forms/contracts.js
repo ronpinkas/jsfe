@@ -114,7 +114,7 @@ export function defineProvider({provides,contract,parameters=[],variables={},ste
 }
 export function defineForm({contract,provides,...spec}) {
    const flow=formFlow({...spec,...(provides?{extraVars:{...spec.extraVars,provides,questions:providerQuestions(provides)}}:{})});
-   return declared(flow,{role:'collector',...contract,form:{inputs:'inputs'}});
+   return declared(flow,{role:'collector',...contract,form:{inputs:'inputs'},...(provides?{catalog:'provides'}:{})});
 }
 export function definePerformer({performs,contract,prepare,present,project=[],provides,...spec}) {
    validateActionProjection(project,spec.id);
@@ -145,7 +145,7 @@ export function definePerformer({performs,contract,prepare,present,project=[],pr
          {...set('receipt_applied','noop','pf_receipt ? consumeActionReceipt(cargo,pf_receipt) : true'),requireTrue:true},
          call('present',present,{form:'{{form_instance}}',request:'{{pf_request}}',result:'{{pf_result}}'}),
          ...(spec.after || [])]});
-   return declared(flow,{role:'performer',...contract,requires:['guardedActions',...normalizeHostRequirements(contract?.requires,spec.id)],actions:'performs',form:{inputs:'inputs'},prepares:prepare,presents:present,projects:'projection'});
+   return declared(flow,{role:'performer',...contract,requires:['guardedActions',...normalizeHostRequirements(contract?.requires,spec.id)],actions:'performs',form:{inputs:'inputs'},prepares:prepare,presents:present,projects:'projection',...(provides?{catalog:'provides'}:{})});
 }
 
 /** A registered tool gets one generated adapter with explicit args; no dynamic tool-name interpreter is needed. */
@@ -213,6 +213,8 @@ export function validateFlowContracts(flows, tools=[], {externalFlows=[],require
          for(const set of provides.sets||[]){if(!set.key||keys.has(set.key))fail(flow.id,'invalid or duplicate fact set');for(const key of set.facts||[])if(!keys.has(key))fail(flow.id,`unknown fact ${key}`);keys.add(set.key);}
          if(provides.facts.some(f=>!f.public)&&(!provides.gate?.flow||![].concat(provides.gate.verified||[]).filter(Boolean).length))fail(flow.id,'private provider needs an explicit gate and verification condition');
          for(const reference of [provides.gate?.flow,provides.source?.flow])if(reference&&!ids.has(reference))fail(flow.id,`unknown provider worker ${reference}`);
+         // a FLOW to a name that does not exist is skipped silently at run time, so a menu choice's target is checked here
+         for(const choice of provides.menu?.choices || [])if(choice?.flow&&!ids.has(choice.flow))fail(flow.id,`unknown menu worker ${choice.flow}`);
       }
       for (const action of contract.performs || flow.variables?.[contract.actions]?.value || []) {
          if(action.retry?.unknown&&!(action.effect==='send'&&action.retry.unknown==='explicit'))fail(flow.id,'unknown effects may be explicitly repeated only for declared send actions');
