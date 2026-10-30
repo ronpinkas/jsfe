@@ -25,6 +25,9 @@ import type { FlowParameterDefinition } from '../index.js';
 
 /** A noul at or above this is a yes. */
 export const STAGE_YES_THRESHOLD = 0.5;
+/** Stage 1: a start below this (`any`) whose route gives its top flow less than SPLIT_ROUTE_SHARE is "None" (owner 2026-10-29). */
+export const WEAK_START = 0.55;
+export const SPLIT_ROUTE_SHARE = 0.7;
 
 export interface StageTurn { role: 'user' | 'assistant'; content: string }
 export interface StageFlow { id: string; name: string; description: string }
@@ -156,7 +159,9 @@ export function decodeFlowLlm(text: string, stage: FlowStageRequest): { flowName
 
 /**
  * System One's stage-1 answers as the canonical reply. `any` at or above the threshold starts the flow `route`
- * chose; below it, "None". `scores` are the top three flows by the chance that each is the one started,
+ * chose; below it, "None". A weak start (`any` below WEAK_START) is "None" too when the route is split, its top flow
+ * under SPLIT_ROUTE_SHARE: unsure a flow is wanted and unsure which, the Guru answers (prod 2026-10-29: 'Esta
+ * cancelación afecta mi crédito?' after a cancellation, any 0.51, restarted CancelService). `scores` are the top three flows by the chance that each is the one started,
  * any × its route probability (for logs and the host's near-miss hedge); `any` is logged with them. Throws when
  * either answer is missing or names no offered flow.
  */
@@ -175,7 +180,8 @@ export function decodeFlowSystemOne(
   const probabilities: Record<string, number> = Object.fromEntries(names.map(n => [n, Number(raw[n]) || 0]));
   const ranked = names.map(n => ({ name: n, p: any * probabilities[n] })).sort((a, b) => b.p - a.p);
   const scores = ranked.slice(0, 3);
-  const flowName = any >= threshold && ranked[0] ? ranked[0].name : 'None';
+  const split = any < WEAK_START && !!ranked[0] && probabilities[ranked[0].name] < SPLIT_ROUTE_SHARE;
+  const flowName = any >= threshold && ranked[0] && !split ? ranked[0].name : 'None';
   return { flowName, scores, any };
 }
 
