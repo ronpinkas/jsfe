@@ -62,6 +62,13 @@ export function flowSetData(flows,compiledFlows=[]){
  }
  return Object.keys(resolved).length?resolved:undefined;
 }
+/** A set's version 2 declarations with every {"$data":"path"} replaced by its value, as compilation sees them; the shared
+ * data entries are kept. For readers of the declarations (the flow docs); compilation resolves them itself. */
+export function resolveSetDataReferences(flows){
+ const data=sharedData((flows||[]).filter(isLibrary));
+ if(!Object.keys(data).length)return flows;
+ return flows.map(flow=>flow?.declarationVersion===2&&!isLibrary(flow)?resolveDataReferences(flow,data,flow.id):flow);
+}
 const isDataReference=value=>!!value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===1&&typeof value.$data==='string';
 /** Replace every {"$data":"path"} with a copy of the shared value at that path; an unknown path fails compilation. */
 function resolveDataReferences(value,data,where,active=new Set()){

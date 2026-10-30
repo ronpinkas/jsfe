@@ -14,9 +14,11 @@
  */
 import fs from 'fs';
 import path from 'path';
+import { resolveSetDataReferences } from '../forms/declarations.js';
 
 export function generateFlowDocs({ sets, root, check = false, hostRun = {}, log = console.log }) {
-   const SETS = sets;
+   // A catalog or value written as {"$data": path} is documented as compilation resolves it.
+   const SETS = sets.map((s) => ({ ...s, flows: resolveSetDataReferences(s.flows) }));
    // Which set holds a flow id; a page links to a flow in its own set, or in another set's folder.
    const setOf = new Map(), flowOf = new Map();
    for (const s of SETS) { for (const f of s.flows) { if (!setOf.has(f.id)) { setOf.set(f.id, s.key); flowOf.set(f.id, f); } else { /* the first set that defines it */ } } }
