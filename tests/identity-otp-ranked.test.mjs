@@ -28,9 +28,12 @@ async function at(answer,option,detected='Balance'){
 }
 let r=await at('my code never showed up','choice:resend');
 assert.equal(r.s.cargo.testResends,1);assert.doesNotMatch(r.s.response,/Let me explain/);
-assert.deepEqual(r.offered.options.filter(o=>o.startsWith('choice:')),['choice:email','choice:resend','choice:no_phone','choice:__agent','choice:usecase:pay','choice:exit:payment_link'],'the step offers (another account only after a caller-ID preselection), the use cases, the declared exits');
+assert.deepEqual(r.offered.options.filter(o=>o.startsWith('choice:')),['choice:email','choice:where','choice:resend','choice:no_phone','choice:__agent','choice:usecase:pay','choice:exit:payment_link'],'the step offers (another account only after a caller-ID preselection), the use cases, the declared exits');
 assert.match(r.offered.choices.find(c=>c.key==='usecase:pay').label,/^states the reason for the call: The caller wants to make a payment\.$/,'a use case is labelled by its description, without its Not: list');
 console.log('PASS a resend said in other words resends');
+r=await at('Ay dónde está?','choice:where');
+assert.match(r.s.response,/I sent it by text message to the cell ending with 0000\. Check your text messages\./,'where the code went: the channel and the masked number');
+assert.match(r.s.response,/6-digit verification code/,'and the code is asked again');assert.equal(r.s.cargo.testResends||0,0,'nothing is sent again');assert.doesNotMatch(r.s.response,/Let me explain/);console.log('PASS a caller asking where the code is hears where it went');
 r=await at('I would rather sort this out with your staff','choice:__agent');
 assert.equal(r.s.cargo.agent,true);console.log('PASS a person said in other words');
 r=await at('what is my balance','new_request');

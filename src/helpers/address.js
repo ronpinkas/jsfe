@@ -26,7 +26,10 @@ export function streetLocation(result,said,zip) {
    const part=kind=>components.find(c=>(c.types || []).includes(kind))?.long_name || '';
    const types=row.types || [],locationType=row.location_type || row.geometry?.location_type || '';
    const exact=result?.status==='OK'&&row.partial_match!==true&&types.includes('street_address')&&locationType==='ROOFTOP'&&part('street_number')&&part('route')&&(!part('postal_code')||part('postal_code')===zip);
-   return {street:exact?part('street_number')+' '+part('route'):String(said).trim(),said:String(said).trim(),verified:!!exact};
+   // An exact street match names the place its mail carries; it corrects a city read from the ZIP code alone (90805 is
+   // Lakewood to the ZIP lookup, while its streets are Long Beach and Lakewood)
+   const city=exact?part('locality')||part('postal_town')||part('sublocality'):'';
+   return {street:exact?part('street_number')+' '+part('route'):String(said).trim(),said:String(said).trim(),verified:!!exact,city};
 }
 export function resolvedAddress(values,data) {
    const unit=/^(none|no|ninguno|ninguna|sin|no hay)$/i.test(String(values.unit || ''))?'':String(values.unit || '').replace(/^(apt\.?|unit|#)\s*/i,'');

@@ -156,6 +156,13 @@ const auth=worker('authenticate-user','AuthenticateUser','Authenticate a contact
    call('auth_code','get-and-validate-otp-code'),
    cases('auth_complete',{'condition: cargo.otpVerified === true':set('auth_ok','auth_result','true'),'condition: cargo.authRetry':end('auth_return_retry'),default:otpMenu('auth_retry_code',"I couldn't verify your account. You can try again or use another contact.",'No pude verificar su cuenta. Puede intentarlo de nuevo o usar otro contacto.',true)}),
    call('auth_gate_end','task-gate',{form:'{{parent_form}}',gate:'authenticate-user',active:false})]});
+// Where the code went, for a caller who asks ('¿dónde está?'): the channel and the masked destination, never the code.
+export function otpWhere(cargo,es=false) {
+   const number=String(cargo.otp_cell_number || '').replace(/\D/g,'').slice(-4),tail=cargo.voice?number.split('').join(', '):number;
+   if(cargo.otpSentOn==='whatsapp')return es?'Se lo acabo de enviar aquí en este chat.':'I just sent it to you here in this chat.';
+   if(cargo.otp_cell_number)return es?'Se lo envié por mensaje de texto al celular que termina con '+tail+'. Revise sus mensajes de texto.':'I sent it by text message to the cell ending with '+tail+'. Check your text messages.';
+   return es?'Se lo envié por correo electrónico a '+String(cargo.otp_email || '')+'. Revise su correo.':'I sent it by email to '+String(cargo.otp_email || '')+'. Check your email.';
+}
 export function otpPrompt(cargo,es=false) {
    const verb=es?cargo.verb_es:cargo.verb,number=String(cargo.otp_cell_number || '').replace(/\D/g,'').slice(-4),tail=cargo.voice?number.split('').join(', '):number;
    const where=cargo.otpSentOn==='whatsapp'?(es?'que le acabo de enviar aquí en este chat':'I just sent you here in this chat'):(es?'que recibió en ':'you received at ')+(cargo.otp_cell_number?(es?'celular que termina con ':'cell ending with ')+tail:(es?'correo electrónico: ':'email: ')+String(cargo.otp_email || ''));
@@ -189,8 +196,8 @@ function otpPhoneUnavailable(value) {
 // What the reply ranker may take at the code question beside the code: the step's offers. Email and another account are
 // offered only where the step offers them (a code sent by text; a caller-ID preselection).
 const OTP_REPLY_CHOICES=[{key:'email',label:'use the email on the account instead of the phone'},{key:'another_account',label:'use another account'},
-   {key:'resend',label:'the code did not arrive; send it again'},{key:'no_phone',label:'no longer has that phone or number'},{key:'__agent',label:'speak with a person (a live agent)'}];
-const validateCode=worker('validate-otp-code','ValidateOtpCode','Validate a challenge response with explicit bounded retries, alternate-contact handling and tenant callbacks.',{variables:vars({otp_phrases:OTP_WORDS,no_code_given:false,wants_other_account:false,other_account_given:false,otp_validation_result:false,whatsapp_invite_sent:false,invite_text:'',otp_cancel:'contact-support',answer_key:'',answer_value:'',otp_reply_choices:OTP_REPLY_CHOICES,otp_offers:[],otp_reply:{}}),contract:{role:'gate',summary:'Validate the active one-time challenge',tools:['validate-otp','send-whatsapp-invite'],result:{path:'cargo.otpVerified',type:'boolean'}},steps:[
+   {key:'where',label:'asks where the code is or where it was sent, or cannot find it'},{key:'resend',label:'the code did not arrive; send it again'},{key:'no_phone',label:'no longer has that phone or number'},{key:'__agent',label:'speak with a person (a live agent)'}];
+const validateCode=worker('validate-otp-code','ValidateOtpCode','Validate a challenge response with explicit bounded retries, alternate-contact handling and tenant callbacks.',{variables:vars({otp_phrases:OTP_WORDS,no_code_given:false,wants_other_account:false,other_account_given:false,otp_validation_result:false,whatsapp_invite_sent:false,invite_text:'',otp_cancel:'contact-support',answer_key:'',answer_value:'',otp_reply_choices:OTP_REPLY_CHOICES,otp_offers:[],otp_reply:{},otp_where:'',otp_where_es:''}),contract:{role:'gate',summary:'Validate the active one-time challenge',tools:['validate-otp','send-whatsapp-invite'],result:{path:'cargo.otpVerified',type:'boolean'}},steps:[
    set('otp_cancel','otp_cancel',"cargo.authCancelFlow || 'contact-support'"),
    set('otp_reset_no_code','no_code_given','false'),set('otp_reset_invite','whatsapp_invite_sent','false'),set('otp_reset_callback','answer_key',"''"),
    when('otp_tenant_code','cargo.authOptions && cargo.authOptions.code_validator && normalized_otp_code.length !== 6 && /[0-9]/.test(user_choice)',call('otp_tenant_code_call','{{cargo.authOptions.code_validator}}',{answer:'{{user_choice}}'})),
@@ -225,10 +232,12 @@ const validateCode=worker('validate-otp-code','ValidateOtpCode','Validate a chal
       +".concat(((typeof $callers !== 'undefined' && $callers && $callers['authenticate-user']) || []).map(function(c){return {key:'usecase:'+c.id,label:'states the reason for the call: '+c.label};}))"
       +".concat(((typeof $gateExits !== 'undefined' && $gateExits && $gateExits['authenticate-user']) || []).map(function(a){return {key:'exit:'+a.key,label:a.label,route:'new_request'};}))"),
    when('otp_off_topic','no_code_given',{id:'otp_reply_rank',type:'DISPATCH',onResponse:'continue',responseContext:'Please say the 6-digit verification code I sent you. (Por favor diga el código de verificación de 6 dígitos que le envié.)',responseChoices:'otp_offers',responseVariable:'otp_reply',onNoIntent:'stay'}),
+   set('otp_where','otp_where',expression(otpWhere,'cargo')),set('otp_where_es','otp_where_es',expression(otpWhere,'cargo','true')),
    set('otp_reply_picked','no_code_given',"no_code_given && !(otp_reply && otp_reply.key && String(otp_reply.key).indexOf('usecase:') !== 0)"),
    cases('otp_reply_route',{
       "condition: !no_code_given && otp_reply && otp_reply.key === 'email'":call('otp_ranked_email','authenticate-user',{cell_number:'',email:'',retrying:true,declined_caller:true},'replace'),
       "condition: !no_code_given && otp_reply && otp_reply.key === 'another_account'":call('otp_ranked_account','authenticate-user',{cell_number:'',email:'',retrying:true,declined_caller:true},'replace'),
+      "condition: !no_code_given && otp_reply && otp_reply.key === 'where'":say('otp_ranked_where','{{otp_where}}','{{otp_where_es}}'),
       "condition: !no_code_given && otp_reply && otp_reply.key === 'resend'":call('otp_ranked_resend','resend-otp-code',{resend_reason:'requested'}),
       "condition: !no_code_given && otp_reply && otp_reply.key === 'no_phone'":otpMenu('otp_ranked_no_phone',"No problem. Then the code can't reach you there. You can use the email on your account instead, or {{cargo.verb}} AGENT to reach a person.",'No hay problema. Entonces el código no le puede llegar ahí. Puede usar el correo electrónico de su cuenta, o {{cargo.verb_es}} AGENTE para hablar con una persona.',false),
       "condition: !no_code_given && otp_reply && otp_reply.key === '__agent'":call('otp_ranked_agent','live-agent-requested',undefined,'reboot'),

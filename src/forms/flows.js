@@ -459,20 +459,26 @@ const readFormChoice={
 // form's other choices (a correction) and a person, never YES. Result: cargo.confirmRanked = 'no' | 'changed' | 'none'
 // (ConfirmForm reads it); `abort` ends every flow; `new_request` goes to intent detection.
 const readConfirmReply={
- id:'read-confirm-reply',name:'ReadConfirmReply',version:'1.2.0',scope:'isolated',description:'Rank an unreadable answer to a confirmation: it declines (NO), picks another of the form\'s choices (a correction, read as that input\'s answer), asks for a person, or is asked again; a withdrawal or a new request leaves with saved form progress. Never confirms.',
- parameters:[{name:'form',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'}],
- variables:vars({question:'',question_es:'',asked:'',ranked:[],reply:null,chain:null,others:[],picked:null,reading:null}),
+ id:'read-confirm-reply',name:'ReadConfirmReply',version:'1.3.0',scope:'isolated',description:'Rank an unreadable answer to a confirmation: it declines (NO), picks another of the form\'s choices (a correction, read as that input\'s answer), says a named field read back is wrong (confirm.named_fields: that input is asked again), asks for a person, or is asked again; a withdrawal or a new request leaves with saved form progress. Never confirms.',
+ parameters:[{name:'form',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'},{name:'named_fields',type:'boolean'}],
+ variables:vars({question:'',question_es:'',asked:'',ranked:[],reply:null,chain:null,others:[],fields:[],field:null,picked:null,reading:null,named_fields:false}),
  steps:[SET('confirm_asked','asked',"language === 'es' && question_es ? question_es : question"),
   SET('confirm_chain','chain','formInputChain(cargo.forms, form, cargo)'),
   SET('confirm_others','others',otherChoicesJS("''",'[]')),
-  rankedChoices('confirm_ranked_choices',"[{key:'no',label:'no: declines or refuses what the question asks to confirm'}].concat(others.map(function(c){return {key:c.key,label:c.label};}))"),
+  // confirm.named_fields: a field read back may be corrected in the caller's own words ('es Long Beach' at an address
+  // read back with the ZIP code's city): each named input of this form that holds a value is offered, and a pick asks
+  // that input again, so the caller's value replaces the one read back
+  SET('confirm_fields','fields',"named_fields === true || named_fields === 'true' ? (chain || []).filter(function(i){var v=cargo.forms[form] && cargo.forms[form].values;return i.form===form && !i.confirmation && Array.isArray(i.names) && i.names.length && v && v[i.name]!==undefined && v[i.name]!==null && v[i.name]!=='';}).map(function(i){var l=String(i.label || i.names[0]);return {key:'field:'+i.name,label:'says the '+l+' read back is wrong, or gives a different '+l,owner:{form:i.form,name:i.name}};}) : []"),
+  rankedChoices('confirm_ranked_choices',"[{key:'no',label:'no: declines or refuses what the question asks to confirm'}].concat(others.map(function(c){return {key:c.key,label:c.label};})).concat(fields.map(function(c){return {key:c.key,label:c.label};}))"),
   rankedDispatch('confirm_dispatch','confirmation_not_matched'),
   ...escapeRoutes('confirm_escape'),
   // a correction picked by the ranker is read as its input's answer: the form changes and is confirmed again, never confirmed
   SET('confirm_picked','picked',"others.filter(function(c){return reply && c.key===reply.key;})[0] || null"),
   SET('confirm_read','reading',"picked ? enrichFormMatches(readFormAnswer(picked.key, chain, picked.owner, picked.key, []), chain, form, [picked.owner.name], picked.owner.name) : null"),
   WHEN('confirm_change','reading && reading.hits.length',FLOW('confirm_change_accept','collect-input-accept','call',{hits:'{{reading.hits}}'})),
-  SIDE('confirm_ranked',"(cargo.confirmRanked=reading && reading.hits.length ? 'changed' : reply && reply.key==='no' ? 'no' : 'none',true)")]
+  SET('confirm_field','field',"fields.filter(function(c){return reply && c.key===reply.key;})[0] || null"),
+  WHEN('confirm_field_reset','field',SIDE('confirm_field_ask','(resetFormInputs(cargo, field.owner.form, [field.owner.name]), true)')),
+  SIDE('confirm_ranked',"(cargo.confirmRanked=reading && reading.hits.length || field ? 'changed' : reply && reply.key==='no' ? 'no' : 'none',true)")]
 };
 const collectContextualAnswer=formFlow({id:'collect-contextual-answer',name:'CollectContextualAnswer',description:'Collect one open-ended answer using contextual DISPATCH and preserve the caller wording.',
  parameters:[...['question','question_es','description','context','context_es'].map(name=>({name,type:'string'})),{name:'choices',type:'array'},{name:'digits',type:'object'}],
@@ -599,7 +605,7 @@ const confirmForm = {
          'condition: cf_named': SET('cf_named_reset', 'cf_result', "(resetFormInputs(cargo, cf_named.form, [cf_named.name]), 'changed')"),
          "condition: cargo.choice === 'no'": SET('cf_declined', 'cf_result', "'no'"),
          "condition: Array.isArray(clarifications) && pickChoice(String(cargo.choiceText || '').replace(/[?¿]/g,''),[{key:'clarify',phrases:clarifications,exact:true}],false)==='clarify'": SET('cf_clarification','cf_result',"'clarification'"),
-         'condition: !cf_must && cf_words > 0': FLOW('cf_elsewhere', 'read-confirm-reply', 'call', { form: '{{form}}', question: '{{cf_prompt}}', question_es: '{{cf_prompt_es}}' }),
+         'condition: !cf_must && cf_words > 0': FLOW('cf_elsewhere', 'read-confirm-reply', 'call', { form: '{{form}}', question: '{{cf_prompt}}', question_es: '{{cf_prompt_es}}', named_fields: '{{named_fields}}' }),
          default: SET('cf_unclear', 'cf_result', "'unclear'") } },
       // the ranker's reading of an unread answer: a decline is the NO; an answer that declines nothing is asked again
       SET('cf_ranked', 'cf_result', "cf_result ? cf_result : cargo.confirmRanked === 'no' ? 'no' : cargo.confirmRanked === 'none' ? 'unclear' : ''"),
