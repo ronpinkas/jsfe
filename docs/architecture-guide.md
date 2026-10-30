@@ -126,7 +126,6 @@ menu offered after an answer. "When is it due?" gets the due date, not a summary
   "action": "bill_payment", "effect": "charge", "subject": "form.data.account",
   "gate": { "flow": "verify-caller", "verified": ["cargo.verified"] },
   "flow": "payment-execute", "confirm": { "exact": true },
-  "reconcile": { "policy": "An unknown result is checked by the billing team against the processor's report the next business day." },
   "outcomes": { "ok": "resolved", "failed": "unresolved", "unknown": "unresolved" }
 }]
 ```
@@ -134,13 +133,10 @@ menu offered after an answer. "When is it due?" gets the due date, not a summary
 From that, JSFE refuses to run the action without the gate, binds the confirmation to the exact request the caller
 heard, invalidates it when any input changes, and never treats a timeout as success.
 
-**An unknown result.** A timeout after the card may have been charged leaves the result unknown. The engine handles the
-machine side for every action, whatever the declaration says: the action is claimed once, a result that is not one of
-the declared `outcomes` counts as unknown, and an unknown charge or cancellation is held, never repeated (only a `send`
-may declare an explicit retry). The declaration covers the human side. An action that charges, writes, sends or cancels
-must declare `idempotency` (the backend rejects a repeat by key) or `reconcile` (how the business settles an unknown
-result), or the set does not build. The `reconcile.policy` text is documentation for people and appears in the flow
-docs; the engine does not read it.
+**An unknown result.** A timeout after the card may have been charged leaves the result unknown. The engine handles it
+for every action: the action is claimed once, a result that is not one of the declared `outcomes` counts as unknown,
+and an unknown charge or cancellation is held, never repeated (only a `send` may declare an explicit retry). Where the
+payment API accepts an idempotency key, the flow passes one as a tool argument as well.
 
 ### Shared data and shared functions
 
@@ -154,6 +150,20 @@ apart.
 The engine's session holds the flow stacks and `cargo`, the conversation's shared state. Form progress lives in
 `cargo.forms`, so a task interrupted by a question, a detour or a different request resumes from where it was when the
 caller comes back to it. The host stores the session between turns; the engine never stores anything itself.
+
+### Deploying while conversations are in progress
+
+A new flow set can go live while callers are in the middle of a flow. A flow's `version` decides what happens to them:
+
+- **A minor or patch change** (`1.4.0` to `1.5.0`: new wording, a new fact, a fix) keeps the conversation going on the
+  steps already saved in it.
+- **A breaking change bumps the major** (`1.5.0` to `2.0.0`): an input, entry argument or shared name removed or
+  renamed, or a value whose meaning changed. A conversation saved under the old major ends that task safely on its next
+  turn, without running any action or reading the caller's message as an answer, and the caller is asked to state the
+  request again.
+
+`continuationBreaks(previousFlows, nextFlows)` compares a set with the deployed one and lists every removed name that
+needs a major bump, so a forgotten bump fails the deploy instead of reaching a caller.
 
 ## 4. One turn, step by step
 

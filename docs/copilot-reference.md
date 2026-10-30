@@ -328,7 +328,6 @@ A Performer requires `form`, nonempty `performs`, `prepare` worker and `present`
 | `subject` | Ownership path such as `form.data.account` or `form.data.subject`; bind account/service identity, not an unrelated session flag. |
 | `gate:{flow?,verified:[paths]}` | Execution-time verification; rerun the declared flow before each fresh effect. |
 | `flow`, `tool` | Installed executor worker and/or registered tool identity. |
-| `idempotency`, `reconcile` | Explicit backend policy. Charge/write/send/cancel require at least one; declaring prose alone does not implement backend idempotency. |
 | `confirm:{exact:true}` | Required for charge, cancel or `reversible:false`. This requires a real form confirmation question. |
 | `outcomes` | Map declared executor statuses to business outcomes, including unknown results. |
 | `retry` | Explicit policies: `after:[knownStatuses]`; unknown retry only for SEND with `unknown:"explicit"` and a new accepted recovery choice. |
@@ -359,7 +358,6 @@ This reduced **composed-registry fragment** illustrates action authoring, not a 
     "action":"curacao_payment", "effect":"charge", "subject":"form.data.account",
     "gate":{"flow":"get-account","verified":["cargo.otpVerified","cargo.authenticatedAccount"]},
     "flow":"payment-execute", "confirm":{"exact":true},
-    "reconcile":{"policy":"Hold unknown results for reconciliation; never automatically repeat a charge."},
     "outcomes":{"ok":"resolved","failed":"unresolved","unknown":"unresolved"}
   }],
   "prepare":"payment-prepare", "present":"payment-present",
@@ -378,7 +376,7 @@ This reduced **composed-registry fragment** illustrates action authoring, not a 
 }
 ```
 
-The action key makes this session projection idempotent; it does not make the payment API idempotent. Declare backend `idempotency` only when the actual API supports the stated key/policy. Otherwise implement and test the declared reconciliation/unknown-result hold. Neither policy wording nor a recorded ledger entry proves a charge succeeded.
+The action key makes this session projection idempotent; it does not make the payment API idempotent. Where the API accepts an idempotency key, pass one as a tool argument. Either way an unknown result is held, never repeated: the engine claims each confirmed action once, treats a status outside `outcomes` as unknown, and never retries an unknown charge or cancellation. A recorded ledger entry does not prove a charge succeeded.
 
 ## 9. Outcomes, recovery and persistence
 
@@ -394,7 +392,7 @@ Session-only protects persisted, serialized session progress from reentry/repeti
 
 With a durable journal, the host saves the returned full session before acknowledging exact versioned action receipts with `checkpointActionSession`. Failed saves do not release scopes. Compatible late results project into current state without replaying presenters or restoring an old workflow merely because their storage sequence is larger. Recovery identity binds verified runtime bytes and actual flow/tool contracts; a version string alone is insufficient. Identity mismatch, unresolved effects or failed projections preserve holds. Do not change persistence mode for a live conversation or clear holds to manufacture compatibility.
 
-For versioned JSON, JSFE generates internal continuation revisions from the entire ordered declaration and named function bodies. Do not author `safetyRevision`. A source change retires obsolete unexecuted continuations before new input; uncertain effects remain preserved/quarantined. This is change detection, not authentication or automatic hot reload. Ordinary executable flows can explicitly use the SDK's revision helper when their host owns that policy.
+For versioned JSON, JSFE generates each declaration's continuation revision from its `version` major, plus the `version` major of each shared data or functions entry it uses (`$data`, `fn.`). Do not author `safetyRevision`. A minor or patch change keeps the revision: a saved session continues on its saved steps. **A change that can break a saved session bumps the major** (a removed or renamed input, entry argument, shared data or function name, or a changed meaning under the same name); the next turn of a session saved under the old major retires its unexecuted continuation before new input, and uncertain effects remain preserved/quarantined. `continuationBreaks(previousFlows, nextFlows)` (`jsfe/forms`) lists the removed names that need a major bump; run it against the deployed set before every deploy. A session saved under the earlier fingerprint revision (the whole declaration) continues while its declaration is unchanged. This is change detection, not authentication or automatic hot reload. Ordinary executable flows can explicitly use the SDK's revision helper when their host owns that policy.
 
 ## 10. Matching tools JSON
 

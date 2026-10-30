@@ -9,7 +9,7 @@ export function fixture(namespace,{storage=createMemoryActionStorage(),nested=fa
    const effects=[];
    const port=()=>createActionJournal({storage,namespace});
    const performer=label=>definePerformer({id:label+'-task',name:label+'Task',description:'Independent '+label+' effect.',inputs:[],contract:{summary:'Recovery fixture '+label},prepare:'prepare-'+label,present:'present-'+label,
-      performs:[{action:label,effect:'write',flow:'effect',idempotency:'journal',outcomes:{saved:'resolved',unknown:'unresolved'}}],
+      performs:[{action:label,effect:'write',flow:'effect',outcomes:{saved:'resolved',unknown:'unresolved'}}],
       project:[set(label+'-projection','noop',"(cargo.failProjection ? (function(){throw new Error('fixture projection failed');})() : null,cargo.projected=cargo.projected || [], result.status==='saved' && !cargo.projected.some(item=>item.key===key) ? cargo.projected.push({key,label:request.label,reference:result.reference}) : null, true)")],
       after:[set(label+'-after','noop',`(cargo.${label}After=pf_result,true)`)]});
    const workers=['alpha','beta'].flatMap(label=>[

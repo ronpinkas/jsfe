@@ -58,7 +58,7 @@ await test('required SET failures still fail before subsequent effects',async()=
 });
 function actionFixture({outcome={status:'saved',reference:'R1'},durable=false}={}){
  const effects=[],storage=createMemoryActionStorage();const journal=()=>createActionJournal({storage,namespace:'named-functions-runtime'});
- const performer=simple('named-action',{form:{inputs:[]},prepare:'named-prepare',present:'named-present',performs:[{action:'save',effect:'charge',idempotency:'journal',flow:'named-effect',subject:'cargo.account',gate:{verified:'cargo.verified'},confirm:{exact:true,question:'Confirm named action?'},outcomes:{saved:'resolved',unknown:'unresolved'}}],project:[set('project','noop','fn.project(cargo,request,result,key)',{requireTrue:true})],functions:{
+ const performer=simple('named-action',{form:{inputs:[]},prepare:'named-prepare',present:'named-present',performs:[{action:'save',effect:'charge',flow:'named-effect',subject:'cargo.account',gate:{verified:'cargo.verified'},confirm:{exact:true,question:'Confirm named action?'},outcomes:{saved:'resolved',unknown:'unresolved'}}],project:[set('project','noop','fn.project(cargo,request,result,key)',{requireTrue:true})],functions:{
   request:fn(['cargo'],['return {account:cargo.account,amount:25};']),
   project:fn(['cargo','request','result','key'],["cargo.projected ||= [];","if (result.status === 'saved' && !cargo.projected.some(row=>row.key===key)) cargo.projected.push({key,reference:result.reference,account:request.account});","return true;"]),
   present:fn(['result'],['return "own:"+result.status+":"+(result.reference || "");'])
@@ -88,10 +88,12 @@ await test('detached late recovery projects using its original declared namespac
  const {retainRecoveryState}=await import('../dist/host/index.js');retainRecoveryState(current,['cargo.verified','cargo.currentDraft']);
  e=f.make();s=await answer(e,current,'status');assert.equal(f.effects.length,1);assert.equal(s.cargo.verified,false);assert.deepEqual(s.cargo.currentDraft,{value:17});assert.equal(s.cargo.projected.length,1);assert.equal(s.cargo.projected[0].reference,'R1');assert.equal(s.lastTurnRecovery.projection,true);assert.match(s.response,/recovered a result/);
 });
-await test('ordinary executable flows remain ordinary and function edits retire saved declaration continuations',async()=>{
+await test('ordinary executable flows remain ordinary; a function edit keeps a saved declaration continuation, a major bump retires it',async()=>{
  const ordinary={id:'ordinary',name:'Ordinary',version:'1',description:'Existing flow.',variables:{fn:{type:'string',value:'legacy'}},steps:[{id:'say',type:'SAY',value:'{{fn}}'}]};let e=engine([ordinary]),s=e.initSession('u','ordinary','en');s=await start(e,s,'ordinary');assert.equal(s.response,'legacy');
  const first=form('edit','OLD:');e=engine([first]);s=e.initSession('u','edit','en');s.cargo.tag='x';s=await start(e,s,'edit');assert.equal(s.response,'OLD:x');
- const changed=form('edit','NEW:');const next=engine([changed]);s=await answer(next,s,'old answer');assert.equal(s.cargo.edit,undefined,'an answer to the retired function declaration cannot resume stale steps');
+ const saved=clone(s);
+ const changed=form('edit','NEW:');s=await answer(engine([changed]),clone(saved),'old answer');assert.equal(s.cargo.edit,'old answer','a non-breaking function edit keeps the saved continuation');
+ s=await answer(engine([{...changed,version:'2.0.0'}]),clone(saved),'old answer');assert.equal(s.cargo.edit,undefined,'an answer to a declaration whose major changed cannot resume stale steps');
 });
 assert.deepEqual(warnings.filter(message=>/expression.*failed|not defined|evaluation failed/i.test(message)),[]);
 console.log(`Named function runtime: all ${checks} checks passed`);

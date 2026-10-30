@@ -846,6 +846,7 @@ export interface FlowDefinition {
   description: string;
   version: string;
   safetyRevision?: string; // Changes retire saved continuations before input/steps; not a hot reload.
+  safetyRevisionCompat?: string; // The earlier fingerprint revision of an unchanged declaration, accepted from a saved session.
   primary?: boolean; // Whether this flow is a primary entry point for users (default: false)
   // A tenant's thin entry point over a shared flow (by id or name): when present, the wrapped flow is no longer primary
   // (it stays callable as a worker), and the wrapper takes its description, parameters, prompts and primary flag unless
@@ -3059,10 +3060,13 @@ function retireUnsafeContinuation(engine: Engine, extraStacks: FlowFrame[][] = [
   const staleForm = (Object.values(engine.cargo?.forms || {}) as any[]).find(state => {
     const definition = engine.flowsMenu?.find(flow => flow.id === state.definition);
     const previous = previousRevisions[state.definition], current = definition?.safetyRevision;
-    return (previous !== undefined || current !== undefined) && previous !== current;
+    return (previous !== undefined || current !== undefined) && previous !== current
+      && !(definition?.safetyRevisionCompat !== undefined && previous === definition.safetyRevisionCompat);
   });
   const mismatch = frames.find(frame => {
     const current = engine.flowsMenu?.find(flow => flow.id === frame.flowId);
+    // A frame saved under the earlier fingerprint revision continues while its declaration is unchanged, under the new revision.
+    if (current?.safetyRevisionCompat !== undefined && frame.safetyRevision === current.safetyRevisionCompat) { frame.safetyRevision = current.safetyRevision; return false; }
     return current?.safetyRevision !== undefined
       ? current.safetyRevision !== frame.safetyRevision
       : frame.safetyRevision !== undefined;

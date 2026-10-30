@@ -18,8 +18,7 @@ throws(()=>validateFlowContracts([defineProvider({id:'bad',name:'Bad',descriptio
 throws(()=>validateFlowContracts([defineProvider({id:'bad',name:'Bad',description:'bad',contract:{summary:'bad'},provides:{...provides,sets:[{key:'summary',facts:['unknown']}]}}),...set.slice(1)]),/unknown fact/);
 const action=defineWorker({id:'charge',name:'Charge',description:'charge',contract:{role:'performer',summary:'charge',performs:[{action:'pay',effect:'charge',tool:'charge',outcomes:{done:'resolved'}}]},steps:[]});
 const tool={id:'charge',parameters:{type:'object',properties:{amount:{type:'number'},account:{type:'string'}}},implementation:{type:'local',function:'charge'}};
-throws(()=>validateFlowContracts([action],[tool]),/idempotency/);
-const declared=action.variables.contract.value.performs[0];declared.idempotency='request.id';
+const declared=action.variables.contract.value.performs[0];
 throws(()=>validateFlowContracts([action],[tool]),/exact confirmation/);
 declared.confirm={exact:true};eq(validateFlowContracts([action],[tool]).declared,1,'fully declared action validates');
 const form=defineForm({id:'form',name:'Form',version:'1',description:'collect',contract:{summary:'collect contact'},inputs:[{name:'phone',field:'phone'}]});

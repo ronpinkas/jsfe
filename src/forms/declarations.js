@@ -10,6 +10,15 @@ const safe=/^[A-Za-z_$][\w$]*$/;
 const fail=message=>{throw new Error('Flow declaration: '+message);};
 // Trusted-author change detection, not an authentication signature. Stable in browsers and Node.
 function sourceRevision(source){const text=JSON.stringify(source);const hashes=[2166136261,2246822507,3266489909,668265263];for(let i=0;i<text.length;i++)for(let lane=0;lane<hashes.length;lane++)hashes[lane]=Math.imul(hashes[lane]^text.charCodeAt(i),16777619+lane*2)>>>0;return hashes.map(n=>n.toString(16).padStart(8,'0')).join('');}
+/** The major of a declared version ("2.4.1" → "2"; absent or unreadable → "0"). */
+const majorOf=version=>{const m=/^\s*v?(\d+)/i.exec(String(version??''));return m?String(Number(m[1])):'0';};
+/** A declaration's continuation revision: its major version, plus the major of each shared entry it uses ($data, fn.).
+ * A minor or patch change keeps the revision, so a saved session continues; a breaking change bumps the major. */
+function majorRevision(declarationVersion,source,libraries){
+ const text=JSON.stringify(source),uses={data:/\$data\b/.test(text),functions:/(?<![\w$])fn\./.test(text)};
+ const shared=libraries.filter(library=>uses[library.library]).map(library=>library.library+'@'+library.id+':'+majorOf(library.version)).sort();
+ return 'declaration-v'+declarationVersion+':major:'+majorOf(source.version)+(shared.length?'/'+shared.join('/'):'');
+}
 const variableDeclaration=value=>value&&typeof value==='object'&&!Array.isArray(value)&&['string','number','integer','boolean','object','array'].includes(value.type)?value:{type:Array.isArray(value)?'array':value===null||typeof value==='object'?'object':typeof value,value};
 
 const DECLARATION_VERSIONS=new Set([1,2]);
@@ -24,7 +33,7 @@ function sharedFunctions(libraries){
   if(library.library!=='functions')continue;
   if(typeof library.id!=='string'||!library.id)fail('a shared functions entry needs an id');
   if(library.declarationVersion!==2)fail('shared functions '+library.id+' require declarationVersion 2');
-  const extra=Object.keys(library).filter(key=>!['id','name','library','declarationVersion','description','functions'].includes(key));
+  const extra=Object.keys(library).filter(key=>!['id','name','library','declarationVersion','description','version','functions'].includes(key));
   if(extra.length)fail('shared functions '+library.id+' cannot declare '+extra.join(', '));
   if(!library.functions||typeof library.functions!=='object'||Array.isArray(library.functions)||!Object.keys(library.functions).length)fail('shared functions '+library.id+' must declare a nonempty functions map');
   for(const [name,definition]of Object.entries(library.functions)){if(Object.hasOwn(shared,name))fail('shared function '+name+' is declared twice');shared[name]=structuredClone(definition);}
@@ -38,7 +47,7 @@ function sharedData(libraries){
  for(const library of libraries.filter(entry=>entry.library==='data')){
   if(typeof library.id!=='string'||!library.id)fail('a shared data entry needs an id');
   if(library.declarationVersion!==2)fail('shared data '+library.id+' requires declarationVersion 2');
-  const extra=Object.keys(library).filter(key=>!['id','name','library','declarationVersion','description','data'].includes(key));
+  const extra=Object.keys(library).filter(key=>!['id','name','library','declarationVersion','description','version','data'].includes(key));
   if(extra.length)fail('shared data '+library.id+' cannot declare '+extra.join(', '));
   if(!library.data||typeof library.data!=='object'||Array.isArray(library.data)||!Object.keys(library.data).length)fail('shared data '+library.id+' must declare a nonempty data map');
   for(const [name,value]of Object.entries(library.data)){if(Object.hasOwn(data,name))fail('shared data '+name+' is declared twice');data[name]=structuredClone(value);}
@@ -64,6 +73,7 @@ export function flowSetData(flows,compiledFlows=[]){
 }
 /** A set's version 2 declarations with every {"$data":"path"} replaced by its value, as compilation sees them; the shared
  * data entries are kept. For readers of the declarations (the flow docs); compilation resolves them itself. */
+export {majorOf};
 export function resolveSetDataReferences(flows){
  const data=sharedData((flows||[]).filter(isLibrary));
  if(!Object.keys(data).length)return flows;
@@ -202,7 +212,11 @@ export function compileFlowDeclarations(flows,{tools,externalFlows=[],validate=t
   flow={...flow,parameters:(flow.parameters||[]).filter(parameter=>{if(parameterNames.has(parameter.name))return false;parameterNames.add(parameter.name);return true;}),...(rest.parameterInstructions!==undefined?{parameterInstructions:rest.parameterInstructions}:{}),...(functions?{functions}:{}),metadata:{...flow.metadata,declaration:{version:declarationVersion,source:source.id}}};
   // Revisions are engine bookkeeping; a stale authored token cannot override source change detection.
   const {safetyRevision:ignoredRevision,...revisionSource}=source;
-  return withSafetyRevision(flow,'declaration-v'+declarationVersion+':'+sourceRevision(declarationVersion===2&&Object.keys(shared).length?{...revisionSource,sharedFunctions:shared}:revisionSource));
+  const revised=withSafetyRevision(flow,majorRevision(declarationVersion,original,libraries));
+  // The earlier revision, a fingerprint of the whole declaration: a session saved under it continues while the declaration
+  // is unchanged (and takes the major revision), so moving to major revisions retires no session.
+  revised.safetyRevisionCompat='declaration-v'+declarationVersion+':'+sourceRevision(declarationVersion===2&&Object.keys(shared).length?{...revisionSource,sharedFunctions:shared}:revisionSource);
+  return revised;
  });
  const externalObjects=externalFlows.filter(flow=>flow&&typeof flow==='object');
  const formIds=new Set(flows.filter(flow=>flow.declarationVersion!==undefined&&flow.form).map(flow=>flow.id));
@@ -281,7 +295,7 @@ export function serializeFlowDeclaration(flow,{resolvedFlow=flow}={}){
   for(const key of ['prompt','prompt_es'])if(resolvedFlow[key]!==undefined)result.form[key]=resolvedFlow[key];
   result.variables=Object.fromEntries(Object.entries(spec.extraVars||{}).map(([name,value])=>[name,variableDeclaration(value)]));
  }else if(spec.variables)result.variables=spec.variables;
- for(const [key,value]of Object.entries(spec))if(!sharedKeys.includes(key)&&!['extraVars','variables','helpers','safetyRevision'].includes(key)&&!(isForm&&formKeys.has(key)))result[key]=value;
+ for(const [key,value]of Object.entries(spec))if(!sharedKeys.includes(key)&&!['extraVars','variables','helpers','safetyRevision','safetyRevisionCompat'].includes(key)&&!(isForm&&formKeys.has(key)))result[key]=value;
  const out=rewrite(result);
  // Helpers and bodies can reference other explicitly authored expressions as well.
  for(const definition of Object.values(registry))definition.body=definition.body.map(rewrite);

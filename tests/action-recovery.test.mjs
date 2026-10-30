@@ -6,7 +6,7 @@ import {createActionJournal,createMemoryActionStorage,checkpointActionSession,ac
 let effects=0,checks=0;
 const S=(id,variable,value)=>({id,type:'SET',variable,value});
 const performer=definePerformer({id:'crash-task',name:'CrashTask',description:'Recover a newly created task',inputs:[],
-   performs:[{action:'write',effect:'write',flow:'effect',idempotency:'journal',outcomes:{saved:'resolved',unknown:'unresolved'}}],
+   performs:[{action:'write',effect:'write',flow:'effect',outcomes:{saved:'resolved',unknown:'unresolved'}}],
    prepare:'prepare',present:'present',contract:{summary:'crash task'}});
 const workers=[
    {id:'prepare',name:'Prepare',steps:[S('prepare-request','noop',"(cargo.actionRequest={item:'one'},true)")]},

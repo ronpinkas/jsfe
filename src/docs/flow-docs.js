@@ -221,7 +221,7 @@ export function generateFlowDocs({ sets, root, check = false, hostRun = {}, log 
       // A form the jsfe SDK compiled (the system set) carries its inputs as a variable; its steps are the engine's run-form loop.
       const compiled = flow.metadata && flow.metadata.formProtocol && flow.variables && flow.variables.inputs && Array.isArray(flow.variables.inputs.value) ? flow.variables.inputs.value : null;
       if (!flow.form && compiled && compiled.length) { out.push('', '### Form inputs', '', formChart({ inputs: compiled })); } else { /* not a compiled form */ }
-      if (flow.performs) { out.push('', '### Performs', '', ...flow.performs.map((a) => `- \`${a.action}\` (${a.effect}): ${a.reconcile && a.reconcile.policy ? cut(a.reconcile.policy, 300) : ''}`), '', performsChart(flow)); } else { /* not a performer */ }
+      if (flow.performs) { out.push('', '### Performs', '', ...flow.performs.map((a) => `- \`${a.action}\` (${a.effect})`), '', performsChart(flow)); } else { /* not a performer */ }
       if (flow.call) { out.push('', '### Call', '', `Runs ${link(flow.call.flow)} with its parameters.`); } else { /* not a call */ }
       if (flow.wraps) { out.push('', '### Wraps', '', `Runs ${link(flow.wraps)} with this set's wording.`); } else { /* not a wrapper */ }
       if (flow.steps && flow.steps.length) { out.push('', '### Steps', '', stepsChart(flow.steps)); } else { /* no steps */ }

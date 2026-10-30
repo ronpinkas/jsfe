@@ -52,9 +52,12 @@ await test('a source that no longer exists is left absent, and the continuation 
    const a=make();let s=a.initSession('u','s3','en');
    s=JSON.parse(JSON.stringify(await a.updateActivity({role:'user',content:'order',start:{flow:'order-form'}},s)));
    const stored=JSON.parse(JSON.stringify(a.storedSession(s)));
-   const changed=make([ADDRESS,{...ORDER,description:'Changed: the caller orders a plan.'}]);
+   const minor=make([ADDRESS,{...ORDER,description:'Changed: the caller orders a plan.'}]);
+   const kept=await minor.updateActivity({role:'user',content:'gold'},JSON.parse(JSON.stringify(stored)));
+   assert.match(String(kept.response||''),/ZIP code/i,'a non-breaking change continues, its specs derived from the current definition');
+   const changed=make([ADDRESS,{...ORDER,version:'9.0.0',description:'Changed: the caller orders a plan.'}]);
    const after=await changed.updateActivity({role:'user',content:'gold'},stored);
-   assert.match(String(after.response||''),/changed|cambió/i,'the changed definition retires the continuation');
+   assert.match(String(after.response||''),/changed|cambió/i,'a major change retires the continuation');
 });
 
 await test('a session never stored (older hosts) continues as before',async()=>{

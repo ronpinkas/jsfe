@@ -1,4 +1,4 @@
-/** Session-owned action state. Backend idempotency and reconciliation remain explicit parts of the action contract. */
+/** Session-owned action state. */
 import { nextFormInput, formPath, formInputApplies } from './form-state.js';
 export function formSignature(value) {
    return JSON.stringify(value, (_key, v) => v && typeof v==='object' && !Array.isArray(v)

@@ -223,7 +223,6 @@ export function validateFlowContracts(flows, tools=[], {externalFlows=[],require
          if(action.tool&&!toolIds.has(action.tool))fail(flow.id,`unknown action tool ${action.tool}`);
          if(action.flow&&!ids.has(action.flow))fail(flow.id,`unknown action worker ${action.flow}`);
          if(!action.outcomes||!Object.keys(action.outcomes).length)fail(flow.id,`action ${action.action} needs outcomes`);
-         if(['charge','write','send','cancel'].includes(action.effect)&&!action.idempotency&&!action.reconcile)fail(flow.id,`action ${action.action} needs idempotency or reconciliation`);
          if((action.effect==='charge'||action.effect==='cancel'||action.reversible===false)&&action.confirm?.exact!==true)fail(flow.id,`action ${action.action} needs exact confirmation`);
       }
       for(const tool of contract.tools || [])if(!toolIds.has(tool))fail(flow.id,`unknown tool ${tool}`);

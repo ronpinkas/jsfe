@@ -4,7 +4,7 @@ import {assertFlowHostCapabilities,JSFEHostCapabilityError} from '../dist/host/i
 import {definePerformer,defineWorker} from '../dist/forms/contracts.js';
 let checks=0;const test=(name,run)=>{run();checks++;console.log('PASS '+name);};
 const legacy={id:'legacy',name:'Legacy',steps:[{id:'say',type:'SAY',value:'still works'}]};
-const build=(contract={})=>definePerformer({id:'native-send',name:'NativeSend',description:'Send a confirmed request',inputs:[],prepare:'prepare-send',present:'present-send',contract:{summary:'Send with durable ownership',...contract},performs:[{action:'send',effect:'send',tool:'send',idempotency:'request-key',outcomes:{sent:{}}}]});
+const build=(contract={})=>definePerformer({id:'native-send',name:'NativeSend',description:'Send a confirmed request',inputs:[],prepare:'prepare-send',present:'present-send',contract:{summary:'Send with durable ownership',...contract},performs:[{action:'send',effect:'send',tool:'send',outcomes:{sent:{}}}]});
 const required=flow=>flow.variables.contract.value.requires;
 const rejected=(flow,capabilities,capability='guardedActions')=>assert.throws(()=>assertFlowHostCapabilities([flow],capabilities),error=>error instanceof JSFEHostCapabilityError&&error.name==='JSFEHostCapabilityError'&&error.flowId===flow.id&&error.capability===capability&&/explicit boolean true/.test(error.message));
 test('legacy flows without declarations load unchanged with missing/false capabilities',()=>{
