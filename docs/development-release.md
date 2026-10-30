@@ -91,6 +91,8 @@ The shared address form (`collect-geocoded-address`) asks the city when the ZIP 
 
 At the verification code question the reply ranker is offered `where`: a caller who asks where the code is ("¿dónde está?") hears where it went (by text to the cell ending with the last four digits, by email, or in this chat) and the code question again; nothing is sent again.
 
+The contact question's `intro` (why the account is needed) is not lost when the question is answered without being asked (the caller ID on file, a contact the caller gave): the first verification code question begins with it instead, once. A contact question that is asked says it, as before, and the code question does not repeat it.
+
 ## 1.9.1: stored sessions without definition copies
 
 `engine.storedSession(session)` returns the session as a host should store it: each open form instance's input specs, providers and questions that its loaded definition (or its parent's schema) reproduces exactly are replaced by a named source (`derived`), and continuation revision hashes are kept only for the definitions of open form instances, the only ones read back. Anything a flow built at run time is stored as it is. `updateActivity` restores a stored session from the loaded flows; a source that no longer exists is left absent and the continuation safety check retires it. The session passed in is never changed, and a session never stored this way continues as before. Measured on a production payment call: 182 KB to 110 KB, 245 revision hashes to 5.
