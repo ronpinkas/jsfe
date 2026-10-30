@@ -43,6 +43,7 @@
     "dist",
     "README.md",
     "LICENSE",
+    "docs/architecture-guide.md",
     "docs/copilot-reference.md",
     "docs/development-release.md"
   ],

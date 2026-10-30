@@ -12,6 +12,7 @@ npm i jsfe
 - **[JavaScript Flow Engine User Guide](user-guide.md)** 
 - Comprehensive tutorials, examples, and best practices
 - **[README.md](README.md)** - Technical API reference (this document)
+- **[Flows architecture guide](docs/architecture-guide.md)** - start here: the concepts, the building blocks, what the caller experiences, and how conversational AI and exact transactional flows work together (the reply ranker and DISPATCH)
 - **[Flow author reference](docs/copilot-reference.md)** - the authoritative engine and JSON authoring specification for flow authors and AI flow generators (shipped in the package; the Flow Designer's CoPilot reads it from the published version, so change it with the engine)
 - **[Development candidate acceptance](docs/development-release.md)** - reproducible package and cross-repository verification
 - **[System Flows](docs/flows/system/README.md)** and **[Shopify Flows](docs/flows/shopify/README.md)** - the bundled flow and tool libraries in `flows/`: a page and a chart per flow, generated from the JSON (`node scripts/flow-docs.mjs`), plus the conventions the system flows share
