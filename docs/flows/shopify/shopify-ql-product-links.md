@@ -1,7 +1,7 @@
 # ShopifyQLProductLinks
 
 <!-- generated:start -->
-**ShopifyQLProductLinks** · `shopify-ql-product-links` · version 3.0.0 · worker (called by other flows) · form + steps · isolated scope
+**ShopifyQLProductLinks** · `shopify-ql-product-links` · version 3.0.1 · worker (called by other flows) · form + steps · isolated scope
 
 > Send only the product links shown, to the explicitly resolved text destination, after a TEXT request.
 

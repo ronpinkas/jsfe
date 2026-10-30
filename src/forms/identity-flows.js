@@ -137,7 +137,7 @@ const authKeys=['retry_flow','cancel_flow','email_validator','cell_validator','c
 const auth=worker('authenticate-user','AuthenticateUser','Authenticate a contact using shared FORM collection and one-time-code services.',{parameters:Object.keys(AUTH_DEFAULTS).filter(k=>!['contact_valid','auth_result','auth_contact_error','auth_contact_error_es','auth_previous_options','auth_restart','auth_join','otp_expiry_ms'].includes(k)).map(k=>param(k,k.replace(/_/g,' '),['retry_returns','retrying','declined_caller'].includes(k)?'boolean':'string')).concat([param('caller_on_file','Caller-ID eligibility inherited from the invoking service')]),variables:vars(AUTH_DEFAULTS),contract:{role:'gate',summary:'Generic one-time-code identity gate',result:{paths:['cargo.otpVerified','cargo.authRetry'],type:'object'}},steps:[
    set('auth_restart','auth_restart',"retrying === true || retrying === 'true'"),
    set('auth_previous_options','auth_previous_options','cargo.authOptions ? Object.assign({},cargo.authOptions) : null'),
-   when('auth_declined_caller',"declined_caller === true || declined_caller === 'true'",effect('auth_decline_state',"(cargo.callerDeclined=true,cargo.callerPreselected=false,cargo.otpHash=null,cargo.contactIntroSkip=true,cargo.callerNamed ? (cargo.displayName='',cargo.displayNameSetBy='flow',cargo.callerNamed=false) : true,true)")),
+   when('auth_declined_caller',"declined_caller === true || declined_caller === 'true'",effect('auth_decline_state',"(cargo.callerDeclined=true,cargo.callerPreselected=false,cargo.otpHash=null,cargo.otpAltHash=null,cargo.otpAltTimestamp=null,cargo.contactIntroSkip=true,cargo.callerNamed ? (cargo.displayName='',cargo.displayNameSetBy='flow',cargo.callerNamed=false) : true,true)")),
    when('auth_already_verified','cargo.otpVerified === true',end('auth_verified_end')),
    ...authKeys.map(key=>set('auth_option_'+key,key,`auth_restart && cargo.authOptions ? cargo.authOptions.${key} || ${key==='retry_returns'?'false':"''"} : ${key}`)),
    set('auth_default_retry','retry_flow',"retry_flow || 'authenticate-user'"),set('auth_default_cancel','cancel_flow',"cancel_flow || 'contact-support'"),
@@ -154,7 +154,7 @@ const auth=worker('authenticate-user','AuthenticateUser','Authenticate a contact
    when('auth_join_challenge','auth_join',call('auth_join_collect','get-and-validate-otp-code')),
    when('auth_join_release','auth_join',call('auth_join_gate_end','task-gate',{form:'{{parent_form}}',gate:'authenticate-user',active:false})),
    when('auth_join_return','auth_join',end('auth_join_complete')),
-   effect('auth_challenge_init',"(cargo.otpLateCode='',cargo.otpResends=0,cargo.otpMismatches=0,cargo.otpFormatMisses=0,cargo.otpWordMisses=0,cargo.otp_cell_number=cell_number || '',cargo.otp_email=email || '',true)"),
+   effect('auth_challenge_init',"(cargo.otpLateCode='',cargo.otpResends=0,cargo.otpMismatches=0,cargo.otpFormatMisses=0,cargo.otpWordMisses=0,cargo.otp_cell_number=cell_number || '',cargo.otp_email=email || '',cargo.otpAltSent=false,cargo.otpAltHash=null,cargo.otpAltTimestamp=null,true)"),
    call('auth_send','send-otp-code'),when('auth_send_failed','cargo.otpSendFailure',call('auth_send_failure','otp-send-failed',undefined,'replace')),
    call('auth_code','get-and-validate-otp-code'),
    cases('auth_complete',{'condition: cargo.otpVerified === true':set('auth_ok','auth_result','true'),'condition: cargo.authRetry':end('auth_return_retry'),default:otpMenu('auth_retry_code',"I couldn't verify your account. You can try again or use another contact.",'No pude verificar su cuenta. Puede intentarlo de nuevo o usar otro contacto.',true)}),
@@ -163,16 +163,33 @@ const auth=worker('authenticate-user','AuthenticateUser','Authenticate a contact
 export function otpWhere(cargo,es=false) {
    const number=String(cargo.otp_cell_number || '').replace(/\D/g,'').slice(-4),tail=cargo.voice?number.split('').join(', '):number;
    if(cargo.otpSentOn==='whatsapp')return es?'Se lo acabo de enviar aquí en este chat.':'I just sent it to you here in this chat.';
+   const mail=String(cargo.otpAltEmail || ''),at=mail.indexOf('@'),masked=cargo.voice?(es?'que empieza con ':'starting with ')+mail.charAt(0).toUpperCase()+(es?', arroba ':', at ')+mail.slice(at+1):mail.charAt(0)+'…@'+mail.slice(at+1);
+   if(cargo.otp_cell_number && cargo.otpAltSent === true)return es?'Se lo envié por mensaje de texto al celular que termina con '+tail+', y también le envié un código a su correo '+masked+'. Revise sus mensajes de texto y su correo.':'I sent it by text message to the cell ending with '+tail+', and I also sent a code to your email '+masked+'. Check your text messages and your email.';
    if(cargo.otp_cell_number)return es?'Se lo envié por mensaje de texto al celular que termina con '+tail+'. Revise sus mensajes de texto.':'I sent it by text message to the cell ending with '+tail+'. Check your text messages.';
    return es?'Se lo envié por correo electrónico a '+String(cargo.otp_email || '')+'. Revise su correo.':'I sent it by email to '+String(cargo.otp_email || '')+'. Check your email.';
 }
 export function otpPrompt(cargo,es=false) {
    const verb=es?cargo.verb_es:cargo.verb,number=String(cargo.otp_cell_number || '').replace(/\D/g,'').slice(-4),tail=cargo.voice?number.split('').join(', '):number;
    const where=cargo.otpSentOn==='whatsapp'?(es?'que le acabo de enviar aquí en este chat':'I just sent you here in this chat'):(es?'que recibió en ':'you received at ')+(cargo.otp_cell_number?(es?'celular que termina con ':'cell ending with ')+tail:(es?'correo electrónico: ':'email: ')+String(cargo.otp_email || ''));
+   const mail=String(cargo.otpAltEmail || ''),at=mail.indexOf('@'),also=cargo.otp_cell_number && cargo.otpAltSent === true?(es?' o en su correo ':' or at your email ')+(cargo.voice?(es?'que empieza con ':'starting with ')+mail.charAt(0).toUpperCase()+(es?', arroba ':', at ')+mail.slice(at+1):mail.charAt(0)+'…@'+mail.slice(at+1)):'';
    const name=cargo.callerPreselected && cargo.callerNamed && cargo.displayName?cargo.displayName:'';
    const lead=String((es?cargo.otpIntro_es:cargo.otpIntro) || '');
-   return (lead?lead+' ':'')+(name?name+(es?', por favor':', please'):es?'Por favor':'Please')+' '+verb+' '+(cargo.voice?es?'o ingrese ':'or enter ':'')+(es?'el código de verificación de 6 dígitos ':'the 6-digit verification code ')+where+'. '+(es?`También puede ${cargo.voice?'presionar * o decir':'escribir'} SALIR para cancelar.`:`You can also ${cargo.voice?'press * or ':''}${verb} EXIT to cancel.`)+(cargo.callerPreselected?(es?` Para usar otra cuenta, ${verb} OTRA CUENTA.`:` To use another account, ${verb} ANOTHER ACCOUNT.`):'');
+   return (lead?lead+' ':'')+(name?name+(es?', por favor':', please'):es?'Por favor':'Please')+' '+verb+' '+(cargo.voice?es?'o ingrese ':'or enter ':'')+(es?'el código de verificación de 6 dígitos ':'the 6-digit verification code ')+where+also+'. '+(es?`También puede ${cargo.voice?'presionar * o decir':'escribir'} SALIR para cancelar.`:`You can also ${cargo.voice?'press * or ':''}${verb} EXIT to cancel.`)+(cargo.callerPreselected?(es?` Para usar otra cuenta, ${verb} OTRA CUENTA.`:` To use another account, ${verb} ANOTHER ACCOUNT.`):'');
 }
+/** What the caller hears when a second code goes to the account's email: the address masked to its first letter and domain. */
+export function otpAlsoSent(cargo,es=false) {
+   const mail=String(cargo.otpAltEmail || ''),at=mail.indexOf('@'),masked=cargo.voice?(es?'que empieza con ':'starting with ')+mail.charAt(0).toUpperCase()+(es?', arroba ':', at ')+mail.slice(at+1):mail.charAt(0)+'…@'+mail.slice(at+1);
+   return es?'Muy bien, también le envié un código a su correo '+masked+'.':'Okay, I also sent a code to your email '+masked+'.';
+}
+// The caller cannot find the texted code (or asks for another way, or for email): a second code goes to the account's email
+// (cargo.otpAltEmail, set by the tenant's contact step when the code goes to a cell), once per challenge, without a question.
+// The texted code stays valid beside it (send-email-otp additional: otpAltHash). A refused address says where the code went.
+const emailToo=worker('send-otp-email-too','SendOtpEmailToo',"Email a second one-time code to the account's email beside the texted one, and say so.",{variables:vars({alt_hash:'',also_sent:'',also_sent_es:'',otp_where:'',otp_where_es:''}),contract:{role:'worker',summary:"Second one-time code to the account's email",tools:['send-email-otp']},steps:[
+   {id:'otp_email_too_send',type:'CALL-TOOL',tool:'send-email-otp',variable:'alt_hash',args:{to:'{{cargo.otpAltEmail}}',container:'{{cargo}}',language:'{{language}}',additional:true},onFail:set('otp_email_too_failed','alt_hash',"''")},
+   effect('otp_email_too_state',"(cargo.otpAltSent=/^[0-9a-f]{64}$/.test(String(alt_hash || ''))?true:'failed',true)"),
+   set('otp_email_too_said','also_sent',expression(otpAlsoSent,'cargo')),set('otp_email_too_said_es','also_sent_es',expression(otpAlsoSent,'cargo','true')),
+   set('otp_email_too_where','otp_where',expression(otpWhere,'cargo')),set('otp_email_too_where_es','otp_where_es',expression(otpWhere,'cargo','true')),
+   cases('otp_email_too_say',{'condition: cargo.otpAltSent === true':say('otp_email_too_sent','{{also_sent}}','{{also_sent_es}}'),default:say('otp_email_too_refused','{{otp_where}}','{{otp_where_es}}')})]});
 const OTP_PROFILES=[{name:'code',label:'verification code',label_es:'código de verificación',profile:{kind:'digits',min:6,max:6}},raw];
 const code=worker('get-and-validate-otp-code','GetAndValidateOtpCode','Collect a one-time-code answer through the owning FORM ancestry, preserving protocol commands for validation.',{variables:vars({otp_code:'',user_choice:'',normalized_otp_code:'',otp_question:'',otp_question_es:'',otp_profiles:OTP_PROFILES}),contract:{role:'collector',summary:'One-time-code answer collector using shared FORM matching'},steps:[
    when('otp_already_verified','cargo.otpVerified === true',end('otp_existing_verification')),
@@ -190,6 +207,9 @@ const OTP_WORDS={
    other_alone:['otra','otro','another','other'],
    email:['email','e-mail','e mail','emails','correo','correos','correo electrónico','correo electronico','imeil'],
    resend:['resend','send again','send it again','not received','never received','did not receive','didn t receive','didn t get','haven t received','nothing came','no code','no text','no llegó','no llego','no llega','no ha llegado','no me llegó','no me llego','no le llegó','no le llego','no me ha llegado','no recibí','no recibi','no lo recibí','no lo recibi','no tengo el código','no tengo el codigo','no lo tengo','no alcancé','no alcance','mándame el código','mandame el codigo','envíame el código','enviame el codigo','reenviar','reenvíe','reenvie'],
+   // the caller cannot find the texted code, or asks for another way to get it or to verify
+   cannot_find:['don t have it','i don t have it','don t have the code','i don t have the code','can t find','cannot find','can not find','couldn t find','could not find','can t find it','cannot find it','i can t find','i cannot find','not there','isn t there','it s not there','there s no code','no encuentro','no lo encuentro','no la encuentro','no encuentro el código','no encuentro el codigo','no aparece','no hay código','no hay codigo'],
+   another_way:['another way','different way','other way','some other way','a different way','another option','other option','otra forma','otra manera','de otra forma','de otra manera','otra opción','otra opcion','hay otra forma','hay otra manera'],
    later:['driving','i am driving','i m busy','im busy','not now','later','call me later','call back','cant right now','can t right now','can t now','cannot right now','manejando','conduciendo','estoy manejando','voy manejando','ahora no','ahora no puedo','no puedo ahora','más tarde','mas tarde','estoy ocupado','estoy ocupada'],
    noPhone:['don t have that phone','don t have that number','don t have that phone anymore','don t have the phone','not my number anymore','not my phone anymore','that s an old number','old number','changed my number','changed my phone','lost my phone','no tengo ese teléfono','no tengo ese telefono','no tengo ese número','no tengo ese numero','ya no tengo ese','ya no tengo el teléfono','ya no tengo el telefono','ya no es mi número','ya no es mi numero','número viejo','numero viejo','cambié de número','cambie de numero','cambié mi número','perdí mi teléfono','perdi mi telefono','don t have a phone','don t have phone','don t have my phone','don t have a cell','don t have the cell','don t have my cell','don t have a cell phone','don t have access to that phone','don t have access to the phone','no tengo teléfono','no tengo telefono','no tengo celular','no tengo el celular','no tengo mi teléfono','no tengo mi telefono','no tengo mi celular','no tengo un teléfono','no tengo un telefono','no tengo acceso a ese teléfono','no tengo acceso a ese telefono']};
 /** Contact access is a protocol state, not an OTP-format error. Read negative possession/access grammar
@@ -202,24 +222,29 @@ function otpPhoneUnavailable(value) {
 // What the reply ranker may take at the code question beside the code: the step's offers. Email and another account are
 // offered only where the step offers them (a code sent by text; a caller-ID preselection).
 const OTP_REPLY_CHOICES=[{key:'email',label:'use the email on the account instead of the phone'},{key:'another_account',label:'use another account'},
-   {key:'where',label:'asks where the code is or where it was sent, or cannot find it'},{key:'resend',label:'the code did not arrive; send it again'},{key:'no_phone',label:'no longer has that phone or number'},{key:'__agent',label:'speak with a person (a live agent)'}];
-const validateCode=worker('validate-otp-code','ValidateOtpCode','Validate a challenge response with explicit bounded retries, alternate-contact handling and tenant callbacks.',{variables:vars({otp_phrases:OTP_WORDS,no_code_given:false,wants_other_account:false,other_account_given:false,otp_validation_result:false,whatsapp_invite_sent:false,invite_text:'',otp_cancel:'contact-support',answer_key:'',answer_value:'',otp_reply_choices:OTP_REPLY_CHOICES,otp_offers:[],otp_reply:{},otp_where:'',otp_where_es:''}),contract:{role:'gate',summary:'Validate the active one-time challenge',tools:['validate-otp','send-whatsapp-invite'],result:{path:'cargo.otpVerified',type:'boolean'}},steps:[
+   {key:'where',label:'asks where the code was sent'},{key:'cannot_find',label:'cannot find the code, or it is not there'},{key:'another_way',label:'asks for another way to get the code or to verify'},{key:'resend',label:'the code did not arrive; send it again'},{key:'no_phone',label:'no longer has that phone or number'},{key:'__agent',label:'speak with a person (a live agent)'}];
+const validateCode=worker('validate-otp-code','ValidateOtpCode','Validate a challenge response with explicit bounded retries, alternate-contact handling and tenant callbacks.',{variables:vars({otp_phrases:OTP_WORDS,email_too:false,no_code_given:false,wants_other_account:false,other_account_given:false,otp_validation_result:false,whatsapp_invite_sent:false,invite_text:'',otp_cancel:'contact-support',answer_key:'',answer_value:'',otp_reply_choices:OTP_REPLY_CHOICES,otp_offers:[],otp_reply:{},otp_where:'',otp_where_es:''}),contract:{role:'gate',summary:'Validate the active one-time challenge',tools:['validate-otp','send-whatsapp-invite'],result:{path:'cargo.otpVerified',type:'boolean'}},steps:[
    set('otp_cancel','otp_cancel',"cargo.authCancelFlow || 'contact-support'"),
+   set('otp_email_too_ready','email_too',"!!(cargo.otp_cell_number && cargo.otpAltSent !== true && cargo.otpAltSent !== 'failed' && validateEmail(String(cargo.otpAltEmail || '')))"),
    set('otp_reset_no_code','no_code_given','false'),set('otp_reset_invite','whatsapp_invite_sent','false'),set('otp_reset_callback','answer_key',"''"),
    when('otp_tenant_code','cargo.authOptions && cargo.authOptions.code_validator && normalized_otp_code.length !== 6 && /[0-9]/.test(user_choice)',call('otp_tenant_code_call','{{cargo.authOptions.code_validator}}',{answer:'{{user_choice}}'})),
    set('otp_other_given','other_account_given',"answer_key === 'another_account' ? (cargo.authOtherAccount=String(answer_value || ''),true) : false"),
    set('otp_other_requested','wants_other_account','other_account_given || !!(cargo.callerPreselected && normalized_otp_code.length !== 6 && (matchesChoice(user_choice,otp_phrases.other) || otp_phrases.other_alone.includes(user_choice.replace(/[.,!?¡¿]/g,\'\').trim())))'),
    when('otp_tenant_answer','cargo.authOptions && cargo.authOptions.answer_handler && normalized_otp_code.length !== 6 && !wants_other_account',call('otp_tenant_answer_call','{{cargo.authOptions.answer_handler}}',{answer:'{{user_choice}}'})),
+   set('otp_where_early','otp_where',expression(otpWhere,'cargo')),set('otp_where_early_es','otp_where_es',expression(otpWhere,'cargo','true')),
    cases('otp_response',{
       'condition: normalized_otp_code.length === 6':{id:'otp_check_tool',type:'CALL-TOOL',tool:'validate-otp',variable:'otp_validation_result',args:{otp:'{{normalized_otp_code}}',container:'{{cargo}}'},onFail:call('otp_check_failed','get-and-validate-otp-code',undefined,'replace')},
       'condition: wants_other_account':call('otp_change_account','authenticate-user',{cell_number:'',email:'',retrying:true,declined_caller:true},'replace'),
       // Email asked for at a code sent by text: authentication is an input step, so the contact question is asked again
       // (without the caller-ID offer) and the caller gives the email; a code sent by email keeps "no me llegó el correo" a resend.
+      ['condition: email_too && normalized_otp_code.length !== 6 && ('+'matchesChoice(user_choice,otp_phrases.resend) || matchesChoice(user_choice,otp_phrases.cannot_find) || matchesChoice(user_choice,otp_phrases.another_way) || matchesChoice(user_choice,otp_phrases.email)'+')']:call('otp_email_too','send-otp-email-too'),
       'condition: !!cargo.otp_cell_number && normalized_otp_code.length !== 6 && matchesChoice(user_choice,otp_phrases.email)':call('otp_use_email','authenticate-user',{cell_number:'',email:'',retrying:true,declined_caller:true},'replace'),
       "condition: isExitRequest(user_choice)":call('otp_exit','{{otp_cancel}}',undefined,'reboot'),
       "condition: isAnswer(user_choice,'agent')":call('otp_agent','live-agent-requested',undefined,'reboot'),
       "condition: isAnswer(user_choice,'text')":call('otp_text','switch-to-text',undefined,'reboot'),
       'condition: matchesChoice(user_choice,otp_phrases.resend)':call('otp_resend','resend-otp-code',{resend_reason:'requested'}),
+      'condition: matchesChoice(user_choice,otp_phrases.cannot_find)':say('otp_cannot_find','{{otp_where}}','{{otp_where_es}}'),
+      'condition: matchesChoice(user_choice,otp_phrases.another_way)':say('otp_no_other_way','{{otp_where}} To reach a person, {{cargo.verb}} AGENT.','{{otp_where_es}} Para hablar con una persona, {{cargo.verb_es}} AGENTE.'),
       'condition: matchesChoice(user_choice,otp_phrases.later)':say('otp_later',"No problem. Say TEXT and I'll continue with you by message so you can do this when you are free, or {{cargo.verb}} the code whenever you are ready.",'No hay problema. Diga TEXTO y sigo con usted por mensaje para que lo haga cuando esté libre, o {{cargo.verb_es}} el código cuando pueda.'),
       'condition: normalized_otp_code.length > 0 && Number(cargo.otpFormatMisses || 0)<2':say('otp_bad_format',"I was expecting a 6-digit code. Let's try again. You can also {{cargo.voice ? 'press * or ' : ''}}{{cargo.verb}} EXIT to cancel.","Esperaba un código de 6 dígitos. Intentemos de nuevo. También puede {{cargo.voice ? 'presionar * o decir' : 'escribir'}} SALIR para cancelar."),
       'condition: normalized_otp_code.length > 0':effect('otp_format_cap_next','true'),
@@ -241,9 +266,11 @@ const validateCode=worker('validate-otp-code','ValidateOtpCode','Validate a chal
    set('otp_where','otp_where',expression(otpWhere,'cargo')),set('otp_where_es','otp_where_es',expression(otpWhere,'cargo','true')),
    set('otp_reply_picked','no_code_given',"no_code_given && !(otp_reply && otp_reply.key && String(otp_reply.key).indexOf('usecase:') !== 0)"),
    cases('otp_reply_route',{
+      "condition: !no_code_given && email_too && otp_reply && ['email','resend','cannot_find','another_way'].includes(otp_reply.key)":call('otp_ranked_email_too','send-otp-email-too'),
       "condition: !no_code_given && otp_reply && otp_reply.key === 'email'":call('otp_ranked_email','authenticate-user',{cell_number:'',email:'',retrying:true,declined_caller:true},'replace'),
       "condition: !no_code_given && otp_reply && otp_reply.key === 'another_account'":call('otp_ranked_account','authenticate-user',{cell_number:'',email:'',retrying:true,declined_caller:true},'replace'),
-      "condition: !no_code_given && otp_reply && otp_reply.key === 'where'":say('otp_ranked_where','{{otp_where}}','{{otp_where_es}}'),
+      "condition: !no_code_given && otp_reply && (otp_reply.key === 'where' || otp_reply.key === 'cannot_find')":say('otp_ranked_where','{{otp_where}}','{{otp_where_es}}'),
+      "condition: !no_code_given && otp_reply && otp_reply.key === 'another_way'":say('otp_ranked_no_other_way','{{otp_where}} To reach a person, {{cargo.verb}} AGENT.','{{otp_where_es}} Para hablar con una persona, {{cargo.verb_es}} AGENTE.'),
       "condition: !no_code_given && otp_reply && otp_reply.key === 'resend'":call('otp_ranked_resend','resend-otp-code',{resend_reason:'requested'}),
       "condition: !no_code_given && otp_reply && otp_reply.key === 'no_phone'":otpMenu('otp_ranked_no_phone',"No problem. Then the code can't reach you there. You can use the email on your account instead, or {{cargo.verb}} AGENT to reach a person.",'No hay problema. Entonces el código no le puede llegar ahí. Puede usar el correo electrónico de su cuenta, o {{cargo.verb_es}} AGENTE para hablar con una persona.',false),
       "condition: !no_code_given && otp_reply && otp_reply.key === '__agent'":call('otp_ranked_agent','live-agent-requested',undefined,'reboot'),
@@ -257,7 +284,7 @@ const validateCode=worker('validate-otp-code','ValidateOtpCode','Validate a chal
    when('otp_format_cap','normalized_otp_code.length !== 6 && cargo.otpFormatMisses >= 3',otpMenu('otp_format_menu',"I still don't have a 6-digit code. To reach a person, {{cargo.verb}} AGENT.",'Todavía no tengo un código de 6 dígitos. Para hablar con una persona, {{cargo.verb_es}} AGENTE.',true)),
    when('otp_format_retry','normalized_otp_code.length !== 6',call('otp_collect_again','get-and-validate-otp-code',undefined,'replace')),
    effect('otp_mismatch_count',"(cargo.otpMismatches=Number(cargo.otpMismatches || 0)+(!cargo.otpVerified && cargo.otpFailure === 'mismatch'?1:0),true)"),
-   when('otp_mismatch_cap',"!cargo.otpVerified && cargo.otpFailure === 'mismatch' && cargo.otpMismatches >= 3",effect('otp_withdraw','(cargo.otpHash=null,true)')),
+   when('otp_mismatch_cap',"!cargo.otpVerified && cargo.otpFailure === 'mismatch' && cargo.otpMismatches >= 3",effect('otp_withdraw','(cargo.otpHash=null,cargo.otpAltHash=null,cargo.otpAltTimestamp=null,true)')),
    cases('otp_verified_result',{
       'condition: cargo.otpVerified === true':effect('otp_verified_record','(cargo.otpLateCode=String(normalized_otp_code),true)'),
       "condition: cargo.otpFailure === 'expired' || cargo.otpFailure === 'missing'":call('otp_refresh','resend-otp-code',{resend_reason:'{{cargo.otpFailure}}'}),
@@ -338,4 +365,4 @@ const resume=worker('resume-identity-caller','ResumeIdentityCaller','Resume the 
    steps:[set('identity_resume_context','resume_context',expression(identityResumeContext,'cargo.forms','parent_form','retry_flow','{acct_number:acct_number,cell_number:cell_number,email:email}')),
       call('identity_resume_caller','{{retry_flow}}',{form_instance:'{{resume_context.form_instance}}',parent_form:'{{resume_context.parent_form}}',result_input:'{{resume_context.result_input}}',gate_options:'{{gate_options}}',cell_number:'{{cell_number}}',email:'{{email}}',acct_number:'{{acct_number}}'},'replace')]
 });
-export const FLOWS=[taskGate,resume,service,rawTransport,contact,declined,splitFailed,rejected,auth,code,validateCode,retry,email];
+export const FLOWS=[taskGate,resume,service,rawTransport,contact,declined,splitFailed,rejected,auth,code,validateCode,emailToo,retry,email];

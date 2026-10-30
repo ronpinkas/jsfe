@@ -14,17 +14,21 @@
 export const OTP_EXPIRY_MS = 10 * 60 * 1000;
 
 /**
- * @param {{otpHash?: string|null, otpTimestamp?: number|null}} stored  the container's pending code
+ * A second code may be live beside the first: one emailed to the account's address when the caller cannot find the texted
+ * code (otpAltHash / otpAltTimestamp), so either one is accepted until it expires, and neither replaces the other.
+ * @param {{otpHash?: string|null, otpTimestamp?: number|null, otpAltHash?: string|null, otpAltTimestamp?: number|null}} stored  the container's pending codes
  * @param {string} providedHash  sha256 of what the customer entered
  * @param {number} now
  * @returns {{ok: boolean, failure: null|'missing'|'expired'|'mismatch'}}
  */
 export function checkOtp(stored, providedHash, now) {
-   if (!stored || !stored.otpHash || !stored.otpTimestamp) {
+   const codes = stored ? [[stored.otpHash, stored.otpTimestamp], [stored.otpAltHash, stored.otpAltTimestamp]].filter(([hash, at]) => hash && at) : [];
+   const live = codes.filter(([, at]) => now - at <= OTP_EXPIRY_MS);
+   if (!codes.length) {
       return { ok: false, failure: 'missing' };
-   } else if (now - stored.otpTimestamp > OTP_EXPIRY_MS) {
+   } else if (!live.length) {
       return { ok: false, failure: 'expired' };
-   } else if (providedHash !== stored.otpHash) {
+   } else if (!live.some(([hash]) => hash === providedHash)) {
       return { ok: false, failure: 'mismatch' };
    } else {
       return { ok: true, failure: null };
@@ -44,8 +48,8 @@ export function maskDestination(to) {
 
 /**
  * A flow's code check (validateOTP): hashes what the customer entered (SHA-256, the hash the code senders store in
- * container.otpHash) and checks it with checkOtp. Accepted: the pending code is cleared and container.otpVerified /
- * otpVerifiedAt are set. Expired: the code is cleared (it can never be accepted again). Every refusal leaves its reason
+ * container.otpHash, and otpAltHash for a second code) and checks it with checkOtp. Accepted: the pending codes are cleared and
+ * container.otpVerified / otpVerifiedAt are set. Expired: the codes are cleared (they can never be accepted again). Every refusal leaves its reason
  * in container.otpFailure ('missing' | 'expired' | 'mismatch'). Uses the platform's Web Crypto, so it needs no host.
  */
 export async function validateOTP(otp, container) {
@@ -54,15 +58,13 @@ export async function validateOTP(otp, container) {
    const providedHash = Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
    const verdict = checkOtp(container, providedHash, Date.now());
    if (verdict.ok) {
-      container.otpHash = null;
-      container.otpTimestamp = null;
+      clearOtp(container);
       delete container.otpFailure;
       container.otpVerified = true;
       container.otpVerifiedAt = Date.now();
       return true;
    } else if (verdict.failure === 'expired') {
-      container.otpHash = null;
-      container.otpTimestamp = null;
+      clearOtp(container);
       container.otpVerified = false;
       container.otpFailure = 'expired';
       return false;
@@ -70,4 +72,13 @@ export async function validateOTP(otp, container) {
       container.otpFailure = verdict.failure;
       return false;
    }
+}
+
+/** Clears every pending code: the texted or emailed one (otpHash) and a second one emailed beside it (otpAltHash). */
+export function clearOtp(container) {
+   container.otpHash = null;
+   container.otpTimestamp = null;
+   container.otpAltHash = null;
+   container.otpAltTimestamp = null;
+   return true;
 }

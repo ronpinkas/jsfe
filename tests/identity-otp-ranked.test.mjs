@@ -28,7 +28,7 @@ async function at(answer,option,detected='Balance'){
 }
 let r=await at('my code never showed up','choice:resend');
 assert.equal(r.s.cargo.testResends,1);assert.doesNotMatch(r.s.response,/Let me explain/);
-assert.deepEqual(r.offered.options.filter(o=>o.startsWith('choice:')),['choice:email','choice:where','choice:resend','choice:no_phone','choice:__agent','choice:usecase:pay','choice:exit:payment_link'],'the step offers (another account only after a caller-ID preselection), the use cases, the declared exits');
+assert.deepEqual(r.offered.options.filter(o=>o.startsWith('choice:')),['choice:email','choice:where','choice:cannot_find','choice:another_way','choice:resend','choice:no_phone','choice:__agent','choice:usecase:pay','choice:exit:payment_link'],'the step offers (another account only after a caller-ID preselection), the use cases, the declared exits');
 assert.match(r.offered.choices.find(c=>c.key==='usecase:pay').label,/^states the reason for the call: The caller wants to make a payment\.$/,'a use case is labelled by its description, without its Not: list');
 console.log('PASS a resend said in other words resends');
 r=await at('Ay dónde está?','choice:where');
