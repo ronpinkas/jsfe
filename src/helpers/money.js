@@ -10,8 +10,11 @@ export function validateMoneyOptions(options) {
 // This is an input grammar, not a conversation classifier. Anything outside one complete
 // monetary answer belongs to DISPATCH, including refusals, corrections with context and reports. "157 95" is dollars and
 // cents said with no word between them (owner 2026-10-29); "95 52" is not (a card's last four read in pairs).
-const NUMERIC_MONEY=/^(?:\$\s*)?(?:\d{1,3}(?:[,.]\d{3})+|\d+)(?:[.,]\d{1,2})?(?:\s*(?:dollars?|d[oó]lar(?:es)?|bucks?))?(?:\s*(?:and|con|y)\s*(?:un\s*)?\d{1,2}(?:\s*(?:cents?|centavos?))?)?$|^\d{1,2}\s*(?:cents?|centavos?)$|^(?:\$\s*)?(?:\d|\d{3,})\s+\d{2}$/i;
+const NUMERIC_MONEY=/^(?:\$\s*)?(?:\d{1,3}(?:[,.]\d{3})+|\d+)(?:[.,]\d{1,2})?(?:\s*(?:dollars?|d[oó]lar(?:es)?|bucks?|\$))?(?:\s*(?:and|con|y)\s*(?:un\s*)?\d{1,2}(?:\s*(?:cents?|centavos?))?)?$|^\d{1,2}\s*(?:cents?|centavos?)$|^(?:\$\s*)?(?:\d|\d{3,})\s+\d{2}$/i;
 const PAYMENT_PREFIX=/^(?:(?:i (?:want to|would like to|can|am able to|will) |i['’]d like to )?pay|(?:quiero |quisiera |puedo |s[ií] puedo |voy a )?(?:pagar|abonar)|(?:no,?\s+)?make it)\s*(?=\$|\d|[a-záéíóúüñ])/i;
+// The field named with its value ("100 amount", "the amount is 100", "monto 100"): the amount, said as such.
+const AMOUNT_LABEL_PREFIX=/^(?:(?:the|el|la)\s+)?(?:amount|monto|cantidad)(?:\s+(?:is|of|es|de))?[:\s]+(?=\$|\d)/i;
+const AMOUNT_LABEL_SUFFIX=/(?<=\d|\$)\s+(?:(?:as\s+)?(?:the\s+)?amount|(?:de\s+|el\s+)?monto|(?:de\s+|la\s+)?cantidad)$/i;
 const ACCOUNT_PREFIX=/^(?:(?:sub[ -]?account|subcuenta|cuenta)\s+\d{1,8}\s*,\s*)/i;
 const DIGIT_WORD='(?:zero|one|two|three|four|five|six|seven|eight|nine|cero|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve)';
 const CARD_SUFFIX=new RegExp('\\s+(?:with (?:the |my )?card(?: (?:ending(?: in)?|number))?|con (?:la |mi )?tarjeta(?: (?:que termina en|terminad[ao] en))?)\\s+(?:\\d(?:[ -]?\\d){3}|'+DIGIT_WORD+'(?: '+DIGIT_WORD+'){3})$','i');
@@ -19,7 +22,7 @@ const ACCOUNT_SUFFIX=/\s+(?:(?:on|to) (?:sub[ -]?account|account)|(?:a|en) (?:la
 function completeMoneyAnswer(input) {
    let raw=String(input??'').replace(/\\(['"\\])/g,'$1').trim().replace(/^[¡!]+|[.!]+$/g,'').trim();
    raw=raw.replace(/^(?:please|por favor)[, ]+/i,'').replace(/[, ]+(?:please|por favor)$/i,'').trim();
-   raw=raw.replace(PAYMENT_PREFIX,'').replace(ACCOUNT_PREFIX,'').replace(CARD_SUFFIX,'').replace(ACCOUNT_SUFFIX,'').trim();
+   raw=raw.replace(PAYMENT_PREFIX,'').replace(AMOUNT_LABEL_PREFIX,'').replace(AMOUNT_LABEL_SUFFIX,'').replace(ACCOUNT_PREFIX,'').replace(CARD_SUFFIX,'').replace(ACCOUNT_SUFFIX,'').trim();
    if(NUMERIC_MONEY.test(raw))return true;
    const {readings,invalid}=scanSpokenMoney(raw);
    return !invalid.length&&readings.length===1&&readings[0].start===0&&readings[0].end===raw.length;

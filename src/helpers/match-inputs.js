@@ -347,6 +347,19 @@ export function matchInputs(answer, candidates, current, choiceKey) {
          return true;
       }
    });
+   // Rule 4 for a compound answer: a bare number beside other words ("New card 100") is the invited amount even when the
+   // amount reader, which reads only a whole monetary answer, could not read it from the whole answer.
+   for (const name of invitedNames) {
+      const field = list.find((c) => c.name === name && c.profile.kind === 'amount' && !isCur(c));
+      const other = field && !readings.some((reading) => reading.form === field.form && reading.name === name) ? readings.find((reading) => reading.rule === 'out_of_order' && bare(reading)) : null;
+      const read = other ? readInputProfile(field.profile, spanText(other), true) : null;
+      if (read && !read.alternatives && !read.incompleteMoney) {
+         readings.push({ ...other, form: field.form, name: field.name, value: read.value, known: false, repeatedChoice: false, wholeChoice: false, choice: false, narrative: false, resetOn: [], keypad: false,
+            group: field.group, exclusive: field.exclusive === true, level: forms.indexOf(field.scope || field.form), current: false, confirm: Array.isArray(field.confirm_against) ? field.confirm_against : [], rule: 'invited' });
+      } else {
+         // no invited amount, or it was read, or no bare number for it
+      }
+   }
    // Rule 4: a single digit the current question offers as a key is that key (the keypad reading wins its group below);
    // one it does not offer reaches the invited amount, whose own validation decides ("3 dollars?").
 
