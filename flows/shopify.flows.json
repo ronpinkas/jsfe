@@ -2640,7 +2640,7 @@
   {
     "id": "shopify-ql-product-links",
     "name": "ShopifyQLProductLinks",
-    "version": "3.0.0",
+    "version": "3.0.1",
     "description": "Send only the product links shown, to the explicitly resolved text destination, after a TEXT request.",
     "scope": "isolated",
     "metadata": {
@@ -2750,9 +2750,6 @@
             "flow": "send-text-action",
             "when": {
               "form.data.newDelivery": "true"
-            },
-            "reconcile": {
-              "policy": "Report uncertain delivery; never automatically repeat the send."
             },
             "outcomes": {
               "sent": "resolved",
