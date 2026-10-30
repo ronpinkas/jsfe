@@ -126,13 +126,21 @@ menu offered after an answer. "When is it due?" gets the due date, not a summary
   "action": "bill_payment", "effect": "charge", "subject": "form.data.account",
   "gate": { "flow": "verify-caller", "verified": ["cargo.verified"] },
   "flow": "payment-execute", "confirm": { "exact": true },
-  "reconcile": { "policy": "Hold an unknown result; never repeat a charge automatically." },
+  "reconcile": { "policy": "An unknown result is checked by the billing team against the processor's report the next business day." },
   "outcomes": { "ok": "resolved", "failed": "unresolved", "unknown": "unresolved" }
 }]
 ```
 
 From that, JSFE refuses to run the action without the gate, binds the confirmation to the exact request the caller
 heard, invalidates it when any input changes, and never treats a timeout as success.
+
+**An unknown result.** A timeout after the card may have been charged leaves the result unknown. The engine handles the
+machine side for every action, whatever the declaration says: the action is claimed once, a result that is not one of
+the declared `outcomes` counts as unknown, and an unknown charge or cancellation is held, never repeated (only a `send`
+may declare an explicit retry). The declaration covers the human side. An action that charges, writes, sends or cancels
+must declare `idempotency` (the backend rejects a repeat by key) or `reconcile` (how the business settles an unknown
+result), or the set does not build. The `reconcile.policy` text is documentation for people and appears in the flow
+docs; the engine does not read it.
 
 ### Shared data and shared functions
 
