@@ -18,10 +18,13 @@
   - `retrying`: retrying
   - `declined_caller`: declined caller
   - `parent_form`: parent form
+  - `task`: task
+  - `task_es`: task es
+  - `failed_flow`: failed flow
   - `caller_on_file`: Caller-ID eligibility inherited from the invoking service
 - **Calls:** [contact-support](contact-support.md) (by name), [task-gate](task-gate.md) (call), [authenticate-user](authenticate-user.md) (gate of task-gate, retry_flow of generic-retry-with-options), [get-cell-or-email](get-cell-or-email.md) (call), {{cell_validator}} (call), {{email_validator}} (call), [generic-retry-with-options](generic-retry-with-options.md) (replace), [get-and-validate-otp-code](get-and-validate-otp-code.md) (call), [send-otp-code](send-otp-code.md) (call), [otp-send-failed](otp-send-failed.md) (replace)
 - **Tools:** none
-- **Called by:** [authenticate-user](authenticate-user.md) (gate of task-gate, retry_flow of generic-retry-with-options), [get-cell-or-email](get-cell-or-email.md) (value, by name), [validate-otp-code](validate-otp-code.md) (retry_flow of generic-retry-with-options, retry_flow, by name), [resend-otp-code](resend-otp-code.md) (retry_flow of generic-retry-with-options, retry_flow), [generic-retry-with-options](generic-retry-with-options.md) (value), [otp-send-failed](otp-send-failed.md) (retry_flow of generic-retry-with-options, retry_flow), [otp-text-undeliverable](otp-text-undeliverable.md), [shopify-ql-track-order](../shopify/shopify-ql-track-order.md) (shopify), [shopify-ql-order-gate](../shopify/shopify-ql-order-gate.md) (shopify)
+- **Called by:** [authenticate-user](authenticate-user.md) (gate of task-gate, retry_flow of generic-retry-with-options), [get-cell-or-email](get-cell-or-email.md) (value, by name), [validate-otp-code](validate-otp-code.md) (retry_flow of generic-retry-with-options, retry_flow, by name), [generic-retry-with-options](generic-retry-with-options.md) (value), [otp-send-failed](otp-send-failed.md) (retry_flow of generic-retry-with-options, retry_flow), [otp-text-undeliverable](otp-text-undeliverable.md), [shopify-ql-track-order](../shopify/shopify-ql-track-order.md) (shopify), [shopify-ql-order-gate](../shopify/shopify-ql-order-gate.md) (shopify)
 
 ### Steps
 

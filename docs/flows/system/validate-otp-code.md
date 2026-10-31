@@ -6,7 +6,7 @@
 > Validate a challenge response with explicit bounded retries, alternate-contact handling and tenant callbacks.
 
 - **Parameters:** none
-- **Calls:** [contact-support](contact-support.md) (value, by name), {{cargo.authOptions.code_validator}} (call), {{cargo.authOptions.answer_handler}} (call), [get-and-validate-otp-code](get-and-validate-otp-code.md) (replace), [authenticate-user](authenticate-user.md) (replace, retry_flow of generic-retry-with-options, retry_flow, by name), [send-otp-email-too](send-otp-email-too.md) (call), {{otp_cancel}} (reboot), [live-agent-requested](live-agent-requested.md) (reboot), [switch-to-text](switch-to-text.md) (reboot), [resend-otp-code](resend-otp-code.md) (call), [generic-retry-with-options](generic-retry-with-options.md) (replace)
+- **Calls:** [contact-support](contact-support.md) (value, by name), {{cargo.authOptions.code_validator}} (call), {{cargo.authOptions.answer_handler}} (call), [get-and-validate-otp-code](get-and-validate-otp-code.md) (replace), [authenticate-user](authenticate-user.md) (replace, retry_flow of generic-retry-with-options, retry_flow, by name), [send-otp-email-too](send-otp-email-too.md) (call), {{otp_cancel}} (reboot), [live-agent-requested](live-agent-requested.md) (reboot), [switch-to-text](switch-to-text.md) (reboot), [resend-otp-code](resend-otp-code.md) (call), [generic-retry-with-options](generic-retry-with-options.md) (replace), [verification-failed](verification-failed.md) (reboot)
 - **Tools:** `validate-otp`, `send-whatsapp-invite`
 - **Called by:** [get-and-validate-otp-code](get-and-validate-otp-code.md), [generic-retry-with-options](generic-retry-with-options.md)
 
@@ -124,7 +124,7 @@ flowchart TD
    c26 -- "else" --> n35
    c36{"case"}
    n35 --> c36
-   b37(["replace → generic-retry-with-options"])
+   b37(["reboot → verification-failed"])
    class b37 endstep
    c36 -- "no_code_given && cargo.otpWordMisses #gt;= 3" --> b37
    c38{"case"}
@@ -141,7 +141,7 @@ flowchart TD
    c40 -- "else" --> n42
    c43{"case"}
    n42 --> c43
-   b44(["replace → generic-retry-with-options"])
+   b44(["reboot → verification-failed"])
    class b44 endstep
    c43 -- "normalized_otp_code.length !== 6 && cargo.otpFormatMisses #gt;= 3" --> b44
    c45{"case"}
@@ -159,7 +159,7 @@ flowchart TD
    b50[["call resend-otp-code"]]
    class b50 flowstep
    c49 -- "cargo.otpFailure === 'expired' #124;#124; cargo.otpFailure === 'missing'" --> b50
-   b51(["replace → generic-retry-with-options"])
+   b51(["reboot → verification-failed"])
    class b51 endstep
    c49 -- "cargo.otpFailure === 'mismatch' && cargo.otpMismatches #gt;= 3" --> b51
    b52["say: That code didn't match. Let's try again."]

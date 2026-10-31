@@ -21,7 +21,7 @@
   - `contact_options`: Contact field protocol declaration
 - **Calls:** [authenticate-user](authenticate-user.md) (value), [contact-support](contact-support.md) (value, by name), [collect-service-answer](collect-service-answer.md) (call), {{retry_flow}} (replace, reboot), [validate-otp-code](validate-otp-code.md) (call), [switch-to-text](switch-to-text.md) (reboot), [live-agent-requested](live-agent-requested.md) (reboot), {{cancel_flow}} (reboot)
 - **Tools:** none
-- **Called by:** [authenticate-user](authenticate-user.md), [get-cell-or-email](get-cell-or-email.md), [validate-otp-code](validate-otp-code.md), [resend-otp-code](resend-otp-code.md), [otp-send-failed](otp-send-failed.md), [contact-not-on-file](contact-not-on-file.md)
+- **Called by:** [authenticate-user](authenticate-user.md), [get-cell-or-email](get-cell-or-email.md), [validate-otp-code](validate-otp-code.md), [otp-send-failed](otp-send-failed.md), [contact-not-on-file](contact-not-on-file.md)
 
 ### Steps
 

@@ -1,13 +1,13 @@
 # ResendOtpCode
 
 <!-- generated:start -->
-**ResendOtpCode** · `resend-otp-code` · version 1.1.3 · worker (called by other flows) · steps
+**ResendOtpCode** · `resend-otp-code` · version 1.2.0 · worker (called by other flows) · steps
 
 > Worker: send a fresh one-time code to the destination authenticate-user used. Params: resend_reason.
 
 - **Parameters:** 
   - `resend_reason`: 'expired' | 'missing' | 'requested'
-- **Calls:** [generic-retry-with-options](generic-retry-with-options.md) (replace), [authenticate-user](authenticate-user.md) (retry_flow of generic-retry-with-options, retry_flow), [send-otp-code](send-otp-code.md) (call), [otp-send-failed](otp-send-failed.md) (replace)
+- **Calls:** [verification-failed](verification-failed.md) (reboot), [send-otp-code](send-otp-code.md) (call), [otp-send-failed](otp-send-failed.md) (replace)
 - **Tools:** none
 - **Called by:** [validate-otp-code](validate-otp-code.md)
 
@@ -18,7 +18,7 @@ flowchart TD
    START(("start"))
    c0{"case"}
    START --> c0
-   b1(["replace → generic-retry-with-options"])
+   b1(["reboot → verification-failed"])
    class b1 endstep
    c0 -- "(cargo.otpResends #124;#124; 0) #gt;= 2" --> b1
    b2["set proceed"]
