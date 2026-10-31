@@ -389,6 +389,40 @@ function spokenKeys(b) {
 }
 
 /**
+ * An answer that repeats an option exactly as the question offered it ("Sí para cancelar" to "diga SÍ para cancelar", "Yes to
+ * submit it" to "say YES to submit it") is that option's word alone (owner 2026-10-31; prod 10-31 11:15: "Sí para cancelar"
+ * at a cancellation confirmation was not understood). An offered option is a word or words in capitals followed by "to" or
+ * "para" and the clause after it, up to punctuation or the next "or" / "o". Only the whole answer counts, courtesy and a
+ * repeated word aside: "Sí para cancelar la cuenta", the echo of an option the question did not offer, or a question
+ * ("¿Sí para cancelar?") is unchanged.
+ * questions: the texts the caller may have heard (the question, its other language, its re-ask).
+ */
+const OFFERED_OPTION = /(?<![\p{L}\p{N}])(\p{Lu}{2,}(?:\s+\p{Lu}{2,})*)\s+(to|para)\s+(.+?)(?=\s*(?:[.,;:!?¿¡]|\s(?:or|o)\s|$))/gu;
+const ECHO_COURTESY = /^(?:(?:please|por favor|thanks|thank you|gracias|okay|ok|um|uh|este|pues)\s+)*|(?:\s+(?:please|por favor|thanks|thank you|gracias|now|ahora))*$/g;
+export function withoutPromptEcho(answer, questions) {
+   const raw = String(answer ?? '');
+   const said = normalize(raw.replace(/[,;!?¿¡]/g, ' ')).replace(/\.$/, '').replace(ECHO_COURTESY, '').trim();
+   if (!said || !/\s(?:to|para)\s/.test(said) || /[?¿]/.test(raw)) {
+      // not an echo; a question is never collapsed (it never confirms a choice that charges or cancels)
+      return raw;
+   } else {
+      // may be an echo
+   }
+   for (const text of (Array.isArray(questions) ? questions : [questions]).filter((q) => typeof q === 'string' && q)) {
+      for (const [, word, link, clause] of text.matchAll(OFFERED_OPTION)) {
+         const w = normalize(word);
+         const echo = normalize(`${word} ${link} ${clause}`);
+         if (said === echo || said === `${w} ${echo}`) {
+            return word.toLowerCase();
+         } else {
+            // not this option
+         }
+      }
+   }
+   return raw;
+}
+
+/**
  * ask-choice's matcher: the key of the choice the answer picks, '__agent', '__exit', or '' (no choice).
  * choices: [{ key, phrases, negative?, neutral?, exact? }]. A key (digit, * or #) and a YES word pick a choice only as the whole
  * answer, courtesy aside (onlyAffirmative); an `exact` choice (one that charges or cancels) treats ALL its words that way. A choice keyed 'yes' also takes ANSWER_WORDS.yes (CONFIRM_WORDS when `exact`) and, when not `exact`, a bare thanks (THANKS), and the NO-type

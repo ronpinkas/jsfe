@@ -398,6 +398,15 @@ reasonFor })` builds both executors' instructions. A reason question declares no
 unchanged: the generic withdrawal includes "I no longer want it", which at a reason question withdrew three prod
 cancellations.
 
+**An option said back as offered (jsfe 1.21.0):** an answer that repeats an option exactly as the question offered it is
+that option's word alone: "Sí para cancelar" to "diga SÍ para cancelar", "Yes to submit it" to "type YES to submit it".
+`ask-choice` applies `withoutPromptEcho(answer, [question, question_es, retry, retry_es])` before it matches, so form inputs
+and confirmations get it too. An offered option is a word or words in capitals followed by "to" or "para" and the clause
+after it, up to punctuation or the next "or" / "o". Only the whole echo counts, courtesy and a repeated word aside: "Sí para
+cancelar la cuenta", the echo of an option the question did not offer ("Sí para pagar" at a cancellation) and a question
+("¿Sí para cancelar?") are unchanged, so an `exact` choice is still confirmed only by its own words. Write offered options
+in capitals for it to apply.
+
 **The re-ask names the customer, opt-in (jsfe 1.20.0):** `sorryNotCaught(lang, cargo)` is the acknowledgement before a
 question asked again ("Sorry, I didn't catch that. " / "Disculpe, no le entendí. "), used by `formInputPrompt`, `ask-choice`
 and the provider menu. A flow set that sets `cargo.sorryByName = true` (for example once the caller is verified) gets it with
