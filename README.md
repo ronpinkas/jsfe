@@ -399,6 +399,14 @@ reach that flow through FLOW steps (`[{ id, label }]`, label = the description b
 label }] }`). validate-otp-code offers both to the ranker: a reason for the call authentication already serves is
 explained again, never routed; a declared exit leaves. Its DISPATCH stays on noise.
 
+**A verification out of attempts ends cleanly (`verification-failed`, jsfe 1.18.0):** three codes that do not match,
+three answers that are not a code, or the resend cap end the verification with no question left open. The owning task
+is retired (`parent_form`), every pending code is cleared, `cargo.verificationFailed` is set and the outcome is
+`unresolved` / `verification_failed`. The caller hears "I wasn't able to verify your account, so I can't {task} right
+now. Whenever you have access to receive the code for this account, we can try again.", then the worker named by
+authenticate-user's `failed_flow`, if any, then "To reach a person, {verb} AGENT." `task` / `task_es` are
+authenticate-user options (default "continue" / "continuar"); Spanish follows the session language.
+
 **Host start (`ContextEntry.start`):** `{ role: 'user', content, start: { flow, arguments } }` starts that
 flow (any flow, by id or name) with those arguments on this turn, without asking the AI. Only the host sets it;
 it is never derived from what the user typed.
@@ -423,8 +431,10 @@ const engine = new WorkflowEngine(logger, aiCallback, flows, tools,
   `textWithUrlToSpeech`, `anythingElse`, `goodbye`.
 - Checks: `validateDigits`, `validatePhone`, `validateEmail`, `validateCardNumber`,
   `validateExpiration`, and `validateOTP(code, container)`, which accepts a code whose SHA-256 matches
-  `container.otpHash` within 10 minutes of `container.otpTimestamp` and leaves the reason for a refusal
-  in `container.otpFailure` (`missing`, `expired` or `mismatch`). Sending the code is the host's job.
+  `container.otpHash` within 10 minutes of `container.otpTimestamp`, or a second code emailed beside it
+  (`otpAltHash` / `otpAltTimestamp`, jsfe 1.17.0) on its own clock; accepting either clears both (`clearOtp`).
+  A refusal leaves its reason in `container.otpFailure` (`missing`, `expired` or `mismatch`). Sending the
+  code is the host's job.
 - Session-aware helpers read only the cargo a caller passes: `callerTextNumber`, `textDestination`,
   `callerIsInternational`.
 
