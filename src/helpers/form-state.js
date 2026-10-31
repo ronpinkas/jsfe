@@ -212,9 +212,10 @@ export function settleFormActivations(batch={},cargo=null) {
       rejected:rejected.map(h=>h.activation_inferred?{...h,...h.activation_entry,activation_inferred:false}:h),pending:pending.concat(accepted.filter(h=>held.has(h.activation_group))).filter(h=>!discarded.has(h.activation_group)).map(h=>held.has(h.activation_group)?{...h,ok:undefined,outcome:'pending',silent:true}:h)};
 }
 /** Explicit ownership: unrelated tasks and sibling inputs never share an instance by definition id. */
-export function openFormInstance(cargo, definition, specs, { parent = null, input = '', resume = '', task = '', providers = null, questions = null, context = false, resume_on_parent_change = undefined, incomplete_outcome = undefined, on_exhausted = undefined, on_no = undefined, must_complete = undefined } = {}) {
+export function openFormInstance(cargo, definition, specs, { parent = null, input = '', resume = '', task = '', providers = null, questions = null, context = false, resume_on_parent_change = undefined, incomplete_outcome = undefined, on_exhausted = undefined, on_no = undefined, acknowledge = undefined, must_complete = undefined } = {}) {
    const incomplete=validateFormIncompleteOutcome(incomplete_outcome);
    validateFormExhaustion(on_exhausted);
+   if(acknowledge!==undefined&&acknowledge!=='all'&&acknowledge!=='data')throw new Error("FORM acknowledge must be 'all' or 'data'");
    cargo.forms ||= {};
    const existing = resume && cargo.forms[resume];
    if (resume && !existing) throw new Error('FORM resume instance no longer exists');
@@ -225,6 +226,7 @@ export function openFormInstance(cargo, definition, specs, { parent = null, inpu
       if(on_exhausted!==undefined)existing.on_exhausted=on_exhausted;
       if(on_no!==undefined)existing.on_no=on_no || '';
       if(must_complete!==undefined)existing.must_complete=must_complete===true;
+      if(acknowledge!==undefined)existing.acknowledge=acknowledge;
       return resume;
    }
    if (parent && !cargo.forms[parent]) throw new Error('FORM parent does not exist');
@@ -238,13 +240,14 @@ export function openFormInstance(cargo, definition, specs, { parent = null, inpu
          if(on_exhausted!==undefined)cargo.forms[child].on_exhausted=on_exhausted;
          if(on_no!==undefined)cargo.forms[child].on_no=on_no || '';
          if(must_complete!==undefined)cargo.forms[child].must_complete=must_complete===true;
+         if(acknowledge!==undefined)cargo.forms[child].acknowledge=acknowledge;
          return child;
       }
    }
    cargo.formSequence = Number(cargo.formSequence || 0) + 1;
    const id = `${definition}:${cargo.formSequence}`;
    cargo.forms[id] = { id, definition, task: owner?.task || task || id, parent, result_input: input,
-      on_exhausted:on_exhausted || '', on_no:on_no || '', must_complete:must_complete===true, incomplete_outcome:incomplete, context_only:!!context, resume_on_parent_change:resume_on_parent_change===true, parent_revision:owner?.revision ?? null, specs, values: {}, accepted: {}, errors: {}, pending: {}, seeds:{}, attempts: {}, misses:{}, feedback:{}, prepared: {}, data:{}, arguments:{}, contexts:{}, children: {}, childResults:{}, revision: 0,
+      on_exhausted:on_exhausted || '', on_no:on_no || '', must_complete:must_complete===true, ...(acknowledge!==undefined?{acknowledge}:{}), incomplete_outcome:incomplete, context_only:!!context, resume_on_parent_change:resume_on_parent_change===true, parent_revision:owner?.revision ?? null, specs, values: {}, accepted: {}, errors: {}, pending: {}, seeds:{}, attempts: {}, misses:{}, feedback:{}, prepared: {}, data:{}, arguments:{}, contexts:{}, children: {}, childResults:{}, revision: 0,
       providers: providers || owner?.providers || null, questions: questions?.length ? questions : owner?.questions || [], status: 'collecting' };
    if (owner) {if(context){owner.contexts ||= {};owner.contexts[definition]=id;}else owner.children[input]=id;}
    return id;

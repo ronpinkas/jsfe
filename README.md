@@ -403,6 +403,12 @@ question asked again ("Sorry, I didn't catch that. " / "Disculpe, no le entendí
 and the provider menu. A flow set that sets `cargo.sorryByName = true` (for example once the caller is verified) gets it with
 `cargo.displayName` ("Disculpe, Ana, no le entendí. "); without it the wording is unchanged.
 
+**Acknowledging only data, opt-in (jsfe 1.20.0):** a form declaring `acknowledge: 'data'` (or the nearest enclosing form
+that declares it) says "Got it, your …" / "Okay, I noted your …" only for a value the caller supplied, an input whose profile
+kind is digits, email, phone, amount, identifier, account or text. A pick among offered words (`choice`, `pattern`), such as
+NEW CARD, is not acknowledged: the next question already shows it was understood. Rejections are always said. Without the
+attribute every input is acknowledged as before (`formAcknowledges(cargo, reading)`).
+
 **Digits said in groups (jsfe 1.19.1):** every `digits` input reads a comma, or a period and a space, after a group of
 one to three digits as a pause inside one number, because speech-to-text writes spoken groups that way ("926, 1 0." is
 the ZIP 92610, "7, 9, 984. 5." the code 799845). A comma after a longer number still separates two numbers ("92610,

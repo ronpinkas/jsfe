@@ -4,7 +4,7 @@ import {linkFormSchemas,validateFlowContracts} from './contracts.js';
 import {compileFormPrompts} from './prompt-compiler.js';
 import {withSafetyRevision} from './continuation-safety.js';
 import {capturedAuthorSpec,copyAuthorSpec,authoredExpressions} from './declaration-capture.js';
-const formKeys=new Set(['inputs','before','after','confirm','before_confirm','declined','stop','close_on_stop','resume_on_parent_change','done','validator','confirmation_condition','prompt','prompt_es','incomplete_outcome','on_exhausted','on_no','must_complete']);
+const formKeys=new Set(['inputs','before','after','confirm','before_confirm','declined','stop','close_on_stop','resume_on_parent_change','done','validator','confirmation_condition','prompt','prompt_es','incomplete_outcome','on_exhausted','on_no','must_complete','acknowledge']);
 const sharedKeys=['id','name','description','version','scope','primary','parameters','contract','parameterInstructions'];
 const safe=/^[A-Za-z_$][\w$]*$/;
 const fail=message=>{throw new Error('Flow declaration: '+message);};

@@ -40,6 +40,18 @@ export function formInputPrompt(cargo,id,input,spec,data={},language='en') {
    if(feedback&&retry)return retry;
    return (feedback==='miss'?sorryNotCaught(es?'es':'en',cargo):'')+question;
 }
+/** Whether an accepted input is acknowledged ("Got it, your amount."). A form declaring acknowledge: 'data' (jsfe 1.20.0,
+ * owner 2026-10-31), or the nearest enclosing form that declares it, acknowledges only a value the caller supplied (digits,
+ * email, phone, amount, identifier, account, text), never a pick among offered words (choice, pattern). Default: every input. */
+const DATA_KINDS=new Set(['digits','email','phone','amount','identifier','account','text']);
+export function formAcknowledges(cargo,reading) {
+   const seen=new Set();let id=reading&&reading.form,mode='all';
+   while(id&&cargo.forms?.[id]&&!seen.has(id)){seen.add(id);const state=cargo.forms[id];if(state.acknowledge){mode=state.acknowledge;break;}id=state.parent;}
+   if(mode!=='data')return true;
+   const state=cargo.forms[reading.form]||{},group=(state.specs||[]).find(s=>s.name===reading.name||s.any_of?.some(i=>i.name===reading.name));
+   const spec=group?.any_of?.find(i=>i.name===reading.name)||group,kind=spec?.profile?.kind;
+   return DATA_KINDS.has(kind);
+}
 export function consumeFormFeedback(cargo,id,input) {if(cargo.forms?.[id]?.feedback)delete cargo.forms[id].feedback[input];return true;}
 
 /** Recovery refers to the actual owning root, and never permits a fresh attempt at an unknown action. */
