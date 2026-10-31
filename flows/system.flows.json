@@ -321,6 +321,21 @@
         "description": "parent form"
       },
       {
+        "name": "task",
+        "type": "string",
+        "description": "task"
+      },
+      {
+        "name": "task_es",
+        "type": "string",
+        "description": "task es"
+      },
+      {
+        "name": "failed_flow",
+        "type": "string",
+        "description": "failed flow"
+      },
+      {
         "name": "caller_on_file",
         "type": "string",
         "description": "Caller-ID eligibility inherited from the invoking service"
@@ -377,6 +392,18 @@
         "value": false
       },
       "parent_form": {
+        "type": "string",
+        "value": ""
+      },
+      "task": {
+        "type": "string",
+        "value": ""
+      },
+      "task_es": {
+        "type": "string",
+        "value": ""
+      },
+      "failed_flow": {
         "type": "string",
         "value": ""
       },
@@ -454,30 +481,6 @@
       "otp_ranked_no_phone_message_es": {
         "type": "string",
         "value": ""
-      },
-      "otp_word_menu_message": {
-        "type": "string",
-        "value": ""
-      },
-      "otp_word_menu_message_es": {
-        "type": "string",
-        "value": ""
-      },
-      "otp_format_menu_message": {
-        "type": "string",
-        "value": ""
-      },
-      "otp_format_menu_message_es": {
-        "type": "string",
-        "value": ""
-      },
-      "otp_mismatch_menu_message": {
-        "type": "string",
-        "value": ""
-      },
-      "otp_mismatch_menu_message_es": {
-        "type": "string",
-        "value": ""
       }
     },
     "steps": [
@@ -523,42 +526,6 @@
         "type": "SET",
         "variable": "otp_ranked_no_phone_message_es",
         "value": "No hay problema. Entonces el código no le puede llegar ahí. Puede usar el correo electrónico de su cuenta, o {{cargo.verb_es}} AGENTE para hablar con una persona."
-      },
-      {
-        "id": "otp_word_menu_message",
-        "type": "SET",
-        "variable": "otp_word_menu_message",
-        "value": "I still don't have the code. To reach a person, {{cargo.verb}} AGENT."
-      },
-      {
-        "id": "otp_word_menu_message_es",
-        "type": "SET",
-        "variable": "otp_word_menu_message_es",
-        "value": "Todavía no tengo el código. Para hablar con una persona, {{cargo.verb_es}} AGENTE."
-      },
-      {
-        "id": "otp_format_menu_message",
-        "type": "SET",
-        "variable": "otp_format_menu_message",
-        "value": "I still don't have a 6-digit code. To reach a person, {{cargo.verb}} AGENT."
-      },
-      {
-        "id": "otp_format_menu_message_es",
-        "type": "SET",
-        "variable": "otp_format_menu_message_es",
-        "value": "Todavía no tengo un código de 6 dígitos. Para hablar con una persona, {{cargo.verb_es}} AGENTE."
-      },
-      {
-        "id": "otp_mismatch_menu_message",
-        "type": "SET",
-        "variable": "otp_mismatch_menu_message",
-        "value": "That code didn't match three times, so I can't accept another try with it. To reach a person, {{cargo.verb}} AGENT."
-      },
-      {
-        "id": "otp_mismatch_menu_message_es",
-        "type": "SET",
-        "variable": "otp_mismatch_menu_message_es",
-        "value": "Ese código no coincidió tres veces, así que no puedo aceptar otro intento con él. Para hablar con una persona, {{cargo.verb_es}} AGENTE."
       },
       {
         "id": "auth_restart",
@@ -655,6 +622,24 @@
         "value": "auth_restart && cargo.authOptions ? cargo.authOptions.parent_form || '' : parent_form"
       },
       {
+        "id": "auth_option_task",
+        "type": "SET",
+        "variable": "task",
+        "value": "auth_restart && cargo.authOptions ? cargo.authOptions.task || '' : task"
+      },
+      {
+        "id": "auth_option_task_es",
+        "type": "SET",
+        "variable": "task_es",
+        "value": "auth_restart && cargo.authOptions ? cargo.authOptions.task_es || '' : task_es"
+      },
+      {
+        "id": "auth_option_failed_flow",
+        "type": "SET",
+        "variable": "failed_flow",
+        "value": "auth_restart && cargo.authOptions ? cargo.authOptions.failed_flow || '' : failed_flow"
+      },
+      {
         "id": "auth_default_retry",
         "type": "SET",
         "variable": "retry_flow",
@@ -670,7 +655,7 @@
         "id": "auth_options",
         "type": "SET",
         "variable": "noop",
-        "value": "(cargo.authOptions={retry_flow:retry_flow,cancel_flow:cancel_flow,email_validator:email_validator,cell_validator:cell_validator,code_validator:code_validator,answer_handler:answer_handler,retry_returns:retry_returns,parent_form:parent_form},cargo.authCancelFlow=cancel_flow,cargo.authRetry=!!(auth_restart && !cell_number && !email && retry_returns),true)"
+        "value": "(cargo.authOptions={retry_flow:retry_flow,cancel_flow:cancel_flow,email_validator:email_validator,cell_validator:cell_validator,code_validator:code_validator,answer_handler:answer_handler,retry_returns:retry_returns,parent_form:parent_form,task:task,task_es:task_es,failed_flow:failed_flow},cargo.authCancelFlow=cancel_flow,cargo.authRetry=!!(auth_restart && !cell_number && !email && retry_returns),true)"
       },
       {
         "id": "auth_return_to_caller",
@@ -2321,30 +2306,6 @@
       "otp_ranked_no_phone_message_es": {
         "type": "string",
         "value": ""
-      },
-      "otp_word_menu_message": {
-        "type": "string",
-        "value": ""
-      },
-      "otp_word_menu_message_es": {
-        "type": "string",
-        "value": ""
-      },
-      "otp_format_menu_message": {
-        "type": "string",
-        "value": ""
-      },
-      "otp_format_menu_message_es": {
-        "type": "string",
-        "value": ""
-      },
-      "otp_mismatch_menu_message": {
-        "type": "string",
-        "value": ""
-      },
-      "otp_mismatch_menu_message_es": {
-        "type": "string",
-        "value": ""
       }
     },
     "steps": [
@@ -2390,42 +2351,6 @@
         "type": "SET",
         "variable": "otp_ranked_no_phone_message_es",
         "value": "No hay problema. Entonces el código no le puede llegar ahí. Puede usar el correo electrónico de su cuenta, o {{cargo.verb_es}} AGENTE para hablar con una persona."
-      },
-      {
-        "id": "otp_word_menu_message",
-        "type": "SET",
-        "variable": "otp_word_menu_message",
-        "value": "I still don't have the code. To reach a person, {{cargo.verb}} AGENT."
-      },
-      {
-        "id": "otp_word_menu_message_es",
-        "type": "SET",
-        "variable": "otp_word_menu_message_es",
-        "value": "Todavía no tengo el código. Para hablar con una persona, {{cargo.verb_es}} AGENTE."
-      },
-      {
-        "id": "otp_format_menu_message",
-        "type": "SET",
-        "variable": "otp_format_menu_message",
-        "value": "I still don't have a 6-digit code. To reach a person, {{cargo.verb}} AGENT."
-      },
-      {
-        "id": "otp_format_menu_message_es",
-        "type": "SET",
-        "variable": "otp_format_menu_message_es",
-        "value": "Todavía no tengo un código de 6 dígitos. Para hablar con una persona, {{cargo.verb_es}} AGENTE."
-      },
-      {
-        "id": "otp_mismatch_menu_message",
-        "type": "SET",
-        "variable": "otp_mismatch_menu_message",
-        "value": "That code didn't match three times, so I can't accept another try with it. To reach a person, {{cargo.verb}} AGENT."
-      },
-      {
-        "id": "otp_mismatch_menu_message_es",
-        "type": "SET",
-        "variable": "otp_mismatch_menu_message_es",
-        "value": "Ese código no coincidió tres veces, así que no puedo aceptar otro intento con él. Para hablar con una persona, {{cargo.verb_es}} AGENTE."
       },
       {
         "id": "validate-otp-code_contextual_response_protocol",
@@ -2819,23 +2744,13 @@
         "type": "CASE",
         "branches": {
           "condition: no_code_given && cargo.otpWordMisses >= 3": {
-            "id": "otp_word_menu",
+            "id": "otp_word_end",
             "type": "FLOW",
-            "value": "generic-retry-with-options",
-            "callType": "replace",
+            "value": "verification-failed",
+            "callType": "reboot",
             "parameters": {
-              "error_message": "{{otp_word_menu_message}}",
-              "error_message_es": "{{otp_word_menu_message_es}}",
-              "retry_flow": "authenticate-user",
-              "retry_call_type": "replace",
-              "cancel_flow": "{{cargo.authCancelFlow}}",
-              "allow_code_entry": true,
-              "capture_patterns": "{{cargo.authCapture}}",
-              "parent_form": "{{cargo.authOptions.parent_form}}",
-              "question": "Would you like to try again to get access to your account?",
-              "question_es": "¿Le gustaría intentar nuevamente obtener acceso a su cuenta?"
-            },
-            "initializeDefaults": true
+              "form": "{{cargo.authOptions.parent_form}}"
+            }
           },
           "default": {
             "id": "otp_word_cap_skip",
@@ -2892,23 +2807,13 @@
         "type": "CASE",
         "branches": {
           "condition: normalized_otp_code.length !== 6 && cargo.otpFormatMisses >= 3": {
-            "id": "otp_format_menu",
+            "id": "otp_format_end",
             "type": "FLOW",
-            "value": "generic-retry-with-options",
-            "callType": "replace",
+            "value": "verification-failed",
+            "callType": "reboot",
             "parameters": {
-              "error_message": "{{otp_format_menu_message}}",
-              "error_message_es": "{{otp_format_menu_message_es}}",
-              "retry_flow": "authenticate-user",
-              "retry_call_type": "replace",
-              "cancel_flow": "{{cargo.authCancelFlow}}",
-              "allow_code_entry": true,
-              "capture_patterns": "{{cargo.authCapture}}",
-              "parent_form": "{{cargo.authOptions.parent_form}}",
-              "question": "Would you like to try again to get access to your account?",
-              "question_es": "¿Le gustaría intentar nuevamente obtener acceso a su cuenta?"
-            },
-            "initializeDefaults": true
+              "form": "{{cargo.authOptions.parent_form}}"
+            }
           },
           "default": {
             "id": "otp_format_cap_skip",
@@ -2981,23 +2886,13 @@
             }
           },
           "condition: cargo.otpFailure === 'mismatch' && cargo.otpMismatches >= 3": {
-            "id": "otp_mismatch_menu",
+            "id": "otp_mismatch_end",
             "type": "FLOW",
-            "value": "generic-retry-with-options",
-            "callType": "replace",
+            "value": "verification-failed",
+            "callType": "reboot",
             "parameters": {
-              "error_message": "{{otp_mismatch_menu_message}}",
-              "error_message_es": "{{otp_mismatch_menu_message_es}}",
-              "retry_flow": "authenticate-user",
-              "retry_call_type": "replace",
-              "cancel_flow": "{{cargo.authCancelFlow}}",
-              "allow_code_entry": false,
-              "capture_patterns": "{{cargo.authCapture}}",
-              "parent_form": "{{cargo.authOptions.parent_form}}",
-              "question": "Would you like to try again to get access to your account?",
-              "question_es": "¿Le gustaría intentar nuevamente obtener acceso a su cuenta?"
-            },
-            "initializeDefaults": true
+              "form": "{{cargo.authOptions.parent_form}}"
+            }
           },
           "default": {
             "id": "otp_mismatch",
@@ -3088,7 +2983,7 @@
   {
     "id": "resend-otp-code",
     "name": "ResendOtpCode",
-    "version": "1.1.3",
+    "version": "1.2.0",
     "description": "Worker: send a fresh one-time code to the destination authenticate-user used. Params: resend_reason.",
     "parameters": [
       {
@@ -3112,18 +3007,10 @@
           "condition: (cargo.otpResends || 0) >= 2": {
             "id": "resend_cap_reached",
             "type": "FLOW",
-            "value": "generic-retry-with-options",
-            "callType": "replace",
+            "value": "verification-failed",
+            "callType": "reboot",
             "parameters": {
-              "error_message": "I've already sent you new codes and still couldn't verify you. To reach a person, {{cargo.verb}} AGENT.",
-              "error_message_es": "Ya le envié códigos nuevos y aún no pude verificarlo. Para hablar con una persona, {{cargo.verb_es}} AGENTE.",
-              "retry_flow": "authenticate-user",
-              "retry_call_type": "replace",
-              "cancel_flow": "{{cargo.authCancelFlow}}",
-              "allow_code_entry": true,
-              "capture_patterns": "{{cargo.authCapture}}",
-              "question": "Would you like to try again to get access to your account?",
-              "question_es": "¿Le gustaría intentar nuevamente obtener acceso a su cuenta?"
+              "form": "{{cargo.authOptions.parent_form}}"
             }
           },
           "default": {
@@ -19600,6 +19487,158 @@
             "value_es": "{{otp_where_es}}"
           }
         }
+      }
+    ],
+    "safetyRevision": "dispatch-intake-2026-10-22"
+  },
+  {
+    "scope": "shared",
+    "version": "1.0.0",
+    "id": "verification-failed",
+    "name": "VerificationFailed",
+    "description": "End a verification that ran out of attempts: retire the owning task, set cargo.verificationFailed, report it unresolved (verification_failed), say so, run the failed_flow given to authenticate-user, then offer an agent.",
+    "parameters": [
+      {
+        "name": "form",
+        "type": "string",
+        "description": "Owning task FORM instance"
+      }
+    ],
+    "variables": {
+      "noop": {
+        "type": "boolean",
+        "scope": "flow",
+        "value": false
+      },
+      "form": {
+        "type": "string",
+        "value": ""
+      },
+      "ended": {
+        "type": "object",
+        "value": null
+      },
+      "vf_text": {
+        "type": "string",
+        "value": ""
+      },
+      "vf_text_es": {
+        "type": "string",
+        "value": ""
+      },
+      "vf_agent": {
+        "type": "string",
+        "value": ""
+      },
+      "vf_agent_es": {
+        "type": "string",
+        "value": ""
+      },
+      "contract": {
+        "type": "object",
+        "value": {
+          "version": 1,
+          "role": "worker",
+          "summary": "Clean end of a failed verification",
+          "parametersFrom": "parameters",
+          "requires": [
+            "jsfe:continuation-safety:v1"
+          ]
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "verification-failed_continuation_safety_protocol",
+        "type": "SET",
+        "variable": "noop",
+        "value": "continuationSafetyProtocol() === 1",
+        "requireTrue": true
+      },
+      {
+        "id": "vf_retire",
+        "type": "SET",
+        "variable": "ended",
+        "value": "form && cargo.forms && cargo.forms[form] ? cancelFormTask(cargo,form) : null"
+      },
+      {
+        "id": "vf_clear_code",
+        "type": "SET",
+        "variable": "noop",
+        "value": "(cargo.otpHash=null,cargo.otpTimestamp=null,cargo.otpAltHash=null,cargo.otpAltTimestamp=null,cargo.verificationFailed=true,true)"
+      },
+      {
+        "id": "vf_text",
+        "type": "SET",
+        "variable": "vf_text",
+        "value": "(function verificationFailedText(cargo,ended,es=false,part='') {\n   const hold=!!(ended && ended.recovery && ended.recovery.mode==='hold');\n   if(part==='agent')return hold?'':es?'Para hablar con una persona, '+cargo.verb_es+' AGENTE.':'To reach a person, '+cargo.verb+' AGENT.';\n   if(hold)return es?'El resultado de su solicitud anterior sigue sin confirmarse. Nuestro equipo debe revisarlo antes de otro intento.':'The result of your earlier request is still unknown. Our team needs to check it before another attempt.';\n   const task=String((cargo.authOptions && (es?cargo.authOptions.task_es:cargo.authOptions.task)) || '');\n   return es?'No pude verificar su cuenta, así que no puedo '+(task || 'continuar')+' en este momento. Cuando pueda recibir el código para esta cuenta, podemos intentarlo de nuevo.'\n      :\"I wasn't able to verify your account, so I can't \"+(task || 'continue')+' right now. Whenever you have access to receive the code for this account, we can try again.';\n})(cargo,ended)"
+      },
+      {
+        "id": "vf_text_es",
+        "type": "SET",
+        "variable": "vf_text_es",
+        "value": "(function verificationFailedText(cargo,ended,es=false,part='') {\n   const hold=!!(ended && ended.recovery && ended.recovery.mode==='hold');\n   if(part==='agent')return hold?'':es?'Para hablar con una persona, '+cargo.verb_es+' AGENTE.':'To reach a person, '+cargo.verb+' AGENT.';\n   if(hold)return es?'El resultado de su solicitud anterior sigue sin confirmarse. Nuestro equipo debe revisarlo antes de otro intento.':'The result of your earlier request is still unknown. Our team needs to check it before another attempt.';\n   const task=String((cargo.authOptions && (es?cargo.authOptions.task_es:cargo.authOptions.task)) || '');\n   return es?'No pude verificar su cuenta, así que no puedo '+(task || 'continuar')+' en este momento. Cuando pueda recibir el código para esta cuenta, podemos intentarlo de nuevo.'\n      :\"I wasn't able to verify your account, so I can't \"+(task || 'continue')+' right now. Whenever you have access to receive the code for this account, we can try again.';\n})(cargo,ended,true)"
+      },
+      {
+        "id": "vf_say",
+        "type": "SAY",
+        "value": "{{vf_text}}",
+        "value_es": "{{vf_text_es}}",
+        "outcome": "{{ended && ended.recovery && ended.recovery.mode === 'hold' ? ended.outcome : 'unresolved'}}",
+        "reason": "{{ended && ended.recovery && ended.recovery.mode === 'hold' ? ended.reason : 'verification_failed'}}"
+      },
+      {
+        "id": "vf_failed_flow",
+        "type": "CASE",
+        "branches": {
+          "condition: !(ended && ended.recovery && ended.recovery.mode === 'hold') && !!(cargo.authOptions && cargo.authOptions.failed_flow)": {
+            "id": "vf_run_failed_flow",
+            "type": "FLOW",
+            "value": "{{cargo.authOptions.failed_flow}}",
+            "callType": "call",
+            "parameters": {}
+          },
+          "default": {
+            "id": "vf_failed_flow_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "vf_agent",
+        "type": "SET",
+        "variable": "vf_agent",
+        "value": "(function verificationFailedText(cargo,ended,es=false,part='') {\n   const hold=!!(ended && ended.recovery && ended.recovery.mode==='hold');\n   if(part==='agent')return hold?'':es?'Para hablar con una persona, '+cargo.verb_es+' AGENTE.':'To reach a person, '+cargo.verb+' AGENT.';\n   if(hold)return es?'El resultado de su solicitud anterior sigue sin confirmarse. Nuestro equipo debe revisarlo antes de otro intento.':'The result of your earlier request is still unknown. Our team needs to check it before another attempt.';\n   const task=String((cargo.authOptions && (es?cargo.authOptions.task_es:cargo.authOptions.task)) || '');\n   return es?'No pude verificar su cuenta, así que no puedo '+(task || 'continuar')+' en este momento. Cuando pueda recibir el código para esta cuenta, podemos intentarlo de nuevo.'\n      :\"I wasn't able to verify your account, so I can't \"+(task || 'continue')+' right now. Whenever you have access to receive the code for this account, we can try again.';\n})(cargo,ended,false,'agent')"
+      },
+      {
+        "id": "vf_agent_es",
+        "type": "SET",
+        "variable": "vf_agent_es",
+        "value": "(function verificationFailedText(cargo,ended,es=false,part='') {\n   const hold=!!(ended && ended.recovery && ended.recovery.mode==='hold');\n   if(part==='agent')return hold?'':es?'Para hablar con una persona, '+cargo.verb_es+' AGENTE.':'To reach a person, '+cargo.verb+' AGENT.';\n   if(hold)return es?'El resultado de su solicitud anterior sigue sin confirmarse. Nuestro equipo debe revisarlo antes de otro intento.':'The result of your earlier request is still unknown. Our team needs to check it before another attempt.';\n   const task=String((cargo.authOptions && (es?cargo.authOptions.task_es:cargo.authOptions.task)) || '');\n   return es?'No pude verificar su cuenta, así que no puedo '+(task || 'continuar')+' en este momento. Cuando pueda recibir el código para esta cuenta, podemos intentarlo de nuevo.'\n      :\"I wasn't able to verify your account, so I can't \"+(task || 'continue')+' right now. Whenever you have access to receive the code for this account, we can try again.';\n})(cargo,ended,true,'agent')"
+      },
+      {
+        "id": "vf_offer_agent",
+        "type": "CASE",
+        "branches": {
+          "condition: !!vf_agent": {
+            "id": "vf_agent_say",
+            "type": "SAY",
+            "value": "{{vf_agent}}",
+            "value_es": "{{vf_agent_es}}"
+          },
+          "default": {
+            "id": "vf_agent_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "vf_end",
+        "type": "END"
       }
     ],
     "safetyRevision": "dispatch-intake-2026-10-22"
