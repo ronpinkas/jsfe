@@ -398,6 +398,12 @@ reasonFor })` builds both executors' instructions. A reason question declares no
 unchanged: the generic withdrawal includes "I no longer want it", which at a reason question withdrew three prod
 cancellations.
 
+**Digits said in groups (jsfe 1.19.1):** every `digits` input reads a comma, or a period and a space, after a group of
+one to three digits as a pause inside one number, because speech-to-text writes spoken groups that way ("926, 1 0." is
+the ZIP 92610, "7, 9, 984. 5." the code 799845). A comma after a longer number still separates two numbers ("92610,
+56035214"). At its own question, an answer of digits and separators alone is one number when its length fits ("4111,
+1111, 1111, 1111"). A choice still reads "1, 2" as two keys.
+
 **Choices that leave (`route: 'new_request'`) and staying on noise (`onNoIntent: 'stay'`, jsfe 1.15.3):** a choice
 declared `{ key, label, route: 'new_request' }` is offered like any other, and picking it leaves like a new request
 (intent detection decides where to). A contextual DISPATCH declared `onNoIntent: 'stay'` asks intent detection BEFORE

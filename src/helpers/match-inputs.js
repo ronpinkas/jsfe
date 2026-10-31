@@ -35,10 +35,16 @@ function unescape(answer) {
    return String(answer ?? '').replace(/\\(['"\\])/g, '$1');
 }
 
-/** Digit runs as said: spoken digits come apart ("4 3 2 1", "555-123-4567"), so single spaces / dashes / dots inside a run join it. */
+/** A run of digits as said: spoken digits come apart ("4 3 2 1", "555-123-4567"), so a single space, dash or dot inside a run
+ * joins it, and so does a comma (or a period and a space) after a group of one to three digits: speech-to-text writes the
+ * pauses between spoken groups that way (prod 2026-10-31: the ZIP 92610 said as "926, 1 0.", the code as "7, 9, 984. 5."). A comma after a
+ * longer number separates two numbers ("92610, 56035214"). */
+const DIGIT_RUN = /\d(?:[\s.-]?\d|(?<=(?:^|\D)\d{1,3})(?:,\s?|\.\s)(?=\d))*/g;
 function digitRuns(raw) {
-   return (raw.match(/\d(?:[\s.-]?\d)*/g) || []).map((r) => r.replace(/\D/g, ''));
+   return (raw.match(DIGIT_RUN) || []).map((r) => r.replace(/\D/g, ''));
 }
+// A choice reads its keys without the comma join: "1, 2" names two keys, not 12.
+const CHOICE_RUN = /\d(?:[\s.-]?\d)*/g;
 
 const DECIMAL_AMOUNT = /(?:[$€£]\s?)?\d+[.,]\d{2}(?!\d)/g;   // a written decimal amount, with its currency mark
 /** Where the answer says amount n: a written decimal by itself ("51 72.45" is not one spoken run), else its number spans. */
@@ -127,7 +133,7 @@ export function readInputProfile(profile, answer, isCurrent = true) {
    if (kind === 'choice') {
       // An amount's own digits are the amount's: a number beside it ("51:72.45", sub account 51 and $72.45) is still a choice.
       const free=isAmountAnswer(raw)?amountMasked(raw):raw;
-      const runs=digitRuns(free),joined=free.replace(/\d(?:[\s.-]?\d)*/g,run=>' '+run.replace(/\D/g,'')+' ');
+      const runs=(free.match(CHOICE_RUN) || []).map((r) => r.replace(/\D/g, '')),joined=free.replace(CHOICE_RUN,run=>' '+run.replace(/\D/g,'')+' ');
       const choices = (Array.isArray(profile.choices) ? profile.choices : []).filter(c=>isCurrent||c.current_only!==true).map(c=>({...c,
          numericWords:(c.phrases ?? c.words ?? []).filter(word=>/^\d{2,}$/.test(String(word).trim())),
          phrases:(c.phrases??c.words??[]).concat(isCurrent ? c.keys || [] : []).filter(word=>!(free!==raw&&/^\d+$/.test(String(word).trim())&&!runs.includes(String(word).trim()))&&(isCurrent||profile.numeric_values===true||!/^[\d*#]$/.test(String(word).trim())))}));
@@ -190,7 +196,11 @@ export function readInputProfile(profile, answer, isCurrent = true) {
       const min = Number(profile.min || 1);
       const max = Number(profile.max || min);
       // Out of order a decimal amount ("72.45", "287,15") is never this field's digits.
-      const fits = [...new Set(digitRuns(isCurrent ? raw : raw.replace(DECIMAL_AMOUNT, (m) => ' '.repeat(m.length))).filter((d) => d.length >= min && d.length <= max))];
+      let fits = [...new Set(digitRuns(isCurrent ? raw : raw.replace(DECIMAL_AMOUNT, (m) => ' '.repeat(m.length))).filter((d) => d.length >= min && d.length <= max))];
+      // At its own question, an answer of digits and separators alone is one number when its length fits ("4111, 1111,
+      // 1111, 1111": a card read in groups of four).
+      const whole = raw.replace(/\D/g, '');
+      if (!fits.length && isCurrent && /^[\d\s.,-]+$/.test(raw.trim()) && whole.length >= min && whole.length <= max) { fits = [whole]; } else { /* read by runs */ }
       if (fits.length === 1) {
          return { value: fits[0], spans: numberSpans(raw, fits[0]), evidence: [`d:${fits[0]}`] };
       } else {
@@ -307,7 +317,7 @@ export function matchInputs(answer, candidates, current, choiceKey) {
             const repeatedChoice=known && !isCur(c) && c.profile.kind==='choice';
             const isChoice=!isCur(c) && c.profile.kind==='choice';
             const wholeOptions=isChoice ? (c.profile.choices || []).filter(choice=>choice.key===option.value).map(choice=>({...choice,exact:true})) : [];
-            const wholeChoice=isChoice && [raw,raw.replace(/\d(?:[\s.-]?\d)*/g,run=>run.replace(/\D/g,''))].some(text=>pickChoice(text,wholeOptions,false)===option.value);
+            const wholeChoice=isChoice && [raw,raw.replace(CHOICE_RUN,run=>run.replace(/\D/g,''))].some(text=>pickChoice(text,wholeOptions,false)===option.value);
             readings.push({ form:c.form, name:c.name, value:option.value, ...(option.refused===true?{refused:true}:{}), ...(option.incompleteMoney===true?{incompleteMoney:true}:{}), known, repeatedChoice, wholeChoice, choice:isChoice,  narrative:isCur(c) && ['text','choice'].includes(c.profile.kind) && c.profile.narrative===true, resetOn:Array.isArray(c.reset_on)?c.reset_on:[], spans:option.spans, keypad:option.keypad === true, fallback:option.fallback === true,
                ...(r.alternatives ? { option_label:option.option_label, option_label_es:option.option_label_es } : {}), group:c.group, exclusive:c.exclusive===true, level:forms.indexOf(c.scope || c.form), current:isCur(c), confirm:Array.isArray(c.confirm_against)?c.confirm_against:[] });
          }
@@ -326,7 +336,7 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    // so the last four of "88 91 7112" fill nothing. A written decimal is a run of its own ("51 72.45": 51, then 72.45).
    const decimalRuns = [...raw.matchAll(DECIMAL_AMOUNT)].map((m) => [m.index, m.index + m[0].length]);
    const undecimal = decimalRuns.reduce((text, [a, b]) => text.slice(0, a) + ' '.repeat(b - a) + text.slice(b), raw);
-   const runs = [...undecimal.matchAll(/\d(?:[\s.-]?\d)*/g)].map((m) => [m.index, m.index + m[0].replace(/\s+$/, '').length]).concat(decimalRuns);
+   const runs = [...undecimal.matchAll(DIGIT_RUN)].map((m) => [m.index, m.index + m[0].replace(/\s+$/, '').length]).concat(decimalRuns);
    const wholeRuns = (reading) => runs.every(([a, b]) => !(reading.spans || []).some(([s, e]) => s < b && a < e) || (reading.spans || []).some(([s, e]) => s <= a && e >= b));
    // Rule 4: a bare number has no money mark and no word in its evidence. Written cents are a money mark: "51:72.45" at
    // the sub account question is sub account 51 and the amount 72.45 (prod 2026-10-30).
@@ -338,7 +348,7 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    // A choice is excluded (a digit it does not offer reaches the invited amount, rule 4), and so is an amount.
    const bareDigits = raw.replace(/\D/g, '');
    const shapeOf = own && own.digits && !['choice', 'amount', 'text'].includes(own.profile.kind) ? own.digits : null;
-   if (shapeOf && bareDigits && /^[\d\s./-]+$/.test(raw.trim()) && !isAmountAnswer(raw) && bareDigits.length >= Number(shapeOf.min || 1) && bareDigits.length <= Number(shapeOf.max || shapeOf.min || 1)
+   if (shapeOf && bareDigits && /^[\d\s.,/-]+$/.test(raw.trim()) && !isAmountAnswer(raw) && bareDigits.length >= Number(shapeOf.min || 1) && bareDigits.length <= Number(shapeOf.max || shapeOf.min || 1)
       && !readings.some((reading) => reading.current || invited(reading))) {
       readings.push({ form: own.form, name: own.name, value: bareDigits, ...(own.validator ? {} : { invalid: true }), known: false, repeatedChoice: false, wholeChoice: false, choice: false, narrative: false, resetOn: [], spans: [[0, raw.length]], keypad: false, fallback: false,
          group: own.group, exclusive: own.exclusive === true, level: forms.indexOf(own.scope || own.form), current: true, confirm: Array.isArray(own.confirm_against) ? own.confirm_against : [] });
