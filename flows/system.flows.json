@@ -18091,6 +18091,10 @@
         "type": "string",
         "value": ""
       },
+      "reason_for": {
+        "type": "string",
+        "value": ""
+      },
       "reply": {
         "type": "object",
         "value": null
@@ -18150,6 +18154,12 @@
         "value": "formInputPrompt(cargo,form,input,Object.assign({},group,spec,{question:spec.question || group.question,question_es:spec.question_es || group.question_es,question_from:spec.question_from || group.question_from}),cargo.forms[form].data || {},language)"
       },
       {
+        "id": "response_reason_for",
+        "type": "SET",
+        "variable": "reason_for",
+        "value": "spec.response.reason_for_from ? String((cargo.forms[form].data || {})[spec.response.reason_for_from] || '') : String(spec.response.reason_for || '')"
+      },
+      {
         "id": "response_clear",
         "type": "SET",
         "variable": "reply",
@@ -18169,6 +18179,7 @@
         },
         "onResponse": "continue",
         "responseContext": "Current question: {{question}}. Requested answer: {{spec.response.description}}.",
+        "responseReasonFor": "{{reason_for}}",
         "responseParameters": [
           {
             "name": "answer",

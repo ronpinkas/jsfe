@@ -17,7 +17,7 @@
 ```mermaid
 flowchart TD
    START(("start"))
-   n0["set group, spec, question, reply"]
+   n0["set group, spec, question, reason_for, reply"]
    START --> n0
    n1(["dispatch: intent detection"])
    class n1 endstep
