@@ -9,7 +9,7 @@
   - `form`: 
 - **Calls:** {{target}} (replace)
 - **Tools:** none
-- **Called by:** [run-form](run-form.md)
+- **Called by:** [run-form](run-form.md), [collect-input](collect-input.md)
 
 ### Steps
 

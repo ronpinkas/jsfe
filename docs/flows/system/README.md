@@ -1,7 +1,7 @@
 # System flows
 
 <!-- generated:start -->
-80 flows (2 entry points), 12 tools. The graph shows each entry point and the flows it reaches directly; a dotted arrow is a flow named rather than called (a hook, a prepare or present step, a default target). Each flow page charts its declarations: a provider (gate, source, facts, menu), a form (inputs in order, then its after steps), a performer (prepare, present, action) and any step list.
+81 flows (2 entry points), 12 tools. The graph shows each entry point and the flows it reaches directly; a dotted arrow is a flow named rather than called (a hook, a prepare or present step, a default target). Each flow page charts its declarations: a provider (gate, source, facts, menu), a form (inputs in order, then its after steps), a performer (prepare, present, action) and any step list.
 
 ```mermaid
 flowchart LR
@@ -99,6 +99,7 @@ flowchart LR
 | [read-form-choice](read-form-choice.md) | steps | Rank an unreadable answer to a choice question and take the offered option it picks, or a request for a person or for text; otherwise ask a… |
 | [read-confirm-reply](read-confirm-reply.md) | steps | Rank an unreadable answer to a confirmation: it declines (NO), picks another of the form's choices (a correction, read as that input's answ… |
 | [validate-card-cvv](validate-card-cvv.md) | steps | Validator: the security code has the length of its card brand, 4 digits for American Express (34, 37) and 3 for every other brand; with no … |
+| [send-otp-email-too](send-otp-email-too.md) | steps | Email a second one-time code to the account's email beside the texted one, and say so. |
 <!-- generated:end -->
 
 ## How to read these docs

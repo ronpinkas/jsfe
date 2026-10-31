@@ -12,7 +12,7 @@
   - `provides`: provides
   - `exit_context`: exit_context
   - `exit_context_es`: exit_context_es
-- **Calls:** {{ci_exhaustion.flow}} (reboot), [give-up](give-up.md) (reboot), [prepare-input](prepare-input.md) (call), {{ci_spec.refresh}} (call), [ask-choice](ask-choice.md) (call), {{ci_routed}} (call), [disambiguate-input](disambiguate-input.md) (call), [collect-input-accept](collect-input-accept.md) (call), [provide-data](provide-data.md) (call), [read-form-choice](read-form-choice.md) (by name), [read-form-reply](read-form-reply.md) (by name), {{ci_reply_reader}} (call)
+- **Calls:** {{ci_exhaustion.flow}} (reboot), [give-up](give-up.md) (reboot), [prepare-input](prepare-input.md) (call), {{ci_spec.refresh}} (call), [ask-choice](ask-choice.md) (call), {{ci_routed}} (call), {{ci_no_flow}} (call), [resume-form](resume-form.md) (reboot), [disambiguate-input](disambiguate-input.md) (call), [collect-input-accept](collect-input-accept.md) (call), [provide-data](provide-data.md) (call), [read-form-choice](read-form-choice.md) (by name), [read-form-reply](read-form-reply.md) (by name), {{ci_reply_reader}} (call)
 - **Tools:** none
 - **Called by:** [run-form](run-form.md)
 
@@ -94,68 +94,86 @@ flowchart TD
    b28(["end (back to caller)"])
    class b28 endstep
    c27 -- "ci_partial === 'hold'" --> b28
-   n29["set ci_chain, ci_m, assignment_side_effect, ci_qkey"]
+   n29["set ci_no_owner, ci_no_flow, ci_no_up"]
    c27 -- "else" --> n29
    c30{"case"}
    n29 --> c30
-   b31["set assignment_side_effect"]
-   c30 -- "ci_m.hits.length #124;#124; ci_m.ambiguous.length #124;#124; ci_m.questions.length #124;#124;…" --> b31
-   n32["set ci_words"]
-   b31 --> n32
-   c30 -- "else" --> n32
-   c33{"case"}
-   n32 --> c33
-   b34[["call disambiguate-input"]]
-   class b34 flowstep
-   c33 -- "ci_m.questions.length #gt; 0 && ci_m.ambiguous.length #gt; 0" --> b34
-   c35{"case"}
-   b34 --> c35
-   c33 -- "else" --> c35
-   b36[["call collect-input-accept"]]
-   class b36 flowstep
-   c35 -- "ci_m.questions.length #gt; 0 && !ci_m.ambiguous.length && ci_m.hits.leng…" --> b36
-   n37["set ci_skip_gate"]
-   b36 --> n37
-   c35 -- "else" --> n37
-   c38{"case"}
-   n37 --> c38
-   b39[["call provide-data"]]
-   class b39 flowstep
-   c38 -- "ci_m.questions.length #gt; 0" --> b39
+   b31[["call #123;#123;ci_no_flow#125;#125;"]]
+   class b31 flowstep
+   c30 -- "ci_no_flow" --> b31
+   c32{"case"}
+   b31 --> c32
+   c30 -- "else" --> c32
+   b33(["reboot → resume-form"])
+   class b33 endstep
+   c32 -- "ci_no_flow && ci_no_up" --> b33
+   c34{"case"}
+   c32 -- "else" --> c34
+   b35(["end (back to caller)"])
+   class b35 endstep
+   c34 -- "ci_no_flow" --> b35
+   n36["set ci_chain, ci_m, assignment_side_effect, ci_qkey"]
+   c34 -- "else" --> n36
+   c37{"case"}
+   n36 --> c37
+   b38["set assignment_side_effect"]
+   c37 -- "ci_m.hits.length #124;#124; ci_m.ambiguous.length #124;#124; ci_m.questions.length #124;#124;…" --> b38
+   n39["set ci_words"]
+   b38 --> n39
+   c37 -- "else" --> n39
    c40{"case"}
-   b39 --> c40
-   c38 -- "else" --> c40
-   b41(["end (back to caller)"])
-   class b41 endstep
-   c40 -- "ci_m.questions.length #gt; 0" --> b41
-   n42["set ci_reply_reader"]
-   c40 -- "else" --> n42
-   c43{"case"}
-   n42 --> c43
-   b44[["call disambiguate-input"]]
-   class b44 flowstep
-   c43 -- "ci_m.ambiguous.length #gt; 0" --> b44
-   b45[["call collect-input-accept"]]
-   class b45 flowstep
-   c43 -- "ci_m.hits.length #gt; 0" --> b45
-   b46(["end (back to caller)"])
-   class b46 endstep
-   c43 -- "ci_m.questions.length #gt; 0" --> b46
-   b47[["call provide-data"]]
-   class b47 flowstep
-   c43 -- "ci_qkey && ci_qkey.indexOf('__') !== 0" --> b47
-   b48[["call #123;#123;ci_reply_reader#125;#125;"]]
-   class b48 flowstep
-   c43 -- "!ci_must && ci_words #gt; 0" --> b48
-   b49["set assignment_side_effect"]
-   c43 -- "else" --> b49
+   n39 --> c40
+   b41[["call disambiguate-input"]]
+   class b41 flowstep
+   c40 -- "ci_m.questions.length #gt; 0 && ci_m.ambiguous.length #gt; 0" --> b41
+   c42{"case"}
+   b41 --> c42
+   c40 -- "else" --> c42
+   b43[["call collect-input-accept"]]
+   class b43 flowstep
+   c42 -- "ci_m.questions.length #gt; 0 && !ci_m.ambiguous.length && ci_m.hits.leng…" --> b43
+   n44["set ci_skip_gate"]
+   b43 --> n44
+   c42 -- "else" --> n44
+   c45{"case"}
+   n44 --> c45
+   b46[["call provide-data"]]
+   class b46 flowstep
+   c45 -- "ci_m.questions.length #gt; 0" --> b46
+   c47{"case"}
+   b46 --> c47
+   c45 -- "else" --> c47
+   b48(["end (back to caller)"])
+   class b48 endstep
+   c47 -- "ci_m.questions.length #gt; 0" --> b48
+   n49["set ci_reply_reader"]
+   c47 -- "else" --> n49
+   c50{"case"}
+   n49 --> c50
+   b51[["call disambiguate-input"]]
+   class b51 flowstep
+   c50 -- "ci_m.ambiguous.length #gt; 0" --> b51
+   b52[["call collect-input-accept"]]
+   class b52 flowstep
+   c50 -- "ci_m.hits.length #gt; 0" --> b52
+   b53(["end (back to caller)"])
+   class b53 endstep
+   c50 -- "ci_m.questions.length #gt; 0" --> b53
+   b54[["call provide-data"]]
+   class b54 flowstep
+   c50 -- "ci_qkey && ci_qkey.indexOf('__') !== 0" --> b54
+   b55[["call #123;#123;ci_reply_reader#125;#125;"]]
+   class b55 flowstep
+   c50 -- "!ci_must && ci_words #gt; 0" --> b55
+   b56["set assignment_side_effect"]
+   c50 -- "else" --> b56
    DONE(["end (back to caller)"])
    class DONE endstep
-   b44 --> DONE
-   b45 --> DONE
-   b47 --> DONE
-   b48 --> DONE
-   b49 --> DONE
+   b51 --> DONE
+   b52 --> DONE
+   b54 --> DONE
+   b55 --> DONE
+   b56 --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80
