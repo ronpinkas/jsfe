@@ -580,7 +580,7 @@
             "id": "auth_decline_state",
             "type": "SET",
             "variable": "noop",
-            "value": "(cargo.callerDeclined=true,cargo.callerPreselected=false,cargo.otpHash=null,cargo.contactIntroSkip=true,cargo.callerNamed ? (cargo.displayName='',cargo.displayNameSetBy='flow',cargo.callerNamed=false) : true,true)"
+            "value": "(cargo.callerDeclined=true,cargo.callerPreselected=false,cargo.otpHash=null,cargo.otpAltHash=null,cargo.otpAltTimestamp=null,cargo.contactIntroSkip=true,cargo.callerNamed ? (cargo.displayName='',cargo.displayNameSetBy='flow',cargo.callerNamed=false) : true,true)"
           },
           "default": {
             "id": "auth_declined_caller_skip",
@@ -873,7 +873,7 @@
         "id": "auth_challenge_init",
         "type": "SET",
         "variable": "noop",
-        "value": "(cargo.otpLateCode='',cargo.otpResends=0,cargo.otpMismatches=0,cargo.otpFormatMisses=0,cargo.otpWordMisses=0,cargo.otp_cell_number=cell_number || '',cargo.otp_email=email || '',true)"
+        "value": "(cargo.otpLateCode='',cargo.otpResends=0,cargo.otpMismatches=0,cargo.otpFormatMisses=0,cargo.otpWordMisses=0,cargo.otp_cell_number=cell_number || '',cargo.otp_email=email || '',cargo.otpAltSent=false,cargo.otpAltHash=null,cargo.otpAltTimestamp=null,true)"
       },
       {
         "id": "auth_send",
@@ -1368,6 +1368,12 @@
         "type": "SET",
         "variable": "contact_prefill",
         "value": "String(acct_number || cell_number || email || (!contact_partial && contact_allowed && contact_options.caller_on_file === 'yes' ? cargo.callerId : ''))"
+      },
+      {
+        "id": "identity_contact_intro_unsaid",
+        "type": "SET",
+        "variable": "noop",
+        "value": "(!contact_prefill ? (cargo.otpIntro='',cargo.otpIntro_es='') : contact_options.intro && !cargo.contactIntroSkip && !contact_options.fromMenu ? (cargo.otpIntro=String(contact_options.intro),cargo.otpIntro_es=String(contact_options.intro_es || contact_options.intro)) : true,true)"
       },
       {
         "id": "identity_contact_preselected",
@@ -1894,13 +1900,19 @@
         "id": "otp_question",
         "type": "SET",
         "variable": "otp_question",
-        "value": "(function otpPrompt(cargo,es=false) {\n   const verb=es?cargo.verb_es:cargo.verb,number=String(cargo.otp_cell_number || '').replace(/\\D/g,'').slice(-4),tail=cargo.voice?number.split('').join(', '):number;\n   const where=cargo.otpSentOn==='whatsapp'?(es?'que le acabo de enviar aquí en este chat':'I just sent you here in this chat'):(es?'que recibió en ':'you received at ')+(cargo.otp_cell_number?(es?'celular que termina con ':'cell ending with ')+tail:(es?'correo electrónico: ':'email: ')+String(cargo.otp_email || ''));\n   const name=cargo.callerPreselected && cargo.callerNamed && cargo.displayName?cargo.displayName:'';\n   return (name?name+(es?', por favor':', please'):es?'Por favor':'Please')+' '+verb+' '+(cargo.voice?es?'o ingrese ':'or enter ':'')+(es?'el código de verificación de 6 dígitos ':'the 6-digit verification code ')+where+'. '+(es?`También puede ${cargo.voice?'presionar * o decir':'escribir'} SALIR para cancelar.`:`You can also ${cargo.voice?'press * or ':''}${verb} EXIT to cancel.`)+(cargo.callerPreselected?(es?` Para usar otra cuenta, ${verb} OTRA CUENTA.`:` To use another account, ${verb} ANOTHER ACCOUNT.`):'');\n})(cargo)"
+        "value": "(function otpPrompt(cargo,es=false) {\n   const verb=es?cargo.verb_es:cargo.verb,number=String(cargo.otp_cell_number || '').replace(/\\D/g,'').slice(-4),tail=cargo.voice?number.split('').join(', '):number;\n   const where=cargo.otpSentOn==='whatsapp'?(es?'que le acabo de enviar aquí en este chat':'I just sent you here in this chat'):(es?'que recibió en ':'you received at ')+(cargo.otp_cell_number?(es?'celular que termina con ':'cell ending with ')+tail:(es?'correo electrónico: ':'email: ')+String(cargo.otp_email || ''));\n   const also=cargo.otp_cell_number && cargo.otpAltSent === true?(es?' o en su correo ':' or at your email ')+maskEmail(cargo.otpAltEmail,cargo.voice,es?'es':'en'):'';\n   const name=cargo.callerPreselected && cargo.callerNamed && cargo.displayName?cargo.displayName:'';\n   const lead=String((es?cargo.otpIntro_es:cargo.otpIntro) || '');\n   return (lead?lead+' ':'')+(name?name+(es?', por favor':', please'):es?'Por favor':'Please')+' '+verb+' '+(cargo.voice?es?'o ingrese ':'or enter ':'')+(es?'el código de verificación de 6 dígitos ':'the 6-digit verification code ')+where+also+'. '+(es?`También puede ${cargo.voice?'presionar * o decir':'escribir'} SALIR para cancelar.`:`You can also ${cargo.voice?'press * or ':''}${verb} EXIT to cancel.`)+(cargo.callerPreselected?(es?` Para usar otra cuenta, ${verb} OTRA CUENTA.`:` To use another account, ${verb} ANOTHER ACCOUNT.`):'');\n})(cargo)"
       },
       {
         "id": "otp_question_es",
         "type": "SET",
         "variable": "otp_question_es",
-        "value": "(function otpPrompt(cargo,es=false) {\n   const verb=es?cargo.verb_es:cargo.verb,number=String(cargo.otp_cell_number || '').replace(/\\D/g,'').slice(-4),tail=cargo.voice?number.split('').join(', '):number;\n   const where=cargo.otpSentOn==='whatsapp'?(es?'que le acabo de enviar aquí en este chat':'I just sent you here in this chat'):(es?'que recibió en ':'you received at ')+(cargo.otp_cell_number?(es?'celular que termina con ':'cell ending with ')+tail:(es?'correo electrónico: ':'email: ')+String(cargo.otp_email || ''));\n   const name=cargo.callerPreselected && cargo.callerNamed && cargo.displayName?cargo.displayName:'';\n   return (name?name+(es?', por favor':', please'):es?'Por favor':'Please')+' '+verb+' '+(cargo.voice?es?'o ingrese ':'or enter ':'')+(es?'el código de verificación de 6 dígitos ':'the 6-digit verification code ')+where+'. '+(es?`También puede ${cargo.voice?'presionar * o decir':'escribir'} SALIR para cancelar.`:`You can also ${cargo.voice?'press * or ':''}${verb} EXIT to cancel.`)+(cargo.callerPreselected?(es?` Para usar otra cuenta, ${verb} OTRA CUENTA.`:` To use another account, ${verb} ANOTHER ACCOUNT.`):'');\n})(cargo,true)"
+        "value": "(function otpPrompt(cargo,es=false) {\n   const verb=es?cargo.verb_es:cargo.verb,number=String(cargo.otp_cell_number || '').replace(/\\D/g,'').slice(-4),tail=cargo.voice?number.split('').join(', '):number;\n   const where=cargo.otpSentOn==='whatsapp'?(es?'que le acabo de enviar aquí en este chat':'I just sent you here in this chat'):(es?'que recibió en ':'you received at ')+(cargo.otp_cell_number?(es?'celular que termina con ':'cell ending with ')+tail:(es?'correo electrónico: ':'email: ')+String(cargo.otp_email || ''));\n   const also=cargo.otp_cell_number && cargo.otpAltSent === true?(es?' o en su correo ':' or at your email ')+maskEmail(cargo.otpAltEmail,cargo.voice,es?'es':'en'):'';\n   const name=cargo.callerPreselected && cargo.callerNamed && cargo.displayName?cargo.displayName:'';\n   const lead=String((es?cargo.otpIntro_es:cargo.otpIntro) || '');\n   return (lead?lead+' ':'')+(name?name+(es?', por favor':', please'):es?'Por favor':'Please')+' '+verb+' '+(cargo.voice?es?'o ingrese ':'or enter ':'')+(es?'el código de verificación de 6 dígitos ':'the 6-digit verification code ')+where+also+'. '+(es?`También puede ${cargo.voice?'presionar * o decir':'escribir'} SALIR para cancelar.`:`You can also ${cargo.voice?'press * or ':''}${verb} EXIT to cancel.`)+(cargo.callerPreselected?(es?` Para usar otra cuenta, ${verb} OTRA CUENTA.`:` To use another account, ${verb} ANOTHER ACCOUNT.`):'');\n})(cargo,true)"
+      },
+      {
+        "id": "otp_intro_said",
+        "type": "SET",
+        "variable": "noop",
+        "value": "(cargo.otpIntro='',cargo.otpIntro_es='',true)"
       },
       {
         "id": "otp_collect",
@@ -2052,6 +2064,50 @@
             "reenvíe",
             "reenvie"
           ],
+          "cannot_find": [
+            "don t have it",
+            "i don t have it",
+            "don t have the code",
+            "i don t have the code",
+            "can t find",
+            "cannot find",
+            "can not find",
+            "couldn t find",
+            "could not find",
+            "can t find it",
+            "cannot find it",
+            "i can t find",
+            "i cannot find",
+            "not there",
+            "isn t there",
+            "it s not there",
+            "there s no code",
+            "no encuentro",
+            "no lo encuentro",
+            "no la encuentro",
+            "no encuentro el código",
+            "no encuentro el codigo",
+            "no aparece",
+            "no hay código",
+            "no hay codigo"
+          ],
+          "another_way": [
+            "another way",
+            "different way",
+            "other way",
+            "some other way",
+            "a different way",
+            "another option",
+            "other option",
+            "otra forma",
+            "otra manera",
+            "de otra forma",
+            "de otra manera",
+            "otra opción",
+            "otra opcion",
+            "hay otra forma",
+            "hay otra manera"
+          ],
           "later": [
             "driving",
             "i am driving",
@@ -2128,6 +2184,10 @@
           ]
         }
       },
+      "email_too": {
+        "type": "boolean",
+        "value": false
+      },
       "no_code_given": {
         "type": "boolean",
         "value": false
@@ -2176,6 +2236,18 @@
             "label": "use another account"
           },
           {
+            "key": "where",
+            "label": "asks where the code was sent"
+          },
+          {
+            "key": "cannot_find",
+            "label": "cannot find the code, or it is not there"
+          },
+          {
+            "key": "another_way",
+            "label": "asks for another way to get the code or to verify"
+          },
+          {
             "key": "resend",
             "label": "the code did not arrive; send it again"
           },
@@ -2196,6 +2268,14 @@
       "otp_reply": {
         "type": "object",
         "value": {}
+      },
+      "otp_where": {
+        "type": "string",
+        "value": ""
+      },
+      "otp_where_es": {
+        "type": "string",
+        "value": ""
       },
       "contract": {
         "type": "object",
@@ -2361,6 +2441,12 @@
         "value": "cargo.authCancelFlow || 'contact-support'"
       },
       {
+        "id": "otp_email_too_ready",
+        "type": "SET",
+        "variable": "email_too",
+        "value": "!!(cargo.otp_cell_number && cargo.otpAltSent !== true && cargo.otpAltSent !== 'failed' && validateEmail(String(cargo.otpAltEmail || '')))"
+      },
+      {
         "id": "otp_reset_no_code",
         "type": "SET",
         "variable": "no_code_given",
@@ -2433,6 +2519,18 @@
         }
       },
       {
+        "id": "otp_where_early",
+        "type": "SET",
+        "variable": "otp_where",
+        "value": "(function otpWhere(cargo,es=false) {\n   const number=String(cargo.otp_cell_number || '').replace(/\\D/g,'').slice(-4),tail=cargo.voice?number.split('').join(', '):number;\n   if(cargo.otpSentOn==='whatsapp')return es?'Se lo acabo de enviar aquí en este chat.':'I just sent it to you here in this chat.';\n   const masked=maskEmail(cargo.otpAltEmail,cargo.voice,es?'es':'en');\n   if(cargo.otp_cell_number && cargo.otpAltSent === true)return es?'Se lo envié por mensaje de texto al celular que termina con '+tail+', y también le envié un código a su correo '+masked+'. Revise sus mensajes de texto y su correo.':'I sent it by text message to the cell ending with '+tail+', and I also sent a code to your email '+masked+'. Check your text messages and your email.';\n   if(cargo.otp_cell_number)return es?'Se lo envié por mensaje de texto al celular que termina con '+tail+'. Revise sus mensajes de texto.':'I sent it by text message to the cell ending with '+tail+'. Check your text messages.';\n   return es?'Se lo envié por correo electrónico a '+String(cargo.otp_email || '')+'. Revise su correo.':'I sent it by email to '+String(cargo.otp_email || '')+'. Check your email.';\n})(cargo)"
+      },
+      {
+        "id": "otp_where_early_es",
+        "type": "SET",
+        "variable": "otp_where_es",
+        "value": "(function otpWhere(cargo,es=false) {\n   const number=String(cargo.otp_cell_number || '').replace(/\\D/g,'').slice(-4),tail=cargo.voice?number.split('').join(', '):number;\n   if(cargo.otpSentOn==='whatsapp')return es?'Se lo acabo de enviar aquí en este chat.':'I just sent it to you here in this chat.';\n   const masked=maskEmail(cargo.otpAltEmail,cargo.voice,es?'es':'en');\n   if(cargo.otp_cell_number && cargo.otpAltSent === true)return es?'Se lo envié por mensaje de texto al celular que termina con '+tail+', y también le envié un código a su correo '+masked+'. Revise sus mensajes de texto y su correo.':'I sent it by text message to the cell ending with '+tail+', and I also sent a code to your email '+masked+'. Check your text messages and your email.';\n   if(cargo.otp_cell_number)return es?'Se lo envié por mensaje de texto al celular que termina con '+tail+'. Revise sus mensajes de texto.':'I sent it by text message to the cell ending with '+tail+'. Check your text messages.';\n   return es?'Se lo envié por correo electrónico a '+String(cargo.otp_email || '')+'. Revise su correo.':'I sent it by email to '+String(cargo.otp_email || '')+'. Check your email.';\n})(cargo,true)"
+      },
+      {
         "id": "otp_response",
         "type": "CASE",
         "branches": {
@@ -2465,6 +2563,12 @@
               "declined_caller": true
             },
             "initializeDefaults": true
+          },
+          "condition: email_too && normalized_otp_code.length !== 6 && (matchesChoice(user_choice,otp_phrases.resend) || matchesChoice(user_choice,otp_phrases.cannot_find) || matchesChoice(user_choice,otp_phrases.another_way) || matchesChoice(user_choice,otp_phrases.email))": {
+            "id": "otp_email_too",
+            "type": "FLOW",
+            "value": "send-otp-email-too",
+            "callType": "call"
           },
           "condition: !!cargo.otp_cell_number && normalized_otp_code.length !== 6 && matchesChoice(user_choice,otp_phrases.email)": {
             "id": "otp_use_email",
@@ -2505,6 +2609,18 @@
             "parameters": {
               "resend_reason": "requested"
             }
+          },
+          "condition: matchesChoice(user_choice,otp_phrases.cannot_find)": {
+            "id": "otp_cannot_find",
+            "type": "SAY",
+            "value": "{{otp_where}}",
+            "value_es": "{{otp_where_es}}"
+          },
+          "condition: matchesChoice(user_choice,otp_phrases.another_way)": {
+            "id": "otp_no_other_way",
+            "type": "SAY",
+            "value": "{{otp_where}} To reach a person, {{cargo.verb}} AGENT.",
+            "value_es": "{{otp_where_es}} Para hablar con una persona, {{cargo.verb_es}} AGENTE."
           },
           "condition: matchesChoice(user_choice,otp_phrases.later)": {
             "id": "otp_later",
@@ -2585,6 +2701,18 @@
         }
       },
       {
+        "id": "otp_where",
+        "type": "SET",
+        "variable": "otp_where",
+        "value": "(function otpWhere(cargo,es=false) {\n   const number=String(cargo.otp_cell_number || '').replace(/\\D/g,'').slice(-4),tail=cargo.voice?number.split('').join(', '):number;\n   if(cargo.otpSentOn==='whatsapp')return es?'Se lo acabo de enviar aquí en este chat.':'I just sent it to you here in this chat.';\n   const masked=maskEmail(cargo.otpAltEmail,cargo.voice,es?'es':'en');\n   if(cargo.otp_cell_number && cargo.otpAltSent === true)return es?'Se lo envié por mensaje de texto al celular que termina con '+tail+', y también le envié un código a su correo '+masked+'. Revise sus mensajes de texto y su correo.':'I sent it by text message to the cell ending with '+tail+', and I also sent a code to your email '+masked+'. Check your text messages and your email.';\n   if(cargo.otp_cell_number)return es?'Se lo envié por mensaje de texto al celular que termina con '+tail+'. Revise sus mensajes de texto.':'I sent it by text message to the cell ending with '+tail+'. Check your text messages.';\n   return es?'Se lo envié por correo electrónico a '+String(cargo.otp_email || '')+'. Revise su correo.':'I sent it by email to '+String(cargo.otp_email || '')+'. Check your email.';\n})(cargo)"
+      },
+      {
+        "id": "otp_where_es",
+        "type": "SET",
+        "variable": "otp_where_es",
+        "value": "(function otpWhere(cargo,es=false) {\n   const number=String(cargo.otp_cell_number || '').replace(/\\D/g,'').slice(-4),tail=cargo.voice?number.split('').join(', '):number;\n   if(cargo.otpSentOn==='whatsapp')return es?'Se lo acabo de enviar aquí en este chat.':'I just sent it to you here in this chat.';\n   const masked=maskEmail(cargo.otpAltEmail,cargo.voice,es?'es':'en');\n   if(cargo.otp_cell_number && cargo.otpAltSent === true)return es?'Se lo envié por mensaje de texto al celular que termina con '+tail+', y también le envié un código a su correo '+masked+'. Revise sus mensajes de texto y su correo.':'I sent it by text message to the cell ending with '+tail+', and I also sent a code to your email '+masked+'. Check your text messages and your email.';\n   if(cargo.otp_cell_number)return es?'Se lo envié por mensaje de texto al celular que termina con '+tail+'. Revise sus mensajes de texto.':'I sent it by text message to the cell ending with '+tail+'. Check your text messages.';\n   return es?'Se lo envié por correo electrónico a '+String(cargo.otp_email || '')+'. Revise su correo.':'I sent it by email to '+String(cargo.otp_email || '')+'. Check your email.';\n})(cargo,true)"
+      },
+      {
         "id": "otp_reply_picked",
         "type": "SET",
         "variable": "no_code_given",
@@ -2594,6 +2722,12 @@
         "id": "otp_reply_route",
         "type": "CASE",
         "branches": {
+          "condition: !no_code_given && email_too && otp_reply && ['email','resend','cannot_find','another_way'].includes(otp_reply.key)": {
+            "id": "otp_ranked_email_too",
+            "type": "FLOW",
+            "value": "send-otp-email-too",
+            "callType": "call"
+          },
           "condition: !no_code_given && otp_reply && otp_reply.key === 'email'": {
             "id": "otp_ranked_email",
             "type": "FLOW",
@@ -2619,6 +2753,18 @@
               "declined_caller": true
             },
             "initializeDefaults": true
+          },
+          "condition: !no_code_given && otp_reply && (otp_reply.key === 'where' || otp_reply.key === 'cannot_find')": {
+            "id": "otp_ranked_where",
+            "type": "SAY",
+            "value": "{{otp_where}}",
+            "value_es": "{{otp_where_es}}"
+          },
+          "condition: !no_code_given && otp_reply && otp_reply.key === 'another_way'": {
+            "id": "otp_ranked_no_other_way",
+            "type": "SAY",
+            "value": "{{otp_where}} To reach a person, {{cargo.verb}} AGENT.",
+            "value_es": "{{otp_where_es}} Para hablar con una persona, {{cargo.verb_es}} AGENTE."
           },
           "condition: !no_code_given && otp_reply && otp_reply.key === 'resend'": {
             "id": "otp_ranked_resend",
@@ -2805,7 +2951,7 @@
             "id": "otp_withdraw",
             "type": "SET",
             "variable": "noop",
-            "value": "(cargo.otpHash=null,true)"
+            "value": "(cargo.otpHash=null,cargo.otpAltHash=null,cargo.otpAltTimestamp=null,true)"
           },
           "default": {
             "id": "otp_mismatch_cap_skip",
@@ -7448,6 +7594,18 @@
         "type": "string",
         "value": ""
       },
+      "ci_no_owner": {
+        "type": "string",
+        "value": ""
+      },
+      "ci_no_flow": {
+        "type": "string",
+        "value": ""
+      },
+      "ci_no_up": {
+        "type": "boolean",
+        "value": false
+      },
       "ci_reply_reader": {
         "type": "string",
         "value": ""
@@ -7997,6 +8155,82 @@
           },
           "default": {
             "id": "ci_partial_hold_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ci_no_owner",
+        "type": "SET",
+        "variable": "ci_no_owner",
+        "value": "formNoOwner(cargo, form, ci_spec, cargo.choiceText)"
+      },
+      {
+        "id": "ci_no_flow",
+        "type": "SET",
+        "variable": "ci_no_flow",
+        "value": "ci_no_owner ? cargo.forms[ci_no_owner].on_no : ''"
+      },
+      {
+        "id": "ci_no_up",
+        "type": "SET",
+        "variable": "ci_no_up",
+        "value": "!!ci_no_owner && ci_no_owner !== form"
+      },
+      {
+        "id": "ci_no_run",
+        "type": "CASE",
+        "branches": {
+          "condition: ci_no_flow": {
+            "id": "ci_no_answer",
+            "type": "FLOW",
+            "value": "{{ci_no_flow}}",
+            "callType": "call",
+            "parameters": {
+              "form": "{{ci_no_owner}}"
+            }
+          },
+          "default": {
+            "id": "ci_no_run_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ci_no_owner_resume",
+        "type": "CASE",
+        "branches": {
+          "condition: ci_no_flow && ci_no_up": {
+            "id": "ci_no_resume_owner",
+            "type": "FLOW",
+            "value": "resume-form",
+            "callType": "reboot",
+            "parameters": {
+              "form": "{{ci_no_owner}}"
+            }
+          },
+          "default": {
+            "id": "ci_no_owner_resume_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ci_no_end",
+        "type": "CASE",
+        "branches": {
+          "condition: ci_no_flow": {
+            "id": "ci_no_done",
+            "type": "END"
+          },
+          "default": {
+            "id": "ci_no_end_skip",
             "type": "SET",
             "variable": "noop",
             "value": "true"
@@ -9020,6 +9254,10 @@
         "type": "object",
         "value": null
       },
+      "form_on_no": {
+        "type": "string",
+        "value": ""
+      },
       "form_must_complete": {
         "type": "boolean",
         "value": false
@@ -9158,7 +9396,7 @@
         "id": "collect-phone_open",
         "type": "SET",
         "variable": "form_instance",
-        "value": "openFormInstance(cargo, \"collect-phone\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-phone\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, must_complete: form_must_complete })"
+        "value": "openFormInstance(cargo, \"collect-phone\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-phone\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete })"
       },
       {
         "id": "collect-phone_task",
@@ -9274,6 +9512,10 @@
       "form_on_exhausted": {
         "type": "object",
         "value": null
+      },
+      "form_on_no": {
+        "type": "string",
+        "value": ""
       },
       "form_must_complete": {
         "type": "boolean",
@@ -9407,7 +9649,7 @@
         "id": "collect-email_open",
         "type": "SET",
         "variable": "form_instance",
-        "value": "openFormInstance(cargo, \"collect-email\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-email\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, must_complete: form_must_complete })"
+        "value": "openFormInstance(cargo, \"collect-email\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-email\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete })"
       },
       {
         "id": "collect-email_task",
@@ -9523,6 +9765,10 @@
       "form_on_exhausted": {
         "type": "object",
         "value": null
+      },
+      "form_on_no": {
+        "type": "string",
+        "value": ""
       },
       "form_must_complete": {
         "type": "boolean",
@@ -9664,7 +9910,7 @@
         "id": "collect-zip_open",
         "type": "SET",
         "variable": "form_instance",
-        "value": "openFormInstance(cargo, \"collect-zip\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-zip\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, must_complete: form_must_complete })"
+        "value": "openFormInstance(cargo, \"collect-zip\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-zip\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete })"
       },
       {
         "id": "collect-zip_task",
@@ -9780,6 +10026,10 @@
       "form_on_exhausted": {
         "type": "object",
         "value": null
+      },
+      "form_on_no": {
+        "type": "string",
+        "value": ""
       },
       "form_must_complete": {
         "type": "boolean",
@@ -9911,7 +10161,7 @@
         "id": "collect-street-address_open",
         "type": "SET",
         "variable": "form_instance",
-        "value": "openFormInstance(cargo, \"collect-street-address\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-street-address\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, must_complete: form_must_complete })"
+        "value": "openFormInstance(cargo, \"collect-street-address\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-street-address\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete })"
       },
       {
         "id": "collect-street-address_task",
@@ -10027,6 +10277,10 @@
       "form_on_exhausted": {
         "type": "object",
         "value": null
+      },
+      "form_on_no": {
+        "type": "string",
+        "value": ""
       },
       "form_must_complete": {
         "type": "boolean",
@@ -10158,7 +10412,7 @@
         "id": "collect-city_open",
         "type": "SET",
         "variable": "form_instance",
-        "value": "openFormInstance(cargo, \"collect-city\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-city\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, must_complete: form_must_complete })"
+        "value": "openFormInstance(cargo, \"collect-city\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-city\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete })"
       },
       {
         "id": "collect-city_task",
@@ -10274,6 +10528,10 @@
       "form_on_exhausted": {
         "type": "object",
         "value": null
+      },
+      "form_on_no": {
+        "type": "string",
+        "value": ""
       },
       "form_must_complete": {
         "type": "boolean",
@@ -10449,7 +10707,7 @@
         "id": "collect-card-number_open",
         "type": "SET",
         "variable": "form_instance",
-        "value": "openFormInstance(cargo, \"collect-card-number\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-card-number\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, must_complete: form_must_complete })"
+        "value": "openFormInstance(cargo, \"collect-card-number\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-card-number\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete })"
       },
       {
         "id": "collect-card-number_task",
@@ -10565,6 +10823,10 @@
       "form_on_exhausted": {
         "type": "object",
         "value": null
+      },
+      "form_on_no": {
+        "type": "string",
+        "value": ""
       },
       "form_must_complete": {
         "type": "boolean",
@@ -10706,7 +10968,7 @@
         "id": "collect-card-expiration_open",
         "type": "SET",
         "variable": "form_instance",
-        "value": "openFormInstance(cargo, \"collect-card-expiration\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-card-expiration\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, must_complete: form_must_complete })"
+        "value": "openFormInstance(cargo, \"collect-card-expiration\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-card-expiration\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete })"
       },
       {
         "id": "collect-card-expiration_task",
@@ -10822,6 +11084,10 @@
       "form_on_exhausted": {
         "type": "object",
         "value": null
+      },
+      "form_on_no": {
+        "type": "string",
+        "value": ""
       },
       "form_must_complete": {
         "type": "boolean",
@@ -10961,7 +11227,7 @@
         "id": "collect-card-cvv_open",
         "type": "SET",
         "variable": "form_instance",
-        "value": "openFormInstance(cargo, \"collect-card-cvv\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-card-cvv\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, must_complete: form_must_complete })"
+        "value": "openFormInstance(cargo, \"collect-card-cvv\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-card-cvv\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete })"
       },
       {
         "id": "collect-card-cvv_task",
@@ -11077,6 +11343,10 @@
       "form_on_exhausted": {
         "type": "object",
         "value": null
+      },
+      "form_on_no": {
+        "type": "string",
+        "value": ""
       },
       "form_must_complete": {
         "type": "boolean",
@@ -11214,7 +11484,7 @@
         "id": "collect-card-zip_open",
         "type": "SET",
         "variable": "form_instance",
-        "value": "openFormInstance(cargo, \"collect-card-zip\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-card-zip\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, must_complete: form_must_complete })"
+        "value": "openFormInstance(cargo, \"collect-card-zip\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-card-zip\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete })"
       },
       {
         "id": "collect-card-zip_task",
@@ -11330,6 +11600,10 @@
       "form_on_exhausted": {
         "type": "object",
         "value": null
+      },
+      "form_on_no": {
+        "type": "string",
+        "value": ""
       },
       "form_must_complete": {
         "type": "boolean",
@@ -11508,7 +11782,7 @@
         "id": "collect-address_open",
         "type": "SET",
         "variable": "form_instance",
-        "value": "openFormInstance(cargo, \"collect-address\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-address\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, must_complete: form_must_complete })"
+        "value": "openFormInstance(cargo, \"collect-address\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-address\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete })"
       },
       {
         "id": "collect-address_task",
@@ -11624,6 +11898,10 @@
       "form_on_exhausted": {
         "type": "object",
         "value": null
+      },
+      "form_on_no": {
+        "type": "string",
+        "value": ""
       },
       "form_must_complete": {
         "type": "boolean",
@@ -11856,7 +12134,7 @@
         "id": "collect-credit-card_open",
         "type": "SET",
         "variable": "form_instance",
-        "value": "openFormInstance(cargo, \"collect-credit-card\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-credit-card\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, must_complete: form_must_complete })"
+        "value": "openFormInstance(cargo, \"collect-credit-card\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-credit-card\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete })"
       },
       {
         "id": "collect-credit-card_task",
@@ -13419,7 +13697,8 @@
             "parameters": {
               "form": "{{form}}",
               "question": "{{cf_prompt}}",
-              "question_es": "{{cf_prompt_es}}"
+              "question_es": "{{cf_prompt_es}}",
+              "named_fields": "{{named_fields}}"
             }
           },
           "default": {
@@ -14340,13 +14619,13 @@
         "id": "ie_say_en",
         "type": "SET",
         "variable": "ca_ack",
-        "value": "ca_h.outcome === 'rejected' && ca_h.quiet ? '' : ca_h.outcome === 'rejected' ? (ca_h.message || ('That ' + (ca_h.label || ca_h.name) + \" doesn't look right.\")) : ca_h.silent === true || ca_h.fromPending ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Thank you, I already have your ' + ca_h.label + '.') : ca_h.outcome === 'changed' ? ('Okay, I noted your ' + ca_h.label + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Got it, your ' + ca_h.label + '.') : ''"
+        "value": "ca_h.outcome === 'rejected' && ca_h.quiet ? '' : ca_h.outcome === 'rejected' ? (ca_h.message || ('That ' + (ca_h.label || ca_h.name) + \" doesn't look right.\")) : ca_h.silent === true || ca_h.fromPending ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Thank you, I already have your ' + ca_h.label + '.') : ca_h.outcome === 'changed' && ca_h.origin !== 'activation' ? ('Okay, I noted your ' + ca_h.label + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Got it, your ' + ca_h.label + '.') : ''"
       },
       {
         "id": "ie_say_es",
         "type": "SET",
         "variable": "ca_ack_es",
-        "value": "ca_h.outcome === 'rejected' && ca_h.quiet ? '' : ca_h.outcome === 'rejected' ? (ca_h.message_es || ca_h.message || ('Ese ' + (ca_h.label_es || ca_h.label || ca_h.name) + ' no parece correcto.')) : ca_h.silent === true || ca_h.fromPending ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Gracias, ya tengo su ' + ca_h.label_es + '.') : ca_h.outcome === 'changed' ? ('Listo, anoté su ' + ca_h.label_es + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Entendido, su ' + ca_h.label_es + '.') : ''"
+        "value": "ca_h.outcome === 'rejected' && ca_h.quiet ? '' : ca_h.outcome === 'rejected' ? (ca_h.message_es || ca_h.message || ('Ese ' + (ca_h.label_es || ca_h.label || ca_h.name) + ' no parece correcto.')) : ca_h.silent === true || ca_h.fromPending ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Gracias, ya tengo su ' + ca_h.label_es + '.') : ca_h.outcome === 'changed' && ca_h.origin !== 'activation' ? ('Listo, anoté su ' + ca_h.label_es + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Entendido, su ' + ca_h.label_es + '.') : ''"
       },
       {
         "id": "ie_say",
@@ -14997,6 +15276,10 @@
         "type": "object",
         "value": null
       },
+      "form_on_no": {
+        "type": "string",
+        "value": ""
+      },
       "form_must_complete": {
         "type": "boolean",
         "value": false
@@ -15190,7 +15473,7 @@
         "id": "collect-service-answer_open",
         "type": "SET",
         "variable": "form_instance",
-        "value": "openFormInstance(cargo, \"collect-service-answer\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-service-answer\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, must_complete: form_must_complete })"
+        "value": "openFormInstance(cargo, \"collect-service-answer\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-service-answer\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete })"
       },
       {
         "id": "collect-service-answer_task",
@@ -15752,6 +16035,10 @@
         "type": "object",
         "value": null
       },
+      "form_on_no": {
+        "type": "string",
+        "value": ""
+      },
       "form_must_complete": {
         "type": "boolean",
         "value": false
@@ -16038,7 +16325,7 @@
         "id": "collect-geocoded-address_open",
         "type": "SET",
         "variable": "form_instance",
-        "value": "openFormInstance(cargo, \"collect-geocoded-address\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-geocoded-address\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, must_complete: form_must_complete })"
+        "value": "openFormInstance(cargo, \"collect-geocoded-address\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-geocoded-address\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete })"
       },
       {
         "id": "collect-geocoded-address_task",
@@ -16532,13 +16819,13 @@
         "id": "address_street_projection",
         "type": "SET",
         "variable": "location",
-        "value": "(function streetLocation(result,said,zip) {\n   const row=result?.results?.[0] || result || {},components=row.components || row.address_components || [];\n   const part=kind=>components.find(c=>(c.types || []).includes(kind))?.long_name || '';\n   const types=row.types || [],locationType=row.location_type || row.geometry?.location_type || '';\n   const exact=result?.status==='OK'&&row.partial_match!==true&&types.includes('street_address')&&locationType==='ROOFTOP'&&part('street_number')&&part('route')&&(!part('postal_code')||part('postal_code')===zip);\n   return {street:exact?part('street_number')+' '+part('route'):String(said).trim(),said:String(said).trim(),verified:!!exact};\n})(result,value,values.zip)"
+        "value": "(function streetLocation(result,said,zip) {\n   const row=result?.results?.[0] || result || {},components=row.components || row.address_components || [];\n   const part=kind=>components.find(c=>(c.types || []).includes(kind))?.long_name || '';\n   const types=row.types || [],locationType=row.location_type || row.geometry?.location_type || '';\n   const exact=result?.status==='OK'&&row.partial_match!==true&&types.includes('street_address')&&locationType==='ROOFTOP'&&part('street_number')&&part('route')&&(!part('postal_code')||part('postal_code')===zip);\n   // An exact street match names the place its mail carries; it corrects a city read from the ZIP code alone (90805 is\n   // Lakewood to the ZIP lookup, while its streets are Long Beach and Lakewood)\n   const city=exact?part('locality')||part('postal_town')||part('sublocality'):'';\n   return {street:exact?part('street_number')+' '+part('route'):String(said).trim(),said:String(said).trim(),verified:!!exact,city};\n})(result,value,values.zip)"
       },
       {
         "id": "address_street_result",
         "type": "SET",
         "variable": "noop",
-        "value": "(cargo.forms[form].data.street=location, cargo.inputCheck={ok:true,value:String(value)}, true)"
+        "value": "(cargo.forms[form].data.street=location, location.city&&cargo.forms[form].accepted&&cargo.forms[form].accepted.city&&cargo.forms[form].accepted.city.origin==='derived'&&cargo.forms[form].values.city!==location.city?(cargo.forms[form].values.city=location.city):null, cargo.inputCheck={ok:true,value:String(value)}, true)"
       }
     ],
     "safetyRevision": "dispatch-intake-2026-10-22"
@@ -17252,6 +17539,10 @@
         "type": "object",
         "value": null
       },
+      "form_on_no": {
+        "type": "string",
+        "value": ""
+      },
       "form_must_complete": {
         "type": "boolean",
         "value": false
@@ -17400,7 +17691,7 @@
         "id": "confirm-input-proposal_open",
         "type": "SET",
         "variable": "form_instance",
-        "value": "openFormInstance(cargo, \"confirm-input-proposal\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"confirm-input-proposal\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, must_complete: form_must_complete })"
+        "value": "openFormInstance(cargo, \"confirm-input-proposal\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"confirm-input-proposal\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete })"
       },
       {
         "id": "confirm-input-proposal_task",
@@ -18076,6 +18367,10 @@
         "type": "object",
         "value": null
       },
+      "form_on_no": {
+        "type": "string",
+        "value": ""
+      },
       "form_must_complete": {
         "type": "boolean",
         "value": false
@@ -18256,7 +18551,7 @@
         "id": "collect-contextual-answer_open",
         "type": "SET",
         "variable": "form_instance",
-        "value": "openFormInstance(cargo, \"collect-contextual-answer\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-contextual-answer\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, must_complete: form_must_complete })"
+        "value": "openFormInstance(cargo, \"collect-contextual-answer\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-contextual-answer\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete })"
       },
       {
         "id": "collect-contextual-answer_task",
@@ -18730,7 +19025,7 @@
         "id": "choice_others",
         "type": "SET",
         "variable": "others",
-        "value": "(function(){var seen=(choices || []).map(function(c){return String(c.key);}).concat(['yes','no']);return (chain || []).filter(function(i){return i.form===form && i.name!==input && !i.confirmation && i.profile && i.profile.kind==='choice' && Array.isArray(i.profile.choices);}).reduce(function(all,i){return all.concat(i.profile.choices.filter(function(c){var k=String(c.key);if(seen.indexOf(k)>=0)return false;seen.push(k);return true;}).map(function(c){return {key:String(c.key),label:(function(c){var said=(Array.isArray(c.phrases) ? c.phrases : []).map(String).filter(function(p){return /[a-zà-ÿ]/i.test(p) && p!==String(c.key);}).slice(0,6);return String(c.label || (said.length ? c.key+' ('+said.join(', ')+')' : c.key));})(c),owner:{form:i.form,name:i.name}};}));},[]);})()"
+        "value": "(function(){var seen=(choices || []).map(function(c){return String(c.key);}).concat(['yes','no']);return (chain || []).filter(function(i){return i.form===form && i.name!==input && !i.confirmation && i.profile && i.profile.kind==='choice' && Array.isArray(i.profile.choices);}).reduce(function(all,i){return all.concat(i.profile.choices.filter(function(c){var k=String(c.key);if(c.current_only===true||seen.indexOf(k)>=0)return false;seen.push(k);return true;}).map(function(c){return {key:String(c.key),label:(function(c){var said=(Array.isArray(c.phrases) ? c.phrases : []).map(String).filter(function(p){return /[a-zà-ÿ]/i.test(p) && p!==String(c.key);}).slice(0,6);return String(c.label || (said.length ? c.key+' ('+said.join(', ')+')' : c.key));})(c),owner:{form:i.form,name:i.name}};}));},[]);})()"
       },
       {
         "id": "choice_ranked",
@@ -18886,9 +19181,9 @@
   {
     "id": "read-confirm-reply",
     "name": "ReadConfirmReply",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "scope": "isolated",
-    "description": "Rank an unreadable answer to a confirmation: it declines (NO), picks another of the form's choices (a correction, read as that input's answer), asks for a person, or is asked again; a withdrawal or a new request leaves with saved form progress. Never confirms.",
+    "description": "Rank an unreadable answer to a confirmation: it declines (NO), picks another of the form's choices (a correction, read as that input's answer), says a named field read back is wrong (confirm.named_fields: that input is asked again), asks for a person, or is asked again; a withdrawal or a new request leaves with saved form progress. Never confirms.",
     "parameters": [
       {
         "name": "form",
@@ -18901,6 +19196,10 @@
       {
         "name": "question_es",
         "type": "string"
+      },
+      {
+        "name": "named_fields",
+        "type": "boolean"
       }
     ],
     "variables": {
@@ -18937,6 +19236,14 @@
         "type": "array",
         "value": []
       },
+      "fields": {
+        "type": "array",
+        "value": []
+      },
+      "field": {
+        "type": "object",
+        "value": null
+      },
       "picked": {
         "type": "object",
         "value": null
@@ -18945,11 +19252,15 @@
         "type": "object",
         "value": null
       },
+      "named_fields": {
+        "type": "boolean",
+        "value": false
+      },
       "contract": {
         "type": "object",
         "value": {
           "version": 1,
-          "summary": "Rank an unreadable answer to a confirmation: it declines (NO), picks another of the form's choices (a correction, read as that input's answer), asks for a person, or is asked again; a withdrawal or a new request leaves with saved form progress. Never confirms.",
+          "summary": "Rank an unreadable answer to a confirmation: it declines (NO), picks another of the form's choices (a correction, read as that input's answer), says a named field read back is wrong (confirm.named_fields: that input is asked again), asks for a person, or is asked again; a withdrawal or a new request leaves with saved form progress. Never confirms.",
           "parametersFrom": "parameters",
           "role": "worker",
           "requires": [
@@ -18990,13 +19301,19 @@
         "id": "confirm_others",
         "type": "SET",
         "variable": "others",
-        "value": "(function(){var seen=([]).map(function(c){return String(c.key);}).concat(['yes','no']);return (chain || []).filter(function(i){return i.form===form && i.name!=='' && !i.confirmation && i.profile && i.profile.kind==='choice' && Array.isArray(i.profile.choices);}).reduce(function(all,i){return all.concat(i.profile.choices.filter(function(c){var k=String(c.key);if(seen.indexOf(k)>=0)return false;seen.push(k);return true;}).map(function(c){return {key:String(c.key),label:(function(c){var said=(Array.isArray(c.phrases) ? c.phrases : []).map(String).filter(function(p){return /[a-zà-ÿ]/i.test(p) && p!==String(c.key);}).slice(0,6);return String(c.label || (said.length ? c.key+' ('+said.join(', ')+')' : c.key));})(c),owner:{form:i.form,name:i.name}};}));},[]);})()"
+        "value": "(function(){var seen=([]).map(function(c){return String(c.key);}).concat(['yes','no']);return (chain || []).filter(function(i){return i.form===form && i.name!=='' && !i.confirmation && i.profile && i.profile.kind==='choice' && Array.isArray(i.profile.choices);}).reduce(function(all,i){return all.concat(i.profile.choices.filter(function(c){var k=String(c.key);if(c.current_only===true||seen.indexOf(k)>=0)return false;seen.push(k);return true;}).map(function(c){return {key:String(c.key),label:(function(c){var said=(Array.isArray(c.phrases) ? c.phrases : []).map(String).filter(function(p){return /[a-zà-ÿ]/i.test(p) && p!==String(c.key);}).slice(0,6);return String(c.label || (said.length ? c.key+' ('+said.join(', ')+')' : c.key));})(c),owner:{form:i.form,name:i.name}};}));},[]);})()"
+      },
+      {
+        "id": "confirm_fields",
+        "type": "SET",
+        "variable": "fields",
+        "value": "named_fields === true || named_fields === 'true' ? (chain || []).filter(function(i){var v=cargo.forms[form] && cargo.forms[form].values;return i.form===form && !i.confirmation && Array.isArray(i.names) && i.names.length && v && v[i.name]!==undefined && v[i.name]!==null && v[i.name]!=='';}).map(function(i){var l=String(i.label || i.names[0]);return {key:'field:'+i.name,label:'says the '+l+' read back is wrong, or gives a different '+l,owner:{form:i.form,name:i.name}};}) : []"
       },
       {
         "id": "confirm_ranked_choices",
         "type": "SET",
         "variable": "ranked",
-        "value": "([{key:'no',label:'no: declines or refuses what the question asks to confirm'}].concat(others.map(function(c){return {key:c.key,label:c.label};}))).concat([{key:'__agent',label:'speak with a person (a live agent)'}])"
+        "value": "([{key:'no',label:'no: declines or refuses what the question asks to confirm'}].concat(others.map(function(c){return {key:c.key,label:c.label};})).concat(fields.map(function(c){return {key:c.key,label:c.label};}))).concat([{key:'__agent',label:'speak with a person (a live agent)'}])"
       },
       {
         "id": "confirm_dispatch",
@@ -19067,10 +19384,34 @@
         }
       },
       {
+        "id": "confirm_field",
+        "type": "SET",
+        "variable": "field",
+        "value": "fields.filter(function(c){return reply && c.key===reply.key;})[0] || null"
+      },
+      {
+        "id": "confirm_field_reset",
+        "type": "CASE",
+        "branches": {
+          "condition: field": {
+            "id": "confirm_field_ask",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(resetFormInputs(cargo, field.owner.form, [field.owner.name]), true)"
+          },
+          "default": {
+            "id": "confirm_field_reset_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "confirm_ranked",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(cargo.confirmRanked=reading && reading.hits.length ? 'changed' : reply && reply.key==='no' ? 'no' : 'none',true)"
+        "value": "(cargo.confirmRanked=reading && reading.hits.length || field ? 'changed' : reply && reply.key==='no' ? 'no' : 'none',true)"
       }
     ],
     "safetyRevision": "dispatch-intake-2026-10-22"
@@ -19136,6 +19477,131 @@
         }
       }
     },
+    "safetyRevision": "dispatch-intake-2026-10-22"
+  },
+  {
+    "scope": "shared",
+    "version": "1.0.0",
+    "id": "send-otp-email-too",
+    "name": "SendOtpEmailToo",
+    "description": "Email a second one-time code to the account's email beside the texted one, and say so.",
+    "variables": {
+      "noop": {
+        "type": "boolean",
+        "scope": "flow",
+        "value": false
+      },
+      "alt_hash": {
+        "type": "string",
+        "value": ""
+      },
+      "also_sent": {
+        "type": "string",
+        "value": ""
+      },
+      "also_sent_es": {
+        "type": "string",
+        "value": ""
+      },
+      "otp_where": {
+        "type": "string",
+        "value": ""
+      },
+      "otp_where_es": {
+        "type": "string",
+        "value": ""
+      },
+      "contract": {
+        "type": "object",
+        "value": {
+          "version": 1,
+          "role": "worker",
+          "summary": "Second one-time code to the account's email",
+          "tools": [
+            "send-email-otp"
+          ],
+          "parametersFrom": "parameters",
+          "requires": [
+            "jsfe:continuation-safety:v1"
+          ]
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "send-otp-email-too_continuation_safety_protocol",
+        "type": "SET",
+        "variable": "noop",
+        "value": "continuationSafetyProtocol() === 1",
+        "requireTrue": true
+      },
+      {
+        "id": "otp_email_too_send",
+        "type": "CALL-TOOL",
+        "tool": "send-email-otp",
+        "variable": "alt_hash",
+        "args": {
+          "to": "{{cargo.otpAltEmail}}",
+          "container": "{{cargo}}",
+          "language": "{{language}}",
+          "additional": true
+        },
+        "onFail": {
+          "id": "otp_email_too_failed",
+          "type": "SET",
+          "variable": "alt_hash",
+          "value": "''"
+        }
+      },
+      {
+        "id": "otp_email_too_state",
+        "type": "SET",
+        "variable": "noop",
+        "value": "(cargo.otpAltSent=/^[0-9a-f]{64}$/.test(String(alt_hash || ''))?true:'failed',true)"
+      },
+      {
+        "id": "otp_email_too_said",
+        "type": "SET",
+        "variable": "also_sent",
+        "value": "(function otpAlsoSent(cargo,es=false) {\n   const masked=maskEmail(cargo.otpAltEmail,cargo.voice,es?'es':'en');\n   return es?'Muy bien, también le envié un código a su correo '+masked+'.':'Okay, I also sent a code to your email '+masked+'.';\n})(cargo)"
+      },
+      {
+        "id": "otp_email_too_said_es",
+        "type": "SET",
+        "variable": "also_sent_es",
+        "value": "(function otpAlsoSent(cargo,es=false) {\n   const masked=maskEmail(cargo.otpAltEmail,cargo.voice,es?'es':'en');\n   return es?'Muy bien, también le envié un código a su correo '+masked+'.':'Okay, I also sent a code to your email '+masked+'.';\n})(cargo,true)"
+      },
+      {
+        "id": "otp_email_too_where",
+        "type": "SET",
+        "variable": "otp_where",
+        "value": "(function otpWhere(cargo,es=false) {\n   const number=String(cargo.otp_cell_number || '').replace(/\\D/g,'').slice(-4),tail=cargo.voice?number.split('').join(', '):number;\n   if(cargo.otpSentOn==='whatsapp')return es?'Se lo acabo de enviar aquí en este chat.':'I just sent it to you here in this chat.';\n   const masked=maskEmail(cargo.otpAltEmail,cargo.voice,es?'es':'en');\n   if(cargo.otp_cell_number && cargo.otpAltSent === true)return es?'Se lo envié por mensaje de texto al celular que termina con '+tail+', y también le envié un código a su correo '+masked+'. Revise sus mensajes de texto y su correo.':'I sent it by text message to the cell ending with '+tail+', and I also sent a code to your email '+masked+'. Check your text messages and your email.';\n   if(cargo.otp_cell_number)return es?'Se lo envié por mensaje de texto al celular que termina con '+tail+'. Revise sus mensajes de texto.':'I sent it by text message to the cell ending with '+tail+'. Check your text messages.';\n   return es?'Se lo envié por correo electrónico a '+String(cargo.otp_email || '')+'. Revise su correo.':'I sent it by email to '+String(cargo.otp_email || '')+'. Check your email.';\n})(cargo)"
+      },
+      {
+        "id": "otp_email_too_where_es",
+        "type": "SET",
+        "variable": "otp_where_es",
+        "value": "(function otpWhere(cargo,es=false) {\n   const number=String(cargo.otp_cell_number || '').replace(/\\D/g,'').slice(-4),tail=cargo.voice?number.split('').join(', '):number;\n   if(cargo.otpSentOn==='whatsapp')return es?'Se lo acabo de enviar aquí en este chat.':'I just sent it to you here in this chat.';\n   const masked=maskEmail(cargo.otpAltEmail,cargo.voice,es?'es':'en');\n   if(cargo.otp_cell_number && cargo.otpAltSent === true)return es?'Se lo envié por mensaje de texto al celular que termina con '+tail+', y también le envié un código a su correo '+masked+'. Revise sus mensajes de texto y su correo.':'I sent it by text message to the cell ending with '+tail+', and I also sent a code to your email '+masked+'. Check your text messages and your email.';\n   if(cargo.otp_cell_number)return es?'Se lo envié por mensaje de texto al celular que termina con '+tail+'. Revise sus mensajes de texto.':'I sent it by text message to the cell ending with '+tail+'. Check your text messages.';\n   return es?'Se lo envié por correo electrónico a '+String(cargo.otp_email || '')+'. Revise su correo.':'I sent it by email to '+String(cargo.otp_email || '')+'. Check your email.';\n})(cargo,true)"
+      },
+      {
+        "id": "otp_email_too_say",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.otpAltSent === true": {
+            "id": "otp_email_too_sent",
+            "type": "SAY",
+            "value": "{{also_sent}}",
+            "value_es": "{{also_sent_es}}"
+          },
+          "default": {
+            "id": "otp_email_too_refused",
+            "type": "SAY",
+            "value": "{{otp_where}}",
+            "value_es": "{{otp_where_es}}"
+          }
+        }
+      }
+    ],
     "safetyRevision": "dispatch-intake-2026-10-22"
   }
 ]

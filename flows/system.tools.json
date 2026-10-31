@@ -75,6 +75,10 @@
       "language": {
         "type": "string",
         "description": "Session language for the message body (e.g. 'es'). Optional; omitted or unrecognised sends English."
+      },
+      "additional": {
+        "type": "boolean",
+        "description": "A second code beside the one already sent (the caller cannot find the texted code): stored as container.otpAltHash, so the first code stays valid. Omitted or false: the new code replaces every pending one."
       }
     },
     "required": [
@@ -88,7 +92,8 @@
       "args": [
         "to",
         "container",
-        "language"
+        "language",
+        "additional"
       ],
       "timeout": 5000
     },
