@@ -2,6 +2,7 @@
 import {formIncompleteOutcome,closeFormInstance} from './form-state.js';
 import {isWholeNo} from './answer.js';
 import {readInputProfile} from './match-inputs.js';
+import {sorryNotCaught} from './phrases.js';
 
 export function clearFormMisses(cargo,id,input) {
    const state=cargo.forms?.[id];if(!state)return true;
@@ -37,7 +38,7 @@ export function formInputPrompt(cargo,id,input,spec,data={},language='en') {
    const retry=written('retry') || (es?spec.retry_es:spec.retry);
    if(feedback==='partial')return es?'Continúe.':'Go on.';
    if(feedback&&retry)return retry;
-   return (feedback==='miss'?(es?'Disculpe, no le entendí. ':"Sorry, I didn't catch that. "):'')+question;
+   return (feedback==='miss'?sorryNotCaught(es?'es':'en',cargo):'')+question;
 }
 export function consumeFormFeedback(cargo,id,input) {if(cargo.forms?.[id]?.feedback)delete cargo.forms[id].feedback[input];return true;}
 

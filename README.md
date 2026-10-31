@@ -398,6 +398,11 @@ reasonFor })` builds both executors' instructions. A reason question declares no
 unchanged: the generic withdrawal includes "I no longer want it", which at a reason question withdrew three prod
 cancellations.
 
+**The re-ask names the customer, opt-in (jsfe 1.20.0):** `sorryNotCaught(lang, cargo)` is the acknowledgement before a
+question asked again ("Sorry, I didn't catch that. " / "Disculpe, no le entendí. "), used by `formInputPrompt`, `ask-choice`
+and the provider menu. A flow set that sets `cargo.sorryByName = true` (for example once the caller is verified) gets it with
+`cargo.displayName` ("Disculpe, Ana, no le entendí. "); without it the wording is unchanged.
+
 **Digits said in groups (jsfe 1.19.1):** every `digits` input reads a comma, or a period and a space, after a group of
 one to three digits as a pause inside one number, because speech-to-text writes spoken groups that way ("926, 1 0." is
 the ZIP 92610, "7, 9, 984. 5." the code 799845). A comma after a longer number still separates two numbers ("92610,

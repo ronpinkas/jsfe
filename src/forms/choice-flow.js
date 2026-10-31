@@ -216,13 +216,13 @@ export const FLOWS = [
         "id": "ac_retry_en",
         "type": "SET",
         "variable": "ac_retry",
-        "value": "typeof retry !== 'undefined' && retry ? retry : \"Sorry, I didn't catch that. \" + question"
+        "value": "typeof retry !== 'undefined' && retry ? retry : sorryNotCaught('en', cargo) + question"
       },
       {
         "id": "ac_retry_spanish",
         "type": "SET",
         "variable": "ac_retry_es",
-        "value": "typeof retry_es !== 'undefined' && retry_es ? retry_es : 'Disculpe, no le entendí. ' + ac_q_es"
+        "value": "typeof retry_es !== 'undefined' && retry_es ? retry_es : sorryNotCaught('es', cargo) + ac_q_es"
       },
       {
         "id": "ac_exit_context",

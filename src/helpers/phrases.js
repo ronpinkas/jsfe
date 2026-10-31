@@ -14,6 +14,20 @@ export function sayName(name) {
    }
 }
 
+/**
+ * The acknowledgement before a question asked again ("Sorry, I didn't catch that. "), with a trailing space. It names the
+ * customer only when the flows opt in with cargo.sorryByName (jsfe 1.20.0; owner 2026-10-31) and cargo.displayName is
+ * known; otherwise it is the wording every earlier version said.
+ */
+export function sorryNotCaught(lang, cargo) {
+   const n = cargo && cargo.sorryByName === true ? sayName(cargo.displayName) : '';
+   if (lang === 'es') {
+      return n ? `Disculpe, ${n}, no le entendí. ` : 'Disculpe, no le entendí. ';
+   } else {
+      return n ? `Sorry, ${n}, I didn't catch that. ` : "Sorry, I didn't catch that. ";
+   }
+}
+
 const ANYTHING_ELSE = {
    en: (n) => (n ? `Is there anything else I can help you with, ${n}?` : 'Is there anything else I can help you with?'),
    es: (n) => (n ? `¿Hay algo más en lo que pueda ayudarle, ${n}?` : '¿Hay algo más en lo que pueda ayudarle?'),
