@@ -387,6 +387,17 @@ answer with any words goes to the ranker with the question's choices (never an e
 confirmation; a NO always) and two escapes every question supports, `__agent` (a person) and `__text` (on a call with
 a textable number); a confirmation's exhausted attempts go to the `give-up` worker.
 
+**Reason questions (`responseReasonFor`, `response.reason_for`, jsfe 1.19.0):** a question that asks WHY the caller does
+not want something (a cancellation's reason) names that thing, and the ranker is offered only `answers` and
+`new_request`: no `abort`, because a reason is never a withdrawal ("No, la uso", "No necesito más", "I no longer need
+it" are reasons). A caller who changes their mind declines the request's confirmation, which a flow that asks for a
+reason must have. A form field declares it in its `response`: `reason_for` (the words, e.g. `"your membership"`) or
+`reason_for_from` (the form data key holding them); a DISPATCH step declares `responseReasonFor` (interpolated; empty
+ranks generically). The request carries `reasonFor`, and `buildReplyRank(input, conversation, question, [], {
+reasonFor })` builds both executors' instructions. A reason question declares no choices. Without it the ranking is
+unchanged: the generic withdrawal includes "I no longer want it", which at a reason question withdrew three prod
+cancellations.
+
 **Choices that leave (`route: 'new_request'`) and staying on noise (`onNoIntent: 'stay'`, jsfe 1.15.3):** a choice
 declared `{ key, label, route: 'new_request' }` is offered like any other, and picking it leaves like a new request
 (intent detection decides where to). A contextual DISPATCH declared `onNoIntent: 'stay'` asks intent detection BEFORE

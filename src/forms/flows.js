@@ -390,13 +390,15 @@ const requestCancelled={
 const readFormResponse={
  id:'read-form-response',name:'ReadFormResponse',version:'1.0.0',scope:'isolated',description:'Read the requested field with contextual DISPATCH: an answer continues, an answer with nothing usable is asked again, a withdrawal or a new request leaves with saved form progress.',
  parameters:[{name:'form',type:'string'},{name:'input',type:'string'}],
- variables:vars({group:null,spec:null,question:'',reply:null}),
+ variables:vars({group:null,spec:null,question:'',reason_for:'',reply:null}),
  steps:[SET('response_group','group',"cargo.forms[form].specs.find(function(s){return s.name===input || s.any_of && s.any_of.some(function(member){return member.name===input;});})"),
   SET('response_spec','spec',"group && (group.any_of ? group.any_of.find(function(s){return s.name===input;}) : group)"),
   {...SET('response_declared','noop','!!spec && !!validateFormResponse(spec.response)'),requireTrue:true},
   SET('response_question','question',"formInputPrompt(cargo,form,input,Object.assign({},group,spec,{question:spec.question || group.question,question_es:spec.question_es || group.question_es,question_from:spec.question_from || group.question_from}),cargo.forms[form].data || {},language)"),
+  // a reason question: what the caller does not want, so the ranker reads "I don't use it" as the reason, not a withdrawal
+  SET('response_reason_for','reason_for',"spec.response.reason_for_from ? String((cargo.forms[form].data || {})[spec.response.reason_for_from] || '') : String(spec.response.reason_for || '')"),
   SET('response_clear','reply','null'),
-  { ...yieldDispatch('response_dispatch','form',"'input_not_matched'"),onResponse:'continue',responseContext:'Current question: {{question}}. Requested answer: {{spec.response.description}}.',responseParameters:[{name:'answer',type:'string',description:'{{spec.response.description}}',verbatim:true}],responseVariable:'reply'},
+  { ...yieldDispatch('response_dispatch','form',"'input_not_matched'"),onResponse:'continue',responseContext:'Current question: {{question}}. Requested answer: {{spec.response.description}}.',responseReasonFor:'{{reason_for}}',responseParameters:[{name:'answer',type:'string',description:'{{spec.response.description}}',verbatim:true}],responseVariable:'reply'},
   // Nothing usable (only after a default `answers`: a confident one carries the reply as said): the reading is
   // rejected, so the form asks the question again (the question alone: it was not a wrong answer). The answer never
   // goes to the host.

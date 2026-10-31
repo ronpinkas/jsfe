@@ -48,6 +48,8 @@ export interface ReplyRankRequest {
   options: ReplyOption[];
   /** the question's declared choices, when it offers any */
   choices?: ReplyChoice[];
+  /** the question asks why the caller does not want this (a cancellation's reason): the step's responseReasonFor */
+  reasonFor?: string;
   llm: { system: string; user: string; schema: Record<string, unknown> };
   systemOne: { state: Record<string, unknown>; questions: Record<string, unknown>; index: { id: string; option: ReplyOption }[] };
 }
@@ -68,6 +70,24 @@ const CRITERIA: Record<typeof REPLY_OPTIONS[number], { true: string; false: stri
   },
 };
 const TASK = 'A workflow asked the caller a question. Decide what the caller\'s latest message does with it.';
+// A question that asks WHY the caller does not want something (a cancellation's reason): not using, needing or wanting
+// it IS the answer, so the generic withdrawal ("I no longer want it") must not read it as one (owner 2026-10-31; prod
+// 2026-10-30: "No, la uso", "No necesito más" and "No, no la necesito" at the Club reason ended the request as withdrawn).
+const reasonTask = (x: string) => `A workflow is filing the caller's request about something the caller does not want (${x}), and asked for the reason. Decide what the caller's latest message does with that question.`;
+// A reason question offers no `abort` (owner 2026-10-31): a reason is never a withdrawal, so the ranker never has to tell
+// "I don't need it" from "I'll keep it". A caller who changes their mind declines the request's confirmation, which the
+// flow asking for the reason must have (the Curacao cancellation reads the request back before filing it).
+const REASON_OPTIONS = ['answers', 'new_request'] as const;
+const reasonCriteria = (x: string): Record<typeof REASON_OPTIONS[number], { true: string; false: string }> => ({
+  answers: {
+    true: `The latest message responds to why the caller does not want ${x}, in any words: that they do not use, need or want it (even when it starts with "no": no la uso, ya no la necesito, I no longer need it, I don't use it), its cost, a problem or complaint, a change in their situation, that they have no reason or prefer not to say, or that they changed their mind.`,
+    false: `It asks for a different service or an unrelated question.`,
+  },
+  new_request: {
+    true: `The latest message asks for a different service or action, or asks a question unrelated to the reason for not wanting ${x}.`,
+    false: `It responds to the question about the reason.`,
+  },
+});
 // With declared choices, `answers` is the reply that responds without picking any of them.
 const ANSWERS_WITHOUT_CHOICE = {
   true: 'The latest message responds to the current question but picks none of the offered options.',
@@ -77,11 +97,13 @@ const choiceCriteria = (c: ReplyChoice) => ({
   true: `The latest message picks the option "${c.label}", in any words, or says it already chose it.`,
   false: 'It picks another option or none of them, withdraws the request, or asks for something else.',
 });
-const criteriaOf = (option: ReplyOption, choices: ReplyChoice[]) => {
+const criteriaOf = (option: ReplyOption, choices: ReplyChoice[], reasonFor = '') => {
   if (option.startsWith(CHOICE_PREFIX)) {
     return choiceCriteria(choices.find(c => CHOICE_PREFIX + c.key === option)!);
   } else if (option === 'answers' && choices.length) {
     return ANSWERS_WITHOUT_CHOICE;
+  } else if (reasonFor) {
+    return reasonCriteria(reasonFor)[option as typeof REASON_OPTIONS[number]];
   } else {
     return CRITERIA[option as typeof REPLY_OPTIONS[number]];
   }
@@ -90,21 +112,28 @@ const criteriaOf = (option: ReplyOption, choices: ReplyChoice[]) => {
 const conversationText = (conversation: ReplyTurn[], input: string) =>
   `${conversation.length ? `<conversation>\n${conversation.map(t => `${t.role}: ${t.content}`).join('\n')}\n</conversation>\n` : ''}<latest-message>\n${input}\n</latest-message>`;
 
-/** The reply ranker's instructions for both executors. */
-export function buildReplyRank(input: string, conversation: ReplyTurn[], question: string, choices: ReplyChoice[] = []): ReplyRankRequest {
-  const options: ReplyOption[] = [...choices.map(c => `${CHOICE_PREFIX}${c.key}` as ReplyOption), ...REPLY_OPTIONS];
+/**
+ * The reply ranker's instructions for both executors. `reasonFor` (what the caller does not want, e.g. "your Curacao
+ * Club membership") ranks the reply as an answer to "why don't you want it?": only `answers` or `new_request`, no
+ * choices.
+ */
+export function buildReplyRank(input: string, conversation: ReplyTurn[], question: string, choices: ReplyChoice[] = [], { reasonFor = '' }: { reasonFor?: string } = {}): ReplyRankRequest {
+  reasonFor = String(reasonFor || '').trim();
+  if (reasonFor && choices.length) throw new Error('rank_reply: a reason question (reasonFor) declares no choices');
+  const task = reasonFor ? reasonTask(reasonFor) : TASK;
+  const options: ReplyOption[] = [...choices.map(c => `${CHOICE_PREFIX}${c.key}` as ReplyOption), ...(reasonFor ? REASON_OPTIONS : REPLY_OPTIONS)];
   const schema = {
     type: 'object', additionalProperties: false, required: ['option'],
     properties: { option: { type: 'string', enum: options } },
   };
   const system = [
-    TASK,
+    task,
     '',
     '<current-question>',
     question,
     '</current-question>',
     '',
-    ...options.map(o => `- ${o}: ${criteriaOf(o, choices).true}`),
+    ...options.map(o => `- ${o}: ${criteriaOf(o, choices, reasonFor).true}`),
     `When none clearly applies: ${REPLY_DEFAULT}.`,
     '',
     '<json-schema>',
@@ -122,15 +151,15 @@ export function buildReplyRank(input: string, conversation: ReplyTurn[], questio
   const ownChoices = choices.some(c => !c.key.startsWith('__'));
   options.filter(o => !(o === 'answers' && ownChoices)).forEach((o, i) => {
     const id = `r${i}`;
-    questions[id] = { type: 'noul', criteria: criteriaOf(o, choices), instructions: { option: o, question: `Does the latest message do what \`${o}\` describes?` } };
+    questions[id] = { type: 'noul', criteria: criteriaOf(o, choices, reasonFor), instructions: { option: o, question: `Does the latest message do what \`${o}\` describes?` } };
     index.push({ id, option: o });
   });
   return {
-    task: 'rank_reply', input, conversation, question, options, ...(choices.length ? { choices } : {}),
+    task: 'rank_reply', input, conversation, question, options, ...(choices.length ? { choices } : {}), ...(reasonFor ? { reasonFor } : {}),
     llm: { system, user: conversationText(conversation, input), schema },
     systemOne: {
       state: {
-        assistant_instructions: `${TASK}\n\nThe current question:\n${question}`,
+        assistant_instructions: `${task}\n\nThe current question:\n${question}`,
         conversation: conversation.map(t => ({ role: t.role, content: t.content })),
         latest_message: input,
       },

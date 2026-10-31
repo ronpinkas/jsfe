@@ -610,6 +610,7 @@ export interface FlowStep {
   responseParameters?: FlowParameterDefinition[]; // Opt-in typed extraction when the reply answers (rank_reply).
   responseVariable?: string; // Declared object variable assigned only when the reply answers.
   responseChoices?: string; // Declared array variable of { key, label }: the ranker may pick one; responseVariable gets { key }.
+  responseReasonFor?: string; // What the caller does not want (interpolated): the reply is ranked as the reason for not wanting it.
   tool?: string;
   args?: Record<string, unknown>;
   variable?: string;
@@ -3832,9 +3833,9 @@ async function detectFlowInTwoStages(input: string, engine: Engine, flows: FlowD
  * when the host says `answers` is the default because no option cleared its cut (`fallback: true`); an answer
  * without that flag (a text model's pick, or a host that does not send it) is a confident one.
  */
-async function rankReply(input: string, engine: Engine, question: string, choices: ReplyChoice[] = []): Promise<{ option: ReplyOption, confident: boolean }> {
+async function rankReply(input: string, engine: Engine, question: string, choices: ReplyChoice[] = [], reasonFor = ''): Promise<{ option: ReplyOption, confident: boolean }> {
   const { input: cleanInput, conversation } = buildDetectFlowRequest(input, engine.lastChatTurn, []);
-  const request = buildReplyRank(cleanInput, conversation, question, choices);
+  const request = buildReplyRank(cleanInput, conversation, question, choices, { reasonFor });
   const reply = parseStageReply(await fetchAiResponse(request.llm.system, request.llm.user, engine.aiCallback, engine.aiTimeOut, stageSchema('rank_reply', request.llm.schema), request));
   const option = String(reply.option ?? '') as ReplyOption;
   if (!request.options.includes(option)) throw new Error(`rank_reply: "${option.slice(0, 40)}" is not an offered option`);
@@ -7323,7 +7324,9 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
       // A model error leaves this live continuation pending for the caller's error policy.
       let option: ReplyOption;
       let confident: boolean;
-      try { ({ option, confident } = await rankReply(String(sanitizedInput),engine,question,choices)); } catch (error) { guardedRoutingFailed = true; throw error; }
+      // A reason question names what the caller does not want; empty (or no attribute) ranks the reply generically.
+      const reasonFor = declaration?.reasonFor ? interpolateMessage(declaration.reasonFor,frame.contextStack,frame.variables,engine).trim() : '';
+      try { ({ option, confident } = await rankReply(String(sanitizedInput),engine,question,choices,reasonFor)); } catch (error) { guardedRoutingFailed = true; throw error; }
       // A declared choice routed as a new request (route: 'new_request') leaves like one.
       const pickedChoice = option.startsWith(CHOICE_PREFIX) ? choices.find(c => CHOICE_PREFIX + c.key === option) : undefined;
       if (pickedChoice?.route === 'new_request') {
@@ -9010,7 +9013,7 @@ export class WorkflowEngine implements Engine {
         try { validateContextualResponseStep(step,flowDef); } catch(error:any) { state.errors.push(`DISPATCH step \"${step.id}\" in flow \"${flowDef.name}\": ${error.message}`); }
         // DISPATCH always routes the turn's own input — no value. It may declare the ending of the
         // flows it ends (`outcome` / `reason`, kept only when no flow matches).
-        const extra = Object.keys(step).filter(k => !['id', 'type', 'outcome', 'reason', 'recovery', 'onResponse', 'responseContext', 'responseParameters', 'responseVariable', 'responseChoices', 'onNoIntent'].includes(k));
+        const extra = Object.keys(step).filter(k => !['id', 'type', 'outcome', 'reason', 'recovery', 'onResponse', 'responseContext', 'responseParameters', 'responseVariable', 'responseChoices', 'responseReasonFor', 'onNoIntent'].includes(k));
         if (extra.length > 0) {
           state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" has invalid attribute(s) ${extra.map(k => `"${k}"`).join(', ')} - DISPATCH takes only "id", "outcome", "reason", "recovery", "onResponse" "responseContext", "responseParameters", "responseVariable", "responseChoices" and "onNoIntent"`);
         } else if (step.onResponse !== undefined && step.onResponse !== 'continue') {

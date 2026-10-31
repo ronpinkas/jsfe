@@ -25,7 +25,9 @@ export function validateContextualResponseStep(step,flow) {
   if(p.verbatim!==undefined&&(p.verbatim!==true||p.type!==undefined&&p.type!=='string'||p.enum!==undefined))fail('verbatim is true on an open string parameter only');
   if(Object.keys(p).some(k=>!['name','description','type','enum','internal','verbatim'].includes(k)))fail('responseParameters accepts only canonical parameter descriptors');
  }
- try{return structuredClone({parameters:step.responseParameters || [],variable:step.responseVariable,...(choices?{choices:step.responseChoices}:{})});}catch{fail('response parameters must be cloneable declaration data');}
+ // responseReasonFor: what the caller does not want; the reply is ranked as the reason for not wanting it (owner 2026-10-31).
+ if(own(step,'responseReasonFor')&&(typeof step.responseReasonFor!=='string'||choices))fail('responseReasonFor is a string, on a question without responseChoices');
+ try{return structuredClone({parameters:step.responseParameters || [],variable:step.responseVariable,...(choices?{choices:step.responseChoices}:{}),...(own(step,'responseReasonFor')?{reasonFor:step.responseReasonFor}:{})});}catch{fail('response parameters must be cloneable declaration data');}
 }
 export function contextualResponseRuntimeSteps(id,steps,requirements=[]) {
  if(!requirements.includes(CONTEXTUAL_RESPONSES_REQUIREMENT))return steps;
@@ -33,9 +35,15 @@ export function contextualResponseRuntimeSteps(id,steps,requirements=[]) {
  return steps[0]?.type==='SET'&&steps[0]?.value===guard.value&&steps[0]?.requireTrue===true?steps:[guard,...steps];
 }
 
-/** A normal extraction description for an open-ended FORM answer, using contextual DISPATCH. */
+/**
+ * A normal extraction description for an open-ended FORM answer, using contextual DISPATCH. A reason question also names
+ * what the caller does not want: `reason_for` (the words) or `reason_for_from` (the form data key holding them).
+ */
 export function validateFormResponse(response) {
- if(!response || typeof response!=='object' || Array.isArray(response) || Object.keys(response).some(k=>k!=='description') || typeof response.description!=='string' || !response.description.trim())fail('FORM response requires a nonempty description only');
+ if(!response || typeof response!=='object' || Array.isArray(response) || Object.keys(response).some(k=>!['description','reason_for','reason_for_from'].includes(k)) || typeof response.description!=='string' || !response.description.trim())fail('FORM response requires a nonempty description (and optionally reason_for or reason_for_from)');
+ if(response.reason_for!==undefined&&(typeof response.reason_for!=='string'||!response.reason_for.trim()))fail('FORM response reason_for must be nonempty text');
+ if(response.reason_for_from!==undefined&&!safeName(response.reason_for_from))fail('FORM response reason_for_from must name a form data key');
+ if(response.reason_for!==undefined&&response.reason_for_from!==undefined)fail('FORM response declares reason_for or reason_for_from, not both');
  return structuredClone(response);
 }
 export const hasFormResponse=inputs=>(inputs || []).some(input=>input.response!==undefined || hasFormResponse(input.any_of) || hasFormResponse(input.schema?.inputs));
