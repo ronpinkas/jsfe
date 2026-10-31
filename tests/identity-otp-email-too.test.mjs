@@ -31,8 +31,8 @@ async function begin(language,voice,altEmail='robin@example.com'){
    return String(s.response||'');
 }
 const ok=(cond,msg)=>{assert.ok(cond,msg);checks++;};
-const W={en:{text:'Okay, I also sent a code to your email r…@example.com.',voice:'Okay, I also sent a code to your email starting with R, at example.com.',also:/the 6-digit verification code you received at cell ending with (0000|0, 0, 0, 0) or at your email (r…@example\.com|starting with R, at example\.com)\./,where:/^I sent it by text message to the cell ending with (0000|0, 0, 0, 0), and I also sent a code to your email/},
-   es:{text:'Muy bien, también le envié un código a su correo r…@example.com.',voice:'Muy bien, también le envié un código a su correo que empieza con R, arroba example.com.',also:/el código de verificación de 6 dígitos que recibió en celular que termina con (0000|0, 0, 0, 0) o en su correo (r…@example\.com|que empieza con R, arroba example\.com)\./,where:/^Se lo envié por mensaje de texto al celular que termina con (0000|0, 0, 0, 0), y también le envié un código a su correo/}};
+const W={en:{text:'Okay, I also sent a code to your email ro***@example.com.',voice:'Okay, I also sent a code to your email starting with r, o, at example.com.',also:/the 6-digit verification code you received at cell ending with (0000|0, 0, 0, 0) or at your email (ro\*\*\*@example\.com|starting with r, o, at example\.com)\./,where:/^I sent it by text message to the cell ending with (0000|0, 0, 0, 0), and I also sent a code to your email/},
+   es:{text:'Muy bien, también le envié un código a su correo ro***@example.com.',voice:'Muy bien, también le envié un código a su correo que empieza con r, o, arroba example.com.',also:/el código de verificación de 6 dígitos que recibió en celular que termina con (0000|0, 0, 0, 0) o en su correo (ro\*\*\*@example\.com|que empieza con r, o, arroba example\.com)\./,where:/^Se lo envié por mensaje de texto al celular que termina con (0000|0, 0, 0, 0), y también le envié un código a su correo/}};
 const SAID={en:["I can't find it.","Let's try another way.","Don't have it.","I'm sorry, there's no code."],es:['No lo encuentro.','¿Hay otra forma?','No me llegó.','No lo tengo.']};
 for(const lang of ['en','es'])for(const voice of [false,true]){
    const w=W[lang],tag=`${lang} ${voice?'call':'text'}`;
@@ -54,7 +54,7 @@ for(const lang of ['en','es'])for(const voice of [false,true]){
    await begin(lang,voice,'');
    r=await say(SAID[lang][0]);ok(!emails.length&&/^(I sent it by text message|Se lo envié por mensaje de texto)/.test(r),`${tag}: no email on file, where the code went [${r}]`);
    r=await say(SAID[lang][1]);ok(!emails.length&&/(To reach a person, (say|type) AGENT\.|Para hablar con una persona, (diga|escriba) AGENTE\.)/.test(r),`${tag}: another way with no email names the agent [${r}]`);
-   // an address stored in capitals is read in lowercase (prod accounts: R…@GMAIL.COM, spelled out on a call)
+   // an address stored in capitals is masked in lowercase (maskEmail)
    await begin(lang,voice,'ROBIN@EXAMPLE.COM');
    r=await say(SAID[lang][0]);ok(r.startsWith(voice?w.voice:w.text)&&!/EXAMPLE/.test(r)&&emails[0].to==='ROBIN@EXAMPLE.COM',`${tag}: a capitalised address is said in lowercase, sent as stored [${r}]`);
    // a refused address: where the code went, and no second attempt

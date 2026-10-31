@@ -1,6 +1,8 @@
 /** Shared identity protocols. Every conversational answer enters the ordinary FORM acceptance/matching pipeline. */
 import {defineWorker,defineForm} from './contracts.js';
 import {OTP_EXPIRY_MS} from '../helpers/otp-check.js';
+// maskEmail is a standard function: these functions run as flow expressions too, where it is in scope by name.
+import {maskEmail} from '../helpers/contact.js';
 const vars=o=>Object.fromEntries(Object.entries(o).map(([k,v])=>[k,{type:Array.isArray(v)?'array':v===null||typeof v==='object'?'object':typeof v,value:v}]));
 const param=(name,description,type='string')=>({name,type,description});
 const set=(id,variable,value)=>({id,type:'SET',variable,value});
@@ -163,7 +165,7 @@ const auth=worker('authenticate-user','AuthenticateUser','Authenticate a contact
 export function otpWhere(cargo,es=false) {
    const number=String(cargo.otp_cell_number || '').replace(/\D/g,'').slice(-4),tail=cargo.voice?number.split('').join(', '):number;
    if(cargo.otpSentOn==='whatsapp')return es?'Se lo acabo de enviar aquí en este chat.':'I just sent it to you here in this chat.';
-   const mail=String(cargo.otpAltEmail || '').trim().toLowerCase(),at=mail.indexOf('@'),masked=cargo.voice?(es?'que empieza con ':'starting with ')+mail.charAt(0).toUpperCase()+(es?', arroba ':', at ')+mail.slice(at+1):mail.charAt(0)+'…@'+mail.slice(at+1);
+   const masked=maskEmail(cargo.otpAltEmail,cargo.voice,es?'es':'en');
    if(cargo.otp_cell_number && cargo.otpAltSent === true)return es?'Se lo envié por mensaje de texto al celular que termina con '+tail+', y también le envié un código a su correo '+masked+'. Revise sus mensajes de texto y su correo.':'I sent it by text message to the cell ending with '+tail+', and I also sent a code to your email '+masked+'. Check your text messages and your email.';
    if(cargo.otp_cell_number)return es?'Se lo envié por mensaje de texto al celular que termina con '+tail+'. Revise sus mensajes de texto.':'I sent it by text message to the cell ending with '+tail+'. Check your text messages.';
    return es?'Se lo envié por correo electrónico a '+String(cargo.otp_email || '')+'. Revise su correo.':'I sent it by email to '+String(cargo.otp_email || '')+'. Check your email.';
@@ -171,14 +173,14 @@ export function otpWhere(cargo,es=false) {
 export function otpPrompt(cargo,es=false) {
    const verb=es?cargo.verb_es:cargo.verb,number=String(cargo.otp_cell_number || '').replace(/\D/g,'').slice(-4),tail=cargo.voice?number.split('').join(', '):number;
    const where=cargo.otpSentOn==='whatsapp'?(es?'que le acabo de enviar aquí en este chat':'I just sent you here in this chat'):(es?'que recibió en ':'you received at ')+(cargo.otp_cell_number?(es?'celular que termina con ':'cell ending with ')+tail:(es?'correo electrónico: ':'email: ')+String(cargo.otp_email || ''));
-   const mail=String(cargo.otpAltEmail || '').trim().toLowerCase(),at=mail.indexOf('@'),also=cargo.otp_cell_number && cargo.otpAltSent === true?(es?' o en su correo ':' or at your email ')+(cargo.voice?(es?'que empieza con ':'starting with ')+mail.charAt(0).toUpperCase()+(es?', arroba ':', at ')+mail.slice(at+1):mail.charAt(0)+'…@'+mail.slice(at+1)):'';
+   const also=cargo.otp_cell_number && cargo.otpAltSent === true?(es?' o en su correo ':' or at your email ')+maskEmail(cargo.otpAltEmail,cargo.voice,es?'es':'en'):'';
    const name=cargo.callerPreselected && cargo.callerNamed && cargo.displayName?cargo.displayName:'';
    const lead=String((es?cargo.otpIntro_es:cargo.otpIntro) || '');
    return (lead?lead+' ':'')+(name?name+(es?', por favor':', please'):es?'Por favor':'Please')+' '+verb+' '+(cargo.voice?es?'o ingrese ':'or enter ':'')+(es?'el código de verificación de 6 dígitos ':'the 6-digit verification code ')+where+also+'. '+(es?`También puede ${cargo.voice?'presionar * o decir':'escribir'} SALIR para cancelar.`:`You can also ${cargo.voice?'press * or ':''}${verb} EXIT to cancel.`)+(cargo.callerPreselected?(es?` Para usar otra cuenta, ${verb} OTRA CUENTA.`:` To use another account, ${verb} ANOTHER ACCOUNT.`):'');
 }
-/** What the caller hears when a second code goes to the account's email: the address masked to its first letter and domain. */
+/** What the caller hears when a second code goes to the account's email, masked by maskEmail (jsfe/helpers). */
 export function otpAlsoSent(cargo,es=false) {
-   const mail=String(cargo.otpAltEmail || '').trim().toLowerCase(),at=mail.indexOf('@'),masked=cargo.voice?(es?'que empieza con ':'starting with ')+mail.charAt(0).toUpperCase()+(es?', arroba ':', at ')+mail.slice(at+1):mail.charAt(0)+'…@'+mail.slice(at+1);
+   const masked=maskEmail(cargo.otpAltEmail,cargo.voice,es?'es':'en');
    return es?'Muy bien, también le envié un código a su correo '+masked+'.':'Okay, I also sent a code to your email '+masked+'.';
 }
 // The caller cannot find the texted code (or asks for another way, or for email): a second code goes to the account's email
