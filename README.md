@@ -568,6 +568,14 @@ The `primary` property enables a clean separation between:
 
 This architecture prevents validation errors for sub-flows that depend on variables from their calling flows, while ensuring complete validation coverage during the engine's deep validation process.
 
+##### Restarting a flow from below it: `replaceTarget`
+
+`REPLACE` swaps the top frame only, so a sub-flow that replaces its parent leaves the parent waiting underneath, one more frame per restart. A flow marked `replaceTarget: true` is restarted instead: a sub-flow's `REPLACE` of it returns to its waiting frame and takes that place, dropping what ran above it. With no waiting frame it is a plain replace. Off by default: a second frame of a shared worker such as `run-form` is usually another form.
+
+##### Flow traps: `validateFlow`, `validateAllFlows`, `findFlowTraps`
+
+The validator reports each real trap once, as an ERROR: `stack_growth` (a loop holding a call) and `spin` (a loop of replaces with no question in reach). A flow replacing itself, reboot, DISPATCH, a `replaceTarget` return and a shared worker in the path are not traps. A flow on a loop that a runtime limit ends declares it with `loopBound: "<the limit>"`, and a test must drive the loop to that limit: the static check cannot read the guard.
+
 ##### Thin wrappers: `wraps`
 
 A shared flow file (one set of flows loaded by many tenants) can be given a tenant-specific entry point without copying it.

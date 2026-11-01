@@ -123,6 +123,7 @@ export function formInputChain(forms, id, cargo = {}) {
       seen.add(target);
       const state=forms[target];
       for(const spec of state.specs || []) {
+         if(spec.after&&state.afterRunning)continue;
          const condition=formCondition(spec,state.values,cargo,state);
          const dormant=condition!==true&&spec.form&&spec.schema?dormantActivation(spec,state,cargo):null;
          if(condition===false&&!dormant)continue;

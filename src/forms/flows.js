@@ -163,7 +163,7 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
          SET(`${id}_resume_kind`, 'form_internal_resume', '!!form_instance'),
          SET(`${id}_open`, 'form_instance', `openFormInstance(cargo, ${JSON.stringify(id)}, inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: ${resume_on_parent_change===true}, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[${JSON.stringify(id)}] || '' : ''), providers: provides, questions: questions, incomplete_outcome: ${incompleteExpression}, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete${acknowledge === 'data' ? ", acknowledge: 'data'" : ''} })`),
          SIDE(`${id}_task`, `(!parent_form ? (cargo.formTasks = cargo.formTasks || {}, cargo.formTasks[${JSON.stringify(id)}] = form_instance) : true, true)`),
-         SIDE(`${id}_provider_reset`, '(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].providerGateActive, true)'),
+         SIDE(`${id}_provider_reset`, '(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].afterRunning, delete cargo.forms[form_instance].providerGateActive, true)'),
          SIDE(`${id}_pass_reset`, '(cargo.forms[form_instance].replays = 0, form_internal_resume ? true : (cargo.forms[form_instance].attempts = {},cargo.forms[form_instance].misses={},cargo.forms[form_instance].feedback={}), true)'),
          SET(`${id}_arguments`,'form_arguments',`rememberFormArguments(cargo.forms[form_instance], currentContext, ${JSON.stringify(parameters.filter(p=>!p.internal&&!/^internal\b/i.test(p.description || '')).map(p=>p.name))}, form_internal_resume)`),
          ...parameters.filter(p=>!p.internal&&!/^internal\b/i.test(p.description || '')).map(p=>SET(`${id}_restore_${p.name}`,p.name,`form_internal_resume ? form_arguments[${JSON.stringify(p.name)}] : currentContext[${JSON.stringify(p.name)}]`)),
@@ -513,7 +513,7 @@ const accept = {
    ],
 };
 const acceptedEffects = {
-   id:'input-accepted-effects',name:'InputAcceptedEffects',version:'2.0.0',scope:'isolated',
+   id:'input-accepted-effects',name:'InputAcceptedEffects',version:'2.1.0',scope:'isolated',
    description:'Worker: acknowledge accepted or rejected candidates and run their callbacks after the batch commit.',
    parameters:[{name:'readings',type:'array'}],
    variables:vars({ca_h:null,ca_rest:[],ca_ack:'',ca_ack_es:''}),
@@ -525,7 +525,10 @@ const acceptedEffects = {
       SET('ie_say_en','ca_ack',"ca_h.outcome === 'rejected' && ca_h.quiet ? '' : ca_h.outcome === 'rejected' ? (ca_h.message || ('That ' + (ca_h.label || ca_h.name) + \" doesn't look right.\")) : ca_h.silent === true || ca_h.fromPending || !formAcknowledges(cargo, ca_h) ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Thank you, I already have your ' + ca_h.label + '.') : ca_h.outcome === 'changed' && ca_h.origin !== 'activation' ? ('Okay, I noted your ' + ca_h.label + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Got it, your ' + ca_h.label + '.') : ''"),
       SET('ie_say_es','ca_ack_es',"ca_h.outcome === 'rejected' && ca_h.quiet ? '' : ca_h.outcome === 'rejected' ? (ca_h.message_es || ca_h.message || ('Ese ' + (ca_h.label_es || ca_h.label || ca_h.name) + ' no parece correcto.')) : ca_h.silent === true || ca_h.fromPending || !formAcknowledges(cargo, ca_h) ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Gracias, ya tengo su ' + ca_h.label_es + '.') : ca_h.outcome === 'changed' && ca_h.origin !== 'activation' ? ('Listo, anoté su ' + ca_h.label_es + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Entendido, su ' + ca_h.label_es + '.') : ''"),
       WHEN('ie_say','ca_ack',SAY('ie_ack','{{ca_ack}}','{{ca_ack_es}}')),
+      // While a field's callback runs, a reply cannot fill the form's callback fields, so a question in it cannot run them again (formInputChain).
+      SET('ie_after_mark','noop',"(ca_h.after && ca_h.outcome !== 'known' && ca_h.outcome !== 'rejected' && ca_h.outcome !== 'pending' && cargo.forms[ca_h.form] ? (cargo.forms[ca_h.form].afterRunning = true) : true, true)"),
       WHEN('ie_callback',"ca_h.after && ca_h.outcome !== 'known' && ca_h.outcome !== 'rejected' && ca_h.outcome !== 'pending'",FLOW('ie_after','{{ca_h.after}}','call',{form:'{{ca_h.form}}',input:'{{ca_h.name}}',value:'{{ca_h.value}}'})),
+      SET('ie_after_clear','noop',"(cargo.forms[ca_h.form] ? delete cargo.forms[ca_h.form].afterRunning : true, true)"),
       WHEN('ie_more','ca_rest.length > 0',FLOW('ie_next','input-accepted-effects','replace',{readings:'{{ca_rest}}'})),
    ],
 };

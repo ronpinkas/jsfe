@@ -1,4 +1,5 @@
 import {compileFlowDeclarations, flowSetData} from './forms/declarations.js';
+import {findFlowTraps, formatFlowTrap} from './forms/flow-traps.js';
 import {compileNamedFunctions} from './helpers/named-functions.js';
 import {closeFormInstance} from './helpers/form-state.js';
 import {storedSession,restoreStoredSession} from './helpers/stored-session.js';
@@ -849,6 +850,8 @@ export interface FlowDefinition {
   safetyRevision?: string; // Changes retire saved continuations before input/steps; not a hot reload.
   safetyRevisionCompat?: string; // The earlier fingerprint revision of an unchanged declaration, accepted from a saved session.
   primary?: boolean; // Whether this flow is a primary entry point for users (default: false)
+  replaceTarget?: boolean; // A sub-flow's REPLACE of this flow returns to its waiting frame instead of adding another (default: false)
+  loopBound?: string; // This flow is on a loop that a runtime limit ends: names the limit, for the flow-trap check (a test must drive it)
   // A tenant's thin entry point over a shared flow (by id or name): when present, the wrapped flow is no longer primary
   // (it stays callable as a worker), and the wrapper takes its description, parameters, prompts and primary flag unless
   // it declares its own. Absent: nothing changes. See applyWraps().
@@ -5420,6 +5423,22 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
     } else if (callType === "replace") {
       // Replace current flow's steps with the sub-flow's steps
       logger.info(`Replacing current flow ${currentFlowFrame.flowName} with ${subFlow.name}`);
+      // A flow marked replaceTarget is restarted, not stacked: a sub-flow's REPLACE returns to its waiting frame and takes
+      // its place, dropping what ran above it. REPLACE swaps only the top frame, so otherwise each restart adds one.
+      if (subFlow.replaceTarget === true) {
+        const stack = getCurrentStack(engine);
+        let waiting = stack.length - 2;
+        while (waiting > -1 && stack[waiting].flowId !== subFlow.id) waiting--;
+        if (waiting > -1) {
+          const dropped = stack.splice(waiting, stack.length - 1 - waiting);
+          for (const frame of dropped) TransactionManager.fail(frame.transaction, `Restarted by ${subFlow.name}`);
+          logger.info(`Restarting ${subFlow.name}: returned to its waiting frame, dropped ${dropped.length}`);
+        } else {
+          logger.debug(`${subFlow.name} has no waiting frame: a plain replace`);
+        }
+      } else {
+        logger.debug(`${subFlow.name} is not a replace target: a plain replace`);
+      }
       logger.debug(`Current flowStepsStack length before replace: ${currentFlowFrame.flowStepsStack.length}`);
 
       // Update current frame to become the new flow
@@ -8776,7 +8795,7 @@ export class WorkflowEngine implements Engine {
       validateTools: true,           // Validate tool existence and parameters
       strictSchema: true,            // Enforce strict schema compliance
       checkVariables: true,          // Validate variable usage and scope
-      maxDepth: 20,                  // Maximum recursion depth for sub-flows
+      maxDepth: this.flowsMenu.length + 1, // Every flow is walked once, so depth is bounded by the set
       ...options
     };
 
@@ -9333,40 +9352,11 @@ export class WorkflowEngine implements Engine {
   }
 
   /**
-   * Checks for circular references in the flow call graph
+   * Reports the flow traps this flow can reach: real ones only (see forms/flow-traps.js)
    */
   private _checkCircularReferences(state: any): void {
-    const visited = new Set<string>();
-    const recursionStack = new Set<string>();
-
-    const detectCycle = (flowName: string, path: string[]): void => {
-      if (recursionStack.has(flowName)) {
-        const cycleStart = path.indexOf(flowName);
-        const cycle = path.slice(cycleStart).join(' → ') + ' → ' + flowName;
-        state.warnings.push(`Circular flow reference detected: ${cycle}`);
-        return;
-      }
-
-      if (visited.has(flowName)) {
-        return;
-      }
-
-      visited.add(flowName);
-      recursionStack.add(flowName);
-
-      const calledFlows = state.flowCallGraph.get(flowName) || [];
-      for (const calledFlow of calledFlows) {
-        detectCycle(calledFlow, [...path, flowName]);
-      }
-
-      recursionStack.delete(flowName);
-    };
-
-    // Check each flow in the call graph
-    for (const flowName of state.flowCallGraph.keys()) {
-      if (!visited.has(flowName)) {
-        detectCycle(flowName, []);
-      }
+    for (const trap of findFlowTraps(this.flowsMenu)) {
+      if (trap.flows.some((flow: string) => state.visitedFlows.has(flow))) state.errors.push(formatFlowTrap(trap));
     }
   }
 

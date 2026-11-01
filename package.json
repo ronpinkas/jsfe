@@ -1,6 +1,6 @@
 {
   "name": "jsfe",
-  "version": "1.23.0",
+  "version": "1.24.0",
   "description": "TypeScript workflow engine for conversational/automation apps: multi-flow orchestration, interrupt/resume, stack-based control, robust errors, and flexible tool/REST integration.",
   "license": "MIT",
   "author": "Ron Pinkas",
