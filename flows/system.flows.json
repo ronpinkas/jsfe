@@ -259,6 +259,7 @@
     "id": "authenticate-user",
     "name": "AuthenticateUser",
     "description": "Authenticate a contact using shared FORM collection and one-time-code services.",
+    "replaceTarget": true,
     "parameters": [
       {
         "name": "retry_flow",
@@ -861,6 +862,27 @@
         "value": "(cargo.otpLateCode='',cargo.otpResends=0,cargo.otpMismatches=0,cargo.otpFormatMisses=0,cargo.otpWordMisses=0,cargo.otp_cell_number=cell_number || '',cargo.otp_email=email || '',cargo.otpAltSent=false,cargo.otpAltHash=null,cargo.otpAltTimestamp=null,true)"
       },
       {
+        "id": "auth_send_limit",
+        "type": "CASE",
+        "branches": {
+          "condition: ((cargo.otpSendsTo || {})[(cargo.otp_cell_number ? String(cargo.otp_cell_number).replace(/[^0-9]/g,'').slice(-10) : String(cargo.otp_email || '').toLowerCase())] || 0) >= 3": {
+            "id": "auth_send_limit_end",
+            "type": "FLOW",
+            "value": "verification-failed",
+            "callType": "reboot",
+            "parameters": {
+              "form": "{{cargo.authOptions.parent_form}}"
+            }
+          },
+          "default": {
+            "id": "auth_send_limit_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "auth_send",
         "type": "FLOW",
         "value": "send-otp-code",
@@ -923,6 +945,24 @@
               "question_es": "¿Le gustaría intentar nuevamente obtener acceso a su cuenta?"
             },
             "initializeDefaults": true
+          }
+        }
+      },
+      {
+        "id": "auth_verified",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.otpVerified === true": {
+            "id": "auth_sends_clear",
+            "type": "SET",
+            "variable": "noop",
+            "value": "(cargo.otpSendsTo ? delete cargo.otpSendsTo[(cargo.otp_cell_number ? String(cargo.otp_cell_number).replace(/[^0-9]/g,'').slice(-10) : String(cargo.otp_email || '').toLowerCase())] : true, true)"
+          },
+          "default": {
+            "id": "auth_verified_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
           }
         }
       },
@@ -1968,6 +2008,7 @@
     "id": "validate-otp-code",
     "name": "ValidateOtpCode",
     "description": "Validate a challenge response with explicit bounded retries, alternate-contact handling and tenant callbacks.",
+    "loopBound": "3 mismatches, 3 format misses, 2 resends, 3 sends per contact",
     "variables": {
       "noop": {
         "type": "boolean",
@@ -2487,6 +2528,7 @@
               "retrying": true,
               "declined_caller": true
             },
+            "toParent": true,
             "initializeDefaults": true
           },
           "condition: email_too && normalized_otp_code.length !== 6 && (matchesChoice(user_choice,otp_phrases.resend) || matchesChoice(user_choice,otp_phrases.cannot_find) || matchesChoice(user_choice,otp_phrases.another_way) || matchesChoice(user_choice,otp_phrases.email))": {
@@ -2506,6 +2548,7 @@
               "retrying": true,
               "declined_caller": true
             },
+            "toParent": true,
             "initializeDefaults": true
           },
           "condition: isExitRequest(user_choice)": {
@@ -2664,6 +2707,7 @@
               "retrying": true,
               "declined_caller": true
             },
+            "toParent": true,
             "initializeDefaults": true
           },
           "condition: !no_code_given && otp_reply && otp_reply.key === 'another_account'": {
@@ -2677,6 +2721,7 @@
               "retrying": true,
               "declined_caller": true
             },
+            "toParent": true,
             "initializeDefaults": true
           },
           "condition: !no_code_given && otp_reply && (otp_reply.key === 'where' || otp_reply.key === 'cannot_find')": {
@@ -2983,7 +3028,7 @@
   {
     "id": "resend-otp-code",
     "name": "ResendOtpCode",
-    "version": "1.2.0",
+    "version": "1.3.0",
     "description": "Worker: send a fresh one-time code to the destination authenticate-user used. Params: resend_reason.",
     "parameters": [
       {
@@ -3004,7 +3049,7 @@
         "id": "check_resend_cap",
         "type": "CASE",
         "branches": {
-          "condition: (cargo.otpResends || 0) >= 2": {
+          "condition: (cargo.otpResends || 0) >= 2 || ((cargo.otpSendsTo || {})[(cargo.otp_cell_number ? String(cargo.otp_cell_number).replace(/[^0-9]/g,'').slice(-10) : String(cargo.otp_email || '').toLowerCase())] || 0) >= 3": {
             "id": "resend_cap_reached",
             "type": "FLOW",
             "value": "verification-failed",
@@ -3475,6 +3520,7 @@
               "contact_options": null,
               "parent_form": "{{parent_form}}"
             },
+            "toParent": true,
             "initializeDefaults": true
           },
           "condition: smart_capture_result": {
@@ -3543,6 +3589,7 @@
               "contact_options": null,
               "parent_form": "{{parent_form}}"
             },
+            "toParent": true,
             "initializeDefaults": true
           },
           "condition: user_choice.trim() === '1' || isAnswer(user_choice,'yes',retry_yes_words)": {
@@ -3741,8 +3788,8 @@
   {
     "id": "send-otp-code",
     "name": "SendOtpCode",
-    "version": "1.0.0",
-    "description": "Worker: sends a one-time code to cargo.otp_cell_number (SMS) or cargo.otp_email. Never texts a number that cannot receive texts (cargo.otpUndeliverableTo). Sets cargo.otpSendFailure ('' | 'undeliverable' | 'sms' | 'email' | 'none'); the caller hands a failure to otp-send-failed.",
+    "version": "1.1.0",
+    "description": "Worker: sends a one-time code to cargo.otp_cell_number (SMS) or cargo.otp_email. Never texts a number that cannot receive texts (cargo.otpUndeliverableTo). Sets cargo.otpSendFailure ('' | 'undeliverable' | 'sms' | 'email' | 'none'); the caller hands a failure to otp-send-failed. Counts each code sent per destination in cargo.otpSendsTo.",
     "steps": [
       {
         "id": "clear_send_failure",
@@ -3819,6 +3866,12 @@
             "value": true
           }
         }
+      },
+      {
+        "id": "count_send",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(cargo.otpSendFailure ? true : (cargo.otpSendsTo = cargo.otpSendsTo || {}, cargo.otpSendsTo[(cargo.otp_cell_number ? String(cargo.otp_cell_number).replace(/[^0-9]/g,'').slice(-10) : String(cargo.otp_email || '').toLowerCase())] = (cargo.otpSendsTo[(cargo.otp_cell_number ? String(cargo.otp_cell_number).replace(/[^0-9]/g,'').slice(-10) : String(cargo.otp_email || '').toLowerCase())] || 0) + 1, true))"
       }
     ]
   },
@@ -3942,7 +3995,8 @@
             "callType": "replace",
             "parameters": {
               "email": "{{choice_email}}"
-            }
+            },
+            "toParent": true
           },
           "condition: validatePhone(choice_digits)": {
             "id": "try_other_cell",
@@ -3951,7 +4005,8 @@
             "callType": "replace",
             "parameters": {
               "cell_number": "{{choice_digits}}"
-            }
+            },
+            "toParent": true
           },
           "condition: isAgentRequest(user_choice)": {
             "id": "goto_live_agent",
@@ -3978,7 +4033,8 @@
             "id": "ask_contact_again",
             "type": "FLOW",
             "value": "authenticate-user",
-            "callType": "replace"
+            "callType": "replace",
+            "toParent": true
           }
         }
       }
@@ -4197,7 +4253,7 @@
   {
     "id": "ask-choice",
     "name": "AskChoice",
-    "version": "1.19.0",
+    "version": "1.21.0",
     "description": "Worker: ask one question and return cargo.choice plus the original cargo.choiceText. Declared choices, precheck keys and typed answer-validator keys keep priority across both read passes. Exact negative choices accept only their own declared words and keys. With amount, an unowned legacy payment question accepts a complete USD monetary answer or a simple payment instruction through readMoneyAmount; uncertain prose yields to DISPATCH without declaring an action failure. A lone digit keeps the question's keypad policy; amount:'marked' still requires marked money. An owning FORM supplies form_context and performs its own field, correction, provider-question and confirmation matching before deciding to retry or yield, retaining its draft and safety guards. Optional answer_precheck runs before choices; answer_validator runs only when no choice matched. AGENT/0 requests a person; EXIT/* leaves the request; a consumed switch offer routes its declared flow. Params include question(_es), choices [{key,phrases,exact?,negative?,neutral?}], retry(_es), accept_other, expect, amount, digits, exit_context(_es), pii and form_context.",
     "parameters": [
       {
@@ -4429,13 +4485,13 @@
         "id": "ac_retry_en",
         "type": "SET",
         "variable": "ac_retry",
-        "value": "typeof retry !== 'undefined' && retry ? retry : \"Sorry, I didn't catch that. \" + question"
+        "value": "typeof retry !== 'undefined' && retry ? retry : sorryNotCaught('en', cargo) + question"
       },
       {
         "id": "ac_retry_spanish",
         "type": "SET",
         "variable": "ac_retry_es",
-        "value": "typeof retry_es !== 'undefined' && retry_es ? retry_es : 'Disculpe, no le entendí. ' + ac_q_es"
+        "value": "typeof retry_es !== 'undefined' && retry_es ? retry_es : sorryNotCaught('es', cargo) + ac_q_es"
       },
       {
         "id": "ac_exit_context",
@@ -4603,6 +4659,12 @@
         "type": "SET",
         "variable": "ac_prechecked",
         "value": "typeof answer_key !== 'undefined' && answer_key ? String(answer_key) : ''"
+      },
+      {
+        "id": "ac_prompt_echo",
+        "type": "SET",
+        "variable": "ac_answer",
+        "value": "withoutPromptEcho(ac_answer, [ac_q, ac_q_es, ac_retry, ac_retry_es])"
       },
       {
         "id": "ac_match",
@@ -4774,6 +4836,12 @@
         "type": "SET",
         "variable": "ac_prechecked",
         "value": "typeof answer_key !== 'undefined' && answer_key ? String(answer_key) : ''"
+      },
+      {
+        "id": "ac_prompt_echo_again",
+        "type": "SET",
+        "variable": "ac_answer",
+        "value": "withoutPromptEcho(ac_answer, [ac_q, ac_q_es, ac_retry, ac_retry_es])"
       },
       {
         "id": "ac_match_again",
@@ -9295,7 +9363,7 @@
         "id": "collect-phone_provider_reset",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].providerGateActive, true)"
+        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].afterRunning, delete cargo.forms[form_instance].providerGateActive, true)"
       },
       {
         "id": "collect-phone_pass_reset",
@@ -9548,7 +9616,7 @@
         "id": "collect-email_provider_reset",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].providerGateActive, true)"
+        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].afterRunning, delete cargo.forms[form_instance].providerGateActive, true)"
       },
       {
         "id": "collect-email_pass_reset",
@@ -9809,7 +9877,7 @@
         "id": "collect-zip_provider_reset",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].providerGateActive, true)"
+        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].afterRunning, delete cargo.forms[form_instance].providerGateActive, true)"
       },
       {
         "id": "collect-zip_pass_reset",
@@ -10060,7 +10128,7 @@
         "id": "collect-street-address_provider_reset",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].providerGateActive, true)"
+        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].afterRunning, delete cargo.forms[form_instance].providerGateActive, true)"
       },
       {
         "id": "collect-street-address_pass_reset",
@@ -10311,7 +10379,7 @@
         "id": "collect-city_provider_reset",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].providerGateActive, true)"
+        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].afterRunning, delete cargo.forms[form_instance].providerGateActive, true)"
       },
       {
         "id": "collect-city_pass_reset",
@@ -10606,7 +10674,7 @@
         "id": "collect-card-number_provider_reset",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].providerGateActive, true)"
+        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].afterRunning, delete cargo.forms[form_instance].providerGateActive, true)"
       },
       {
         "id": "collect-card-number_pass_reset",
@@ -10867,7 +10935,7 @@
         "id": "collect-card-expiration_provider_reset",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].providerGateActive, true)"
+        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].afterRunning, delete cargo.forms[form_instance].providerGateActive, true)"
       },
       {
         "id": "collect-card-expiration_pass_reset",
@@ -11126,7 +11194,7 @@
         "id": "collect-card-cvv_provider_reset",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].providerGateActive, true)"
+        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].afterRunning, delete cargo.forms[form_instance].providerGateActive, true)"
       },
       {
         "id": "collect-card-cvv_pass_reset",
@@ -11383,7 +11451,7 @@
         "id": "collect-card-zip_provider_reset",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].providerGateActive, true)"
+        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].afterRunning, delete cargo.forms[form_instance].providerGateActive, true)"
       },
       {
         "id": "collect-card-zip_pass_reset",
@@ -11681,7 +11749,7 @@
         "id": "collect-address_provider_reset",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].providerGateActive, true)"
+        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].afterRunning, delete cargo.forms[form_instance].providerGateActive, true)"
       },
       {
         "id": "collect-address_pass_reset",
@@ -12033,7 +12101,7 @@
         "id": "collect-credit-card_provider_reset",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].providerGateActive, true)"
+        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].afterRunning, delete cargo.forms[form_instance].providerGateActive, true)"
       },
       {
         "id": "collect-credit-card_pass_reset",
@@ -13820,13 +13888,13 @@
         "id": "pm_question",
         "type": "SET",
         "variable": "pm_q",
-        "value": "(function () { function fmt1(v, f, lang) { if (v === undefined || v === null || v === '') { return ''; } else if (f === 'money') { return amountToSpeech(v, lang, !!cargo.voice); } else if (f === 'money_nonzero') { return Number(v) === 0 ? '' : amountToSpeech(v, lang, !!cargo.voice); } else if (f === 'date') { return dateToWords(v, lang, true); } else if (f === 'date_no_year') { return dateToWords(v, lang, false); } else if (f === 'last4') { return last4(v, !!cargo.voice); } else if (f === 'digits') { return cargo.voice ? String(v).split('').join(', ') : String(v); } else { return String(v); } } function fill(t, obj, fmts, lang, extra) { var one = function (seg) { var gone = false; var out = String(seg).replace(/\\{(\\w+)\\}/g, function (m, k) { var v = Object.prototype.hasOwnProperty.call(extra, k) ? String(extra[k] || '') : fmt1(obj !== null && typeof obj === 'object' ? obj[k] : (k === 'value' ? obj : undefined), fmts && typeof fmts === 'object' ? fmts[k] : fmts, lang); if (v === '') { gone = true; } else { /* filled */ } return v; }); return { out: out, gone: gone }; }; var t2 = String(t).replace(/\\[([^\\]]*)\\]/g, function (m, seg) { var alts = seg.split('|'); for (var i = 0; i < alts.length; i++) { var r = one(alts[i]); if (!r.gone || i === alts.length - 1) { return r.gone && alts.length === 1 ? '' : r.out; } else { /* try the next alternative */ } } return ''; }); return one(t2).out.replace(/[ \\t]+([.,;:])/g, '$1').replace(/[ \\t]{2,}/g, ' ').trim(); } function empty(v) { return v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0) || (v !== null && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).every(function (k) { return v[k] === undefined || v[k] === null || v[k] === ''; })); } function render(f, src, lang, name) { var es = lang === 'es'; var o = src; String(f.path).split('.').forEach(function (k) { o = o === undefined || o === null ? undefined : o[k]; }); var label = es ? (f.label_es || f.label) : f.label; var extra = { name: name, label: label }; if (empty(o)) { var miss = es ? (f.missing_es || f.missing) : f.missing; return miss ? fill(miss, {}, null, lang, extra) : (es ? 'No veo ' + label + ' en su ' + (provides.subject_es || provides.subject || 'cuenta') + '.' : (\"I don't see a \" + label + ' on your ' + (provides.subject || 'account') + '.')); } else if (f.format && typeof f.format === 'object' && f.format.type === 'list' && Array.isArray(o)) { var it = es ? (f.format.item_es || f.format.item) : f.format.item; extra.count = String(o.length); extra.items = o.map(function (x) { return fill(it, x, f.format.fields, lang, { name: name }); }).join(es ? (f.format.join_es || f.format.join || '; ') : (f.format.join || '; ')); var lt = o.length === 1 ? (es ? (f.say_one_es || f.say_one || f.say_es || f.say) : (f.say_one || f.say)) : (es ? (f.say_es || f.say) : f.say); return fill(lt || '{items}', o, null, lang, extra); } else { var t = es ? (f.say_es || f.say) : f.say; if (t && typeof t === 'object') { t = t[o && o.state] || t.default || ''; } else { /* one sentence */ } return fill(t || (es ? 'Su {label} es {value}.' : 'Your {label} is {value}.'), o, f.format, lang, extra); } } var m = provides.menu; var t = cargo.voice && m.question_voice ? m.question_voice : m.question; return (retry === '1' ? \"Sorry, I didn't catch that. \" : '') + fill(t, {}, null, 'en', { name: pm_who, verb: cargo.verb || (cargo.voice ? 'say' : 'type') }); })()"
+        "value": "(function () { function fmt1(v, f, lang) { if (v === undefined || v === null || v === '') { return ''; } else if (f === 'money') { return amountToSpeech(v, lang, !!cargo.voice); } else if (f === 'money_nonzero') { return Number(v) === 0 ? '' : amountToSpeech(v, lang, !!cargo.voice); } else if (f === 'date') { return dateToWords(v, lang, true); } else if (f === 'date_no_year') { return dateToWords(v, lang, false); } else if (f === 'last4') { return last4(v, !!cargo.voice); } else if (f === 'digits') { return cargo.voice ? String(v).split('').join(', ') : String(v); } else { return String(v); } } function fill(t, obj, fmts, lang, extra) { var one = function (seg) { var gone = false; var out = String(seg).replace(/\\{(\\w+)\\}/g, function (m, k) { var v = Object.prototype.hasOwnProperty.call(extra, k) ? String(extra[k] || '') : fmt1(obj !== null && typeof obj === 'object' ? obj[k] : (k === 'value' ? obj : undefined), fmts && typeof fmts === 'object' ? fmts[k] : fmts, lang); if (v === '') { gone = true; } else { /* filled */ } return v; }); return { out: out, gone: gone }; }; var t2 = String(t).replace(/\\[([^\\]]*)\\]/g, function (m, seg) { var alts = seg.split('|'); for (var i = 0; i < alts.length; i++) { var r = one(alts[i]); if (!r.gone || i === alts.length - 1) { return r.gone && alts.length === 1 ? '' : r.out; } else { /* try the next alternative */ } } return ''; }); return one(t2).out.replace(/[ \\t]+([.,;:])/g, '$1').replace(/[ \\t]{2,}/g, ' ').trim(); } function empty(v) { return v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0) || (v !== null && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).every(function (k) { return v[k] === undefined || v[k] === null || v[k] === ''; })); } function render(f, src, lang, name) { var es = lang === 'es'; var o = src; String(f.path).split('.').forEach(function (k) { o = o === undefined || o === null ? undefined : o[k]; }); var label = es ? (f.label_es || f.label) : f.label; var extra = { name: name, label: label }; if (empty(o)) { var miss = es ? (f.missing_es || f.missing) : f.missing; return miss ? fill(miss, {}, null, lang, extra) : (es ? 'No veo ' + label + ' en su ' + (provides.subject_es || provides.subject || 'cuenta') + '.' : (\"I don't see a \" + label + ' on your ' + (provides.subject || 'account') + '.')); } else if (f.format && typeof f.format === 'object' && f.format.type === 'list' && Array.isArray(o)) { var it = es ? (f.format.item_es || f.format.item) : f.format.item; extra.count = String(o.length); extra.items = o.map(function (x) { return fill(it, x, f.format.fields, lang, { name: name }); }).join(es ? (f.format.join_es || f.format.join || '; ') : (f.format.join || '; ')); var lt = o.length === 1 ? (es ? (f.say_one_es || f.say_one || f.say_es || f.say) : (f.say_one || f.say)) : (es ? (f.say_es || f.say) : f.say); return fill(lt || '{items}', o, null, lang, extra); } else { var t = es ? (f.say_es || f.say) : f.say; if (t && typeof t === 'object') { t = t[o && o.state] || t.default || ''; } else { /* one sentence */ } return fill(t || (es ? 'Su {label} es {value}.' : 'Your {label} is {value}.'), o, f.format, lang, extra); } } var m = provides.menu; var t = cargo.voice && m.question_voice ? m.question_voice : m.question; return (retry === '1' ? sorryNotCaught('en', cargo) : '') + fill(t, {}, null, 'en', { name: pm_who, verb: cargo.verb || (cargo.voice ? 'say' : 'type') }); })()"
       },
       {
         "id": "pm_question_es",
         "type": "SET",
         "variable": "pm_q_es",
-        "value": "(function () { function fmt1(v, f, lang) { if (v === undefined || v === null || v === '') { return ''; } else if (f === 'money') { return amountToSpeech(v, lang, !!cargo.voice); } else if (f === 'money_nonzero') { return Number(v) === 0 ? '' : amountToSpeech(v, lang, !!cargo.voice); } else if (f === 'date') { return dateToWords(v, lang, true); } else if (f === 'date_no_year') { return dateToWords(v, lang, false); } else if (f === 'last4') { return last4(v, !!cargo.voice); } else if (f === 'digits') { return cargo.voice ? String(v).split('').join(', ') : String(v); } else { return String(v); } } function fill(t, obj, fmts, lang, extra) { var one = function (seg) { var gone = false; var out = String(seg).replace(/\\{(\\w+)\\}/g, function (m, k) { var v = Object.prototype.hasOwnProperty.call(extra, k) ? String(extra[k] || '') : fmt1(obj !== null && typeof obj === 'object' ? obj[k] : (k === 'value' ? obj : undefined), fmts && typeof fmts === 'object' ? fmts[k] : fmts, lang); if (v === '') { gone = true; } else { /* filled */ } return v; }); return { out: out, gone: gone }; }; var t2 = String(t).replace(/\\[([^\\]]*)\\]/g, function (m, seg) { var alts = seg.split('|'); for (var i = 0; i < alts.length; i++) { var r = one(alts[i]); if (!r.gone || i === alts.length - 1) { return r.gone && alts.length === 1 ? '' : r.out; } else { /* try the next alternative */ } } return ''; }); return one(t2).out.replace(/[ \\t]+([.,;:])/g, '$1').replace(/[ \\t]{2,}/g, ' ').trim(); } function empty(v) { return v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0) || (v !== null && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).every(function (k) { return v[k] === undefined || v[k] === null || v[k] === ''; })); } function render(f, src, lang, name) { var es = lang === 'es'; var o = src; String(f.path).split('.').forEach(function (k) { o = o === undefined || o === null ? undefined : o[k]; }); var label = es ? (f.label_es || f.label) : f.label; var extra = { name: name, label: label }; if (empty(o)) { var miss = es ? (f.missing_es || f.missing) : f.missing; return miss ? fill(miss, {}, null, lang, extra) : (es ? 'No veo ' + label + ' en su ' + (provides.subject_es || provides.subject || 'cuenta') + '.' : (\"I don't see a \" + label + ' on your ' + (provides.subject || 'account') + '.')); } else if (f.format && typeof f.format === 'object' && f.format.type === 'list' && Array.isArray(o)) { var it = es ? (f.format.item_es || f.format.item) : f.format.item; extra.count = String(o.length); extra.items = o.map(function (x) { return fill(it, x, f.format.fields, lang, { name: name }); }).join(es ? (f.format.join_es || f.format.join || '; ') : (f.format.join || '; ')); var lt = o.length === 1 ? (es ? (f.say_one_es || f.say_one || f.say_es || f.say) : (f.say_one || f.say)) : (es ? (f.say_es || f.say) : f.say); return fill(lt || '{items}', o, null, lang, extra); } else { var t = es ? (f.say_es || f.say) : f.say; if (t && typeof t === 'object') { t = t[o && o.state] || t.default || ''; } else { /* one sentence */ } return fill(t || (es ? 'Su {label} es {value}.' : 'Your {label} is {value}.'), o, f.format, lang, extra); } } var m = provides.menu; var t = cargo.voice && (m.question_voice_es || m.question_voice) ? (m.question_voice_es || m.question_voice) : (m.question_es || m.question); return (retry === '1' ? 'Disculpe, no le entendí. ' : '') + fill(t, {}, null, 'es', { name: pm_who, verb: cargo.verb_es || (cargo.voice ? 'diga' : 'escriba') }); })()"
+        "value": "(function () { function fmt1(v, f, lang) { if (v === undefined || v === null || v === '') { return ''; } else if (f === 'money') { return amountToSpeech(v, lang, !!cargo.voice); } else if (f === 'money_nonzero') { return Number(v) === 0 ? '' : amountToSpeech(v, lang, !!cargo.voice); } else if (f === 'date') { return dateToWords(v, lang, true); } else if (f === 'date_no_year') { return dateToWords(v, lang, false); } else if (f === 'last4') { return last4(v, !!cargo.voice); } else if (f === 'digits') { return cargo.voice ? String(v).split('').join(', ') : String(v); } else { return String(v); } } function fill(t, obj, fmts, lang, extra) { var one = function (seg) { var gone = false; var out = String(seg).replace(/\\{(\\w+)\\}/g, function (m, k) { var v = Object.prototype.hasOwnProperty.call(extra, k) ? String(extra[k] || '') : fmt1(obj !== null && typeof obj === 'object' ? obj[k] : (k === 'value' ? obj : undefined), fmts && typeof fmts === 'object' ? fmts[k] : fmts, lang); if (v === '') { gone = true; } else { /* filled */ } return v; }); return { out: out, gone: gone }; }; var t2 = String(t).replace(/\\[([^\\]]*)\\]/g, function (m, seg) { var alts = seg.split('|'); for (var i = 0; i < alts.length; i++) { var r = one(alts[i]); if (!r.gone || i === alts.length - 1) { return r.gone && alts.length === 1 ? '' : r.out; } else { /* try the next alternative */ } } return ''; }); return one(t2).out.replace(/[ \\t]+([.,;:])/g, '$1').replace(/[ \\t]{2,}/g, ' ').trim(); } function empty(v) { return v === undefined || v === null || v === '' || (Array.isArray(v) && v.length === 0) || (v !== null && typeof v === 'object' && !Array.isArray(v) && Object.keys(v).every(function (k) { return v[k] === undefined || v[k] === null || v[k] === ''; })); } function render(f, src, lang, name) { var es = lang === 'es'; var o = src; String(f.path).split('.').forEach(function (k) { o = o === undefined || o === null ? undefined : o[k]; }); var label = es ? (f.label_es || f.label) : f.label; var extra = { name: name, label: label }; if (empty(o)) { var miss = es ? (f.missing_es || f.missing) : f.missing; return miss ? fill(miss, {}, null, lang, extra) : (es ? 'No veo ' + label + ' en su ' + (provides.subject_es || provides.subject || 'cuenta') + '.' : (\"I don't see a \" + label + ' on your ' + (provides.subject || 'account') + '.')); } else if (f.format && typeof f.format === 'object' && f.format.type === 'list' && Array.isArray(o)) { var it = es ? (f.format.item_es || f.format.item) : f.format.item; extra.count = String(o.length); extra.items = o.map(function (x) { return fill(it, x, f.format.fields, lang, { name: name }); }).join(es ? (f.format.join_es || f.format.join || '; ') : (f.format.join || '; ')); var lt = o.length === 1 ? (es ? (f.say_one_es || f.say_one || f.say_es || f.say) : (f.say_one || f.say)) : (es ? (f.say_es || f.say) : f.say); return fill(lt || '{items}', o, null, lang, extra); } else { var t = es ? (f.say_es || f.say) : f.say; if (t && typeof t === 'object') { t = t[o && o.state] || t.default || ''; } else { /* one sentence */ } return fill(t || (es ? 'Su {label} es {value}.' : 'Your {label} is {value}.'), o, f.format, lang, extra); } } var m = provides.menu; var t = cargo.voice && (m.question_voice_es || m.question_voice) ? (m.question_voice_es || m.question_voice) : (m.question_es || m.question); return (retry === '1' ? sorryNotCaught('es', cargo) : '') + fill(t, {}, null, 'es', { name: pm_who, verb: cargo.verb_es || (cargo.voice ? 'diga' : 'escriba') }); })()"
       },
       {
         "id": "pm_build",
@@ -14404,7 +14472,7 @@
   {
     "id": "input-accepted-effects",
     "name": "InputAcceptedEffects",
-    "version": "2.0.0",
+    "version": "2.1.0",
     "scope": "isolated",
     "description": "Worker: acknowledge accepted or rejected candidates and run their callbacks after the batch commit.",
     "parameters": [
@@ -14506,13 +14574,13 @@
         "id": "ie_say_en",
         "type": "SET",
         "variable": "ca_ack",
-        "value": "ca_h.outcome === 'rejected' && ca_h.quiet ? '' : ca_h.outcome === 'rejected' ? (ca_h.message || ('That ' + (ca_h.label || ca_h.name) + \" doesn't look right.\")) : ca_h.silent === true || ca_h.fromPending ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Thank you, I already have your ' + ca_h.label + '.') : ca_h.outcome === 'changed' && ca_h.origin !== 'activation' ? ('Okay, I noted your ' + ca_h.label + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Got it, your ' + ca_h.label + '.') : ''"
+        "value": "ca_h.outcome === 'rejected' && ca_h.quiet ? '' : ca_h.outcome === 'rejected' ? (ca_h.message || ('That ' + (ca_h.label || ca_h.name) + \" doesn't look right.\")) : ca_h.silent === true || ca_h.fromPending || !formAcknowledges(cargo, ca_h) ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Thank you, I already have your ' + ca_h.label + '.') : ca_h.outcome === 'changed' && ca_h.origin !== 'activation' ? ('Okay, I noted your ' + ca_h.label + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Got it, your ' + ca_h.label + '.') : ''"
       },
       {
         "id": "ie_say_es",
         "type": "SET",
         "variable": "ca_ack_es",
-        "value": "ca_h.outcome === 'rejected' && ca_h.quiet ? '' : ca_h.outcome === 'rejected' ? (ca_h.message_es || ca_h.message || ('Ese ' + (ca_h.label_es || ca_h.label || ca_h.name) + ' no parece correcto.')) : ca_h.silent === true || ca_h.fromPending ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Gracias, ya tengo su ' + ca_h.label_es + '.') : ca_h.outcome === 'changed' && ca_h.origin !== 'activation' ? ('Listo, anoté su ' + ca_h.label_es + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Entendido, su ' + ca_h.label_es + '.') : ''"
+        "value": "ca_h.outcome === 'rejected' && ca_h.quiet ? '' : ca_h.outcome === 'rejected' ? (ca_h.message_es || ca_h.message || ('Ese ' + (ca_h.label_es || ca_h.label || ca_h.name) + ' no parece correcto.')) : ca_h.silent === true || ca_h.fromPending || !formAcknowledges(cargo, ca_h) ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Gracias, ya tengo su ' + ca_h.label_es + '.') : ca_h.outcome === 'changed' && ca_h.origin !== 'activation' ? ('Listo, anoté su ' + ca_h.label_es + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Entendido, su ' + ca_h.label_es + '.') : ''"
       },
       {
         "id": "ie_say",
@@ -14531,6 +14599,12 @@
             "value": "true"
           }
         }
+      },
+      {
+        "id": "ie_after_mark",
+        "type": "SET",
+        "variable": "noop",
+        "value": "(ca_h.after && ca_h.outcome !== 'known' && ca_h.outcome !== 'rejected' && ca_h.outcome !== 'pending' && cargo.forms[ca_h.form] ? (cargo.forms[ca_h.form].afterRunning = true) : true, true)"
       },
       {
         "id": "ie_callback",
@@ -14554,6 +14628,12 @@
             "value": "true"
           }
         }
+      },
+      {
+        "id": "ie_after_clear",
+        "type": "SET",
+        "variable": "noop",
+        "value": "(cargo.forms[ca_h.form] ? delete cargo.forms[ca_h.form].afterRunning : true, true)"
       },
       {
         "id": "ie_more",
@@ -15372,7 +15452,7 @@
         "id": "collect-service-answer_provider_reset",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].providerGateActive, true)"
+        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].afterRunning, delete cargo.forms[form_instance].providerGateActive, true)"
       },
       {
         "id": "collect-service-answer_pass_reset",
@@ -16224,7 +16304,7 @@
         "id": "collect-geocoded-address_provider_reset",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].providerGateActive, true)"
+        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].afterRunning, delete cargo.forms[form_instance].providerGateActive, true)"
       },
       {
         "id": "collect-geocoded-address_pass_reset",
@@ -17101,6 +17181,7 @@
           "email": "{{email}}",
           "acct_number": "{{acct_number}}"
         },
+        "toParent": true,
         "initializeDefaults": true
       }
     ],
@@ -17590,7 +17671,7 @@
         "id": "confirm-input-proposal_provider_reset",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].providerGateActive, true)"
+        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].afterRunning, delete cargo.forms[form_instance].providerGateActive, true)"
       },
       {
         "id": "confirm-input-proposal_pass_reset",
@@ -18461,7 +18542,7 @@
         "id": "collect-contextual-answer_provider_reset",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].providerGateActive, true)"
+        "value": "(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].afterRunning, delete cargo.forms[form_instance].providerGateActive, true)"
       },
       {
         "id": "collect-contextual-answer_pass_reset",
