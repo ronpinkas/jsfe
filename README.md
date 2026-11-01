@@ -570,11 +570,11 @@ This architecture prevents validation errors for sub-flows that depend on variab
 
 ##### Restarting a flow from below it: `replaceTarget`
 
-`REPLACE` swaps the top frame only, so a sub-flow that replaces its parent leaves the parent waiting underneath, one more frame per restart. A flow marked `replaceTarget: true` is restarted instead: a sub-flow's `REPLACE` of it returns to its waiting frame and takes that place, dropping what ran above it. With no waiting frame it is a plain replace. Off by default: a second frame of a shared worker such as `run-form` is usually another form.
+`REPLACE` swaps the top frame only, so a sub-flow that replaces its parent leaves the parent waiting underneath, one more frame per restart. To restart it in place, both sides opt in: the step sets `toParent: true` and the parent flow declares `replaceTarget: true`. The `REPLACE` then returns to the parent's waiting frame and takes that place, dropping what ran above it. With either one missing, or no waiting frame, it is an ordinary local `REPLACE`.
 
 ##### Flow traps: `validateFlow`, `validateAllFlows`, `findFlowTraps`
 
-The validator reports each real trap once, as an ERROR: `stack_growth` (a loop holding a call) and `spin` (a loop of replaces with no question in reach). A flow replacing itself, reboot, DISPATCH, a `replaceTarget` return and a shared worker in the path are not traps. A flow on a loop that a runtime limit ends declares it with `loopBound: "<the limit>"`, and a test must drive the loop to that limit: the static check cannot read the guard.
+The validator reports each real trap once, as an ERROR: `stack_growth` (a loop holding a call) and `spin` (a loop of replaces with no question in reach). A flow replacing itself, reboot, DISPATCH, a `toParent` return to a `replaceTarget` flow and a shared worker in the path are not traps. A flow on a loop that a runtime limit ends declares it with `loopBound: "<the limit>"`, and a test must drive the loop to that limit: the static check cannot read the guard.
 
 ##### Thin wrappers: `wraps`
 

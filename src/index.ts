@@ -622,6 +622,7 @@ export interface FlowStep {
   [key: string]: unknown; // Allow for value-xx properties and future extensions
   name?: string;
   callType?: 'call' | 'replace' | 'reboot';
+  toParent?: boolean; // replace only: restart the target where it waits below, if it declares replaceTarget (default: replace the top frame)
   initializeDefaults?: boolean; // shared FLOW replace only: opt in to filling target defaults for undefined variables; legacy replacement preserves its current variables
   keepSay?: boolean; // RETURN only: deliver the SAY text queued before it ahead of the value (default: not delivered)
   discardSay?: boolean; // reboot only: drop the SAY text queued before it (default: delivered with the new flow's output)
@@ -850,7 +851,7 @@ export interface FlowDefinition {
   safetyRevision?: string; // Changes retire saved continuations before input/steps; not a hot reload.
   safetyRevisionCompat?: string; // The earlier fingerprint revision of an unchanged declaration, accepted from a saved session.
   primary?: boolean; // Whether this flow is a primary entry point for users (default: false)
-  replaceTarget?: boolean; // A sub-flow's REPLACE of this flow returns to its waiting frame instead of adding another (default: false)
+  replaceTarget?: boolean; // A REPLACE step with toParent may return to this flow's waiting frame instead of adding another (default: false)
   loopBound?: string; // This flow is on a loop that a runtime limit ends: names the limit, for the flow-trap check (a test must drive it)
   // A tenant's thin entry point over a shared flow (by id or name): when present, the wrapped flow is no longer primary
   // (it stays callable as a worker), and the wrapper takes its description, parameters, prompts and primary flag unless
@@ -5423,9 +5424,9 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
     } else if (callType === "replace") {
       // Replace current flow's steps with the sub-flow's steps
       logger.info(`Replacing current flow ${currentFlowFrame.flowName} with ${subFlow.name}`);
-      // A flow marked replaceTarget is restarted, not stacked: a sub-flow's REPLACE returns to its waiting frame and takes
-      // its place, dropping what ran above it. REPLACE swaps only the top frame, so otherwise each restart adds one.
-      if (subFlow.replaceTarget === true) {
+      // A step's toParent asks to restart a flow waiting below it, and the flow must declare replaceTarget: the REPLACE
+      // returns to its waiting frame and takes its place, dropping what ran above it. Any other REPLACE swaps the top frame.
+      if (step.toParent === true && subFlow.replaceTarget === true) {
         const stack = getCurrentStack(engine);
         let waiting = stack.length - 2;
         while (waiting > -1 && stack[waiting].flowId !== subFlow.id) waiting--;
@@ -5434,10 +5435,10 @@ async function handleSubFlowStep(currentFlowFrame: FlowFrame, engine: Engine): P
           for (const frame of dropped) TransactionManager.fail(frame.transaction, `Restarted by ${subFlow.name}`);
           logger.info(`Restarting ${subFlow.name}: returned to its waiting frame, dropped ${dropped.length}`);
         } else {
-          logger.debug(`${subFlow.name} has no waiting frame: a plain replace`);
+          logger.debug(`${subFlow.name} has no waiting frame: a local replace`);
         }
       } else {
-        logger.debug(`${subFlow.name} is not a replace target: a plain replace`);
+        logger.debug(`Replacing ${subFlow.name} in place (toParent ${step.toParent === true}, replaceTarget ${subFlow.replaceTarget === true})`);
       }
       logger.debug(`Current flowStepsStack length before replace: ${currentFlowFrame.flowStepsStack.length}`);
 

@@ -1,8 +1,8 @@
 /**
  * Flow traps: the flow-graph defects that are real (owner 2026-11-01). A call on a loop grows the stack every lap; a
  * loop of replaces with no question in reach spins inside one turn. Not traps: a flow replacing itself (the frame is
- * reused and a question is in reach), reboot and DISPATCH (both clear the stack), a REPLACE of a `replaceTarget` flow
- * (it returns to the waiting frame), a loop whose flow declares `loopBound`, and a worker in the path (it runs whichever
+ * reused and a question is in reach), reboot and DISPATCH (both clear the stack), a `toParent` REPLACE of a
+ * `replaceTarget` flow (it returns to the waiting frame), a loop whose flow declares `loopBound`, and a worker in the path (it runs whichever
  * form asked, so two forms sharing run-form are nesting, not a loop). A worker's own loops are not read here.
  *
  * Targets named in a declaration count like the FLOW step that will run them: form input callbacks and validators,
@@ -32,17 +32,17 @@ function walk(node, visit) {
 function flowEdges(flow, resolve, returning, isReplaceTarget) {
    const edges = [];
    let asks = false;
-   const add = (target, kind, via) => {
+   const add = (target, kind, via, toParent = false) => {
       const id = resolve(target);
       if (!id || WORKER_FLOW_IDS.has(id)) return;
-      if (kind === 'replace' && isReplaceTarget(id)) return;   // it returns to the waiting frame: no growth
+      if (kind === 'replace' && toParent && isReplaceTarget(id)) return;   // it returns to the waiting frame: no growth
       if (!edges.some((edge) => edge.to === id && edge.kind === kind)) edges.push({ to: id, kind, via });
    };
    walk(flow.steps || [], (step) => {
       if (step.type === 'SAY-GET') asks = true;
       if (step.type === 'FLOW' && isTarget(step.value)) {
          if (ASKING_WORKERS.has(step.value)) asks = true;
-         if ((step.callType || 'call') !== 'reboot') add(step.value, step.callType || 'call', 'step');
+         if ((step.callType || 'call') !== 'reboot') add(step.value, step.callType || 'call', 'step', step.toParent === true);
       }
       if (step.onFail && step.onFail.type === 'FLOW' && !step.onFail.callType && isTarget(step.onFail.value)) add(step.onFail.value, 'replace', 'onFail');
    });
