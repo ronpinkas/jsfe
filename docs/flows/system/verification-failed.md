@@ -9,7 +9,7 @@
   - `form`: Owning task FORM instance
 - **Calls:** {{cargo.authOptions.failed_flow}} (call)
 - **Tools:** none
-- **Called by:** [validate-otp-code](validate-otp-code.md), [resend-otp-code](resend-otp-code.md)
+- **Called by:** [authenticate-user](authenticate-user.md), [validate-otp-code](validate-otp-code.md), [resend-otp-code](resend-otp-code.md)
 
 ### Steps
 

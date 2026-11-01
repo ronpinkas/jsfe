@@ -1,9 +1,9 @@
 # SendOtpCode
 
 <!-- generated:start -->
-**SendOtpCode** · `send-otp-code` · version 1.0.0 · worker (called by other flows) · steps
+**SendOtpCode** · `send-otp-code` · version 1.1.0 · worker (called by other flows) · steps
 
-> Worker: sends a one-time code to cargo.otp_cell_number (SMS) or cargo.otp_email. Never texts a number that cannot receive texts (cargo.otpUndeliverableTo). Sets cargo.otpSendFailure ('' | 'undeliverable' | 'sms' | 'email' | 'none'); the caller hands a failure to otp-send-failed.
+> Worker: sends a one-time code to cargo.otp_cell_number (SMS) or cargo.otp_email. Never texts a number that cannot receive texts (cargo.otpUndeliverableTo). Sets cargo.otpSendFailure ('' | 'undeliverable' | 'sms' | 'email' | 'none'); the caller hands a failure to otp-send-failed. Counts each code sent per destination in cargo.otpSendsTo.
 
 - **Parameters:** none
 - **Calls:** no other flow
@@ -40,14 +40,16 @@ flowchart TD
    c4 -- "!cargo.otpSendFailure" --> b7
    b8["set proceed"]
    c4 -- "else" --> b8
+   n9["set assignment_side_effect"]
+   b5 --> n9
+   b5f --> n9
+   b6 --> n9
+   b6f --> n9
+   b7 --> n9
+   b8 --> n9
    DONE(["end (back to caller)"])
    class DONE endstep
-   b5 --> DONE
-   b5f --> DONE
-   b6 --> DONE
-   b6f --> DONE
-   b7 --> DONE
-   b8 --> DONE
+   n9 --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

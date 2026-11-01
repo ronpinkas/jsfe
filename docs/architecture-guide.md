@@ -270,7 +270,8 @@ does this reply do with the question the flow asked? The model picks from a clos
 | `answers` | the reply responds to the question | the flow continues; any value still goes through deterministic validation |
 | `choice:<key>` | the reply picks one of the question's offered choices | that choice is the answer |
 | `abort` | the caller withdraws the request | every flow ends; the caller hears that the request was cancelled |
-| `new_request` | the caller asks for something else | DISPATCH: the message goes to intent detection |
+| `new_request` | the caller clearly asks for something else | DISPATCH: the message goes to intent detection |
+| `irrelevant` | the reply means nothing here: a stray word, an unfinished sentence, speech to someone else | the question is asked again; no flow moves |
 
 Some options are **never offered**, so the ranker cannot pick them: a choice marked `exact` (anything that charges or
 cancels) and the YES of a firm confirmation. A ranker can understand "no thanks, maybe later" as NO; it can never

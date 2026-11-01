@@ -1,7 +1,7 @@
 # InputAcceptedEffects
 
 <!-- generated:start -->
-**InputAcceptedEffects** · `input-accepted-effects` · version 2.0.0 · worker (called by other flows) · steps · isolated scope
+**InputAcceptedEffects** · `input-accepted-effects` · version 2.1.0 · worker (called by other flows) · steps · isolated scope
 
 > Worker: acknowledge accepted or rejected candidates and run their callbacks after the batch commit.
 
@@ -36,21 +36,25 @@ flowchart TD
    n6 --> c7
    b8["say: #123;#123;ca_ack#125;#125;"]
    c7 -- "ca_ack" --> b8
-   c9{"case"}
-   b8 --> c9
-   c7 -- "else" --> c9
-   b10[["call #123;#123;ca_h.after#125;#125;"]]
-   class b10 flowstep
-   c9 -- "ca_h.after && ca_h.outcome !== 'known' && ca_h.outcome !== 'rejected'…" --> b10
-   c11{"case"}
-   b10 --> c11
-   c9 -- "else" --> c11
-   b12(["replace → input-accepted-effects"])
-   class b12 endstep
-   c11 -- "ca_rest.length #gt; 0" --> b12
+   n9["set noop"]
+   b8 --> n9
+   c7 -- "else" --> n9
+   c10{"case"}
+   n9 --> c10
+   b11[["call #123;#123;ca_h.after#125;#125;"]]
+   class b11 flowstep
+   c10 -- "ca_h.after && ca_h.outcome !== 'known' && ca_h.outcome !== 'rejected'…" --> b11
+   n12["set noop"]
+   b11 --> n12
+   c10 -- "else" --> n12
+   c13{"case"}
+   n12 --> c13
+   b14(["replace → input-accepted-effects"])
+   class b14 endstep
+   c13 -- "ca_rest.length #gt; 0" --> b14
    DONE(["end (back to caller)"])
    class DONE endstep
-   c11 -- "else" --> DONE
+   c13 -- "else" --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

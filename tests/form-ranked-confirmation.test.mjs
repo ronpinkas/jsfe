@@ -29,7 +29,7 @@ await test('an unread decline is the NO, ranked with the confirmation question',
  const t=fixture();await atConfirm(t);await t.say('that card was lost and I have another one');
  assert.equal(t.session.cargo.paid,undefined);assert.deepEqual(Object.values(t.session.cargo.formConfirm),['no']);assert.equal(t.session.lastTurnDispatch,undefined);
  assert.deepEqual(t.calls,['rank_reply']);assert.ok(t.contexts[0].includes('Charge it now'),'the ranker sees the confirmation question');
- assert.deepEqual(t.cfg.offered,['choice:no','choice:__agent','answers','abort','new_request'],'never YES');
+ assert.deepEqual(t.cfg.offered,['choice:no','choice:__agent','answers','abort','new_request','irrelevant'],'never YES');
 });
 await test('the ranker never confirms: a key other than no is asked again',async()=>{
  const t=fixture({key:'yes'});await atConfirm(t);const r=await t.say('sure thing go right ahead with it');

@@ -25,7 +25,7 @@ function fixture({option='answers',key='1',fallback=false,choices=null,confirmat
 await test('a ranked answer takes the offered key it picks, in one call',async()=>{
  const t=fixture();assert.match(await t.say('start',true),/Which account/);await t.say('I went with the top one');
  assert.equal(t.session.cargo.paid,'1');assert.deepEqual(t.calls,['rank_reply']);
- assert.deepEqual(t.cfg.offered,['choice:1','choice:2','choice:__agent','answers','abort','new_request'],'no text escape without a call');
+ assert.deepEqual(t.cfg.offered,['choice:1','choice:2','choice:__agent','answers','abort','new_request','irrelevant'],'no text escape without a call');
 });
 await test('a one-word answer is ranked too',async()=>{
  const t=fixture();await t.say('start',true);await t.say('top');assert.equal(t.session.cargo.paid,'1');assert.deepEqual(t.calls,['rank_reply']);

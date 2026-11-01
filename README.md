@@ -363,7 +363,7 @@ is the original single call.
 
 **The reply ranker (contextual DISPATCH, `onResponse: "continue"`):** when a flow's question gets a reply its
 deterministic reader cannot read, jsfe asks what the reply does with the step's `responseContext` (the question):
-`answers`, `abort` or `new_request`. ONE aiCallback call whose 4th argument is `task: 'rank_reply'` with both
+`answers`, `abort`, `new_request` or `irrelevant`. ONE aiCallback call whose 4th argument is `task: 'rank_reply'` with both
 executors' instructions (`llm`, `systemOne`); the host replies `{ "option": … }`, plus `"fallback": true` when the
 option is `answers` only because nothing cleared the cut (System One). `jsfe/host` exports
 `buildReplyRank`, `decodeReplyRankLlm` and `decodeReplyRankSystemOne` (the highest option at or above 0.5, else
@@ -374,7 +374,7 @@ the field is the reply as said. Unmarked fields (a product, a city) always need 
 `fallback` answer extraction is the judge, and ReadFormResponse asks the question again when it finds nothing; `abort` is a RETURN: every flow ends and the reply is system message `cmd_request_aborted`
 ("The process has been cancelled at your request - how can I help you?"),
 outcome `user_aborted`, no recovery stamp;
-`new_request` ends the flows and routes the input through intent detection. Only a new request is routed: after
+`irrelevant` (a stray word, an unfinished sentence, speech to someone else; cut 0.7, and 0.8 to outrank a cleared choice) extracts nothing and asks again: no flow moves. `new_request` ends the flows and routes the input through intent detection. Only a new request is routed: after
 `answers` a later ordinary DISPATCH in the same turn hands the host the turn without detection. A host that does not know the task answers the `llm`
 instructions with its text model.
 

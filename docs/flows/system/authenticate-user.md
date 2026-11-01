@@ -22,7 +22,7 @@
   - `task_es`: task es
   - `failed_flow`: failed flow
   - `caller_on_file`: Caller-ID eligibility inherited from the invoking service
-- **Calls:** [contact-support](contact-support.md) (by name), [task-gate](task-gate.md) (call), [authenticate-user](authenticate-user.md) (gate of task-gate, retry_flow of generic-retry-with-options), [get-cell-or-email](get-cell-or-email.md) (call), {{cell_validator}} (call), {{email_validator}} (call), [generic-retry-with-options](generic-retry-with-options.md) (replace), [get-and-validate-otp-code](get-and-validate-otp-code.md) (call), [send-otp-code](send-otp-code.md) (call), [otp-send-failed](otp-send-failed.md) (replace)
+- **Calls:** [contact-support](contact-support.md) (by name), [task-gate](task-gate.md) (call), [authenticate-user](authenticate-user.md) (gate of task-gate, retry_flow of generic-retry-with-options), [get-cell-or-email](get-cell-or-email.md) (call), {{cell_validator}} (call), {{email_validator}} (call), [generic-retry-with-options](generic-retry-with-options.md) (replace), [get-and-validate-otp-code](get-and-validate-otp-code.md) (call), [verification-failed](verification-failed.md) (reboot), [send-otp-code](send-otp-code.md) (call), [otp-send-failed](otp-send-failed.md) (replace)
 - **Tools:** none
 - **Called by:** [authenticate-user](authenticate-user.md) (gate of task-gate, retry_flow of generic-retry-with-options), [get-cell-or-email](get-cell-or-email.md) (value, by name), [validate-otp-code](validate-otp-code.md) (retry_flow of generic-retry-with-options, retry_flow, by name), [generic-retry-with-options](generic-retry-with-options.md) (value), [otp-send-failed](otp-send-failed.md) (retry_flow of generic-retry-with-options, retry_flow), [otp-text-undeliverable](otp-text-undeliverable.md), [shopify-ql-track-order](../shopify/shopify-ql-track-order.md) (shopify), [shopify-ql-order-gate](../shopify/shopify-ql-order-gate.md) (shopify)
 
@@ -97,33 +97,41 @@ flowchart TD
    c22 -- "auth_join" --> b23
    n24["set noop"]
    c22 -- "else" --> n24
-   n25[["call send-otp-code"]]
-   class n25 flowstep
-   n24 --> n25
-   c26{"case"}
-   n25 --> c26
-   b27(["replace → otp-send-failed"])
-   class b27 endstep
-   c26 -- "cargo.otpSendFailure" --> b27
-   n28[["call get-and-validate-otp-code"]]
-   class n28 flowstep
-   c26 -- "else" --> n28
-   c29{"case"}
-   n28 --> c29
-   b30["set auth_result"]
-   c29 -- "cargo.otpVerified === true" --> b30
-   b31(["end (back to caller)"])
-   class b31 endstep
-   c29 -- "cargo.authRetry" --> b31
-   b32(["replace → generic-retry-with-options"])
-   class b32 endstep
-   c29 -- "else" --> b32
-   n33[["call task-gate"]]
-   class n33 flowstep
-   b30 --> n33
+   c25{"case"}
+   n24 --> c25
+   b26(["reboot → verification-failed"])
+   class b26 endstep
+   c25 -- "((cargo.otpSendsTo #124;#124; #123;#125;)[(cargo.otp_cell_number ? String(cargo.otp_c…" --> b26
+   n27[["call send-otp-code"]]
+   class n27 flowstep
+   c25 -- "else" --> n27
+   c28{"case"}
+   n27 --> c28
+   b29(["replace → otp-send-failed"])
+   class b29 endstep
+   c28 -- "cargo.otpSendFailure" --> b29
+   n30[["call get-and-validate-otp-code"]]
+   class n30 flowstep
+   c28 -- "else" --> n30
+   c31{"case"}
+   n30 --> c31
+   b32["set auth_result"]
+   c31 -- "cargo.otpVerified === true" --> b32
+   b33(["end (back to caller)"])
+   class b33 endstep
+   c31 -- "cargo.authRetry" --> b33
+   b34(["replace → generic-retry-with-options"])
+   class b34 endstep
+   c31 -- "else" --> b34
+   c35{"case"}
+   b32 --> c35
+   n36[["call task-gate"]]
+   class n36 flowstep
+   c35 -- "cargo.otpVerified === true" --> n36
+   c35 -- "else" --> n36
    DONE(["end (back to caller)"])
    class DONE endstep
-   n33 --> DONE
+   n36 --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

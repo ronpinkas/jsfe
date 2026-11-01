@@ -1,7 +1,7 @@
 # ResendOtpCode
 
 <!-- generated:start -->
-**ResendOtpCode** · `resend-otp-code` · version 1.2.0 · worker (called by other flows) · steps
+**ResendOtpCode** · `resend-otp-code` · version 1.3.0 · worker (called by other flows) · steps
 
 > Worker: send a fresh one-time code to the destination authenticate-user used. Params: resend_reason.
 
@@ -20,7 +20,7 @@ flowchart TD
    START --> c0
    b1(["reboot → verification-failed"])
    class b1 endstep
-   c0 -- "(cargo.otpResends #124;#124; 0) #gt;= 2" --> b1
+   c0 -- "(cargo.otpResends #124;#124; 0) #gt;= 2 #124;#124; ((cargo.otpSendsTo #124;#124; #123;#125;)[(cargo.otp_…" --> b1
    b2["set proceed"]
    c0 -- "else" --> b2
    n3["set assignment_side_effect"]

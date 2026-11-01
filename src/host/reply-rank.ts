@@ -6,7 +6,9 @@
  *
  *   answers      the reply answers the question (the default: an open question's reply that clears no option is its answer)
  *   abort        the caller withdraws the request and asks for nothing else
- *   new_request  the caller asks for something else: a different service or an unrelated question
+ *   new_request  the caller clearly asks for something else: a different service, product or action, or an unrelated question
+ *   irrelevant   the reply means nothing here (a stray word, an unfinished sentence, speech to someone else): the question
+ *                is asked again and no flow moves. A reason question does not offer it.
  *   choice:<key> the reply picks one of the question's declared choices (only when the step declares them); `answers`
  *                is then a reply that picks none of them
  *
@@ -14,7 +16,7 @@
  * instructions with its text model, which is a complete answer.
  */
 
-export const REPLY_OPTIONS = ['answers', 'abort', 'new_request'] as const;
+export const REPLY_OPTIONS = ['answers', 'abort', 'new_request', 'irrelevant'] as const;
 /** The fixed options, or `choice:<key>` for a declared choice. */
 export type ReplyOption = typeof REPLY_OPTIONS[number] | `choice:${string}`;
 /** A choice the question offers: its key and the words that describe it to the ranker. */
@@ -36,7 +38,14 @@ export const REPLY_CUTS: Partial<Record<ReplyOption, number>> = {
   // a new request leaves the question unanswered. Unclear replies at a question ("la curazán" at a confirmation, "Es que
   // mi tarjeta se cambió" at the pay menu) rated 0.47-0.58 and vary ±0.04 between calls; they are asked again
   new_request: 0.6,
+  // Measured 2026-11-01 on 444 prod replies: a real request never rated 0.5; a name given at a contact question rated 0.64.
+  irrelevant: 0.7,
 };
+/**
+ * `irrelevant` outranks a cleared choice only from here: a false pick can transfer the call. Measured 2026-11-01: "You." and
+ * "And, Leslie." at a pay menu rated 0.86 and were taken as a request for a person; "Operator." 0.78 is that request.
+ */
+export const REPLY_IRRELEVANT_OVER_CHOICE = 0.8;
 
 export interface ReplyTurn { role: 'user' | 'assistant'; content: string }
 export interface ReplyRankRequest {
@@ -65,8 +74,12 @@ const CRITERIA: Record<typeof REPLY_OPTIONS[number], { true: string; false: stri
     false: 'It responds to the current question, or asks for something.',
   },
   new_request: {
-    true: 'The latest message asks for a different service or action, or asks a question unrelated to the current question.',
-    false: 'It responds to the current question, or only withdraws the request.',
+    true: 'The latest message clearly asks for a different service, product or action, by name or in words, or asks a question unrelated to the current question. A stray word, an unfinished sentence, a remark or speech addressed to someone else does not qualify.',
+    false: 'It responds to the current question, only withdraws the request, or does not clearly say what the caller wants.',
+  },
+  irrelevant: {
+    true: 'The latest message means nothing here: a stray word or name, an unfinished sentence, background speech or words addressed to someone else. It names no service, action, product, amount or person to speak to.',
+    false: 'It responds to the current question in any words (yes, no, thanks, a name, a number, a question about it), withdraws the request, or names something the caller wants.',
   },
 };
 const TASK = 'A workflow asked the caller a question. Decide what the caller\'s latest message does with it.';
@@ -198,7 +211,9 @@ export function decodeReplyRankSystemOne(
   // A cleared choice is taken over `answers` and `new_request` (owner 2026-10-28: a request that names an offered option
   // is that option, "Representative." is the agent); only `abort` keeps its rank.
   const choice = cleared.find(o => o.startsWith(CHOICE_PREFIX));
-  const best = choice && (cleared[0] === 'answers' || cleared[0] === 'new_request') ? choice : cleared[0];
+  // `irrelevant` takes a choice's place only from its own higher cut (REPLY_IRRELEVANT_OVER_CHOICE).
+  const yieldsToChoice = cleared[0] === 'answers' || cleared[0] === 'new_request' || (cleared[0] === 'irrelevant' && scores.irrelevant < REPLY_IRRELEVANT_OVER_CHOICE);
+  const best = choice && yieldsToChoice ? choice : cleared[0];
   if (best) {
     return { option: best, scores, fallback: false };
   } else {

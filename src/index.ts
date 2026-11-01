@@ -7403,6 +7403,13 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         }
         logger.info(`Contextual DISPATCH in '${frame.flowName}': the reply answers the current question; the flow continues`);
         return false;
+      } else if (option === 'irrelevant') {
+        // The reply means nothing here: nothing is extracted, so the flow asks again, and no flow moves.
+        ranked = 'answers';
+        if (declaration) frame.variables[declaration.variable] = declaration.parameters.length ? {} : { key: '' };
+        else { /* no typed response: the flow reads the reply itself */ }
+        logger.info(`Contextual DISPATCH in '${frame.flowName}': the reply means nothing here; the flow continues`);
+        return false;
       } else if (option === 'abort') {
         // No recovery stamp: the caller chose to stop, so the host has nothing to resume or post-mortem.
         abortReply = getSystemMessage(engine,'cmd_request_aborted');
