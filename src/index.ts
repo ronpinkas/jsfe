@@ -2835,8 +2835,18 @@ function getCurrentStack(engine: Engine): FlowFrame[] {
   return engine.flowStacks[engine.flowStacks.length - 1] as FlowFrame[];
 }
 
+// Deepest journey in the Curacao flow suites: 16 frames. One flow re-entering itself adds about 9.
+const MAX_FLOW_STACK = 32;
+const WARN_FLOW_STACK = 24;
+
 function pushToCurrentStack(engine: Engine, flowFrame: FlowFrame) {
-  getCurrentStack(engine).push(flowFrame);
+  const stack = getCurrentStack(engine);
+  stack.push(flowFrame);
+  if (stack.length === WARN_FLOW_STACK + 1) {
+    logger.warn(`Flow stack passed ${WARN_FLOW_STACK} frames: ${stack.map((frame) => frame.flowId).join('>')}`);
+  } else {
+    // within the expected depth, or already warned on the way down
+  }
 }
 
 function popFromCurrentStack(engine: Engine): FlowFrame {
@@ -3128,7 +3138,7 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
   if (retired) return retired;
   // Enhanced recursion protection using natural stack depth
   const stackDepth = getCurrentStackLength(engine);
-  if (stackDepth > 20) {
+  if (stackDepth > MAX_FLOW_STACK) {
     const error = new Error("Maximum recursion depth reached in playFlowFrame");
     logger.error("ERROR!", error.message);
 
@@ -3378,7 +3388,7 @@ async function playFlowFrame(engine: Engine): Promise<string | null> {
 async function playStep(currentFlowFrame: FlowFrame, engine: Engine): Promise<string | null> {
   try {
     const stackDepth = getCurrentStackLength(engine);
-    if (stackDepth > 20) {
+    if (stackDepth > MAX_FLOW_STACK) {
       throw new Error("Maximum recursion depth reached in playStep");
     }
 
