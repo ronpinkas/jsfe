@@ -398,6 +398,12 @@ reasonFor })` builds both executors' instructions. A reason question declares no
 unchanged: the generic withdrawal includes "I no longer want it", which at a reason question withdrew three prod
 cancellations.
 
+**The waiting question, in another language (jsfe 1.22.0):** `engine.restatePendingQuestion(session)` says the question
+the active flow is waiting on again in the session's language and returns it, or null when no flow waits on a question.
+A host that switches a conversation's language mid-flow (a caller's explicit request) sets `session.language` and calls
+it: the waiting SAY-GET is rendered again from its `value` / `value_<lang>` and the flow's variables, and becomes the
+frame's `lastSayMessage`. No step runs and no answer is counted; the flow still waits on the same input.
+
 **An option said back as offered (jsfe 1.21.0):** an answer that repeats an option exactly as the question offered it is
 that option's word alone: "Sí para cancelar" to "diga SÍ para cancelar", "Yes to submit it" to "type YES to submit it".
 `ask-choice` applies `withoutPromptEcho(answer, [question, question_es, retry, retry_es])` before it matches, so form inputs

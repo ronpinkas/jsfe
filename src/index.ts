@@ -8419,6 +8419,32 @@ export class WorkflowEngine implements Engine {
   }
 
   /**
+   * The question the active flow is waiting on, said again in the session's language, or null when no flow waits on a
+   * question (owner 2026-10-31: a caller who switches language mid-flow hears the same question in the new language).
+   * The waiting SAY-GET is rendered again from its own value / value_<lang> and the flow's variables, and becomes the
+   * frame's lastSayMessage. No step runs and no answer is counted: the flow still waits on the same input.
+   */
+  restatePendingQuestion(engineSessionContext: EngineSessionContext): string | null {
+    this.sessionContext = engineSessionContext;
+    this.cargo = engineSessionContext.cargo || {};
+    const stack = engineSessionContext.flowStacks?.[engineSessionContext.flowStacks.length - 1] as FlowFrame[] | undefined;
+    const frame = stack?.[stack.length - 1];
+    const step = frame?.flowStepsStack?.[frame.flowStepsStack.length - 1];
+    if (!frame || !step || step.type !== 'SAY-GET' || !step.variable || frame.pendingVariable !== step.variable) {
+      logger.info(`restatePendingQuestion: no flow is waiting on a question`);
+      return null;
+    } else {
+      const lang = this.getSessionLanguage() || this.language;
+      const message = (lang && step[`value_${lang}`]) || step.value || '';
+      const restated = interpolateMessage(String(message), frame.contextStack, frame.variables, this);
+      frame.lastSayMessage = restated;
+      frame.pendingVariableContext = restated;
+      logger.info(`restatePendingQuestion: '${frame.flowName}' asks again in '${lang}'`);
+      return restated;
+    }
+  }
+
+  /**
    * Get list of currently enabled commands.
    * 
    * @returns Array of enabled command names
