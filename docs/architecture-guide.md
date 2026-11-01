@@ -73,7 +73,7 @@ A flow is made of steps. Most authors need only a handful:
 | `SAY-GET` | Say the queued text and wait for the caller's answer. |
 | `SET` | Compute a value (a JavaScript expression) into a variable. |
 | `CASE` / `SWITCH` | Branch on a condition or a value. |
-| `FLOW` | Run another flow: `call` (and come back), `replace` or `reboot`. |
+| `FLOW` | Run another flow: `call` (and come back), `replace` or `reboot` ([how they differ](#how-flows-run-other-flows)). |
 | `CALL-TOOL` | Call a registered tool, with an `onFail` route. |
 | `END` | Finish this flow and return to the one that called it. |
 | `RETURN` | Finish every flow and hand a reply (or the turn) to the host. |
@@ -144,6 +144,64 @@ A value several flows use (a catalog, a list of services, a set of phrases) is w
 referenced as `{"$data": "path.to.value"}`; expressions read it as `$data.name`. A function several flows use is
 written once in the set's functions entry and called as `fn.name(...)`. One source means two flows can never drift
 apart.
+
+### How flows run other flows
+
+A running conversation is a stack of flows. The flow on top is the one executing; the frames below it wait for it to
+finish. A `FLOW` step has three call types, and each treats the stack differently. `DISPATCH` is the fourth way to
+move, and it is not a call at all.
+
+| | Stack | When the new flow ends | Use it for |
+| --- | --- | --- | --- |
+| `call` (the default) | adds a frame | the calling flow continues at its next step | a sub-task with a result: look up, verify, ask |
+| `replace` | swaps the top frame | control goes to whatever the replaced flow would have returned to | moving on, or trying the same flow again |
+| `reboot` | clears the stack, then runs the flow | the conversation has no flow to return to | starting over from a dead end |
+| `DISPATCH` step | clears the stack, then runs intent detection on the message | not applicable | a message that is not for this flow |
+
+A failed answer that must be asked again needs no special support: the flow replaces itself and the frame is reused, so
+it can repeat as often as its own limit allows.
+
+**Restarting a flow from below it.** `replace` swaps only the top frame. If `verify-account` calls `ask-contact`, and
+`ask-contact` replaces `verify-account` to start over, the original `verify-account` is still waiting underneath: one
+more frame on every restart. For this, both sides opt in. The step sets `toParent: true` and the flow it restarts
+declares `replaceTarget: true`. The `replace` then finds that waiting frame, drops everything above it and takes its
+place, so the stack is the same height on every lap. With either side missing, or no such frame waiting, it is an
+ordinary local `replace`, so a local restart of a marked flow is still available when it is what you want.
+
+```json
+{ "id": "verify-account", "replaceTarget": true, "steps": ["..."] }
+{ "id": "start_over", "type": "FLOW", "value": "verify-account", "callType": "replace", "toParent": true }
+```
+
+**The trap: a direct call to something already running.** Forms are re-entrant: a form declares its inputs, and when one
+is already filled it is skipped. So the safe way to reach another task, or to come back to this one, is `DISPATCH`. It
+clears the stack, intent detection starts the right flow, and that flow resumes from its saved draft. Nothing piles up.
+
+A direct `call` has none of that protection. It runs on top of whatever is open, so if the called flow can reach the
+caller again, each lap adds frames until the engine refuses to go on (32 frames, with a warning naming the path past
+24). The usual disguise is a callback: an input's `after` flow runs as a `call` after the input is accepted. Asking a
+question in an `after` is fine. Starting a new request from one is not, and neither is a field being re-filled by the
+reply to that question, so while an `after` runs, the fields of its form that carry an `after` cannot be filled from a
+reply. A caller who changes the subject there leaves by `DISPATCH`.
+
+So: `call` for a closed sub-task that finishes and comes back, `DISPATCH` for anything the caller asked for.
+
+**The flow-trap check.** The validator reads the graph of who runs whom and reports each real trap once, as an error:
+
+| Trap | What it is |
+| --- | --- |
+| `stack_growth` | a loop holding at least one `call`: every lap adds a frame |
+| `spin` | a loop of `replace`s, or one closed by a `toParent` replace, with no question in reach: it never ends and never waits |
+
+Not traps, so never reported: a flow replacing itself with a question in reach, `reboot` and `DISPATCH` (both clear the
+stack), a `toParent` return to a `replaceTarget` flow with a question in reach, and a shared worker in the path (two
+forms both using `run-form` are nesting, not a loop). A flow on a loop that a runtime limit ends declares it with
+`loopBound: "3 mismatches, 2 resends"`; the check cannot read the guard, so a test must drive that loop to its limit.
+
+Run it on compiled flows (`engine.flowsMenu`), because declared forms only become steps when compiled: on raw
+declarations a question inside a form is invisible, and a good loop reads as a `spin`. It follows only fixed targets. A
+target chosen at run time (`{{retry_flow}}`) and the loops inside a shared worker are not read, so those need journeys.
+A host should refuse to deploy a set with a trap.
 
 ### Session state
 
@@ -356,7 +414,9 @@ it from the company's documents.
 6. **Sensitive decisions are exact.** Any choice that charges or cancels is `exact`, and asked as a firm confirmation.
 7. **Descriptions are for detection only.** A primary's description says what starts it and what does not; caller
    wording belongs in questions and fact renderers.
-8. **Test journeys, not just units.** Run the real engine on the real set: in order, out of order, all at once,
+8. **`call` for a closed sub-task, `DISPATCH` for what the caller asked for.** A loop that grows the stack is a design
+   bug, and the validator refuses it.
+9. **Test journeys, not just units.** Run the real engine on the real set: in order, out of order, all at once,
    corrected, a mid-form question, a change of subject, a decline, voice and text, every language.
 
 ## Where to read next
