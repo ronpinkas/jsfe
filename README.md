@@ -574,7 +574,7 @@ This architecture prevents validation errors for sub-flows that depend on variab
 
 ##### Flow traps: `validateFlow`, `validateAllFlows`, `findFlowTraps`
 
-The validator reports each real trap once, as an ERROR: `stack_growth` (a loop holding a call) and `spin` (a loop of replaces with no question in reach). A flow replacing itself, reboot, DISPATCH, a `toParent` return to a `replaceTarget` flow and a shared worker in the path are not traps. A flow on a loop that a runtime limit ends declares it with `loopBound: "<the limit>"`, and a test must drive the loop to that limit: the static check cannot read the guard.
+The validator reports each real trap once, as an ERROR: `stack_growth` (a loop holding a call) and `spin` (a loop of replaces, or one closed by a parent REPLACE, with no question in reach). A flow replacing itself, reboot, DISPATCH, a `toParent` return to a `replaceTarget` flow and a shared worker in the path are not traps. A flow on a loop that a runtime limit ends declares it with `loopBound: "<the limit>"`, and a test must drive the loop to that limit: the static check cannot read the guard.
 
 ##### Thin wrappers: `wraps`
 

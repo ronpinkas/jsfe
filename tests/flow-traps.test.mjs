@@ -21,6 +21,7 @@ const cases = [
    ['replace loop with no question', [noQuestion('a', [['b', 'replace']]), noQuestion('b', [['a', 'replace']])], ['spin:a+b']],
    ['reboot clears the stack', [flow('a', [['b', 'call']]), flow('b', [['a', 'reboot']])], []],
    ['toParent REPLACE of a replaceTarget returns to its frame', [flow('a', [['b', 'call']], { replaceTarget: true }), flow('b', [['a', 'replace', { toParent: true }]])], []],
+   ['toParent REPLACE of a replaceTarget with no question spins', [{ ...noQuestion('a', [['b', 'call']]), replaceTarget: true }, { ...noQuestion('b', []), steps: [{ id: 's0', type: 'FLOW', value: 'a', callType: 'replace', toParent: true }] }], ['spin:a+b']],
    ['a local REPLACE of a replaceTarget still stacks', [flow('a', [['b', 'call']], { replaceTarget: true }), flow('b', [['a', 'replace']])], ['stack_growth:a+b']],
    ['toParent of an unmarked flow still stacks', [flow('a', [['b', 'call']]), flow('b', [['a', 'replace', { toParent: true }]])], ['stack_growth:a+b']],
    ['a declared bound', [flow('a', [['b', 'call']], { loopBound: 'once per form' }), flow('b', [['a', 'call']])], []],

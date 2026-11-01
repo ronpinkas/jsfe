@@ -2,7 +2,7 @@
  * Flow traps: the flow-graph defects that are real (owner 2026-11-01). A call on a loop grows the stack every lap; a
  * loop of replaces with no question in reach spins inside one turn. Not traps: a flow replacing itself (the frame is
  * reused and a question is in reach), reboot and DISPATCH (both clear the stack), a `toParent` REPLACE of a
- * `replaceTarget` flow (it returns to the waiting frame), a loop whose flow declares `loopBound`, and a worker in the path (it runs whichever
+ * `replaceTarget` flow with a question in reach (it returns to the waiting frame), a loop whose flow declares `loopBound`, and a worker in the path (it runs whichever
  * form asked, so two forms sharing run-form are nesting, not a loop). A worker's own loops are not read here.
  *
  * Targets named in a declaration count like the FLOW step that will run them: form input callbacks and validators,
@@ -28,14 +28,14 @@ function walk(node, visit) {
    Object.values(node).forEach((value) => walk(value, visit));
 }
 
-/** Every edge of one flow: { to, kind: 'call'|'replace', via } and whether the flow itself can put a question. */
+/** Every edge of one flow: { to, kind: 'call'|'replace'|'return', via } and whether the flow itself can put a question. */
 function flowEdges(flow, resolve, returning, isReplaceTarget) {
    const edges = [];
    let asks = false;
    const add = (target, kind, via, toParent = false) => {
       const id = resolve(target);
       if (!id || WORKER_FLOW_IDS.has(id)) return;
-      if (kind === 'replace' && toParent && isReplaceTarget(id)) return;   // it returns to the waiting frame: no growth
+      if (kind === 'replace' && toParent && isReplaceTarget(id)) kind = 'return';   // to the waiting frame: no growth, still a lap
       if (!edges.some((edge) => edge.to === id && edge.kind === kind)) edges.push({ to: id, kind, via });
    };
    walk(flow.steps || [], (step) => {
@@ -87,7 +87,7 @@ function stronglyConnected(graph) {
 
 /**
  * The traps of a set of flows: [{ kind: 'stack_growth'|'spin', flows, edges: ['a -call-> b', …] }], each once.
- * `stack_growth`: a loop holding at least one call. `spin`: a loop of replaces where no flow can reach a question.
+ * `stack_growth`: a loop holding at least one call. `spin`: a loop of replaces, or one closed by a REPLACE of the parent, where no flow can reach a question.
  */
 export function findFlowTraps(flows) {
    const byName = new Map();
@@ -102,8 +102,8 @@ export function findFlowTraps(flows) {
       asks.set(flow.id, read.asks);
    }
    for (const { from, to } of returning) {
-      const target = byName.get(to);
-      if (target && !markedTargets.has(target) && graph.has(from) && !graph.get(from).some((edge) => edge.to === target && edge.kind === 'replace')) graph.get(from).push({ to: target, kind: 'replace', via: 'retry_flow' });
+      const target = byName.get(to), kind = markedTargets.has(target) ? 'return' : 'replace';
+      if (target && graph.has(from) && !graph.get(from).some((edge) => edge.to === target && edge.kind === kind)) graph.get(from).push({ to: target, kind, via: 'retry_flow' });
    }
    const reachesQuestion = (start) => {
       const seen = new Set([start]), queue = [start];
@@ -114,15 +114,22 @@ export function findFlowTraps(flows) {
       }
       return false;
    };
+   const describe = (edge) => `${edge.from} -${edge.kind === 'call' ? 'call' : edge.kind === 'return' ? 'replace-parent' : 'replace'}${edge.via === 'step' ? '' : `(${edge.via})`}-> ${edge.to}`;
+   const innerEdges = (group, edgesOf) => { const members = new Set(group); return group.flatMap((from) => edgesOf(from).filter((edge) => members.has(edge.to)).map((edge) => ({ from, ...edge }))); };
+   const framed = (from) => (graph.get(from) || []).filter((edge) => edge.kind !== 'return');
    const traps = [];
-   for (const group of stronglyConnected(graph)) {
-      const members = new Set(group);
-      const inner = group.flatMap((from) => (graph.get(from) || []).filter((edge) => members.has(edge.to)).map((edge) => ({ from, ...edge })));
+   for (const group of stronglyConnected(new Map([...graph.keys()].map((from) => [from, framed(from)])))) {
+      const inner = innerEdges(group, framed);
       if (!inner.length) continue;
       if (group.some((flow) => bounded.has(flow))) continue;   // a runtime limit ends this loop, and a test drives it there
-      const describe = (edge) => `${edge.from} -${edge.kind === 'call' ? 'call' : 'replace'}${edge.via === 'step' ? '' : `(${edge.via})`}-> ${edge.to}`;
       if (inner.some((edge) => edge.kind === 'call')) traps.push({ kind: 'stack_growth', flows: [...group].sort(), edges: inner.map(describe).sort() });
       else if (!group.some(reachesQuestion)) traps.push({ kind: 'spin', flows: [...group].sort(), edges: inner.map(describe).sort() });
+   }
+   // A REPLACE of the parent keeps the stack flat, but it is still a lap: with no question in reach it never ends.
+   for (const group of stronglyConnected(graph)) {
+      const inner = innerEdges(group, (from) => graph.get(from) || []);
+      if (!inner.some((edge) => edge.kind === 'return') || group.some((flow) => bounded.has(flow)) || group.some(reachesQuestion)) continue;
+      if (!traps.some((trap) => trap.kind === 'spin' && trap.flows.some((flow) => group.includes(flow)))) traps.push({ kind: 'spin', flows: [...group].sort(), edges: inner.map(describe).sort() });
    }
    return traps.sort((a, b) => a.flows[0].localeCompare(b.flows[0]));
 }
