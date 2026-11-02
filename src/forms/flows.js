@@ -310,7 +310,7 @@ const collectInput = {
       WHEN('ci_no_run', 'ci_no_flow', FLOW('ci_no_answer', '{{ci_no_flow}}', 'call', { form: '{{ci_no_owner}}' })),
       WHEN('ci_no_owner_resume', 'ci_no_flow && ci_no_up', FLOW('ci_no_resume_owner', 'resume-form', 'reboot', { form: '{{ci_no_owner}}' })),
       WHEN('ci_no_end', 'ci_no_flow', END('ci_no_done')),
-      SET('ci_build_chain', 'ci_chain', CHAIN_JS),
+      SET('ci_build_chain', 'ci_chain', `(${CHAIN_JS}).filter(function(i){return !(ci_spec.own_identifiers === true && i.form !== form && i.profile && i.profile.kind === 'identifier');})`),
       SET('ci_match', 'ci_m', "readFormAnswer(cargo.choiceText, ci_chain, Array.isArray(ci_spec.any_of) ? { form: form, names: ci_names } : { form: form, name: current }, cargo.choice, provides && Array.isArray(questions) ? questions : [])"),
       SIDE('ci_acceptance_trace', "(cargo.formAcceptance = formAcceptanceTrace(cargo.formAcceptance, ci_m), true)"),
       // The labels and validators ride on each reading, so the presets stay in this one flow.
@@ -448,7 +448,7 @@ const readFormChoice={
   ...escapeRoutes('choice_escape'),
   SET('choice_picked','picked',"(function(){var k=String(reply && reply.key || '');var c=(choices || []).filter(function(c){return String(c.key)===k;})[0] || others.filter(function(c){return c.key===k;})[0];return c ? String(c.key) : '';})()"),
   // A question over any_of asks one name and its choices belong to a member ('selection' asks, 'option' holds PAST DUE): the pick is read as the member's answer.
-  SET('choice_owner','owner',"(others.filter(function(c){return c.key===picked && !(choices || []).some(function(own){return String(own.key)===picked;});})[0] || {}).owner || (function(){var asked=(chain || []).filter(function(i){return i.form===form && i.name===input;})[0];if(asked || !picked)return null;var member=(chain || []).filter(function(i){return i.form===form && i.profile && (i.profile.choices || []).some(function(c){return String(c.key)===picked;});})[0];return member ? {form:member.form,name:member.name} : null;})()"),
+  SET('choice_owner','owner',"(others.filter(function(c){return c.key===picked && !(choices || []).some(function(own){return String(own.key)===picked;});})[0] || {}).owner || (function(){var asked=(chain || []).filter(function(i){return i.form===form && i.name===input;})[0];if(asked || !picked)return null;var spec=((cargo.forms[form] || {}).specs || []).filter(function(i){return i.name===input;})[0];var names=((spec || {}).any_of || []).map(function(i){return i.name;});var member=(chain || []).filter(function(i){return i.form===form && names.indexOf(i.name)>=0 && i.profile && (i.profile.choices || []).some(function(c){return String(c.key)===picked;});})[0];return member ? {form:member.form,name:member.name} : null;})()"),
   WHEN('choice_none','!picked',rankedMiss('choice_miss')),
   WHEN('choice_none_end','!picked',END('choice_none_done')),
   SIDE('choice_take',"(cargo.choice=picked,cargo.choiceText=picked,true)"),
