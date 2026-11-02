@@ -9,7 +9,7 @@
  * the flows. Part of jsfe/helpers; imports only siblings.
  */
 import { matchesChoice } from './matches-choice.js';
-import { pickChoice, amountInAnswer, isAmountAnswer, ANSWER_WORDS, CONFIRM_WORDS } from './answer.js';
+import { pickChoice, amountInAnswer, isAmountAnswer, isReaderFiller, ANSWER_WORDS, CONFIRM_WORDS } from './answer.js';
 import { readEmail, readPhone, readInternationalPhone, readIdentifier } from './contact.js';
 import { readSpokenMoney } from './spoken-money.js';
 import {readMoneyAmount,isPartialMoneyAnswer} from './money.js';
@@ -151,7 +151,7 @@ export function readInputProfile(profile, answer, isCurrent = true) {
       let readings = pool.filter(c => pickChoice(raw, [c], false) === c.key || numericSpans(c).length).map(c => {
          const words = (c.phrases ?? c.words ?? []).filter(w => matchesChoice(raw,[w]));
          const spans = [...choiceSpans(raw,words),...numericSpans(c)].filter((span,index,all)=>all.findIndex(other=>other[0]===span[0]&&other[1]===span[1])===index);
-         return { value:c.key, ...(isCurrent && (c.keys || []).length && !isAmountAnswer(raw) && pickChoice(raw,[{key:c.key,phrases:c.keys,exact:true}],false)===c.key ? {keypad:true} : {}), spans:spans.length?spans:[[0,raw.length]], option_label:c.label || (c.phrases ?? c.words ?? []).find(w=>!/^\d+$/.test(w)) || c.key, option_label_es:c.label_es || c.label || (c.phrases ?? c.words ?? []).find(w=>!/^\d+$/.test(w)) || c.key };
+         return { value:c.key, ...(spans.length?{}:{unlocated:true}), ...(isCurrent && (c.keys || []).length && !isAmountAnswer(raw) && pickChoice(raw,[{key:c.key,phrases:c.keys,exact:true}],false)===c.key ? {keypad:true} : {}), spans:spans.length?spans:[[0,raw.length]], option_label:c.label || (c.phrases ?? c.words ?? []).find(w=>!/^\d+$/.test(w)) || c.key, option_label_es:c.label_es || c.label || (c.phrases ?? c.words ?? []).find(w=>!/^\d+$/.test(w)) || c.key };
       });
       // A more specific declared phrase can cover a shorter phrase of the same field's other option.
       readings = readings.filter(r => !readings.some(other => other !== r && r.spans.every(([a,b]) => other.spans.some(([c,d]) => c <= a && d >= b && (c<a || d>b)))));
@@ -406,6 +406,27 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    // Rule 4: a single digit the current question offers as a key is that key (the keypad reading wins its group below);
    // one it does not offer reaches the invited amount, whose own validation decides ("3 dollars?").
 
+   // profile.whole_phrases (a choice, or a pattern that reads words): a phrase picks only when the answer is accounted
+   // for: its phrases, the arguments read beside them (numbers, amounts, a card), courtesy or connecting words
+   // (isReaderFiller) and the field's own profile.template_words. A template such as "pay 50 with my Visa card" stays;
+   // any other word beside a phrase means the words do not decide: the reply ranker does. A reading from digits or a
+   // keypad key is an argument, read as before.
+   const wordChoice = (reading) => { const profile = fieldOf(reading).profile; return ['choice', 'pattern'].includes(profile.kind) && profile.whole_phrases === true && !reading.keypad && !/\d/.test(spanText(reading)); };
+   const wholeAnswer = (reading) => {
+      const choice = (fieldOf(reading).profile.choices || []).find((c) => c.key === reading.value);
+      return !!choice && (reading.value === 'yes' && reading.unlocated === true || pickChoice(raw, [{ ...choice, exact: true }], false) === reading.value);
+   };
+   const located = readings.filter((reading) => !reading.fallback && reading.unlocated !== true);
+   const leftover = unclaimedSpans(raw, located).map(([a, b]) => raw.slice(a, b)).join(' ');
+   readings = readings.filter((reading) => {
+      if (!wordChoice(reading) || wholeAnswer(reading) || reading.unlocated !== true && isReaderFiller(leftover, fieldOf(reading).profile.template_words || [])) {
+         return true;
+      } else {
+         refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'unaccounted_words', spans: reading.spans });
+         return false;
+      }
+   });
+
    const paired = (a, b) => a.confirm.indexOf(b.name) > -1 || b.confirm.indexOf(a.name) > -1;
    // Narrative ownership protects ancestor choices and same-form choices that reset
    // the requested field. Other sibling choices remain independent compound data. A current choice can carry narrative context too (e.g. a channel plus a
@@ -497,5 +518,11 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    hits.push(...kept.map(({ rule, ...r }) => strip(r)));
    // Why each field was filled other than as the current answer, kept beside the hits so their shape never changes.
    const decisions = kept.filter((r) => r.rule).map((r) => ({ form: r.form, name: r.name, rule: r.rule }));
-   return { hits, ambiguous, ...(remaining.length ? {remaining} : {}), ...(stopped.length ? {refused: stopped} : {}), ...(decisions.length ? {decisions} : {}) };
+   // current.whole_reply (a read-back whose fields a caller may correct): a reply with words the readings do not account for
+   // ("It's Long Beach, apartment 4" read only as the apartment) is the reply ranker's, so none of it is lost.
+   if (current?.whole_reply === true && hits.length && !isReaderFiller(unclaimedSpans(raw, kept).map(([a, b]) => raw.slice(a, b)).join(' '))) {
+      return { hits: [], ambiguous, refused: [...stopped, ...hits.map((hit) => ({ form: hit.form, name: hit.name, value: hit.value, rule: 'unaccounted_words', spans: hit.spans }))], ...(decisions.length ? {decisions} : {}) };
+   } else {
+      return { hits, ambiguous, ...(remaining.length ? {remaining} : {}), ...(stopped.length ? {refused: stopped} : {}), ...(decisions.length ? {decisions} : {}) };
+   }
 }

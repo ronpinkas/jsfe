@@ -185,10 +185,10 @@ Profiles:
 
 | `profile.kind` | Options |
 | --- | --- |
-| `choice` | `choices:[{key,phrases,label?,label_es?,keys?,exact?,neutral?,negative?,current_only?}]`; optional `accept_other`, `numeric_values`, `narrative`. |
+| `choice` | `choices:[{key,phrases,label?,label_es?,keys?,exact?,neutral?,negative?,current_only?}]`; optional `accept_other`, `numeric_values`, `narrative`, `whole_phrases`, `template_words`. |
 | `digits` | `min`, `max`: one unambiguous digit run of that length. |
 | `identifier` | `pattern`: permitted account identifier shape. |
-| `pattern` | `regex`, optional `flags`, `group`; optional `accept_other` for the current field only. |
+| `pattern` | `regex`, optional `flags`, `group`; optional `accept_other` for the current field only, `whole_phrases`, `template_words`. |
 | `phone`, `email` | Typed readers; email `literal:true` preserves an explicit visible address token in surrounding prose. |
 | `amount` | `min`, `max`, optional `marked:true` or `marked:"out_of_order"`; optional `money:{currency:"USD",cardinals:true,intent:"payment"}`. |
 | `text` | Current-field text fallback; `narrative:true` retains a substantive answer alongside independent structured fields. |
@@ -257,6 +257,10 @@ The loop skips accepted data and asks the first ready missing required field. Co
 An unreadable answer with any words goes to the reply ranker, offered the question's choices (never an exact choice or the YES of a firm confirmation; a NO always), a person (`__agent`) and, on a call with a textable number, text (`__text`): a picked choice is the answer, a person or text is taken, a reply that picks none is asked again (counted against `max_attempts`); only `abort` or `new_request` leaves the form. `max_misses` (default two) bounds unreadable answers without words (symbols, an unexpected keypad entry): clarify the first with explicit retry text or a localized “Sorry, I didn't catch that.” prefix; yield the second utterance to DISPATCH while preserving the draft. A form confirmation's unread answers are ranked the same way (offered NO, never YES); after two, the `give-up` worker takes over. Validator failures use a separate `max_attempts` budget. An out-of-order accepted answer is not a miss. On exhaustion the nearest declared `on_exhausted` receives `{form,input,failed_form,failed_input,reason:"attempts_exhausted"}` and must deliberately recover that branch; it does not receive consent.
 
 `must_complete:true` on a form (inherited by every field of it and of the forms nested in it) or on one field (`false` on a field opts out): an unreadable answer is never yielded to DISPATCH, however long, and neither is a confirmation miss or an unresolved ambiguity — the question is asked again, acknowledged. Use it where leaving would strand an effect in progress (a payment's card, its billing-ZIP correction). Exits stay explicit: the form's stop words, `max_attempts` with `on_exhausted`, and whatever the host intercepts before the engine. The form runaway guard counts passes without a caller answer only.
+
+`confirm.named_fields: true` lets a caller correct a read-back in their own words: each input holding a value is offered to the reply ranker, and a pick extracts the new value of every such input, so one reply can change several. `confirm.reply_context` tells the ranker and the extraction what a reply may contain (never spoken); an input's `argument_description` says what its value looks like ("apartment or unit number alone, such as 4 or 12B"). A reply the word readers only partly account for goes to the ranker, so none of it is lost.
+
+`whole_phrases: true` on a `choice`, or on a `pattern` that reads words: a word reading picks only when the whole reply is accounted for by its phrase, another input's argument (digits, an amount, a card), courtesy, connecting words and the input's `template_words` ("pay $50 with my Visa card"). Anything else goes to the reply ranker, which is offered every choice. Keypad keys and digit readings are arguments and read as before. Off by default.
 
 A choice marked `current_only` is read only at its own question: neither the word reader nor the reply ranker offers it while another question is asked (a route's `done` or `switch` is never picked for a NO or a sub account said at the amount question). Written cents (`72.45`, `$72.45`, `287,15`) are an amount by shape: out of order they fill an open amount, and beside another field's reading (`51:72.45` at a sub account question) they are that amount, never digits of a security code or ZIP code.
 

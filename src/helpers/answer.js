@@ -422,6 +422,19 @@ export function withoutPromptEcho(answer, questions) {
    return raw;
 }
 
+// What a phrase reader may leave unclaimed around its phrases and arguments (profile.whole_phrases): courtesy, an
+// acknowledgement and the connecting words of a template ("I want to pay 50 with my Visa", "quiero pagar 50 con mi Visa").
+const CONNECTORS = ['i', "i'd", 'want', 'to', 'would', 'like', 'need', 'can', 'could', 'you', 'quiero', 'quisiera', 'deseo', 'necesito', 'voy', 'puedo',
+   'a', 'al', 'an', 'the', 'el', 'la', 'los', 'las', 'lo', 'un', 'una', 'my', 'mi', 'mis', 'su', 'of', 'de', 'del', 'for', 'por', 'para', 'in', 'en',
+   'with', 'using', 'con', 'and', 'y', 'it', 'its', 'is', 'es', 'that', 'this', 'esa', 'ese', 'esta', 'just', 'solo', 'me', 'on', 'one', 'uno',
+   'actually', 'mean', 'realidad', 'mejor', 'quise', 'decir'];
+const READER_FILLER = new Set([...CONNECTORS, ...[...COURTESY, ...ACKNOWLEDGEMENTS.map(normalize).map((w) => w.split(' '))].flat()].map(normalize));
+/** Is this unclaimed text only courtesy, connecting words, the field's own template words and numbers (an argument, even one no input took)? */
+export function isReaderFiller(text, templateWords = []) {
+   const template = new Set(templateWords.map(normalize));
+   return normalize(String(text ?? '').replace(/[^\p{L}\p{N}'\s]/gu, ' ')).split(/\s+/).filter((word) => /\p{L}/u.test(word)).every((word) => READER_FILLER.has(word) || template.has(word));
+}
+
 /**
  * ask-choice's matcher: the key of the choice the answer picks, '__agent', '__exit', or '' (no choice).
  * choices: [{ key, phrases, negative?, neutral?, exact? }]. A key (digit, * or #) and a YES word pick a choice only as the whole

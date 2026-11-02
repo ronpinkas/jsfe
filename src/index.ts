@@ -3871,7 +3871,8 @@ function readResponseChoices(value: unknown): ReplyChoice[] {
     const key = String(choice?.key ?? '').trim();
     if (!key || keys.has(key)) throw new Error('Contextual response choices need unique nonempty keys');
     keys.add(key);
-    return { key, label: String(choice?.label ?? '').trim() || key, ...(choice?.route === 'new_request' ? { route: 'new_request' as const } : {}) };
+    if (choice?.parameters !== undefined && (!Array.isArray(choice.parameters) || !choice.parameters.length || choice.parameters.some((p: any) => !String(p?.name ?? '').trim() || !String(p?.description ?? '').trim()))) throw new Error(`Contextual response choice '${key}': parameters need a name and a description`);
+    return { key, label: String(choice?.label ?? '').trim() || key, ...(choice?.route === 'new_request' ? { route: 'new_request' as const } : {}), ...(choice?.parameters ? { parameters: choice.parameters.map((p: any) => ({ name: String(p.name), type: String(p.type || 'string'), description: String(p.description) })) } : {}) };
   });
 }
 
@@ -7367,8 +7368,20 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
       }
       ranked = option.startsWith(CHOICE_PREFIX) ? 'answers' : option;
       if (option.startsWith(CHOICE_PREFIX)) {
-        // A declared choice is the whole answer: no extraction.
-        frame.variables[declaration!.variable] = { key: option.slice(CHOICE_PREFIX.length) };
+        // A declared choice is the whole answer, unless it declares arguments: they are extracted like a flow's, and the
+        // pick stands when extraction finds none or fails (the flow asks for what is missing).
+        let extractedArguments: Record<string, any> | null = null;
+        if (pickedChoice?.parameters?.length) {
+          try {
+            extractedArguments = await extractReplyParameters(String(sanitizedInput),engine,question,pickedChoice.parameters as FlowParameterDefinition[]);
+          } catch (error) {
+            logger.warn(`Contextual DISPATCH in '${frame.flowName}': extracting the arguments of '${pickedChoice.key}' failed (${(error as Error)?.message}); the pick stands`);
+            extractedArguments = {};
+          }
+        } else {
+          // no arguments declared
+        }
+        frame.variables[declaration!.variable] = { key: option.slice(CHOICE_PREFIX.length), ...(extractedArguments ? { arguments: extractedArguments } : {}) };
         logger.info(`Contextual DISPATCH in '${frame.flowName}': the reply picks '${option.slice(CHOICE_PREFIX.length)}'; the flow continues`);
         return false;
       } else if (option === 'answers') {

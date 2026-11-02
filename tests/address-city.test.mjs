@@ -6,8 +6,10 @@ import {STANDARD_FUNCTIONS} from '../dist/helpers/index.js';
 // read-back ('the city is wrong') or picked after NO is the only part asked again.
 const comp=(city)=>[{long_name:city,short_name:city,types:['locality']},{long_name:'California',short_name:'CA',types:['administrative_area_level_1']}];
 const ZIP={'90023':{status:'OK',components:comp('Commerce'),localities:['Commerce','East Los Angeles','Los Angeles','Vernon']},'91352':{status:'OK',components:comp('Los Angeles'),localities:[]}};
+// what the parameter stage extracts from a correction the ranker picked (live: jsfe-flows replay/address-corrections-live.mjs)
+const CORRECTED={'la ciudad es Los Ángeles':{city:'Los Ángeles'}};
 const warnings=[];const tools=['geocode-zip','geocode-street'].map(id=>({id,name:id,description:'Synthetic geocoder',parameters:{type:'object',properties:{components:{type:'string'},address:{type:'string'}}},implementation:{type:'local',function:id,retries:0}}));
-const engine=new WorkflowEngine({info(){},debug(){},error(){},warn:m=>warnings.push(String(m))},async()=>'{"flowName":"None"}',linkFormSchemas(FLOWS),tools,{...STANDARD_FUNCTIONS,'geocode-zip':async(a)=>ZIP[(String((a&&a.components)||a).match(/\d{5}/)||[])[0]]||null,'geocode-street':async()=>null},{},false,'en');engine.disableCommands();
+const engine=new WorkflowEngine({info(){},debug(){},error(){},warn:m=>warnings.push(String(m))},async(system,user,schema,request)=>request?.task==='rank_reply'?JSON.stringify({option:'choice:field:city'}):request?.stage===2?JSON.stringify({parameters:CORRECTED[request.input]||{}}):'{"flowName":"None"}',linkFormSchemas(FLOWS),tools,{...STANDARD_FUNCTIONS,'geocode-zip':async(a)=>ZIP[(String((a&&a.components)||a).match(/\d{5}/)||[])[0]]||null,'geocode-street':async()=>null},{},false,'en');engine.disableCommands();
 let session,checks=0;const say=async(content,start)=>{session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start:{flow:'collect-geocoded-address'}}:{})},JSON.parse(JSON.stringify(session)))));return String(session.response||'').replace(/\s+/g,' ');};
 const begin=async(language,voice)=>{session=engine.initSession('test',crypto.randomUUID(),language);session.cargo.voice=voice;await say('start',true);};
 const check=(ok,label)=>{assert.ok(ok,label);checks++;};

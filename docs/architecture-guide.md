@@ -273,6 +273,10 @@ does this reply do with the question the flow asked? The model picks from a clos
 | `new_request` | the caller clearly asks for something else | DISPATCH: the message goes to intent detection |
 | `irrelevant` | the reply means nothing here: a stray word, an unfinished sentence, speech to someone else | the question is asked again; no flow moves |
 
+**Options with arguments.** A declared choice may carry `parameters` (`{name,type,description}`): a pick then extracts them from the reply with the same stage as a flow's parameters, and the flow reads `{ key, arguments }`. The pick stands when extraction finds nothing or fails. The ranker is generic, so the flow supplies the context: a form's `confirm.reply_context` says what a reply may contain. The address read-back uses this: "It's Long Beach, apartment 4" changes the city and the apartment and reads the address back, with no further question.
+
+**Word readers and the ranker.** An input with `profile.whole_phrases` reads a choice from words only when the whole reply is accounted for: its phrase, another input's argument, courtesy, connecting words and the input's `template_words`. A reply with any other word goes to the ranker, so a word inside a sentence ("Quiero hacer una nueva compra" at a pay menu) never picks an option. Compound answers that carry arguments stay with the reader ("pay $50 with my Visa card"), because a picked option extracts no arguments. A proposal's confirmation offers the ranker its input's choices, so a correction ("yes, it was stolen") picks the changed candidate.
+
 Some options are **never offered**, so the ranker cannot pick them: a choice marked `exact` (anything that charges or
 cancels) and the YES of a firm confirmation. A ranker can understand "no thanks, maybe later" as NO; it can never
 produce a YES to a payment. Options that cost more when wrong need a higher score (a NO that would cancel what the

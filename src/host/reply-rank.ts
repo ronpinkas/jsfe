@@ -21,7 +21,9 @@ export const REPLY_OPTIONS = ['answers', 'abort', 'new_request', 'irrelevant'] a
 export type ReplyOption = typeof REPLY_OPTIONS[number] | `choice:${string}`;
 /** A choice the question offers: its key and the words that describe it to the ranker. */
 // route 'new_request': a pick of this choice is a new request, routed by intent detection (an exit the flow declares).
-export interface ReplyChoice { key: string; label: string; route?: 'new_request' }
+// parameters: a pick of this choice also extracts these from the reply (intent stage 2), read as { key, arguments }.
+export interface ReplyChoiceParameter { name: string; type: string; description: string }
+export interface ReplyChoice { key: string; label: string; route?: 'new_request'; parameters?: ReplyChoiceParameter[] }
 export const CHOICE_PREFIX = 'choice:';
 /** An open question's reply that clears no option is its answer (owner decision 2026-10-26). */
 export const REPLY_DEFAULT: ReplyOption = 'answers';

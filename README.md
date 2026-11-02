@@ -378,8 +378,10 @@ outcome `user_aborted`, no recovery stamp;
 `answers` a later ordinary DISPATCH in the same turn hands the host the turn without detection. A host that does not know the task answers the `llm`
 instructions with its text model.
 
+An input with `profile.whole_phrases` (default off; `choice`, or a `pattern` that reads words) keeps its word reader only for a reply wholly made of its phrase, arguments, courtesy, connecting words and its `template_words`; any other reply goes to this ranker.
+
 **Declared choices (`responseChoices`, jsfe 1.14):** a step may name a flow variable of type array holding
-`[{ key, label }]`; the ranker is then also offered `choice:<key>` for each (before the fixed three), and `answers`
+`[{ key, label, parameters? }]` (`parameters`: extracted on a pick, read as `{ key, arguments }`); the ranker is then also offered `choice:<key>` for each (before the fixed three), and `answers`
 means a reply that picks none of them. A picked choice sets `responseVariable` to `{ key }` with no extraction;
 `answers` sets `{ key: '' }` unless `responseParameters` are declared too. The request carries the options it offers
 (`request.options`); a host validates a reply against those, never a fixed list. The form readers use it: an unread
