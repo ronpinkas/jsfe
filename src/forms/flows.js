@@ -447,7 +447,8 @@ const readFormChoice={
   rankedDispatch('choice_dispatch','input_not_matched'),
   ...escapeRoutes('choice_escape'),
   SET('choice_picked','picked',"(function(){var k=String(reply && reply.key || '');var c=(choices || []).filter(function(c){return String(c.key)===k;})[0] || others.filter(function(c){return c.key===k;})[0];return c ? String(c.key) : '';})()"),
-  SET('choice_owner','owner',"(others.filter(function(c){return c.key===picked && !(choices || []).some(function(own){return String(own.key)===picked;});})[0] || {}).owner || null"),
+  // A question over any_of asks one name and its choices belong to a member ('selection' asks, 'option' holds PAST DUE): the pick is read as the member's answer.
+  SET('choice_owner','owner',"(others.filter(function(c){return c.key===picked && !(choices || []).some(function(own){return String(own.key)===picked;});})[0] || {}).owner || (function(){var asked=(chain || []).filter(function(i){return i.form===form && i.name===input;})[0];if(asked || !picked)return null;var member=(chain || []).filter(function(i){return i.form===form && i.profile && (i.profile.choices || []).some(function(c){return String(c.key)===picked;});})[0];return member ? {form:member.form,name:member.name} : null;})()"),
   WHEN('choice_none','!picked',rankedMiss('choice_miss')),
   WHEN('choice_none_end','!picked',END('choice_none_done')),
   SIDE('choice_take',"(cargo.choice=picked,cargo.choiceText=picked,true)"),
