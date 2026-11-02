@@ -109,7 +109,7 @@ export function defineProvider({provides,contract,parameters=[],variables={},ste
       parameters:[...parameters,asked],variables:{...variables,...(gateParameters!==undefined?{provider_gate_arguments:value(null)}:{}),asked:value(''),provides:value(provides)},
       steps:steps || [...before,...(provides.default!==undefined?[{id:`${flow.id}_default`,type:'SET',variable:'asked',value:`asked || ${JSON.stringify(provides.default)}`}]:[]),
          ...(gateParameters!==undefined?[{id:`${flow.id}_gate_arguments`,type:'SET',variable:'provider_gate_arguments',value:gateArgumentExpression(gateParameters)}]:[]),
-         {id:`${flow.id}_provide`,type:'FLOW',value:'provide-data',callType:'call',parameters:{provides:'{{provides}}',asked:'{{asked}}',...(gateParameters!==undefined?{gate_params:'{{provider_gate_arguments}}'}:{})}}]},
+         {id:`${flow.id}_provide`,type:'FLOW',value:'provide-data',callType:'call',parameters:{provides:'{{provides}}',asked:'{{asked}}',reply:'{{userInput}}',...(gateParameters!==undefined?{gate_params:'{{provider_gate_arguments}}'}:{})}}]},
       {role:'provider',...contract,catalog:'provides'});
 }
 export function defineForm({contract,provides,...spec}) {

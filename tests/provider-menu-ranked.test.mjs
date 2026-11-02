@@ -14,12 +14,12 @@ const pay=W('pay-flow',[S('paid','(cargo.paid=true,true)'),{id:'pay_said',type:'
 const load=W('load-fact',[S('loaded','(cargo.info={balance:17,duedate:"the 6th",limit:900},true)')]);
 const agent=W('live-agent-requested',[S('agent_ran','(cargo.agent=true,true)')]);
 const other={id:'other',name:'Other',primary:true,description:'A different service',version:'1',steps:[S('other_ran','(cargo.other=true,true)'),{id:'other_said',type:'SAY',value:'OTHER',value_es:'OTRO'}]};
-const catalog=(whole=true)=>({subject:'account',source:{flow:'load-fact',result:'cargo.info',refresh:'per_turn'},
+const catalog=(whole=true,unanswered=false)=>({subject:'account',source:{flow:'load-fact',result:'cargo.info',refresh:'per_turn'},
  facts:[{key:'balance',description:'the balance owed',phrases:['balance','my balance'],path:'balance',say:'BALANCE {value}',say_es:'SALDO {value}',public:true},
   {key:'duedate',description:'when the next payment is due',phrases:['due date'],path:'duedate',say:'DUE {value}',say_es:'VENCE {value}',public:true},
   {key:'limit',phrases:['credit limit'],path:'limit',say:'LIMIT {value}',say_es:'LIMITE {value}',public:true},
   {key:'summary',description:'never offered: no phrases',path:'balance',say:'SUMMARY',say_es:'RESUMEN',public:true}],
- menu:{...(whole?{whole_phrases:true}:{}),question:'What next? Say PAY.',question_es:'¿Qué sigue? Diga PAGAR.',
+ menu:{...(whole?{whole_phrases:true}:{}),...(unanswered?{unanswered:{asked:['other'],choice:'pay',question:'Sorry, I cannot answer that. Pay now?',question_es:'Lo siento. ¿Pagar ahora?'}}:{}),question:'What next? Say PAY.',question_es:'¿Qué sigue? Diga PAGAR.',
   choices:[{key:'pay',exact:true,label:'make a payment now',phrases:['1','pay'],flow:'pay-flow'}],done:{phrases:['done'],say:'BYE',say_es:'ADIOS'}}});
 async function run(reply,scores,{whole=true,detect='None',language='en'}={}){
  const calls=[];let offered=null,labels=null;
@@ -83,4 +83,24 @@ await test('decoder: an escape and a fixed option are never in also, a non-choic
  assert.equal(decodeReplyRankSystemOne(noul(.1,.1,.9,.1),req).option,'choice:__agent');
  assert.equal(decodeReplyRankSystemOne(noul(.1,.1,.1,.9),req).also,undefined);
 });
+// A declared provider that owns the menu, so intent detection can send a reply back to it.
+const {defineProvider}=await import('../dist/forms/index.js');
+async function back(reply,scores,asked,next){
+ const provider=defineProvider({id:'info',name:'Info',primary:true,description:'Account questions',version:'1.0.0',contract:{summary:'account facts'},provides:{...catalog(true,true),sets:[{key:'other',facts:['balance']}]}});
+ const ai=async(s,u,x,r)=>{if(r.task==='rank_reply'){const answers=Object.fromEntries(r.systemOne.index.map(q=>[q.id,{noul:scores[q.option]??0.01}]));const d=decodeReplyRankSystemOne(answers,r);return JSON.stringify({option:d.option});}return JSON.stringify({flowName:'Info',parameters:{asked}});};
+ const engine=new WorkflowEngine(quiet,ai,linkFormSchemas([...FLOWS,pay,load,agent,other,provider]),[],STANDARD_FUNCTIONS,{},false,'en');engine.disableCommands();
+ let session=engine.initSession('menu',crypto.randomUUID(),'en');session.cargo.info={balance:17,duedate:'the 6th',limit:900};session.cargo.verb='type';
+ session=await engine.updateActivity({role:'user',content:'begin',start:{flow:'provider-menu',arguments:{provides:catalog(true,true)}}},session);
+ session=structuredClone(await engine.updateActivity({role:'user',content:reply},structuredClone(session)));const first=session.response||'';let second='';
+ if(next){session=structuredClone(await engine.updateActivity({role:'user',content:next},structuredClone(session)));second=session.response||'';}
+ return {first,second,session};
+}
+await test('a question the ranker sent back to its own provider: sorry and the offer, not the facts again',async()=>{const t=await back('why did my balance go up',{new_request:.9},'balance');assert.match(t.first,/cannot answer that/);assert.doesNotMatch(t.first,/BALANCE/);});
+await test('yes runs the offered action',async()=>{const t=await back('why did my balance go up',{new_request:.9},'balance','yes please');assert.equal(t.session.cargo.paid,true);});
+await test('no returns to the menu',async()=>{const t=await back('why did my balance go up',{new_request:.9},'balance','no');assert.match(t.second,/What next/);assert.equal(t.session.cargo.paid,undefined);});
+await test('no phrase: a catch-all from intent detection is unanswered, a named fact is answered',async()=>{
+ const a=await back('tell me more',{},'other');assert.match(a.first,/cannot answer that/);
+ const b=await back('when do I owe it',{},'duedate');assert.match(b.first,/DUE/);assert.doesNotMatch(b.first,/cannot answer/);
+});
+await test('the mark lasts one question: answered, it is gone',async()=>{const t=await back('why did my balance go up',{new_request:.9},'balance','no');assert.equal(t.session.cargo.providerAsked,undefined);});
 console.log(`provider-menu-ranked: ${checks} tests`);

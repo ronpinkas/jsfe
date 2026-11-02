@@ -766,11 +766,14 @@ export function finishProviderRequest(cargo,owner,provides,keys) {
 const provideData = {
    id: 'provide-data', name: 'ProvideData', version: '1.0.0', scope: 'isolated',
    description: "Worker: answer a question about a provider catalog. Resolves `asked` (a fact or set key; empty = ask which), passes the catalog's gate for non-public facts (gate.flow, called with gate_params; then every path in gate.verified must be truthy), loads the source (load-source), says the facts (answer-facts). Params: provides, asked.",
-   parameters: [{name:'form',type:'string',description:'Originating FORM instance for task-owned deferred questions'}, { name: 'provides', type: 'object', description: 'The provider catalog' }, { name: 'asked', type: 'string', description: 'Fact or set key' }, {name:'asked_keys',type:'array',description:'Independent requested facts or sets'}, { name: 'no_menu', type: 'string', description: "'true': answer only (a question asked inside a form)" }, { name: 'gate_params', type: 'object', description: 'Identifiers the caller already gave, passed to the gate flow as gate_params' }, { name: 'no_gate', type: 'string', description: "'true': the caller is inside a task on the verified account; the gate flow is not run (the verified paths are still checked)" }],
-   variables: vars({form:'',pd_request:null,pd_deferred:null,pd_ready:[],asked_keys:[], no_gate: '', pd_close: false, pd_who: '', no_menu: '', gate_params: null, pd_keys: [], pd_menu: [], pd_mkeys: [], pd_q: '', pd_q_es: '', pd_gated: false, pd_ok: false }),
+   parameters: [{name:'form',type:'string',description:'Originating FORM instance for task-owned deferred questions'}, { name: 'provides', type: 'object', description: 'The provider catalog' }, { name: 'asked', type: 'string', description: 'Fact or set key' }, { name: 'reply', type: 'string', description: 'The words that started the provider, this turn: tells a question back from its own menu from a later one' }, {name:'asked_keys',type:'array',description:'Independent requested facts or sets'}, { name: 'no_menu', type: 'string', description: "'true': answer only (a question asked inside a form)" }, { name: 'gate_params', type: 'object', description: 'Identifiers the caller already gave, passed to the gate flow as gate_params' }, { name: 'no_gate', type: 'string', description: "'true': the caller is inside a task on the verified account; the gate flow is not run (the verified paths are still checked)" }],
+   variables: vars({reply:'',pd_unanswered:false,form:'',pd_request:null,pd_deferred:null,pd_ready:[],asked_keys:[], no_gate: '', pd_close: false, pd_who: '', no_menu: '', gate_params: null, pd_keys: [], pd_menu: [], pd_mkeys: [], pd_q: '', pd_q_es: '', pd_gated: false, pd_ok: false }),
    steps: [
       WHEN('pd_no_catalog', "!provides || typeof provides !== 'object' || !Array.isArray(provides.facts)", END('pd_no_catalog_end', { outcome: 'unresolved', reason: 'provide_data_catalog',recovery:{version:1,mode:'none',reason:'provide_data_catalog'} })),
       SET('pd_resolve', 'pd_keys', "(function () { var requested=Array.isArray(asked_keys)&&asked_keys.length?asked_keys:[typeof asked!=='undefined'?String(asked||''):''];return requested.reduce(function(keys,a){var set=(provides.sets||[]).filter(function(x){return x.key===a;})[0];var facts=set?set.facts:provides.facts.some(function(f){return f.key===a;})?[a]:[];return keys.concat(facts.filter(function(key){return keys.indexOf(key)<0;}));},[]); })()"),
+      // Back from its own menu with nothing it can answer: the ranker found no fact, or intent detection named a catch-all (unanswered.asked).
+      SET('pd_unanswered_check', 'pd_unanswered', "(function () { var u = provides.menu && provides.menu.unanswered, m = cargo.providerAsked; delete cargo.providerAsked; var same = function (x) { return String(x == null ? '' : x).replace(/\\\\/g, '').trim(); }; return !!u && !!m && m.subject === String(provides.subject || '') && typeof reply !== 'undefined' && same(m.input) === same(reply) && (m.ranked === true || (u.asked || []).indexOf(typeof asked !== 'undefined' ? String(asked || '') : '') > -1); })()"),
+      WHEN('pd_unanswered_go', 'pd_unanswered', FLOW('pd_unanswered_flow', 'provider-unanswered', 'replace', { provides: '{{provides}}' })),
       // Nothing specific asked: offer the sets and facts as a menu (keys 1..n, never 8; at most 7 options shown).
       SET('pd_menu_items', 'pd_menu', "(provides.sets || []).concat(provides.facts).slice(0, 7)"),
       SET('pd_menu_keys', 'pd_mkeys', `${KEYS_JS}(pd_menu.length)`),
@@ -817,6 +820,27 @@ provideData.steps.splice(provideData.steps.findIndex((s) => s.id === 'pd_menu_q'
    SET('pd_menu_build', 'pd_menu_choices', "pd_menu.map(function (m, i) { return { key: m.key, phrases: [pd_mkeys[i], m.label || m.key, m.label_es || ''].filter(Boolean) }; })"));
 
 // provider-menu: what next, after an answer — the catalog's actions, another fact, or done (owner MENU-1016 shape)
+
+// The menu's own question came back to its provider and no fact answers it (owner 2026-11-02, prod-shaped "por qué subió mi saldo",
+// which re-read the summary): say so, offer the action the catalog names (provides.menu.unanswered), and otherwise return to the menu.
+const providerUnanswered = {
+   id: 'provider-unanswered', name: 'ProviderUnanswered', version: '1.0.0', scope: 'isolated',
+   description: "Worker: a question the provider has no fact for, sent back to it from its own menu: says provides.menu.unanswered.question(_es) and offers that menu's choice unanswered.choice. YES runs it, NO returns to the menu, anything else is DISPATCHed. Param: provides.",
+   parameters: [{ name: 'provides', type: 'object', description: 'The provider catalog' }],
+   variables: vars({ pu_choice: null, pu_yes: false, pu_no: false, pu_flow: '' }),
+   steps: [
+      SET('pu_find', 'pu_choice', "(provides.menu.choices || []).filter(function (c) { return c.key === provides.menu.unanswered.choice; })[0] || null"),
+      FLOW('pu_ask', 'ask-choice', 'call', { question: '{{provides.menu.unanswered.question}}', question_es: '{{provides.menu.unanswered.question_es}}', choices: [{ key: 'yes', phrases: ['1'] }, { key: 'no', phrases: ['2', 'no', 'no thanks', 'no thank you', 'not now', 'no gracias', 'ahora no'] }], accept_other: true, digits: { min: 1, max: 1 } }),
+      SET('pu_read_yes', 'pu_yes', "String(cargo.choice) === 'yes' || isAnswer(cargo.choiceText, 'yes')"),
+      SET('pu_read_no', 'pu_no', "!pu_yes && String(cargo.choice) === 'no'"),
+      SET('pu_take', 'pu_flow', "pu_yes && pu_choice ? (function (c) { if (c.set) { Object.keys(c.set).forEach(function (k) { cargo[k] = c.set[k]; }); } else { /* nothing to set */ } return c.flow; })(pu_choice) : ''"),
+      { id: 'pu_route', type: 'CASE', branches: {
+         'condition: pu_flow': FLOW('pu_act', '{{pu_flow}}', 'replace'),
+         'condition: pu_no': FLOW('pu_menu', 'provider-menu', 'replace', { provides: '{{provides}}' }),
+         default: { id: 'pu_elsewhere', type: 'DISPATCH' } } },
+   ],
+};
+
 const providerMenu = {
    id: 'provider-menu', name: 'ProviderMenu', version: '1.1.0', scope: 'isolated',
    description: "Worker: after a provider answered, offer its menu (provides.menu: question(_voice)(_es) with {verb} / {name}; choices [{ key, phrases, flow, exact, set }]; done { phrases, say(_es) }). A fact or set named by its words is answered and the menu comes back (menu.whole_phrases: only when the phrase is the whole reply; a phrase inside a sentence goes to the reply ranker, whose no-pick is the host's); an action runs its flow (replace) after setting its `set` cargo fields; done says goodbye. Other phrases: DISPATCH. No phrases: asked once more, then 'anything else?'. Params: provides, retry.",
@@ -833,6 +857,8 @@ const providerMenu = {
       // existing reserved done fallback retain their normal behavior.
       SET('pm_take', 'pm_key', "(function(){var key=String(cargo.choice || '');if(key.indexOf('fact:')===0)return pickProviderQuestion(cargo.choiceText,pm_choices.filter(function(c){return c.key.indexOf('fact:')===0;}));if(key.indexOf('act:')===0 && provides.menu.done && pickChoice(cargo.choiceText,[{key:'terminal:done',phrases:provides.menu.done.phrases ?? provides.menu.done.words,exact:true}],true)==='terminal:done')return 'done';return key;})()"),
       SET('pm_contained_check', 'pm_contained', "provides.menu.whole_phrases === true && pm_key.indexOf('fact:') === 0 && pickChoice(cargo.choiceText, pm_choices.filter(function (c) { return c.key === pm_key; }).map(function (c) { return { key: c.key, phrases: c.phrases, exact: true }; }), false) !== pm_key"),
+      // Who asked: provide-data knows the reply came back from this menu (same words, this turn), and whether the ranker read it.
+      SIDE('pm_mark_reply', "(provides.menu.unanswered ? cargo.providerAsked = { subject: String(provides.subject || ''), input: String(cargo.choiceText || ''), ranked: pm_contained } : null, true)"),
       WHEN('pm_rank', 'pm_contained', FLOW('pm_read_reply', 'read-provider-reply', 'call', { question: '{{pm_q}}', question_es: '{{pm_q_es}}', choices: '{{pm_choices}}' })),
       SET('pm_ranked_also', 'pm_also', "pm_contained ? ((cargo.providerReply || {}).also || []) : []"),
       SET('pm_ranked_key', 'pm_key', "pm_contained ? String((cargo.providerReply || {}).key || '') : pm_key"),
@@ -929,7 +955,7 @@ const resumeForm={id:'resume-form',name:'ResumeForm',version:'1.0.0',scope:'isol
       SET('resume_definition','target','cargo.forms[form].definition'),SET('resume_parent','parent',"cargo.forms[form].parent || ''"),SET('resume_slot','slot',"cargo.forms[form].result_input || ''"),
       FLOW('resume_owned_form','{{target}}','replace',{form_instance:'{{form}}',parent_form:'{{parent}}',result_input:'{{slot}}'})
    ]};
-const LIBRARY_FLOWS = [readProviderReply, readFormReply, readFormChoice, readConfirmReply, confirmInputProposal,proposalDeclined,resumeForm,performAction, sendTextAction, prepareInput, runForm, collectInput, validateBatch, requestCancelled, readFormResponse, collectContextualAnswer, accept, acceptedEffects, disambiguate, confirmForm, formDone, providerMenu, ...validators, ...fieldCollectors, ...subForms, provideData, provideQueuedData, loadSource, answerFacts];
+const LIBRARY_FLOWS = [providerUnanswered, readProviderReply, readFormReply, readFormChoice, readConfirmReply, confirmInputProposal,proposalDeclined,resumeForm,performAction, sendTextAction, prepareInput, runForm, collectInput, validateBatch, requestCancelled, readFormResponse, collectContextualAnswer, accept, acceptedEffects, disambiguate, confirmForm, formDone, providerMenu, ...validators, ...fieldCollectors, ...subForms, provideData, provideQueuedData, loadSource, answerFacts];
 const LIBRARY_CONTRACTS={
    'confirm-input-proposal':{role:'collector',requires:[INPUT_PROPOSALS_REQUIREMENT]},'confirm-input-proposal-declined':{role:'worker',requires:[INPUT_PROPOSALS_REQUIREMENT]},
    'resume-form':{role:'worker'},
@@ -943,7 +969,7 @@ const LIBRARY_CONTRACTS={
    'validate-input-batch':{role:'worker',result:{path:'cargo.inputBatch',type:'object'}},
    'collect-input-accept':{role:'worker'},'input-accepted-effects':{role:'worker'},
    'disambiguate-input':{role:'worker'},'confirm-form':{role:'worker'},'form-done':{role:'worker'},
-   'provider-menu':{role:'worker'},'provide-data':{role:'worker'},'provide-queued-data':{role:'worker'},
+   'provider-menu':{role:'worker'},'provider-unanswered':{role:'worker'},'provide-data':{role:'worker'},'provide-queued-data':{role:'worker'},
    'load-source':{role:'worker'},'answer-facts':{role:'worker'},
    'validate-card-number':{role:'worker',result:{path:'cargo.inputCheck',type:'object'}},
    'validate-card-expiration':{role:'worker',result:{path:'cargo.inputCheck',type:'object'}},
