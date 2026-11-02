@@ -68,7 +68,7 @@ flowchart TD
    c7 -- "matchesChoice(user_choice,otp_phrases.another_way)" --> b17
    b18["say: No problem. Say TEXT and I'll continue with you by message …"]
    c7 -- "matchesChoice(user_choice,otp_phrases.later)" --> b18
-   b19["say: I was expecting a 6-digit code. Let's try again. You can al…"]
+   b19["say: I was expecting a 6-digit code. Let's try again."]
    c7 -- "normalized_otp_code.length #gt; 0 && Number(cargo.otpFormatMisses #124;#124; 0)#lt;2" --> b19
    b20(["replace → generic-retry-with-options"])
    class b20 endstep
@@ -82,6 +82,7 @@ flowchart TD
    b16 --> n22
    b17 --> n22
    b18 --> n22
+   c7 -- "answer_key === 'code_notice'" --> n22
    b19 --> n22
    c7 -- "normalized_otp_code.length #gt; 0" --> n22
    b21 --> n22

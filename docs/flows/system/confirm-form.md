@@ -68,49 +68,46 @@ flowchart TD
    class b15 flowstep
    c11 -- "cf_m.hits.length #gt; 0" --> b15
    b16["set cf_result"]
-   c11 -- "cf_named" --> b16
+   c11 -- "cargo.choice === 'no'" --> b16
    b17["set cf_result"]
-   c11 -- "cargo.choice === 'no'" --> b17
-   b18["set cf_result"]
-   c11 -- "Array.isArray(clarifications) && pickChoice(String(cargo.choiceText #124;…" --> b18
-   b19[["call read-confirm-reply"]]
-   class b19 flowstep
-   c11 -- "!cf_must && cf_words #gt; 0" --> b19
-   b20["set cf_result"]
-   c11 -- "else" --> b20
-   n21["set cf_result, cf_tries"]
-   b12 --> n21
-   b13 --> n21
-   b14 --> n21
-   b15 --> n21
-   b16 --> n21
-   b17 --> n21
-   b18 --> n21
-   b19 --> n21
-   b20 --> n21
-   c22{"case"}
-   n21 --> c22
-   b23(["dispatch: intent detection"])
-   class b23 endstep
-   c22 -- "(cf_tries #gt;= 2 && !cf_must) && !!formIncompleteOutcome(cargo,form,#123;ou…" --> b23
+   c11 -- "Array.isArray(clarifications) && pickChoice(String(cargo.choiceText #124;…" --> b17
+   b18[["call read-confirm-reply"]]
+   class b18 flowstep
+   c11 -- "!cf_must && cf_words #gt; 0" --> b18
+   b19["set cf_result"]
+   c11 -- "else" --> b19
+   n20["set cf_result, cf_tries"]
+   b12 --> n20
+   b13 --> n20
+   b14 --> n20
+   b15 --> n20
+   b16 --> n20
+   b17 --> n20
+   b18 --> n20
+   b19 --> n20
+   c21{"case"}
+   n20 --> c21
+   b22(["dispatch: intent detection"])
+   class b22 endstep
+   c21 -- "(cf_tries #gt;= 2 && !cf_must) && !!formIncompleteOutcome(cargo,form,#123;ou…" --> b22
+   c23{"case"}
+   c21 -- "else" --> c23
    c24{"case"}
-   c22 -- "else" --> c24
-   c25{"case"}
-   c24 -- "cf_tries #gt;= 2 && !cf_must" --> c25
-   c24 -- "else" --> c25
-   b26(["reboot → give-up"])
-   class b26 endstep
-   c25 -- "cf_tries #gt;= 2 && !cf_must" --> b26
-   c27{"case"}
-   c25 -- "else" --> c27
-   b28["set assignment_side_effect"]
-   c27 -- "cf_result === 'yes'" --> b28
-   n29["set assignment_side_effect"]
-   b28 --> n29
-   c27 -- "else" --> n29
+   c23 -- "cf_tries #gt;= 2 && !cf_must" --> c24
+   c23 -- "else" --> c24
+   b25(["reboot → give-up"])
+   class b25 endstep
+   c24 -- "cf_tries #gt;= 2 && !cf_must" --> b25
+   c26{"case"}
+   c24 -- "else" --> c26
+   b27["set assignment_side_effect"]
+   c26 -- "cf_result === 'yes'" --> b27
+   n28["set assignment_side_effect"]
+   b27 --> n28
+   c26 -- "else" --> n28
    DONE(["end (back to caller)"])
    class DONE endstep
-   n29 --> DONE
+   n28 --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

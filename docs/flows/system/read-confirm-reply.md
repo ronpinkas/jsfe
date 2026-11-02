@@ -10,6 +10,7 @@
   - `question`: 
   - `question_es`: 
   - `named_fields`: 
+  - `reply_context`: 
 - **Calls:** [live-agent-requested](live-agent-requested.md) (reboot), [collect-input-accept](collect-input-accept.md) (call)
 - **Tools:** none
 - **Called by:** [confirm-form](confirm-form.md)
@@ -19,7 +20,7 @@
 ```mermaid
 flowchart TD
    START(("start"))
-   n0["set asked, chain, others, fields, ranked"]
+   n0["set asked, chain, prompt, others, fields, field_arguments, ranked"]
    START --> n0
    n1(["dispatch: intent detection"])
    class n1 endstep
@@ -35,19 +36,25 @@ flowchart TD
    b6[["call collect-input-accept"]]
    class b6 flowstep
    c5 -- "reading && reading.hits.length" --> b6
-   n7["set field"]
+   n7["set field, corrections"]
    b6 --> n7
    c5 -- "else" --> n7
    c8{"case"}
    n7 --> c8
-   b9["set assignment_side_effect"]
-   c8 -- "field" --> b9
-   n10["set assignment_side_effect"]
-   b9 --> n10
-   c8 -- "else" --> n10
+   b9[["call collect-input-accept"]]
+   class b9 flowstep
+   c8 -- "corrections.length" --> b9
+   c10{"case"}
+   b9 --> c10
+   c8 -- "else" --> c10
+   b11["set assignment_side_effect"]
+   c10 -- "field && !corrections.length" --> b11
+   n12["set assignment_side_effect"]
+   b11 --> n12
+   c10 -- "else" --> n12
    DONE(["end (back to caller)"])
    class DONE endstep
-   n10 --> DONE
+   n12 --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

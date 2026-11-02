@@ -366,8 +366,7 @@ deterministic reader cannot read, jsfe asks what the reply does with the step's 
 `answers`, `abort`, `new_request` or `irrelevant`. ONE aiCallback call whose 4th argument is `task: 'rank_reply'` with both
 executors' instructions (`llm`, `systemOne`); the host replies `{ "option": … }`, plus `"fallback": true` when the
 option is `answers` only because nothing cleared the cut (System One). `jsfe/host` exports
-`buildReplyRank`, `decodeReplyRankLlm` and `decodeReplyRankSystemOne` (the highest option at or above 0.5, else
-`answers`). `answers` continues the flow, after extracting the step's `responseParameters` with a stage-2 request
+`buildReplyRank`, `decodeReplyRankLlm` and `decodeReplyRankSystemOne` (the highest option at or above its cut: 0.5, or `choice:no` 0.65, `new_request` 0.6, `irrelevant` 0.7; a cleared choice outranks `answers` and `new_request`, and `irrelevant` from 0.8; else `answers`). `answers` continues the flow, after extracting the step's `responseParameters` with a stage-2 request
 when it declares them. A confident `answers` (no `fallback`) is never lost: when the declaration is one parameter marked
 `verbatim: true` (an open string whose words are the value, such as a reason) and extraction finds nothing or fails,
 the field is the reply as said. Unmarked fields (a product, a city) always need a real extraction. After a
@@ -381,8 +380,8 @@ instructions with its text model.
 An input with `profile.whole_phrases` (default off; `choice`, or a `pattern` that reads words) keeps its word reader only for a reply wholly made of its phrase, arguments, courtesy, connecting words and its `template_words`; any other reply goes to this ranker.
 
 **Declared choices (`responseChoices`, jsfe 1.14):** a step may name a flow variable of type array holding
-`[{ key, label, parameters? }]` (`parameters`: extracted on a pick, read as `{ key, arguments }`); the ranker is then also offered `choice:<key>` for each (before the fixed three), and `answers`
-means a reply that picks none of them. A picked choice sets `responseVariable` to `{ key }` with no extraction;
+`[{ key, label, parameters? }]` (`parameters`: extracted on a pick, read as `{ key, arguments }`); the ranker is then also offered `choice:<key>` for each (before the fixed options), and `answers`
+means a reply that picks none of them. A picked choice sets `responseVariable` to `{ key }`, plus `arguments` when it declares `parameters` (the pick stands if extraction finds nothing or fails);
 `answers` sets `{ key: '' }` unless `responseParameters` are declared too. The request carries the options it offers
 (`request.options`); a host validates a reply against those, never a fixed list. The form readers use it: an unread
 answer with any words goes to the ranker with the question's choices (never an exact choice or the YES of a firm

@@ -3841,7 +3841,7 @@ async function detectFlowInTwoStages(input: string, engine: Engine, flows: FlowD
 
 /**
  * The reply ranker (jsfe/host reply-rank): what the latest message does with the question a contextual DISPATCH
- * asked — `answers`, `abort` or `new_request`. ONE aiCallback call whose 4th argument carries both executors'
+ * asked — `answers`, `abort`, `new_request` or `irrelevant`. ONE aiCallback call whose 4th argument carries both executors'
  * instructions; the host answers with System One and covers it with a text model (its aiCallbackRank). A reply that
  * is not an offered option throws, and the pending step stays for the caller's error policy. `confident` is false only
  * when the host says `answers` is the default because no option cleared its cut (`fallback: true`); an answer

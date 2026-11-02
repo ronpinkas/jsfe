@@ -14,6 +14,7 @@
   - `context`: Exit context
   - `context_es`: Spanish exit context
   - `stop_path`: State path that completes this protocol without another answer
+  - `own_identifiers`: This question reads identifiers itself: an owner form's identifier input never takes the answer
   - `form_instance`: Internal instance to resume
 - **Calls:** [service-answer-raw](service-answer-raw.md) (answer_precheck, by name), [disambiguate-input](disambiguate-input.md) (call), [collect-input-accept](collect-input-accept.md) (call), [run-form](run-form.md) (call), [form-done](form-done.md) (call)
 - **Tools:** none

@@ -1946,6 +1946,7 @@
         "callType": "call",
         "parameters": {
           "profiles": "{{otp_profiles}}",
+          "own_identifiers": true,
           "question": "{{otp_question}}",
           "question_es": "{{otp_question_es}}",
           "keypad": {
@@ -2467,7 +2468,7 @@
         "id": "otp_tenant_answer",
         "type": "CASE",
         "branches": {
-          "condition: cargo.authOptions && cargo.authOptions.answer_handler && normalized_otp_code.length !== 6 && !wants_other_account": {
+          "condition: cargo.authOptions && cargo.authOptions.answer_handler && normalized_otp_code.length !== 6 && !wants_other_account && answer_key !== 'code_notice'": {
             "id": "otp_tenant_answer_call",
             "type": "FLOW",
             "value": "{{cargo.authOptions.answer_handler}}",
@@ -2596,11 +2597,17 @@
             "value": "No problem. Say TEXT and I'll continue with you by message so you can do this when you are free, or {{cargo.verb}} the code whenever you are ready.",
             "value_es": "No hay problema. Diga TEXTO y sigo con usted por mensaje para que lo haga cuando esté libre, o {{cargo.verb_es}} el código cuando pueda."
           },
+          "condition: answer_key === 'code_notice'": {
+            "id": "otp_tenant_notice_said",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          },
           "condition: normalized_otp_code.length > 0 && Number(cargo.otpFormatMisses || 0)<2": {
             "id": "otp_bad_format",
             "type": "SAY",
-            "value": "I was expecting a 6-digit code. Let's try again. You can also {{cargo.voice ? 'press * or ' : ''}}{{cargo.verb}} EXIT to cancel.",
-            "value_es": "Esperaba un código de 6 dígitos. Intentemos de nuevo. También puede {{cargo.voice ? 'presionar * o decir' : 'escribir'}} SALIR para cancelar."
+            "value": "I was expecting a 6-digit code. Let's try again.",
+            "value_es": "Esperaba un código de 6 dígitos. Intentemos de nuevo."
           },
           "condition: normalized_otp_code.length > 0": {
             "id": "otp_format_cap_next",
@@ -3130,6 +3137,11 @@
     "description": "Collect a retry, alternate contact, code or exit through the shared FORM adapter.",
     "parameters": [
       {
+        "name": "retry_misses",
+        "type": "number",
+        "description": "Replies already asked again"
+      },
+      {
         "name": "error_message",
         "type": "string",
         "description": "Failure sentence"
@@ -3253,6 +3265,43 @@
         "type": "object",
         "value": null
       },
+      "retry_misses": {
+        "type": "number",
+        "value": 0
+      },
+      "retry_known": {
+        "type": "boolean",
+        "value": false
+      },
+      "retry_picked": {
+        "type": "string",
+        "value": ""
+      },
+      "retry_asked": {
+        "type": "string",
+        "value": ""
+      },
+      "retry_reply": {
+        "type": "object",
+        "value": null
+      },
+      "retry_ranked": {
+        "type": "array",
+        "value": [
+          {
+            "key": "yes",
+            "label": "wants to try again"
+          },
+          {
+            "key": "exit",
+            "label": "does not want to try again and stops here"
+          },
+          {
+            "key": "__agent",
+            "label": "speak with a person (a live agent)"
+          }
+        ]
+      },
       "user_choice": {
         "type": "string",
         "value": ""
@@ -3360,6 +3409,7 @@
           "summary": "Common bounded service retry menu",
           "parametersFrom": "parameters",
           "requires": [
+            "jsfe:contextual-responses:v1",
             "jsfe:continuation-safety:v1"
           ]
         }
@@ -3371,6 +3421,13 @@
         "type": "SET",
         "variable": "noop",
         "value": "continuationSafetyProtocol() === 1",
+        "requireTrue": true
+      },
+      {
+        "id": "generic-retry-with-options_contextual_response_protocol",
+        "type": "SET",
+        "variable": "noop",
+        "value": "contextualResponseProtocol() === 1",
         "requireTrue": true
       },
       {
@@ -3570,6 +3627,81 @@
         }
       },
       {
+        "id": "retry_known",
+        "type": "SET",
+        "variable": "retry_known",
+        "value": "!!normalized_otp_code || (user_choice.trim() === '1' || isAnswer(user_choice,'yes',retry_yes_words)) || user_choice.trim() === '9' || isAnswer(user_choice,'text') || isAgentRequest(user_choice) || !user_choice.trim() || /^\\d$/.test(user_choice.trim()) || isExitRequest(user_choice)"
+      },
+      {
+        "id": "retry_rank_asked",
+        "type": "SET",
+        "variable": "retry_asked",
+        "value": "language === 'es' ? retry_question_es : retry_question"
+      },
+      {
+        "id": "retry_rank",
+        "type": "CASE",
+        "branches": {
+          "condition: !retry_known": {
+            "id": "retry_rank_dispatch",
+            "type": "DISPATCH",
+            "outcome": "{{caller_outcome}}",
+            "reason": "{{caller_reason}}",
+            "onResponse": "continue",
+            "responseContext": "Current question: {{retry_asked}}",
+            "responseChoices": "retry_ranked",
+            "responseVariable": "retry_reply"
+          },
+          "default": {
+            "id": "retry_rank_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "retry_picked",
+        "type": "SET",
+        "variable": "retry_picked",
+        "value": "retry_reply && retry_reply.key || ''"
+      },
+      {
+        "id": "retry_again",
+        "type": "CASE",
+        "branches": {
+          "condition: !retry_known && !retry_picked && retry_misses < 1": {
+            "id": "retry_ask_again",
+            "type": "FLOW",
+            "value": "generic-retry-with-options",
+            "callType": "replace",
+            "parameters": {
+              "error_message": "Sorry, I didn't catch that.",
+              "error_message_es": "Disculpe, no le entendí.",
+              "retry_flow": "{{retry_flow}}",
+              "cancel_flow": "{{cancel_flow}}",
+              "capture_patterns": "{{capture_patterns}}",
+              "retry_call_type": "{{retry_call_type}}",
+              "allow_code_entry": "{{allow_code_entry}}",
+              "question": "{{question}}",
+              "question_es": "{{question_es}}",
+              "caller_outcome": "{{caller_outcome}}",
+              "caller_reason": "{{caller_reason}}",
+              "parent_form": "{{parent_form}}",
+              "contact_options": "{{contact_options}}",
+              "retry_misses": 1
+            },
+            "initializeDefaults": true
+          },
+          "default": {
+            "id": "retry_again_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "retry_decision",
         "type": "CASE",
         "branches": {
@@ -3577,7 +3709,7 @@
             "id": "retry_verified",
             "type": "END"
           },
-          "condition: (user_choice.trim() === '1' || isAnswer(user_choice,'yes',retry_yes_words)) && retry_call_type === 'replace'": {
+          "condition: (retry_picked === 'yes' || user_choice.trim() === '1' || isAnswer(user_choice,'yes',retry_yes_words)) && retry_call_type === 'replace'": {
             "id": "retry_yes_replace",
             "type": "FLOW",
             "value": "{{retry_flow}}",
@@ -3609,13 +3741,13 @@
             "value": "switch-to-text",
             "callType": "reboot"
           },
-          "condition: isAgentRequest(user_choice)": {
+          "condition: retry_picked === '__agent' || isAgentRequest(user_choice)": {
             "id": "retry_agent",
             "type": "FLOW",
             "value": "live-agent-requested",
             "callType": "reboot"
           },
-          "condition: !user_choice.trim() || /^\\d$/.test(user_choice.trim()) || isExitRequest(user_choice)": {
+          "condition: retry_picked === 'exit' || !user_choice.trim() || /^\\d$/.test(user_choice.trim()) || isExitRequest(user_choice)": {
             "id": "retry_cancel",
             "type": "FLOW",
             "value": "{{cancel_flow}}",
@@ -8196,7 +8328,7 @@
         "id": "ci_build_chain",
         "type": "SET",
         "variable": "ci_chain",
-        "value": "formInputChain(cargo.forms, form, cargo)"
+        "value": "(formInputChain(cargo.forms, form, cargo)).filter(function(i){return !(ci_spec.own_identifiers === true && i.form !== form && i.profile && i.profile.kind === 'identifier');})"
       },
       {
         "id": "ci_match",
@@ -13037,13 +13169,13 @@
         "type": "boolean",
         "value": false
       },
+      "reply_context": {
+        "type": "string",
+        "value": ""
+      },
       "cf_must": {
         "type": "boolean",
         "value": false
-      },
-      "cf_named": {
-        "type": "object",
-        "value": null
       },
       "cf_presets": {
         "type": "object",
@@ -13506,7 +13638,7 @@
         "id": "cf_current",
         "type": "SET",
         "variable": "cf_current",
-        "value": "cargo.forms[form].proposalPrompt ? {form:cargo.forms[form].parent,name:cargo.forms[form].proposalPrompt.input} : {form:form,name:'',invites:Array.isArray(invites)?invites:[]}"
+        "value": "cargo.forms[form].proposalPrompt ? {form:cargo.forms[form].parent,name:cargo.forms[form].proposalPrompt.input} : {form:form,name:'',invites:Array.isArray(invites)?invites:[],whole_reply:named_fields === true || named_fields === 'true'}"
       },
       {
         "id": "cf_match",
@@ -13531,12 +13663,6 @@
         "type": "SET",
         "variable": "cf_words",
         "value": "String(cargo.choiceText || '').split(/\\s+/).filter(function (w) { return /[a-záéíóúüñ]/i.test(w); }).length"
-      },
-      {
-        "id": "cf_named_field",
-        "type": "SET",
-        "variable": "cf_named",
-        "value": "(named_fields === true || named_fields === 'true') && cargo.choice !== 'yes' && !cf_m.hits.length && !cf_m.ambiguous.length && !cf_m.questions.length ? (function (text, chain) { var plain = function (v) { return ' ' + String(v || '').toLowerCase().replace(/[^a-z0-9áéíóúüñ]+/g, ' ').trim() + ' '; }; var said = plain(text); var named = chain.filter(function (input) { return (input.names || []).some(function (name) { return said.indexOf(plain(name)) >= 0; }); }); return named.length === 1 ? { form: named[0].form, name: named[0].name } : null; })(cargo.choiceText, cf_chain) : null"
       },
       {
         "id": "cf_question_fields",
@@ -13626,12 +13752,6 @@
               "hits": "{{cf_m.hits}}"
             }
           },
-          "condition: cf_named": {
-            "id": "cf_named_reset",
-            "type": "SET",
-            "variable": "cf_result",
-            "value": "(resetFormInputs(cargo, cf_named.form, [cf_named.name]), 'changed')"
-          },
           "condition: cargo.choice === 'no'": {
             "id": "cf_declined",
             "type": "SET",
@@ -13653,7 +13773,8 @@
               "form": "{{form}}",
               "question": "{{cf_prompt}}",
               "question_es": "{{cf_prompt_es}}",
-              "named_fields": "{{named_fields}}"
+              "named_fields": "{{named_fields}}",
+              "reply_context": "{{reply_context}}"
             }
           },
           "default": {
@@ -15227,6 +15348,11 @@
         "description": "State path that completes this protocol without another answer"
       },
       {
+        "name": "own_identifiers",
+        "type": "boolean",
+        "description": "This question reads identifiers itself: an owner form's identifier input never takes the answer"
+      },
+      {
         "name": "form_instance",
         "type": "string",
         "internal": true,
@@ -15464,7 +15590,7 @@
         "id": "collect-service-answer_arguments",
         "type": "SET",
         "variable": "form_arguments",
-        "value": "rememberFormArguments(cargo.forms[form_instance], currentContext, [\"profiles\",\"question\",\"question_es\",\"keypad\",\"prefill\",\"context\",\"context_es\",\"stop_path\"], form_internal_resume)"
+        "value": "rememberFormArguments(cargo.forms[form_instance], currentContext, [\"profiles\",\"question\",\"question_es\",\"keypad\",\"prefill\",\"context\",\"context_es\",\"stop_path\",\"own_identifiers\"], form_internal_resume)"
       },
       {
         "id": "collect-service-answer_restore_profiles",
@@ -15515,10 +15641,16 @@
         "value": "form_internal_resume ? form_arguments[\"stop_path\"] : currentContext[\"stop_path\"]"
       },
       {
+        "id": "collect-service-answer_restore_own_identifiers",
+        "type": "SET",
+        "variable": "own_identifiers",
+        "value": "form_internal_resume ? form_arguments[\"own_identifiers\"] : currentContext[\"own_identifiers\"]"
+      },
+      {
         "id": "service_declaration",
         "type": "SET",
         "variable": "noop",
-        "value": "(function () {var state=cargo.forms[form_instance];state.data={question:question,question_es:question_es};state.specs=[{name:'answer',any_of:Array.isArray(profiles) && profiles.length?profiles:[{name:'raw',label:'answer',label_es:'respuesta',profile:{kind:'text'}}],question_from:'question',digits:keypad,answer_precheck:'service-answer-raw',as_spoken:true}];return true;})()"
+        "value": "(function () {var state=cargo.forms[form_instance];state.data={question:question,question_es:question_es};state.specs=[{name:'answer',any_of:Array.isArray(profiles) && profiles.length?profiles:[{name:'raw',label:'answer',label_es:'respuesta',profile:{kind:'text'}}],question_from:'question',digits:keypad,answer_precheck:'service-answer-raw',as_spoken:true,own_identifiers:own_identifiers===true||own_identifiers==='true'}];return true;})()"
       },
       {
         "id": "service_chain",
@@ -16069,6 +16201,7 @@
             "retry_text_es": "Por favor escriba su código postal de 5 dígitos.",
             "name": "zip",
             "field": "zip",
+            "argument_description": "5-digit ZIP code",
             "names": [
               "zip",
               "zip code",
@@ -16082,6 +16215,7 @@
           },
           {
             "name": "city",
+            "argument_description": "city name alone",
             "label": "city",
             "label_es": "ciudad",
             "names": [
@@ -16110,6 +16244,7 @@
           },
           {
             "name": "city_state",
+            "argument_description": "city and state",
             "label": "city and state",
             "label_es": "ciudad y estado",
             "names": [
@@ -16130,6 +16265,7 @@
           },
           {
             "name": "street",
+            "argument_description": "street number and street name, without the apartment",
             "label": "street address",
             "label_es": "dirección",
             "names": [
@@ -16152,6 +16288,7 @@
           },
           {
             "name": "unit",
+            "argument_description": "apartment or unit number alone, such as 4 or 12B",
             "reset_on": [
               "street"
             ],
@@ -16167,7 +16304,7 @@
             ],
             "profile": {
               "kind": "pattern",
-              "regex": "(?:\\bapt\\.?|\\bunit|#)\\s*([\\w-]+)",
+              "regex": "(?:\\bapartment|\\bapartamento|\\bdepartamento|\\bapt\\.?|\\bunit|\\bunidad|#)\\s*([\\w-]+)",
               "group": 1,
               "accept_other": true
             },
@@ -16212,6 +16349,7 @@
         "type": "object",
         "value": {
           "named_fields": true,
+          "reply_context": "This is a mailing address read back for confirmation. A reply may correct one part or several at once: the street number, street name or street type, the apartment or unit, the city, or the ZIP code.",
           "no_keys": [
             "2",
             "not right",
@@ -16480,6 +16618,7 @@
               "interrupts": "{{form_confirmation.interrupts}}",
               "invites": "{{form_confirmation.invites}}",
               "named_fields": "{{form_confirmation.named_fields}}",
+              "reply_context": "{{form_confirmation.reply_context}}",
               "exit_context": "{{exit_context}}",
               "exit_context_es": "{{exit_context_es}}"
             }
@@ -17873,6 +18012,7 @@
               "interrupts": "{{form_confirmation.interrupts}}",
               "invites": "{{form_confirmation.invites}}",
               "named_fields": "{{form_confirmation.named_fields}}",
+              "reply_context": "{{form_confirmation.reply_context}}",
               "exit_context": "{{exit_context}}",
               "exit_context_es": "{{exit_context_es}}"
             }
@@ -19057,7 +19197,7 @@
         "id": "choice_owner",
         "type": "SET",
         "variable": "owner",
-        "value": "(others.filter(function(c){return c.key===picked && !(choices || []).some(function(own){return String(own.key)===picked;});})[0] || {}).owner || null"
+        "value": "(others.filter(function(c){return c.key===picked && !(choices || []).some(function(own){return String(own.key)===picked;});})[0] || {}).owner || (function(){var asked=(chain || []).filter(function(i){return i.form===form && i.name===input;})[0];if(asked || !picked)return null;var spec=((cargo.forms[form] || {}).specs || []).filter(function(i){return i.name===input;})[0];var names=((spec || {}).any_of || []).map(function(i){return i.name;});var member=(chain || []).filter(function(i){return i.form===form && names.indexOf(i.name)>=0 && i.profile && (i.profile.choices || []).some(function(c){return String(c.key)===picked;});})[0];return member ? {form:member.form,name:member.name} : null;})()"
       },
       {
         "id": "choice_none",
@@ -19179,6 +19319,10 @@
       {
         "name": "named_fields",
         "type": "boolean"
+      },
+      {
+        "name": "reply_context",
+        "type": "string"
       }
     ],
     "variables": {
@@ -19235,6 +19379,22 @@
         "type": "boolean",
         "value": false
       },
+      "prompt": {
+        "type": "object",
+        "value": null
+      },
+      "field_arguments": {
+        "type": "array",
+        "value": []
+      },
+      "corrections": {
+        "type": "array",
+        "value": []
+      },
+      "reply_context": {
+        "type": "string",
+        "value": ""
+      },
       "contract": {
         "type": "object",
         "value": {
@@ -19268,7 +19428,7 @@
         "id": "confirm_asked",
         "type": "SET",
         "variable": "asked",
-        "value": "language === 'es' && question_es ? question_es : question"
+        "value": "(language === 'es' && question_es ? question_es : question)+(reply_context ? ' '+reply_context : '')"
       },
       {
         "id": "confirm_chain",
@@ -19277,10 +19437,16 @@
         "value": "formInputChain(cargo.forms, form, cargo)"
       },
       {
+        "id": "confirm_prompt",
+        "type": "SET",
+        "variable": "prompt",
+        "value": "cargo.forms[form] && cargo.forms[form].proposalPrompt ? {form:cargo.forms[form].parent,name:cargo.forms[form].proposalPrompt.input} : null"
+      },
+      {
         "id": "confirm_others",
         "type": "SET",
         "variable": "others",
-        "value": "(function(){var seen=([]).map(function(c){return String(c.key);}).concat(['yes','no']);return (chain || []).filter(function(i){return i.form===form && i.name!=='' && !i.confirmation && i.profile && i.profile.kind==='choice' && Array.isArray(i.profile.choices);}).reduce(function(all,i){return all.concat(i.profile.choices.filter(function(c){var k=String(c.key);if(c.current_only===true||seen.indexOf(k)>=0)return false;seen.push(k);return true;}).map(function(c){return {key:String(c.key),label:(function(c){var said=(Array.isArray(c.phrases) ? c.phrases : []).map(String).filter(function(p){return /[a-zà-ÿ]/i.test(p) && p!==String(c.key);}).slice(0,6);return String(c.label || (said.length ? c.key+' ('+said.join(', ')+')' : c.key));})(c),owner:{form:i.form,name:i.name}};}));},[]);})()"
+        "value": "(function(){var seen=([]).map(function(c){return String(c.key);}).concat(['yes','no']);return (chain || []).filter(function(i){return (prompt ? i.form===prompt.form && i.name===prompt.name : i.form===form) && !i.confirmation && i.profile && i.profile.kind==='choice' && Array.isArray(i.profile.choices);}).reduce(function(all,i){return all.concat(i.profile.choices.filter(function(c){var k=String(c.key);if(c.current_only===true||seen.indexOf(k)>=0)return false;seen.push(k);return true;}).map(function(c){return {key:String(c.key),label:(function(c){var said=(Array.isArray(c.phrases) ? c.phrases : []).map(String).filter(function(p){return /[a-zà-ÿ]/i.test(p) && p!==String(c.key);}).slice(0,6);return String(c.label || (said.length ? c.key+' ('+said.join(', ')+')' : c.key));})(c),owner:{form:i.form,name:i.name}};}));},[]);})()"
       },
       {
         "id": "confirm_fields",
@@ -19289,10 +19455,16 @@
         "value": "named_fields === true || named_fields === 'true' ? (chain || []).filter(function(i){var v=cargo.forms[form] && cargo.forms[form].values;return i.form===form && !i.confirmation && Array.isArray(i.names) && i.names.length && v && v[i.name]!==undefined && v[i.name]!==null && v[i.name]!=='';}).map(function(i){var l=String(i.label || i.names[0]);return {key:'field:'+i.name,label:'says the '+l+' read back is wrong, or gives a different '+l,owner:{form:i.form,name:i.name}};}) : []"
       },
       {
+        "id": "confirm_field_arguments",
+        "type": "SET",
+        "variable": "field_arguments",
+        "value": "fields.map(function(c){var i=(chain || []).filter(function(i){return i.form===c.owner.form && i.name===c.owner.name;})[0];var l=String(i.label || i.names[0]);return {name:c.owner.name,type:'string',description:'The correct '+(i.argument_description || l)+' the caller gives now. Leave it empty when they give none.'};})"
+      },
+      {
         "id": "confirm_ranked_choices",
         "type": "SET",
         "variable": "ranked",
-        "value": "([{key:'no',label:'no: declines or refuses what the question asks to confirm'}].concat(others.map(function(c){return {key:c.key,label:c.label};})).concat(fields.map(function(c){return {key:c.key,label:c.label};}))).concat([{key:'__agent',label:'speak with a person (a live agent)'}])"
+        "value": "([{key:'no',label:'no: declines or refuses what the question asks to confirm'}].concat(others.map(function(c){return {key:c.key,label:c.label};})).concat(fields.map(function(c){return {key:c.key,label:c.label,parameters:field_arguments};}))).concat([{key:'__agent',label:'speak with a person (a live agent)'}])"
       },
       {
         "id": "confirm_dispatch",
@@ -19369,10 +19541,37 @@
         "value": "fields.filter(function(c){return reply && c.key===reply.key;})[0] || null"
       },
       {
+        "id": "confirm_corrections",
+        "type": "SET",
+        "variable": "corrections",
+        "value": "field && reply.arguments ? fields.reduce(function(all,c){var said=String(reply.arguments[c.owner.name] || '').trim();return said ? all.concat(enrichFormMatches(readFormAnswer(said, chain, c.owner, said, []), chain, form, [c.owner.name], c.owner.name).hits) : all;},[]) : []"
+      },
+      {
+        "id": "confirm_correct",
+        "type": "CASE",
+        "branches": {
+          "condition: corrections.length": {
+            "id": "confirm_correct_accept",
+            "type": "FLOW",
+            "value": "collect-input-accept",
+            "callType": "call",
+            "parameters": {
+              "hits": "{{corrections}}"
+            }
+          },
+          "default": {
+            "id": "confirm_correct_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "confirm_field_reset",
         "type": "CASE",
         "branches": {
-          "condition: field": {
+          "condition: field && !corrections.length": {
             "id": "confirm_field_ask",
             "type": "SET",
             "variable": "assignment_side_effect",

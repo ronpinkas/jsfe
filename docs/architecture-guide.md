@@ -237,6 +237,7 @@ flowchart TD
    K -->|answers / a choice| V
    K -->|abort| X[End flows: request cancelled]
    K -->|new_request| D[DISPATCH]
+   K -->|irrelevant| Q[Ask the question again; no flow moves]
    A -->|no| D
    D --> S1[Intent detection, stage 1: which primary flow, or None]
    S1 -->|a flow| S2[Stage 2: that flow's parameters]
@@ -292,7 +293,7 @@ the task ("OK, let's pay now"), the primary flow starts again and resumes from i
 everything again.
 
 A flow can also ask a question whose answer is open ("Describe the problem") with a **contextual DISPATCH**
-(`onResponse: "continue"`): the ranker decides whether the reply answers, withdraws or changes the subject, and an
+(`onResponse: "continue"`): the ranker decides whether the reply answers, withdraws, changes the subject or means nothing here, and an
 answer's fields are extracted by the same parameter extraction intent detection uses.
 
 **DISPATCH is not giving up.** Sending a caller to a person (the `give-up` worker) happens only after real attempts at
@@ -300,6 +301,8 @@ the answer ran out, or a service the flow needs failed. A caller who changed the
 transferred.
 
 ### Intent detection: two stages
+
+With `engine.intentDetection = 'two-stage'` (the default is one single call):
 
 1. **Which flow.** Only primary flows can start this way, and stage 1 reads only their `description`: what should
    start the flow and, in a `Not:` list, what belongs elsewhere. The answer is one flow or `None`.

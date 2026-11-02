@@ -4,6 +4,7 @@
 
 - **[JavaScript Flow Engine User Guide](user-guide.md)** - Comprehensive tutorials, examples, and best practices (this document)
 - **[README.md](README.md)** - Technical API reference and quick start guide
+- **[Flows architecture guide](docs/architecture-guide.md)** and **[Flow author reference](docs/copilot-reference.md)** - forms, providers, performers, the reply ranker and flow traps, which this guide does not cover
 
 *For technical API documentation, installation instructions, and architecture overview, see the **[README.md](README.md)**.*
 
@@ -553,7 +554,7 @@ interface FlowDefinition {
   - The wrapper takes the wrapped flow's `description`, `parameters`, prompts and `primary` flag unless it declares its
     own, so intent detection reads one description, kept in one place.
   - The wrapper's steps do the tenant's own work, then call the wrapped flow with arguments of their own. Example:
-    Curacao's `curacao-track-order` wraps `shopify-track-order`, looks the caller up by caller ID, and passes the first
+    Curacao's `curacao-track-order` wraps `shopify-ql-track-order`, looks the caller up by caller ID, and passes the first
     name as `caller_name` for the opening.
   - The engine applies wraps once, at construction, on copies (the host's flow objects are not changed). A `wraps` that
     names no flow in the menu is logged and ignored; without `wraps` nothing changes. A config that lacks the wrapped flow
@@ -4509,7 +4510,7 @@ fields; the host does.
 
 ### DISPATCH Steps - Hand the Input Back to Intent Detection
 
-**Purpose**: End **every** flow and route the user's input for **this turn** through intent detection, exactly as if no flow had been active when they spoke. Use it where a flow asks a closed question and the answer is really a new request — the `default` branch of a menu that matched none of its choices.
+**Purpose**: End **every** flow and route the user's input for **this turn** through intent detection, exactly as if no flow had been active when they spoke. With `onResponse: "continue"` (a contextual DISPATCH) the reply ranker decides first, and only `new_request` ends the flows; see the README. Use it where a flow asks a closed question and the answer is really a new request — the `default` branch of a menu that matched none of its choices.
 
 ```javascript
 {
@@ -5758,30 +5759,28 @@ The **JavaScript Flow Engine** provides a robust foundation for building sophist
 The JavaScript Flow Engine comes with a set of production-ready core flows that handle common conversational patterns. These flows are tested in production and provide robust implementations for system tasks and common integrations.
 
 ## System Flows
-`flows/system.flows.json` and `flows/system.tools.json`. Full reference, step by step: **[docs/system-flows.md](docs/system-flows.md)**.
+`flows/system.flows.json` and `flows/system.tools.json`. Full reference, step by step: **[docs/flows/system/README.md](docs/flows/system/README.md)**.
 
 - **`authenticate-user`**: OTP authentication by SMS or email. It collects the contact, can run optional tenant validator flows (`cell_validator` / `email_validator`, fail-closed), sends the code, and verifies it. It sets `cargo.otpVerified`.
 - **`get-cell-or-email`**: collects and normalizes a phone number or email, with caller-ID support.
 - **`get-and-validate-otp-code`** / **`validate-otp-code`**: prompt for the 6-digit code and verify it, with help for "didn't get it" / "I'm driving" answers and an optional WhatsApp invite after a wrong code.
 - **`generic-retry-with-options`**: the shared "try again / switch to text / exit" menu, with smart capture of a corrected value.
-- **`retry-authenticate-generic`**: the authentication-specific retry menu.
-- **`live-agent-requested`**: offers to keep helping, then transfers (the host performs the transfer), or shares contact info when no agent is available.
-- **`switch-to-text`** (the only primary system flow): moves a voice call to SMS.
+- **`live-agent-requested`** (primary): offers to keep helping, then transfers (the host performs the transfer), or shares contact info when no agent is available.
+- **`switch-to-text`** (primary): moves a voice call to SMS.
 - **`contact-support`**: shares support contact info. It ends with `outcome: "unresolved"`.
 - **`cancel-process`**: confirms a cancellation.
 - **`no-action-needed`**: `RETURN ''`, which hands the turn back to the host.
 
 ## Shopify Flows
-`flows/shopify.flows.json` and `flows/shopify.tools.json`. Full reference, including every tool's `returns` contract: **[docs/shopify-flows.md](docs/shopify-flows.md)**.
+`flows/shopify.flows.json` and `flows/shopify.tools.json`. Full reference, including every tool's `returns` contract: **[docs/flows/shopify/README.md](docs/flows/shopify/README.md)**.
 
 **Note**: the tool definitions are `local` tools. The engine ships their definitions, not their implementations: the host must register the named functions (`searchShopifyProducts`, `lookupCustomerOrders`, `getShipStationTracking`…) in `APPROVED_FUNCTIONS`, together with the expression helpers the flows call (`matchesChoice`, `validatePhone`, `validateEmail`, `normalizeAndFindCapture`, `textWithUrlToSpeech`). `demos/make-payment.js` contains reference implementations of many of them.
 
-- **`shopify-product-search`** (primary): catalog search, then optional nearest-store stock lookup (needs the `global_store_locations` global variable).
-- **`get-search-query`**: helper that asks for a search query when the prompt did not contain one.
-- **`shopify-track-order`** (primary): authenticates with `authenticate-user`, then hands off to `shopify-get-orders-verified`.
-- **`shopify-get-orders-verified`**: lists the verified customer's orders and shows one order's detail, adding live ShipStation tracking when the order has a tracking number.
-- **`shipstation-track-by-number-verified`**: looks up a tracking number directly in ShipStation, offered when the customer has no Shopify orders.
-- **`shopify-store-policies`** (primary): answers policy/FAQ questions from Shopify, but only when the tenant opts in with the `global_shopify_policy` global variable. Otherwise it hands the question to the host.
+- **`shopify-ql-product-search`** (primary): catalog search, then optional nearest-store stock lookup (needs the `global_store_locations` global variable).
+- **`shopify-ql-get-search-query`**: helper that asks for a search query when the prompt did not contain one.
+- **`shopify-ql-track-order`** (primary): authenticates with `authenticate-user`, then hands off to its order workers.
+- **`shopify-ql-shipstation-track-by-number-verified`**: looks up a tracking number directly in ShipStation, offered when the customer has no Shopify orders.
+- **`shopify-ql-store-policies`** (primary): answers policy/FAQ questions from Shopify, but only when the tenant opts in with the `global_shopify_policy` global variable. Otherwise it hands the question to the host.
 
 ## Usage
 These flows are available in the `flows/` directory and can be added to your `flowsMenu` during engine initialization. Since they are standard object structures, you can import them directly from the JSON files.

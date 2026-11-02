@@ -76,8 +76,6 @@ Shopify's UCP 2026-04-08 rollout and an earlier tool-rename (Apr 15) caused `sho
 
 The `??` operator is not supported by `extractByPath`. Expression resolved to `""`, passed to Shopify's Admin API, rejected. Similar pattern at `{{language || 'en'}}`.
 
-Fixed in `AIDevelopment/jsfe-flows/shopify.flows.json` (and `.dev.json`) by applying the hoist-to-SET workaround above — repurposing the existing `variant_ok` CASE branch to compute `variant_gid` via JS expression, then referencing `{{variant_gid}}` in the CALL-TOOL args.
-
 ## Options Considered For JSFE Unification
 
 ### Option A — Heuristic-routed `interpolateObject` (shelved)
