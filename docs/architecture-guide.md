@@ -278,9 +278,11 @@ does this reply do with the question the flow asked? The model picks from a clos
 
 **Word readers and the ranker.** An input with `profile.whole_phrases` reads a choice from words only when the whole reply is accounted for: its phrase, another input's argument, courtesy, connecting words and the input's `template_words`. A reply with any other word goes to the ranker, so a word inside a sentence ("Quiero hacer una nueva compra" at a pay menu) never picks an option. Compound answers that carry arguments stay with the reader ("pay $50 with my Visa card"), because a picked option extracts no arguments. A proposal's confirmation offers the ranker its input's choices, so a correction ("yes, it was stolen") picks the changed candidate.
 
-Some options are **never offered**, so the ranker cannot pick them: a choice marked `exact` (anything that charges or
-cancels) and the YES of a firm confirmation. A ranker can understand "no thanks, maybe later" as NO; it can never
-produce a YES to a payment. Options that cost more when wrong need a higher score (a NO that would cancel what the
+Some options are **never offered**, so the ranker cannot pick them: the YES of a firm confirmation or of a form's
+confirmation, a `current_only` choice while another question is asked, and text. `exact` on a choice says how words
+match it, not what it does, so exact choices are offered. A charge or a cancellation is guarded by `confirm: {exact: true}`
+on its action, whose form confirmation offers the ranker NO, corrections and a person: a ranker can understand "no thanks,
+maybe later" as NO; it can never produce a YES to a payment. Options that cost more when wrong need a higher score (a NO that would cancel what the
 caller was confirming, or a new request that leaves the question unanswered). A reply that clears no option is
 `answers`, and the question is asked again if nothing usable was in it.
 

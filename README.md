@@ -384,9 +384,10 @@ An input with `profile.whole_phrases` (default off; `choice`, or a `pattern` tha
 means a reply that picks none of them. A picked choice sets `responseVariable` to `{ key }`, plus `arguments` when it declares `parameters` (the pick stands if extraction finds nothing or fails);
 `answers` sets `{ key: '' }` unless `responseParameters` are declared too. The request carries the options it offers
 (`request.options`); a host validates a reply against those, never a fixed list. The form readers use it: an unread
-answer with any words goes to the ranker with the question's choices (never an exact choice or the YES of a firm
-confirmation; a NO always) and two escapes every question supports, `__agent` (a person) and `__text` (on a call with
-a textable number); a confirmation's exhausted attempts go to the `give-up` worker.
+answer with any words goes to the ranker with the question's choices (`exact` ones too, since `exact` is how words match
+a choice; never the YES of a firm confirmation; a NO always) and the escape every question supports, `__agent` (a person);
+text is never offered. A charge or a cancellation is guarded by the action's `confirm: {exact: true}`, not by the choice's
+`exact`. A confirmation's exhausted attempts go to the `give-up` worker.
 
 **Reason questions (`responseReasonFor`, `response.reason_for`, jsfe 1.19.0):** a question that asks WHY the caller does
 not want something (a cancellation's reason) names that thing, and the ranker is offered only `answers` and
