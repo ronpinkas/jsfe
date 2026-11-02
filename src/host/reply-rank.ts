@@ -48,6 +48,12 @@ export const REPLY_CUTS: Partial<Record<ReplyOption, number>> = {
  * "And, Leslie." at a pay menu rated 0.86 and were taken as a request for a person; "Operator." 0.78 is that request.
  */
 export const REPLY_IRRELEVANT_OVER_CHOICE = 0.8;
+/**
+ * The cut another declared choice must clear to be reported beside the pick (`also`): a reply may ask for two of a menu's
+ * facts ("my due date and the amount"). Measured 2026-11-02 on 136 prod replies at the account menu: 0.6 kept those and
+ * dropped the neighbours a single question rates 0.50-0.59.
+ */
+export const REPLY_ALSO_CUT = 0.6;
 
 export interface ReplyTurn { role: 'user' | 'assistant'; content: string }
 export interface ReplyRankRequest {
@@ -202,7 +208,7 @@ export function decodeReplyRankSystemOne(
   answers: Record<string, { noul?: unknown } | undefined> | undefined,
   request: ReplyRankRequest,
   { threshold = REPLY_YES_THRESHOLD, cuts = REPLY_CUTS }: { threshold?: number; cuts?: Partial<Record<ReplyOption, number>> } = {}
-): { option: ReplyOption; scores: Record<string, number>; fallback: boolean } {
+): { option: ReplyOption; also?: string[]; scores: Record<string, number>; fallback: boolean } {
   const scores: Record<string, number> = {};
   for (const q of request.systemOne.index) {
     const noul = Number(answers?.[q.id]?.noul);
@@ -217,7 +223,9 @@ export function decodeReplyRankSystemOne(
   const yieldsToChoice = cleared[0] === 'answers' || cleared[0] === 'new_request' || (cleared[0] === 'irrelevant' && scores.irrelevant < REPLY_IRRELEVANT_OVER_CHOICE);
   const best = choice && yieldsToChoice ? choice : cleared[0];
   if (best) {
-    return { option: best, scores, fallback: false };
+    // A question's own choices that also cleared REPLY_ALSO_CUT, by score. An escape (`__agent`) is never a second pick.
+    const also = best.startsWith(CHOICE_PREFIX) ? cleared.filter(o => o !== best && o.startsWith(CHOICE_PREFIX) && !o.startsWith(`${CHOICE_PREFIX}__`) && scores[o] >= REPLY_ALSO_CUT).map(o => o.slice(CHOICE_PREFIX.length)) : [];
+    return { option: best, ...(also.length ? { also } : {}), scores, fallback: false };
   } else {
     return { option: REPLY_DEFAULT, scores, fallback: true };
   }

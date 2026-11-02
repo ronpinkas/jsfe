@@ -436,6 +436,19 @@ const readFormReply={
   ...escapeRoutes('reply_escape'),
   rankedMiss('reply_miss')]
 };
+// A provider menu's fact named inside a longer sentence (provides.menu.whole_phrases): the phrase does not decide, the ranker
+// does. It is offered every choice the menu's reader accepts. The result is cargo.providerReply: { key, also? }, key '' when no
+// choice was picked (the menu then hands the turn to the host, which holds the account in its user context).
+const readProviderReply={
+ id:'read-provider-reply',name:'ReadProviderReply',version:'1.0.0',scope:'isolated',description:'Rank a menu reply its phrases do not settle: a fact or action it picks, the other facts it also asks for, or a request for a person; a withdrawal or a new request leaves.',
+ parameters:[{name:'question',type:'string'},{name:'question_es',type:'string'},{name:'choices',type:'array'}],
+ variables:vars({question:'',question_es:'',choices:[],asked:'',ranked:[],reply:null}),
+ steps:[SET('provider_reply_asked','asked',"language === 'es' && question_es ? question_es : question"),
+  rankedChoices('provider_reply_ranked',`(choices || []).map(function(c){return {key:String(c.key),label:(${RANK_LABEL_JS})(c)};})`),
+  {id:'provider_reply_dispatch',type:'DISPATCH',onResponse:'continue',responseContext:'Current question: {{asked}}',responseChoices:'ranked',responseVariable:'reply'},
+  ...escapeRoutes('provider_reply_escape'),
+  SIDE('provider_reply_take',"(cargo.providerReply=reply || {},true)")]
+};
 const readFormChoice={
  id:'read-form-choice',name:'ReadFormChoice',version:'1.3.0',scope:'isolated',description:'Rank an unreadable answer to a choice question and take the offered option it picks, or a request for a person or for text; otherwise ask again. A withdrawal or a new request leaves with saved form progress.',
  parameters:[{name:'form',type:'string'},{name:'input',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'},{name:'choices',type:'array'},{name:'firm',type:'string'}],
@@ -805,21 +818,27 @@ provideData.steps.splice(provideData.steps.findIndex((s) => s.id === 'pd_menu_q'
 
 // provider-menu: what next, after an answer — the catalog's actions, another fact, or done (owner MENU-1016 shape)
 const providerMenu = {
-   id: 'provider-menu', name: 'ProviderMenu', version: '1.0.0', scope: 'isolated',
-   description: "Worker: after a provider answered, offer its menu (provides.menu: question(_voice)(_es) with {verb} / {name}; choices [{ key, phrases, flow, exact, set }]; done { phrases, say(_es) }). A fact or set named by its words is answered and the menu comes back; an action runs its flow (replace) after setting its `set` cargo fields; done says goodbye. Other phrases: DISPATCH. No phrases: asked once more, then 'anything else?'. Params: provides, retry.",
+   id: 'provider-menu', name: 'ProviderMenu', version: '1.1.0', scope: 'isolated',
+   description: "Worker: after a provider answered, offer its menu (provides.menu: question(_voice)(_es) with {verb} / {name}; choices [{ key, phrases, flow, exact, set }]; done { phrases, say(_es) }). A fact or set named by its words is answered and the menu comes back (menu.whole_phrases: only when the phrase is the whole reply; a phrase inside a sentence goes to the reply ranker, whose no-pick is the host's); an action runs its flow (replace) after setting its `set` cargo fields; done says goodbye. Other phrases: DISPATCH. No phrases: asked once more, then 'anything else?'. Params: provides, retry.",
    parameters: [{ name: 'provides', type: 'object', description: 'The provider catalog' }, { name: 'retry', type: 'string', description: "'1' on the re-ask" }],
-   variables: vars({ retry: '', pm_q: '', pm_q_es: '', pm_choices: [], pm_key: '', pm_keys: [], pm_close:false, pm_flow: '', pm_bye: '', pm_bye_es: '', pm_who: '', pm_sorry: '', pm_sorry_es: '' }),
+   variables: vars({ retry: '', pm_q: '', pm_q_es: '', pm_choices: [], pm_key: '', pm_keys: [], pm_contained:false, pm_also: [], pm_close:false, pm_flow: '', pm_bye: '', pm_bye_es: '', pm_who: '', pm_sorry: '', pm_sorry_es: '' }),
    steps: [
       SET('pm_name', 'pm_who', NAME_JS),
       SET('pm_question', 'pm_q', `(function () { ${RENDER_JS} var m = provides.menu; var t = cargo.voice && m.question_voice ? m.question_voice : m.question; return (retry === '1' ? sorryNotCaught('en', cargo) : '') + fill(t, {}, null, 'en', { name: pm_who, verb: cargo.verb || (cargo.voice ? 'say' : 'type') }); })()`),
       SET('pm_question_es', 'pm_q_es', `(function () { ${RENDER_JS} var m = provides.menu; var t = cargo.voice && (m.question_voice_es || m.question_voice) ? (m.question_voice_es || m.question_voice) : (m.question_es || m.question); return (retry === '1' ? sorryNotCaught('es', cargo) : '') + fill(t, {}, null, 'es', { name: pm_who, verb: cargo.verb_es || (cargo.voice ? 'diga' : 'escriba') }); })()`),
-      SET('pm_build', 'pm_choices', "provides.facts.concat(provides.sets || []).filter(function (f) { return Array.isArray(f.phrases ?? f.words) && (f.phrases ?? f.words).length; }).map(function (f) { return { key: 'fact:' + f.key, phrases: f.phrases ?? f.words }; }).concat((provides.menu.choices || []).map(function (c) { return { key: 'act:' + c.key, phrases: c.phrases ?? c.words, exact: c.exact === true }; })).concat(provides.menu.done ? [{ key: 'done', phrases: provides.menu.done.phrases ?? provides.menu.done.words, exact: true }] : [])"),
+      SET('pm_build', 'pm_choices', "provides.facts.concat(provides.sets || []).filter(function (f) { return Array.isArray(f.phrases ?? f.words) && (f.phrases ?? f.words).length; }).map(function (f) { return Object.assign({ key: 'fact:' + f.key, phrases: f.phrases ?? f.words }, f.description ? { label: f.description } : {}); }).concat((provides.menu.choices || []).map(function (c) { return Object.assign({ key: 'act:' + c.key, phrases: c.phrases ?? c.words, exact: c.exact === true }, c.label ? { label: c.label } : {}); })).concat(provides.menu.done ? [Object.assign({ key: 'done', phrases: provides.menu.done.phrases ?? provides.menu.done.words, exact: true }, provides.menu.done.label ? { label: provides.menu.done.label } : {})] : [])"),
       FLOW('pm_ask', 'ask-choice', 'call', { question: '{{pm_q}}', question_es: '{{pm_q_es}}', choices: '{{pm_choices}}', accept_other: true, digits: { min: 1, max: 1 }, exit_context: '{{provides.subject}}', exit_context_es: '{{provides.subject_es}}' }),
       // A declared terminal phrase (for example "no thanks") may also fit a shorter action
       // after courtesy stripping ("no"). Resolve only that overlap; fact ownership and the
       // existing reserved done fallback retain their normal behavior.
       SET('pm_take', 'pm_key', "(function(){var key=String(cargo.choice || '');if(key.indexOf('fact:')===0)return pickProviderQuestion(cargo.choiceText,pm_choices.filter(function(c){return c.key.indexOf('fact:')===0;}));if(key.indexOf('act:')===0 && provides.menu.done && pickChoice(cargo.choiceText,[{key:'terminal:done',phrases:provides.menu.done.phrases ?? provides.menu.done.words,exact:true}],true)==='terminal:done')return 'done';return key;})()"),
-      SET('pm_fact_keys', 'pm_keys', "pm_key.indexOf('fact:') === 0 ? (function (k) { var s = (provides.sets || []).filter(function (x) { return x.key === k; })[0]; return s ? s.facts.slice() : [k]; })(pm_key.slice(5)) : []"),
+      SET('pm_contained_check', 'pm_contained', "provides.menu.whole_phrases === true && pm_key.indexOf('fact:') === 0 && pickChoice(cargo.choiceText, pm_choices.filter(function (c) { return c.key === pm_key; }).map(function (c) { return { key: c.key, phrases: c.phrases, exact: true }; }), false) !== pm_key"),
+      WHEN('pm_rank', 'pm_contained', FLOW('pm_read_reply', 'read-provider-reply', 'call', { question: '{{pm_q}}', question_es: '{{pm_q_es}}', choices: '{{pm_choices}}' })),
+      SET('pm_ranked_also', 'pm_also', "pm_contained ? ((cargo.providerReply || {}).also || []) : []"),
+      SET('pm_ranked_key', 'pm_key', "pm_contained ? String((cargo.providerReply || {}).key || '') : pm_key"),
+      SIDE('pm_ranked_clear', '(delete cargo.providerReply,true)'),
+      // Every fact the reply asks for, in one answer.
+      SET('pm_fact_keys', 'pm_keys', "pm_key.indexOf('fact:') === 0 ? [pm_key].concat(pm_also.filter(function (a) { return String(a).indexOf('fact:') === 0; })).reduce(function (keys, full) { var k = String(full).slice(5); var s = (provides.sets || []).filter(function (x) { return x.key === k; })[0]; (s ? s.facts : [k]).forEach(function (fact) { if (keys.indexOf(fact) < 0) keys.push(fact); }); return keys; }, []) : []"),
       SET('pm_closing', 'pm_close', "pm_keys.length > 0 && pm_keys.every(function (key) { var fact = provides.facts.find(function (f) { return f.key === key; }); return !!fact && fact.close === true; })"),
       SET('pm_action_flow', 'pm_flow', "pm_key.indexOf('act:') === 0 ? (function (c) { if (c && c.set) { Object.keys(c.set).forEach(function (k) { cargo[k] = c.set[k]; }); } else { /* nothing to set */ } return c ? c.flow : ''; })((provides.menu.choices || []).filter(function (x) { return 'act:' + x.key === pm_key; })[0]) : ''"),
       SET('pm_goodbye', 'pm_bye', `(function () { ${RENDER_JS} var d = provides.menu.done || {}; return fill(d.say || 'Glad I could help. Have a great day[, {name}]!', {}, null, 'en', { name: pm_who }); })()`),
@@ -910,7 +929,7 @@ const resumeForm={id:'resume-form',name:'ResumeForm',version:'1.0.0',scope:'isol
       SET('resume_definition','target','cargo.forms[form].definition'),SET('resume_parent','parent',"cargo.forms[form].parent || ''"),SET('resume_slot','slot',"cargo.forms[form].result_input || ''"),
       FLOW('resume_owned_form','{{target}}','replace',{form_instance:'{{form}}',parent_form:'{{parent}}',result_input:'{{slot}}'})
    ]};
-const LIBRARY_FLOWS = [readFormReply, readFormChoice, readConfirmReply, confirmInputProposal,proposalDeclined,resumeForm,performAction, sendTextAction, prepareInput, runForm, collectInput, validateBatch, requestCancelled, readFormResponse, collectContextualAnswer, accept, acceptedEffects, disambiguate, confirmForm, formDone, providerMenu, ...validators, ...fieldCollectors, ...subForms, provideData, provideQueuedData, loadSource, answerFacts];
+const LIBRARY_FLOWS = [readProviderReply, readFormReply, readFormChoice, readConfirmReply, confirmInputProposal,proposalDeclined,resumeForm,performAction, sendTextAction, prepareInput, runForm, collectInput, validateBatch, requestCancelled, readFormResponse, collectContextualAnswer, accept, acceptedEffects, disambiguate, confirmForm, formDone, providerMenu, ...validators, ...fieldCollectors, ...subForms, provideData, provideQueuedData, loadSource, answerFacts];
 const LIBRARY_CONTRACTS={
    'confirm-input-proposal':{role:'collector',requires:[INPUT_PROPOSALS_REQUIREMENT]},'confirm-input-proposal-declined':{role:'worker',requires:[INPUT_PROPOSALS_REQUIREMENT]},
    'resume-form':{role:'worker'},
@@ -919,7 +938,7 @@ const LIBRARY_CONTRACTS={
    'prepare-input':{role:'worker'},'run-form':{role:'worker'},'collect-input':{role:'worker'},
    'request-cancelled':{role:'worker'},
    'read-form-response':{role:'worker',requires:[CONTEXTUAL_RESPONSES_REQUIREMENT]},
-   'read-form-reply':{role:'worker'},'read-form-choice':{role:'worker',requires:[CONTEXTUAL_RESPONSES_REQUIREMENT]},'read-confirm-reply':{role:'worker',requires:[CONTEXTUAL_RESPONSES_REQUIREMENT]},
+   'read-form-reply':{role:'worker'},'read-form-choice':{role:'worker',requires:[CONTEXTUAL_RESPONSES_REQUIREMENT]},'read-provider-reply':{role:'worker',requires:[CONTEXTUAL_RESPONSES_REQUIREMENT]},'read-confirm-reply':{role:'worker',requires:[CONTEXTUAL_RESPONSES_REQUIREMENT]},
    'collect-contextual-answer':{role:'collector',requires:[CONTEXTUAL_RESPONSES_REQUIREMENT]},
    'validate-input-batch':{role:'worker',result:{path:'cargo.inputBatch',type:'object'}},
    'collect-input-accept':{role:'worker'},'input-accepted-effects':{role:'worker'},

@@ -3847,7 +3847,7 @@ async function detectFlowInTwoStages(input: string, engine: Engine, flows: FlowD
  * when the host says `answers` is the default because no option cleared its cut (`fallback: true`); an answer
  * without that flag (a text model's pick, or a host that does not send it) is a confident one.
  */
-async function rankReply(input: string, engine: Engine, question: string, choices: ReplyChoice[] = [], reasonFor = ''): Promise<{ option: ReplyOption, confident: boolean }> {
+async function rankReply(input: string, engine: Engine, question: string, choices: ReplyChoice[] = [], reasonFor = ''): Promise<{ option: ReplyOption, confident: boolean, also: string[] }> {
   const { input: cleanInput, conversation } = buildDetectFlowRequest(input, engine.lastChatTurn, []);
   const request = buildReplyRank(cleanInput, conversation, question, choices, { reasonFor });
   const reply = parseStageReply(await fetchAiResponse(request.llm.system, request.llm.user, engine.aiCallback, engine.aiTimeOut, stageSchema('rank_reply', request.llm.schema), request));
@@ -3855,7 +3855,9 @@ async function rankReply(input: string, engine: Engine, question: string, choice
   if (!request.options.includes(option)) throw new Error(`rank_reply: "${option.slice(0, 40)}" is not an offered option`);
   const confident = reply.fallback !== true;
   logger.info(`rank_reply: ${option}${confident ? '' : ' (default: no option cleared the cut)'} for ${JSON.stringify(cleanInput)}`);
-  return { option, confident };
+  // `also`: other declared choices the reply clears as well (a host that does not send it answers one choice).
+  const also = Array.isArray(reply.also) ? reply.also.map(String).filter(key => request.options.includes(`${CHOICE_PREFIX}${key}` as ReplyOption)) : [];
+  return { option, confident, also };
 }
 
 /**
@@ -7355,9 +7357,10 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
       // A model error leaves this live continuation pending for the caller's error policy.
       let option: ReplyOption;
       let confident: boolean;
+      let also: string[];
       // A reason question names what the caller does not want; empty (or no attribute) ranks the reply generically.
       const reasonFor = declaration?.reasonFor ? interpolateMessage(declaration.reasonFor,frame.contextStack,frame.variables,engine).trim() : '';
-      try { ({ option, confident } = await rankReply(String(sanitizedInput),engine,question,choices,reasonFor)); } catch (error) { guardedRoutingFailed = true; throw error; }
+      try { ({ option, confident, also } = await rankReply(String(sanitizedInput),engine,question,choices,reasonFor)); } catch (error) { guardedRoutingFailed = true; throw error; }
       // A declared choice routed as a new request (route: 'new_request') leaves like one.
       const pickedChoice = option.startsWith(CHOICE_PREFIX) ? choices.find(c => CHOICE_PREFIX + c.key === option) : undefined;
       if (pickedChoice?.route === 'new_request') {
@@ -7381,7 +7384,7 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         } else {
           // no arguments declared
         }
-        frame.variables[declaration!.variable] = { key: option.slice(CHOICE_PREFIX.length), ...(extractedArguments ? { arguments: extractedArguments } : {}) };
+        frame.variables[declaration!.variable] = { key: option.slice(CHOICE_PREFIX.length), ...(also.length ? { also } : {}), ...(extractedArguments ? { arguments: extractedArguments } : {}) };
         logger.info(`Contextual DISPATCH in '${frame.flowName}': the reply picks '${option.slice(CHOICE_PREFIX.length)}'; the flow continues`);
         return false;
       } else if (option === 'answers') {
