@@ -40,6 +40,9 @@ A versioned entry has `declarationVersion: 2` (new authoring) or `1` (earlier se
 | `parameters` | Entry arguments: what a caller passes, or what may be said up front that no input asks. On a version 2 form, input parameters are generated and may not be written. Declare meaning precisely; never infer consent from extraction. |
 | `parameterInstructions` | Cross-parameter extraction guidance for stage two; not stage-one intent selection. |
 | `variables` | Initial local variables, preferably `{ "name": {"type":"string","value":""} }`. Object/array defaults are cloned per activation. |
+| `interruptable` | When it and every flow on the stack are true, intent detection may interrupt. |
+| `loopBound` | A string naming the runtime limit that ends a loop this flow is on; the flow-trap check accepts the loop and a test must drive the limit. |
+| `replaceTarget` | `true`: a `FLOW.replace` with `toParent:true` may return to this flow's waiting frame and take its place. |
 | `functions` | Named ordinary JavaScript bodies, described below. |
 | `contract` | Business summary, role, requirements, tool references and result metadata; builders supply normal protocol details. |
 | `wraps` | Ordinary thin wrapper over an installed shared flow, by ID/name. The shared target becomes non-primary; omitted wrapper description, parameters, prompts and primary flag inherit from it (a primary wrapper needs no description of its own). |
@@ -104,11 +107,13 @@ Each step has `type`, a stable `id`, and the applicable fields below. CASE/SWITC
 | `CALL-TOOL` | Registered `tool`, `args`, result `variable`, and explicit `onFail`. |
 | `END` | End only this flow; resume its caller after the FLOW call. A root simply finishes. |
 | `RETURN` | End all stacks and return the evaluated `value` to the host. Empty string forwards this turn's original input to host AI/RAG. Queued SAY text is dropped unless `keepSay:true`. |
-| `DISPATCH` | End all stacks, drop undelivered SAY text, and reroute this turn's input through primary intent detection. A match starts in the same turn; otherwise the host handles it with its conversation context. |
+| `DISPATCH` | End all stacks, drop undelivered SAY text, and reroute this turn's input through primary intent detection. A match starts in the same turn; otherwise the host handles it with its conversation context. Optional `outcome`, `reason`, `recovery`. Contextual form: `onResponse:"continue"` with `responseContext`, `responseVariable` (a declared object), `responseParameters`, `responseChoices` (a declared array variable of `{key,label?,route?:"new_request",parameters?}`), `responseReasonFor` (a string; not with `responseChoices`) and `onNoIntent:"stay"`. |
 
 `FLOW.call` runs the child and returns to the next caller step. `FLOW.replace` replaces only the current frame; when the replacement ends, it returns to the original caller. A shared replace preserves existing variables; `initializeDefaults:true` fills declared target defaults only where a value is undefined. Versioned native builders set this explicitly. An isolated target always has its own declared context. `FLOW.reboot` clears all stacks and starts a new execution context with explicit parameters, preserving cargo. Queued SAY text normally travels with the reboot; `discardSay:true` drops it.
 
 A `FLOW.replace` with `toParent: true` whose target flow declares `replaceTarget: true` returns to that flow's waiting frame and takes its place, dropping what ran above it. With either missing, or no such frame, it is a local replace. The validator refuses a loop holding a `call` (`stack_growth`) and a loop of replaces with no question in reach (`spin`); a flow on a loop that a runtime limit ends declares `loopBound: "<the limit>"`, and a test drives the loop to that limit. Use `call` for a closed sub-task and `DISPATCH` for anything the caller asked for.
+
+A flow trap (a loop of flows with no question in reach, or a stack that grows with each answer) refuses the set. Trap edges include form input form, validator, prepare, refresh, after, answer_precheck, answer_validator, on_no, on_declined; proposal prepare and on_declined; gate, source and action flow; parameters validate_flow, code_validator, answer_handler, failed_flow, cell_validator, email_validator, switch_reset (calls), restart (replace), retry_flow with retry_returns:true (replace). Not traps: a flow replacing itself, reboot, DISPATCH, loopBound, any path through a JSFE worker.
 
 For validated native `FLOW.parameters` and `CALL-TOOL.args`, interpolation references must be dotted paths such as `{{request.account}}`, not arbitrary expressions. Compute expressions in a preceding SET or named worker. Provider `gateParameters` is an authoring convenience that lowers whole-expression templates to SET steps before the call.
 
@@ -162,7 +167,7 @@ Field options:
 
 | Fields | Meaning |
 | --- | --- |
-| `label`, `label_es`; `question`, `question_es`; `retry`, `retry_es` | Names, first prompt and explicit retry wording. Contextual question templates compile to workers automatically. |
+| `label`, `label_es`; `question`, `question_es`, `question_voice`, `question_voice_es`; `retry`, `retry_es` | Names, first prompt and explicit retry wording. Contextual question templates compile to workers automatically. |
 | `question_text`, `question_text_es`; `retry_text`, `retry_text_es` | Optional written-channel wording, used instead when the conversation is not a call (`cargo.voice` false). |
 | `description` | Public extraction guidance; `response.description`, when used, describes an open answer. |
 | `when` | Map paths to desired scalar values or arrays; siblings use field names, session paths use `cargo.*`, owner data uses `form.*`. Values prefixed `!` exclude that value. |
@@ -193,7 +198,7 @@ Profiles:
 | `amount` | `min`, `max`, optional `marked:true` or `marked:"out_of_order"`; optional `money:{currency:"USD",cardinals:true,intent:"payment"}`. |
 | `text` | Current-field text fallback; `narrative:true` retains a substantive answer alongside independent structured fields. |
 
-`phrases` is the authoring name for matching aliases; `description` explains their meaning. Do not duplicate `words` / `gloss` aliases in new source. Historical executable definitions remain readable with those old keys; new names take precedence.
+`phrases` is the authoring name for matching aliases; `description` explains their meaning to parameter extraction only. For the reply ranker a choice is its `label`, or else its key and first six phrases, so write a `label` when the phrases do not convey the option; there is no rank attribute. Do not duplicate `words` / `gloss` aliases in new source. Historical executable definitions remain readable with those old keys; new names take precedence.
 
 Matching depends on policy. With `exact:true`, a phrase must form the whole normalized answer, allowing the engine's bounded courtesy/affirmation wrappers; questions and additional substantive corrections do not consent. Thus exact `here` does not accept `pay here`. Without exact, ordinary positive named choices may match within an unnegated clause: do not assume whole-answer matching. Keypad aliases, YES and NO-type answers have stricter rules regardless. `keys` are current-field-only whole-answer keypad aliases; they must not steal a monetary answer or identify a different field. `neutral` is not consent. Use exact choices for sensitive finite decisions.
 
@@ -213,7 +218,6 @@ Declarations:
 | input `invites:[names]`, `form.confirm.invites` | The other inputs this question (or the read-back) also asks for ("NEW CARD, LINK, or a different amount" invites `amount`), in its form or an enclosing one; read as in order while it is asked. |
 | profile `out_of_order:{…}` | A narrower signature for out-of-order reading: the payment card takes a bare last four when asked, but out of order only a card word or "ending in 4242". |
 | input `choices_from` | The choice's values come from prepared data (the caller's saved cards), so its signature is those values. |
-| `form.compound:"worker"` | A parser that reads several of the form's fields from one answer (an address said in one breath). |
 
 Rules, in order:
 
