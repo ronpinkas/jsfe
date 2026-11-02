@@ -3,7 +3,7 @@
 <!-- generated:start -->
 **LiveAgentRequested** · `live-agent-requested` · version 1.8.0 · **entry point** (intent detection can start it) · steps
 
-> Customer wants to talk to a person, or says just 'agent' / 'AGENT': a live agent, a representative, customer service ('agent', 'speak to an agent', 'customer service representative', 'transfer me', 'I need to talk to someone', 'can I talk to a human', 'agente', 'representante', 'servicio al cliente', 'atención al cliente', 'transfiéreme', 'hablar con una persona', 'comunicarme con alguien', 'operator', 'manager', 'supervisor'), including a cut-off 'service' or 'al cliente' said alone. Not: continuing by text (SwitchToText); only asking for a phone number, email or hours (None). Transfers at once: no offer to continue with the assistant (the tenant's own interception covers it; owner 2026-10-28).
+> Wants a person, or says just 'agent' / 'AGENT': a live agent, representative, customer service or supervisor ('transfer me', 'agente', 'representante', 'operator', 'manager', 'supervisor', 'servicio al cliente', 'atención al cliente', 'hablar con una persona'), including a cut-off 'service' or 'al cliente' alone. Not: continuing by text (SwitchToText); only asking for a phone number, email or hours (None).
 
 - **Parameters:** none
 - **Calls:** no other flow

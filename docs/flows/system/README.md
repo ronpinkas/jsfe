@@ -14,8 +14,8 @@ flowchart LR
 
 | flow | kind | what it is |
 |---|---|---|
-| [switch-to-text](switch-to-text.md) | steps | Customer explicitly asks to continue this conversation by text message / SMS ('switch to text', 'text me instead', 'can we continue by text… |
-| [live-agent-requested](live-agent-requested.md) | steps | Customer wants to talk to a person, or says just 'agent' / 'AGENT': a live agent, a representative, customer service ('agent', 'speak to an… |
+| [switch-to-text](switch-to-text.md) | steps | Explicitly asks to continue this conversation by text or SMS ('text me instead', 'seguimos por mensaje de texto'). Not: a person (LiveAgent… |
+| [live-agent-requested](live-agent-requested.md) | steps | Wants a person, or says just 'agent' / 'AGENT': a live agent, representative, customer service or supervisor ('transfer me', 'agente', 'rep… |
 
 ## Workers
 

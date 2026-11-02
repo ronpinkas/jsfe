@@ -3,7 +3,7 @@
 <!-- generated:start -->
 **SwitchToText** · `switch-to-text` · version 1.2.4 · **entry point** (intent detection can start it) · steps
 
-> Customer explicitly asks to continue this conversation by text message / SMS ('switch to text', 'text me instead', 'can we continue by text', 'pásame a texto', 'seguimos por mensaje de texto'). Not: asking for a live agent or a person (LiveAgentRequested); asking to have one thing texted, such as a link, an address or a statement, a yes or no, or any answer that does not mention text or SMS (None).
+> Explicitly asks to continue this conversation by text or SMS ('text me instead', 'seguimos por mensaje de texto'). Not: a person (LiveAgentRequested); having one thing texted, such as a link, address or statement (None).
 
 - **Parameters:** none
 - **Calls:** [give-up](give-up.md) (reboot)

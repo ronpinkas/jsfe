@@ -32,9 +32,9 @@ flowchart LR
 
 | flow | kind | what it is |
 |---|---|---|
-| [shopify-ql-product-search](shopify-ql-product-search.md) | steps | Find a product, price, or online/store availability, including a product named alone ('a Minions costume', 'tires'). Follow-up questions ab… |
-| [shopify-ql-track-order](shopify-ql-track-order.md) | steps | Customer asks about an order or purchase they placed, or a package: its status, when it will arrive or be ready for pickup, where it is, it… |
-| [shopify-ql-store-policies](shopify-ql-store-policies.md) | steps | Customer asks about store policy or FAQ terms: returns, refunds, exchanges, shipping or delivery rules ('what is your return policy', 'do y… |
+| [shopify-ql-product-search](shopify-ql-product-search.md) | steps | Wants to find, price or check availability of a product, including one named alone ('tires'); wants to place a new order ('quiero hacer un … |
+| [shopify-ql-track-order](shopify-ql-track-order.md) | steps | Asks about an order or package they placed: status, arrival, pickup readiness, tracking, contents, not arrived, or a list of their orders (… |
+| [shopify-ql-store-policies](shopify-ql-store-policies.md) | steps | Asks a general store policy or FAQ rule: returns, refunds, exchanges, shipping or delivery ('do you ship to Canada', '¿cuál es su política … |
 
 ## Workers
 
