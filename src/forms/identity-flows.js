@@ -241,7 +241,7 @@ const validateCode=worker('validate-otp-code','ValidateOtpCode','Validate a chal
    when('otp_tenant_code','cargo.authOptions && cargo.authOptions.code_validator && normalized_otp_code.length !== 6 && /[0-9]/.test(user_choice)',call('otp_tenant_code_call','{{cargo.authOptions.code_validator}}',{answer:'{{user_choice}}'})),
    set('otp_other_given','other_account_given',"answer_key === 'another_account' ? (cargo.authOtherAccount=String(answer_value || ''),true) : false"),
    set('otp_other_requested','wants_other_account','other_account_given || !!(cargo.callerPreselected && normalized_otp_code.length !== 6 && (matchesChoice(user_choice,otp_phrases.other) || otp_phrases.other_alone.includes(user_choice.replace(/[.,!?¡¿]/g,\'\').trim())))'),
-   when('otp_tenant_answer','cargo.authOptions && cargo.authOptions.answer_handler && normalized_otp_code.length !== 6 && !wants_other_account',call('otp_tenant_answer_call','{{cargo.authOptions.answer_handler}}',{answer:'{{user_choice}}'})),
+   when('otp_tenant_answer','cargo.authOptions && cargo.authOptions.answer_handler && normalized_otp_code.length !== 6 && !wants_other_account && answer_key !== \'code_notice\'',call('otp_tenant_answer_call','{{cargo.authOptions.answer_handler}}',{answer:'{{user_choice}}'})),
    set('otp_where_early','otp_where',expression(otpWhere,'cargo')),set('otp_where_early_es','otp_where_es',expression(otpWhere,'cargo','true')),
    cases('otp_response',{
       'condition: normalized_otp_code.length === 6':{id:'otp_check_tool',type:'CALL-TOOL',tool:'validate-otp',variable:'otp_validation_result',args:{otp:'{{normalized_otp_code}}',container:'{{cargo}}'},onFail:call('otp_check_failed','get-and-validate-otp-code',undefined,'replace')},
@@ -257,6 +257,8 @@ const validateCode=worker('validate-otp-code','ValidateOtpCode','Validate a chal
       'condition: matchesChoice(user_choice,otp_phrases.cannot_find)':say('otp_cannot_find','{{otp_where}}','{{otp_where_es}}'),
       'condition: matchesChoice(user_choice,otp_phrases.another_way)':say('otp_no_other_way','{{otp_where}} To reach a person, {{cargo.verb}} AGENT.','{{otp_where_es}} Para hablar con una persona, {{cargo.verb_es}} AGENTE.'),
       'condition: matchesChoice(user_choice,otp_phrases.later)':say('otp_later',"No problem. Say TEXT and I'll continue with you by message so you can do this when you are free, or {{cargo.verb}} the code whenever you are ready.",'No hay problema. Diga TEXTO y sigo con usted por mensaje para que lo haga cuando esté libre, o {{cargo.verb_es}} el código cuando pueda.'),
+      // code_validator said why this answer is not taken (answer_key 'code_notice'): the question is asked again; it counts as a format miss.
+      "condition: answer_key === 'code_notice'":effect('otp_tenant_notice_said','true'),
       'condition: normalized_otp_code.length > 0 && Number(cargo.otpFormatMisses || 0)<2':say('otp_bad_format',"I was expecting a 6-digit code. Let's try again.","Esperaba un código de 6 dígitos. Intentemos de nuevo."),
       'condition: normalized_otp_code.length > 0':effect('otp_format_cap_next','true'),
       ['condition: matchesChoice(user_choice,otp_phrases.noPhone) || '+expression(otpPhoneUnavailable,'user_choice')]:otpMenu('otp_no_phone',"No problem. Then the code can't reach you there. You can use the email on your account instead, or {{cargo.verb}} AGENT to reach a person.",'No hay problema. Entonces el código no le puede llegar ahí. Puede usar el correo electrónico de su cuenta, o {{cargo.verb_es}} AGENTE para hablar con una persona.',false),
