@@ -221,7 +221,8 @@ export function decodeReplyRankSystemOne(
   const choice = cleared.find(o => o.startsWith(CHOICE_PREFIX));
   // `irrelevant` takes a choice's place only from its own higher cut (REPLY_IRRELEVANT_OVER_CHOICE).
   const yieldsToChoice = cleared[0] === 'answers' || cleared[0] === 'new_request' || (cleared[0] === 'irrelevant' && scores.irrelevant < REPLY_IRRELEVANT_OVER_CHOICE);
-  const best = choice && yieldsToChoice ? choice : cleared[0];
+  // A clear ask outranks noise (owner 2026-11-02, prod "¿Quién habla?" irrelevant .85, new_request .72): with both cleared the reply is a request.
+  const best = choice && yieldsToChoice ? choice : cleared[0] === 'irrelevant' && !choice && cleared.includes('new_request') ? 'new_request' : cleared[0];
   if (best) {
     // A question's own choices that also cleared REPLY_ALSO_CUT, by score. An escape (`__agent`) is never a second pick.
     const also = best.startsWith(CHOICE_PREFIX) ? cleared.filter(o => o !== best && o.startsWith(CHOICE_PREFIX) && !o.startsWith(`${CHOICE_PREFIX}__`) && scores[o] >= REPLY_ALSO_CUT).map(o => o.slice(CHOICE_PREFIX.length)) : [];

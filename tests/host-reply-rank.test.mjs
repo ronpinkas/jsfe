@@ -61,5 +61,12 @@ test('irrelevant: its own cut, and it takes a choice only from the higher one',(
  assert.equal(pick(.7,.78),'choice:1','below 0.8 a cleared choice stands ("Operator.")');assert.equal(pick(.7,.86),'irrelevant','from 0.8 a stray word is not a pick ("You.")');
  assert.equal(pick(.9,.85),'choice:1','a choice rated higher stands');
 });
+test('a cleared new_request outranks irrelevant, on an open question and never over a cleared choice',()=>{
+ const r=buildReplyRank('x',conversation,'Q?');const noul=v=>Object.fromEntries(r.systemOne.index.map(q=>[q.id,{noul:v[q.option]??.05}]));
+ assert.equal(decodeReplyRankSystemOne(noul({irrelevant:.85,new_request:.72}),r).option,'new_request');
+ assert.equal(decodeReplyRankSystemOne(noul({irrelevant:.85,new_request:.59}),r).option,'irrelevant');
+ const c=buildReplyRank('x',conversation,'Q?',[{key:'1',label:'one'}]);const n=v=>Object.fromEntries(c.systemOne.index.map(q=>[q.id,{noul:v[q.option]??.05}]));
+ assert.equal(decodeReplyRankSystemOne(n({'choice:1':.7,irrelevant:.86,new_request:.7}),c).option,'irrelevant','a stray word is still not a pick');
+});
 test('a reason question offers no irrelevant: a reason is never thrown away',()=>{assert.ok(!buildReplyRank('x',conversation,'Why?',[],{reasonFor:'the club'}).options.includes('irrelevant'));});
 console.log(`Reply rank: all checks passed (${checks})`);
