@@ -12335,6 +12335,11 @@
         "description": "Fact or set key"
       },
       {
+        "name": "reply",
+        "type": "string",
+        "description": "The words that started the provider, this turn: tells a question back from its own menu from a later one"
+      },
+      {
         "name": "asked_keys",
         "type": "array",
         "description": "Independent requested facts or sets"
@@ -12359,6 +12364,14 @@
       "noop": {
         "type": "boolean",
         "scope": "flow",
+        "value": false
+      },
+      "reply": {
+        "type": "string",
+        "value": ""
+      },
+      "pd_unanswered": {
+        "type": "boolean",
         "value": false
       },
       "form": {
@@ -12482,6 +12495,34 @@
         "type": "SET",
         "variable": "pd_keys",
         "value": "(function () { var requested=Array.isArray(asked_keys)&&asked_keys.length?asked_keys:[typeof asked!=='undefined'?String(asked||''):''];return requested.reduce(function(keys,a){var set=(provides.sets||[]).filter(function(x){return x.key===a;})[0];var facts=set?set.facts:provides.facts.some(function(f){return f.key===a;})?[a]:[];return keys.concat(facts.filter(function(key){return keys.indexOf(key)<0;}));},[]); })()"
+      },
+      {
+        "id": "pd_unanswered_check",
+        "type": "SET",
+        "variable": "pd_unanswered",
+        "value": "(function () { var u = provides.menu && provides.menu.unanswered, m = cargo.providerAsked; delete cargo.providerAsked; var same = function (x) { return String(x == null ? '' : x).replace(/\\\\/g, '').trim(); }; return !!u && !!m && m.subject === String(provides.subject || '') && typeof reply !== 'undefined' && same(m.input) === same(reply) && (m.ranked === true || (u.asked || []).indexOf(typeof asked !== 'undefined' ? String(asked || '') : '') > -1); })()"
+      },
+      {
+        "id": "pd_unanswered_go",
+        "type": "CASE",
+        "branches": {
+          "condition: pd_unanswered": {
+            "id": "pd_unanswered_flow",
+            "type": "FLOW",
+            "value": "provider-unanswered",
+            "callType": "replace",
+            "initializeDefaults": true,
+            "parameters": {
+              "provides": "{{provides}}"
+            }
+          },
+          "default": {
+            "id": "pd_unanswered_go_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
       },
       {
         "id": "pd_menu_items",
@@ -13905,9 +13946,9 @@
   {
     "id": "provider-menu",
     "name": "ProviderMenu",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "scope": "isolated",
-    "description": "Worker: after a provider answered, offer its menu (provides.menu: question(_voice)(_es) with {verb} / {name}; choices [{ key, phrases, flow, exact, set }]; done { phrases, say(_es) }). A fact or set named by its words is answered and the menu comes back; an action runs its flow (replace) after setting its `set` cargo fields; done says goodbye. Other phrases: DISPATCH. No phrases: asked once more, then 'anything else?'. Params: provides, retry.",
+    "description": "Worker: after a provider answered, offer its menu (provides.menu: question(_voice)(_es) with {verb} / {name}; choices [{ key, phrases, flow, exact, set }]; done { phrases, say(_es) }). A fact or set named by its words is answered and the menu comes back (menu.whole_phrases: only when the phrase is the whole reply; a phrase inside a sentence goes to the reply ranker, whose no-pick is the host's); an action runs its flow (replace) after setting its `set` cargo fields; done says goodbye. Other phrases: DISPATCH. No phrases: asked once more, then 'anything else?'. Params: provides, retry.",
     "parameters": [
       {
         "name": "provides",
@@ -13950,6 +13991,14 @@
         "type": "array",
         "value": []
       },
+      "pm_contained": {
+        "type": "boolean",
+        "value": false
+      },
+      "pm_also": {
+        "type": "array",
+        "value": []
+      },
       "pm_close": {
         "type": "boolean",
         "value": false
@@ -13982,7 +14031,7 @@
         "type": "object",
         "value": {
           "version": 1,
-          "summary": "Worker: after a provider answered, offer its menu (provides.menu: question(_voice)(_es) with {verb} / {name}; choices [{ key, phrases, flow, exact, set }]; done { phrases, say(_es) }). A fact or set named by its words is answered and the menu comes back; an action runs its flow (replace) after setting its `set` cargo fields; done says goodbye. Other phrases: DISPATCH. No phrases: asked once more, then 'anything else?'. Params: provides, retry.",
+          "summary": "Worker: after a provider answered, offer its menu (provides.menu: question(_voice)(_es) with {verb} / {name}; choices [{ key, phrases, flow, exact, set }]; done { phrases, say(_es) }). A fact or set named by its words is answered and the menu comes back (menu.whole_phrases: only when the phrase is the whole reply; a phrase inside a sentence goes to the reply ranker, whose no-pick is the host's); an action runs its flow (replace) after setting its `set` cargo fields; done says goodbye. Other phrases: DISPATCH. No phrases: asked once more, then 'anything else?'. Params: provides, retry.",
           "parametersFrom": "parameters",
           "role": "worker",
           "requires": [
@@ -14021,7 +14070,7 @@
         "id": "pm_build",
         "type": "SET",
         "variable": "pm_choices",
-        "value": "provides.facts.concat(provides.sets || []).filter(function (f) { return Array.isArray(f.phrases ?? f.words) && (f.phrases ?? f.words).length; }).map(function (f) { return { key: 'fact:' + f.key, phrases: f.phrases ?? f.words }; }).concat((provides.menu.choices || []).map(function (c) { return { key: 'act:' + c.key, phrases: c.phrases ?? c.words, exact: c.exact === true }; })).concat(provides.menu.done ? [{ key: 'done', phrases: provides.menu.done.phrases ?? provides.menu.done.words, exact: true }] : [])"
+        "value": "provides.facts.concat(provides.sets || []).filter(function (f) { return Array.isArray(f.phrases ?? f.words) && (f.phrases ?? f.words).length; }).map(function (f) { return Object.assign({ key: 'fact:' + f.key, phrases: f.phrases ?? f.words }, f.description ? { label: f.description } : {}); }).concat((provides.menu.choices || []).map(function (c) { return Object.assign({ key: 'act:' + c.key, phrases: c.phrases ?? c.words, exact: c.exact === true }, c.label ? { label: c.label } : {}); })).concat(provides.menu.done ? [Object.assign({ key: 'done', phrases: provides.menu.done.phrases ?? provides.menu.done.words, exact: true }, provides.menu.done.label ? { label: provides.menu.done.label } : {})] : [])"
       },
       {
         "id": "pm_ask",
@@ -14048,10 +14097,63 @@
         "value": "(function(){var key=String(cargo.choice || '');if(key.indexOf('fact:')===0)return pickProviderQuestion(cargo.choiceText,pm_choices.filter(function(c){return c.key.indexOf('fact:')===0;}));if(key.indexOf('act:')===0 && provides.menu.done && pickChoice(cargo.choiceText,[{key:'terminal:done',phrases:provides.menu.done.phrases ?? provides.menu.done.words,exact:true}],true)==='terminal:done')return 'done';return key;})()"
       },
       {
+        "id": "pm_contained_check",
+        "type": "SET",
+        "variable": "pm_contained",
+        "value": "provides.menu.whole_phrases === true && pm_key.indexOf('fact:') === 0 && pickChoice(cargo.choiceText, pm_choices.filter(function (c) { return c.key === pm_key; }).map(function (c) { return { key: c.key, phrases: c.phrases, exact: true }; }), false) !== pm_key"
+      },
+      {
+        "id": "pm_mark_reply",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(provides.menu.unanswered ? cargo.providerAsked = { subject: String(provides.subject || ''), input: String(cargo.choiceText || ''), ranked: pm_contained } : null, true)"
+      },
+      {
+        "id": "pm_rank",
+        "type": "CASE",
+        "branches": {
+          "condition: pm_contained": {
+            "id": "pm_read_reply",
+            "type": "FLOW",
+            "value": "read-provider-reply",
+            "callType": "call",
+            "parameters": {
+              "question": "{{pm_q}}",
+              "question_es": "{{pm_q_es}}",
+              "choices": "{{pm_choices}}"
+            }
+          },
+          "default": {
+            "id": "pm_rank_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "pm_ranked_also",
+        "type": "SET",
+        "variable": "pm_also",
+        "value": "pm_contained ? ((cargo.providerReply || {}).also || []) : []"
+      },
+      {
+        "id": "pm_ranked_key",
+        "type": "SET",
+        "variable": "pm_key",
+        "value": "pm_contained ? String((cargo.providerReply || {}).key || '') : pm_key"
+      },
+      {
+        "id": "pm_ranked_clear",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(delete cargo.providerReply,true)"
+      },
+      {
         "id": "pm_fact_keys",
         "type": "SET",
         "variable": "pm_keys",
-        "value": "pm_key.indexOf('fact:') === 0 ? (function (k) { var s = (provides.sets || []).filter(function (x) { return x.key === k; })[0]; return s ? s.facts.slice() : [k]; })(pm_key.slice(5)) : []"
+        "value": "pm_key.indexOf('fact:') === 0 ? [pm_key].concat(pm_also.filter(function (a) { return String(a).indexOf('fact:') === 0; })).reduce(function (keys, full) { var k = String(full).slice(5); var s = (provides.sets || []).filter(function (x) { return x.key === k; })[0]; (s ? s.facts : [k]).forEach(function (fact) { if (keys.indexOf(fact) < 0) keys.push(fact); }); return keys; }, []) : []"
       },
       {
         "id": "pm_closing",
@@ -19930,6 +20032,277 @@
       {
         "id": "vf_end",
         "type": "END"
+      }
+    ],
+    "safetyRevision": "dispatch-intake-2026-10-22"
+  },
+  {
+    "id": "read-provider-reply",
+    "name": "ReadProviderReply",
+    "version": "1.0.0",
+    "scope": "isolated",
+    "description": "Rank a menu reply its phrases do not settle: a fact or action it picks, the other facts it also asks for, or a request for a person; a withdrawal or a new request leaves.",
+    "parameters": [
+      {
+        "name": "question",
+        "type": "string"
+      },
+      {
+        "name": "question_es",
+        "type": "string"
+      },
+      {
+        "name": "choices",
+        "type": "array"
+      }
+    ],
+    "variables": {
+      "noop": {
+        "type": "boolean",
+        "scope": "flow",
+        "value": false
+      },
+      "question": {
+        "type": "string",
+        "value": ""
+      },
+      "question_es": {
+        "type": "string",
+        "value": ""
+      },
+      "choices": {
+        "type": "array",
+        "value": []
+      },
+      "asked": {
+        "type": "string",
+        "value": ""
+      },
+      "ranked": {
+        "type": "array",
+        "value": []
+      },
+      "reply": {
+        "type": "object",
+        "value": null
+      },
+      "contract": {
+        "type": "object",
+        "value": {
+          "version": 1,
+          "summary": "Rank a menu reply its phrases do not settle: a fact or action it picks, the other facts it also asks for, or a request for a person; a withdrawal or a new request leaves.",
+          "parametersFrom": "parameters",
+          "role": "worker",
+          "requires": [
+            "jsfe:contextual-responses:v1",
+            "jsfe:continuation-safety:v1"
+          ]
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "read-provider-reply_continuation_safety_protocol",
+        "type": "SET",
+        "variable": "noop",
+        "value": "continuationSafetyProtocol() === 1",
+        "requireTrue": true
+      },
+      {
+        "id": "read-provider-reply_contextual_response_protocol",
+        "type": "SET",
+        "variable": "noop",
+        "value": "contextualResponseProtocol() === 1",
+        "requireTrue": true
+      },
+      {
+        "id": "provider_reply_asked",
+        "type": "SET",
+        "variable": "asked",
+        "value": "language === 'es' && question_es ? question_es : question"
+      },
+      {
+        "id": "provider_reply_ranked",
+        "type": "SET",
+        "variable": "ranked",
+        "value": "((choices || []).map(function(c){return {key:String(c.key),label:(function(c){var said=(Array.isArray(c.phrases) ? c.phrases : []).map(String).filter(function(p){return /[a-zà-ÿ]/i.test(p) && p!==String(c.key);}).slice(0,6);return String(c.label || (said.length ? c.key+' ('+said.join(', ')+')' : c.key));})(c)};})).concat([{key:'__agent',label:'speak with a person (a live agent)'}])"
+      },
+      {
+        "id": "provider_reply_dispatch",
+        "type": "DISPATCH",
+        "onResponse": "continue",
+        "responseContext": "Current question: {{asked}}",
+        "responseChoices": "ranked",
+        "responseVariable": "reply"
+      },
+      {
+        "id": "provider_reply_escape_agent",
+        "type": "CASE",
+        "branches": {
+          "condition: reply && reply.key === '__agent'": {
+            "id": "provider_reply_escape_agent_flow",
+            "type": "FLOW",
+            "value": "live-agent-requested",
+            "callType": "reboot"
+          },
+          "default": {
+            "id": "provider_reply_escape_agent_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "provider_reply_take",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(cargo.providerReply=reply || {},true)"
+      }
+    ],
+    "safetyRevision": "dispatch-intake-2026-10-22"
+  },
+  {
+    "id": "provider-unanswered",
+    "name": "ProviderUnanswered",
+    "version": "1.0.0",
+    "scope": "isolated",
+    "description": "Worker: a question the provider has no fact for, sent back to it from its own menu: says provides.menu.unanswered.question(_es) and offers that menu's choice unanswered.choice. YES runs it, NO returns to the menu, anything else is DISPATCHed. Param: provides.",
+    "parameters": [
+      {
+        "name": "provides",
+        "type": "object",
+        "description": "The provider catalog"
+      }
+    ],
+    "variables": {
+      "noop": {
+        "type": "boolean",
+        "scope": "flow",
+        "value": false
+      },
+      "pu_choice": {
+        "type": "object",
+        "value": null
+      },
+      "pu_yes": {
+        "type": "boolean",
+        "value": false
+      },
+      "pu_no": {
+        "type": "boolean",
+        "value": false
+      },
+      "pu_flow": {
+        "type": "string",
+        "value": ""
+      },
+      "contract": {
+        "type": "object",
+        "value": {
+          "version": 1,
+          "summary": "Worker: a question the provider has no fact for, sent back to it from its own menu: says provides.menu.unanswered.question(_es) and offers that menu's choice unanswered.choice. YES runs it, NO returns to the menu, anything else is DISPATCHed. Param: provides.",
+          "parametersFrom": "parameters",
+          "role": "worker",
+          "requires": [
+            "jsfe:continuation-safety:v1"
+          ]
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "provider-unanswered_continuation_safety_protocol",
+        "type": "SET",
+        "variable": "noop",
+        "value": "continuationSafetyProtocol() === 1",
+        "requireTrue": true
+      },
+      {
+        "id": "pu_find",
+        "type": "SET",
+        "variable": "pu_choice",
+        "value": "(provides.menu.choices || []).filter(function (c) { return c.key === provides.menu.unanswered.choice; })[0] || null"
+      },
+      {
+        "id": "pu_ask",
+        "type": "FLOW",
+        "value": "ask-choice",
+        "callType": "call",
+        "parameters": {
+          "question": "{{provides.menu.unanswered.question}}",
+          "question_es": "{{provides.menu.unanswered.question_es}}",
+          "choices": [
+            {
+              "key": "yes",
+              "phrases": [
+                "1"
+              ]
+            },
+            {
+              "key": "no",
+              "phrases": [
+                "2",
+                "no",
+                "no thanks",
+                "no thank you",
+                "not now",
+                "no gracias",
+                "ahora no"
+              ]
+            }
+          ],
+          "accept_other": true,
+          "digits": {
+            "min": 1,
+            "max": 1
+          }
+        }
+      },
+      {
+        "id": "pu_read_yes",
+        "type": "SET",
+        "variable": "pu_yes",
+        "value": "String(cargo.choice) === 'yes' || isAnswer(cargo.choiceText, 'yes')"
+      },
+      {
+        "id": "pu_read_no",
+        "type": "SET",
+        "variable": "pu_no",
+        "value": "!pu_yes && String(cargo.choice) === 'no'"
+      },
+      {
+        "id": "pu_take",
+        "type": "SET",
+        "variable": "pu_flow",
+        "value": "pu_yes && pu_choice ? (function (c) { if (c.set) { Object.keys(c.set).forEach(function (k) { cargo[k] = c.set[k]; }); } else { /* nothing to set */ } return c.flow; })(pu_choice) : ''"
+      },
+      {
+        "id": "pu_route",
+        "type": "CASE",
+        "branches": {
+          "condition: pu_flow": {
+            "id": "pu_act",
+            "type": "FLOW",
+            "value": "{{pu_flow}}",
+            "callType": "replace",
+            "initializeDefaults": true
+          },
+          "condition: pu_no": {
+            "id": "pu_menu",
+            "type": "FLOW",
+            "value": "provider-menu",
+            "callType": "replace",
+            "initializeDefaults": true,
+            "parameters": {
+              "provides": "{{provides}}"
+            }
+          },
+          "default": {
+            "id": "pu_elsewhere",
+            "type": "DISPATCH"
+          }
+        }
       }
     ],
     "safetyRevision": "dispatch-intake-2026-10-22"
