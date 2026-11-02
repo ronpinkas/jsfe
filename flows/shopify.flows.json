@@ -7,7 +7,7 @@
     "name": "ShopifyQLProductSearch",
     "prompt": "product search",
     "prompt_es": "buscar producto",
-    "description": "Find a product, price, or online/store availability, including a product named alone ('a Minions costume', 'tires'). Follow-up questions about those products, which are in stock, their price, the second one, or the cheapest use the shown-result context. Extract a new search_query only when the caller names a new product or changed features. Explicit variant or color changes are a new search, not permission to drop those constraints. Store availability requires a chosen product and city/state/ZIP. Wanting to place an order is a search ('quiero hacer un pedido de un televisor', 'I want to order a TV'). Not placed orders, including a product they say they already ordered ('tengo un pedido de un iPhone', 'I have an order for a TV') (ShopifyQLTrackOrder), policies (ShopifyQLStorePolicies), advice or greetings (None); the interest, APR or financing terms of buying on credit ('¿cuánto de interés?', 'what is the interest rate') (None).",
+    "description": "Wants to find, price or check availability of a product, including one named alone ('tires'); wants to place a new order ('quiero hacer un pedido de un televisor', 'I want to order a TV'); or asks about the products shown. Not: 'I have an order for X', 'I placed an order for X', 'tengo un pedido de X' or 'hice un pedido de X', whatever X is: that order already exists, so it is order tracking, never a search; when a product will be restocked (None); store policies; interest, APR or financing terms, advice or greetings (None).",
     "parameters": [
       {
         "name": "search_query",
@@ -3333,7 +3333,7 @@
     "name": "ShopifyQLTrackOrder",
     "prompt": "track order",
     "prompt_es": "rastrear pedido",
-    "description": "Customer asks about an order or purchase they placed, or a package: its status, when it will arrive or be ready for pickup, where it is, its tracking or tracking number, what is in it, a package that has not arrived, a product they say they already ordered ('tengo un pedido de un iPhone', 'hice un pedido de una laptop', 'I have an order for a TV', 'I placed an order for a laptop'), or a list of their orders ('where is my order', 'order status', 'my order', 'help with an order', 'track my package', 'when will my delivery arrive', 'order #1234', 'track 1Z999AA10123456784', 'where do I find my tracking number', '¿dónde está mi pedido?', 'mi pedido', 'estado de mi orden', '¿cuándo llega mi pedido?', '¿ya está listo para recoger?', 'no me ha llegado mi pedido', 'rastrear mi pedido', 'rastrear mi paquete'). Not: a charge on their account or bill ('un cargo', 'mi último cargo'), which is not an order; finding a product (ShopifyQLProductSearch); a return, refund or shipping policy (ShopifyQLStorePolicies); cancelling an order (None).",
+    "description": "Asks about an order or package they placed: status, arrival, pickup readiness, tracking, contents, not arrived, or a list of their orders ('mi pedido', 'order #1234', 'rastrear mi paquete'). Also 'I have an order for X', 'I placed an order for X', 'tengo un pedido de X' or 'hice un pedido de X', whatever X is. Not: a charge ('mi último cargo'); finding a product or placing a new order ('quiero hacer un pedido de un televisor'); a return or shipping policy; cancelling an order.",
     "parameters": [
       {
         "name": "order_number",
@@ -7771,7 +7771,7 @@
     "name": "ShopifyQLStorePolicies",
     "prompt": "store policies",
     "prompt_es": "políticas de la tienda",
-    "description": "Customer asks about store policy or FAQ terms: returns, refunds, exchanges, shipping or delivery rules ('what is your return policy', 'do you ship to Canada', '¿cuál es su política de devoluciones?'). A policy question concerns general rules; a missing refund on their own purchase, an order already placed, cancellation or a product search belongs to the corresponding task instead. Extract the customer's complete policy question as policy_query; leave it absent when only the policy topic is requested without a question.",
+    "description": "Asks a general store policy or FAQ rule: returns, refunds, exchanges, shipping or delivery ('do you ship to Canada', '¿cuál es su política de devoluciones?'). Not: a missing refund on their own purchase, tracking a placed order, or finding a product.",
     "parameters": [
       {
         "name": "policy_query",
