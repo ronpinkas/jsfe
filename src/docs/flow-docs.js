@@ -215,7 +215,7 @@ export function generateFlowDocs({ sets, root, check = false, hostRun = {}, log 
       ];
       if (flow.functions) { out.push(`- **Functions:** ${Object.keys(flow.functions).map((n) => '`' + n + '`').join(', ')}`); } else { /* none */ }
       if (flow.provides) {
-         out.push('', '### Provider', '', ...(flow.provides.facts || []).map((f) => `- fact \`${f.key}\`: ${f.description || ''}${f.path ? ' (from `' + f.path + '`)' : ''}`), '', providerChart(flow.provides));
+         out.push('', '### Provider', '', ...(flow.provides.facts || []).map((f) => `- fact \`${f.key}\`: ${f.description || ''}${f.path ? ' (from `' + f.path + '`)' : ''}`), ...providerMenuNotes(flow.provides.menu), '', providerChart(flow.provides));
       } else { /* not a provider */ }
       if (flow.form) { out.push('', '### Form', '', formChart(flow.form)); } else { /* not a form */ }
       // A form the jsfe SDK compiled (the system set) carries its inputs as a variable; its steps are the engine's run-form loop.
@@ -226,6 +226,15 @@ export function generateFlowDocs({ sets, root, check = false, hostRun = {}, log 
       if (flow.wraps) { out.push('', '### Wraps', '', `Runs ${link(flow.wraps)} with this set's wording.`); } else { /* not a wrapper */ }
       if (flow.steps && flow.steps.length) { out.push('', '### Steps', '', stepsChart(flow.steps)); } else { /* no steps */ }
       return out.join('\n');
+   }
+
+   // What a provider's menu opted into: both change what the caller hears, and neither shows in the chart.
+   function providerMenuNotes(menu) {
+      const notes = [];
+      if (menu && menu.whole_phrases) { notes.push('- menu `whole_phrases`: a fact\'s phrase inside a sentence goes to the reply ranker; a fact pick also answers every fact that cleared 0.6'); } else { /* not opted in */ }
+      const u = menu && menu.unanswered;
+      if (u) { notes.push(`- menu \`unanswered\`: a question with no fact, back from this menu${u.asked ? ' (asked: ' + u.asked.join(', ') + ')' : ''}, says "${u.question}"${u.question_es ? ' / "' + u.question_es + '"' : ''}; yes runs menu choice \`${u.choice}\`, no returns to the menu`); } else { /* not opted in */ }
+      return notes;
    }
 
    function upsert(file, title, generated, skeleton) {
