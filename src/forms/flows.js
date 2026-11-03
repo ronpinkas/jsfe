@@ -253,7 +253,7 @@ const collectInput = {
    id: 'collect-input', name: 'CollectInput', version: '1.0.0', scope: 'isolated',
    description: "Worker: ask the form's current input once and file the answer wherever it belongs in the form chain (matchInputs, decided by scope; a declared confirm_against pair is asked). One reading → collect-input-accept; ambiguous → disambiguate-input; a question about the form's data → provide-data; a short miss → counted, the loop re-asks; 3+ words that fit nothing → DISPATCH. Params: form, current, questions, provides, exit_context(_es).",
    parameters: ['form', 'current', 'questions', 'provides', 'exit_context', 'exit_context_es'].map((n) => ({ name: n, type: ['questions'].includes(n) ? 'array' : n === 'provides' ? 'object' : 'string', description: n })),
-   variables: vars({ ci_clarify:null, ci_clarify_number:'', ci_partial:'', ci_no_owner:'', ci_no_flow:'', ci_no_up:false, ci_reply_reader:'', ci_exhaustion:null, ci_d: {}, ci_pre: '', ci_val: '', ci_routed: '', ci_names: [], ci_chain: [], ci_spec: null, ci_choices: [], ci_q: '', ci_q_es: '', ci_missed: 0, ci_max: 3, ci_misses:0,ci_miss_limit:2,ci_must:false, ci_m: null, ci_qkey: '', ci_skip_gate:'', ci_words: 0, ci_digits: null, ci_amount: false, ci_as_spoken:false, ci_reader:{}, ci_pii: false, ci_ctx: '', ci_ctx_es: '' }),
+   variables: vars({ ci_clarify:null, ci_partial:'', ci_no_owner:'', ci_no_flow:'', ci_no_up:false, ci_reply_reader:'', ci_exhaustion:null, ci_d: {}, ci_pre: '', ci_val: '', ci_routed: '', ci_names: [], ci_chain: [], ci_spec: null, ci_choices: [], ci_q: '', ci_q_es: '', ci_missed: 0, ci_max: 3, ci_misses:0,ci_miss_limit:2,ci_must:false, ci_m: null, ci_qkey: '', ci_skip_gate:'', ci_words: 0, ci_digits: null, ci_amount: false, ci_as_spoken:false, ci_reader:{}, ci_pii: false, ci_ctx: '', ci_ctx_es: '' }),
    steps: [
       SET('ci_find_spec', 'ci_spec', "(function () { var s = ((cargo.forms[form] || {}).specs || []).filter(function (s) { return s.name === current; })[0]; return s ? (Array.isArray(s.any_of) ? Object.assign({}, s, { profile: { kind: 'group' } }) : s) : null; })()"),
       SET('ci_current_names', 'ci_names', "Array.isArray(ci_spec && ci_spec.any_of) ? ci_spec.any_of.map(function (m) { return m.name; }) : [current]"),
@@ -329,8 +329,7 @@ const collectInput = {
       // input.confirm_out_of_order: the number filled nothing; say how to mean it, then the question again. It counts as an attempt.
       SET('ci_clarify','ci_clarify',"!ci_m.hits.length && !ci_m.ambiguous.length && !ci_m.questions.length && Array.isArray(ci_m.clarify) && ci_m.clarify.length ? ci_m.clarify[0] : null"),
       WHEN('ci_clarify_attempt','ci_clarify',SIDE('ci_clarify_count',"(cargo.forms[form].attempts=cargo.forms[form].attempts || {},cargo.forms[form].attempts[current]=Number(cargo.forms[form].attempts[current] || 0)+1,true)")),
-      SET('ci_clarify_number','ci_clarify_number',"ci_clarify ? String(ci_clarify.value).split('').join(cargo.voice ? ' ' : '') : ''"),
-      WHEN('ci_clarify_say','ci_clarify',SAY('ci_clarify_line',"{{ci_clarify.message.replace('{value}', ci_clarify_number)}}","{{(ci_clarify.message_es || ci_clarify.message).replace('{value}', ci_clarify_number)}}")),
+      WHEN('ci_clarify_say','ci_clarify',SAY('ci_clarify_line',"{{confirmOutOfOrderLine(ci_clarify,ci_clarify.value,'en',cargo.voice)}}","{{confirmOutOfOrderLine(ci_clarify,ci_clarify.value,'es',cargo.voice)}}")),
       WHEN('ci_clarify_end','ci_clarify',END('ci_clarify_done')),
       { id: 'ci_route', type: 'CASE', branches: {
          'condition: ci_m.ambiguous.length > 0': FLOW('ci_ambiguous', 'disambiguate-input', 'call', { readings: '{{ci_m.ambiguous}}', hits: '{{ci_m.hits}}', remaining:'{{ci_m.remaining}}' }),
@@ -602,7 +601,7 @@ const confirmForm = {
    id: 'confirm-form', name: 'ConfirmForm', version: '1.0.0', scope: 'isolated',
    description: "Worker: ask a form's confirmation (exact YES / NO; keys 1 and 2). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
    parameters: ['form', 'question', 'question_es', 'exit_context', 'exit_context_es','phrases','words','interrupts','no_keys','clarifications','invites'].map((n) => ({ name: n, type: ['phrases','words','interrupts','no_keys','clarifications','invites'].includes(n)?'array':'string', description: n })).concat([{ name: 'named_fields', type: 'boolean', description: "true: an answer that names one of the form's inputs (its names) without a value re-asks only that input" }]),
-   variables: vars({ cf_clarify:null, cf_clarify_number:'', named_fields: false, reply_context: '', cf_must: false, cf_presets: FIELD_PRESETS, cf_chain: [], cf_m: null, cf_current:null, cf_result: '',cf_prompt:'',cf_prompt_es:'', cf_words: 0, cf_tries: 0, phrases:null, words:[], clarifications:[], no_keys:['2'], interrupts:[], invites:[], cf_choices:[], cf_event:'', cf_amount:false, cf_questions:[],cf_provides:null,cf_skip_gate:'' }),
+   variables: vars({ cf_clarify:null, named_fields: false, reply_context: '', cf_must: false, cf_presets: FIELD_PRESETS, cf_chain: [], cf_m: null, cf_current:null, cf_result: '',cf_prompt:'',cf_prompt_es:'', cf_words: 0, cf_tries: 0, phrases:null, words:[], clarifications:[], no_keys:['2'], interrupts:[], invites:[], cf_choices:[], cf_event:'', cf_amount:false, cf_questions:[],cf_provides:null,cf_skip_gate:'' }),
    steps: [
       SIDE('cf_reset', "(cargo.formConfirm = cargo.formConfirm || {}, cargo.formConfirm[form] = '', cargo.confirmRanked = '', true)"),
       SET('cf_choices','cf_choices',`[{key:'yes',phrases:['1'].concat(Array.isArray(phrases)?phrases:Array.isArray(words)?words:[]),exact:true},{key:'no',phrases:(Array.isArray(no_keys)?no_keys:['2']).concat(${JSON.stringify(ANSWER_WORDS.no)}),exact:true}].concat((Array.isArray(interrupts)?interrupts:[]).map(function(event){return {key:'event:'+event.key,phrases:event.phrases ?? event.words,exact:event.exact!==false};}))`),
@@ -630,8 +629,7 @@ const confirmForm = {
       SET('cf_must_complete','cf_must',"formMustComplete(cargo,form,'__confirm')"),
       // input.confirm_out_of_order: a number that filled nothing; say how to mean it, then the question again. A try, without "sorry".
       SET('cf_clarify','cf_clarify',"cargo.choice !== 'yes' && !cf_m.questions.length && !cf_m.ambiguous.length && !cf_m.hits.length && Array.isArray(cf_m.clarify) && cf_m.clarify.length ? cf_m.clarify[0] : null"),
-      SET('cf_clarify_number','cf_clarify_number',"cf_clarify ? String(cf_clarify.value).split('').join(cargo.voice ? ' ' : '') : ''"),
-      WHEN('cf_clarify_say','cf_clarify',SAY('cf_clarify_line',"{{cf_clarify.message.replace('{value}', cf_clarify_number)}}","{{(cf_clarify.message_es || cf_clarify.message).replace('{value}', cf_clarify_number)}}")),
+      WHEN('cf_clarify_say','cf_clarify',SAY('cf_clarify_line',"{{confirmOutOfOrderLine(cf_clarify,cf_clarify.value,'en',cargo.voice)}}","{{confirmOutOfOrderLine(cf_clarify,cf_clarify.value,'es',cargo.voice)}}")),
       { id: 'cf_route', type: 'CASE', branches: {
          'condition: cf_clarify': SET('cf_clarified','cf_result',"'unclear'"),
          'condition: cf_m.questions.length > 0': SET('cf_question_repeat','cf_result',"'changed'"),

@@ -256,6 +256,19 @@ export function readInputProfile(profile, answer, isCurrent = true) {
  */
 /** Explicit information questions are a separate answer kind, so their topic is not accepted as a field value.
  * A question clause is consumed as a question; independently separated clauses remain available for collection. */
+// confirm_out_of_order's word, in either language, said in the answer.
+export function saysConfirmWord(answer, spec) {
+   return [spec?.word, spec?.word_es].some((word) => word && matchesChoice(String(answer ?? ''), [String(word).toLowerCase()]));
+}
+
+// confirm_out_of_order's line: {value} the number (digit by digit on a call), {word} its word.
+export function confirmOutOfOrderLine(spec, value, language, voice) {
+   const es = language === 'es';
+   const line = String((es && spec?.message_es) || spec?.message || '');
+   const word = String((es && spec?.word_es) || spec?.word || '');
+   return line.replace('{value}', String(value ?? '').split('').join(voice ? ' ' : '')).replace('{word}', word);
+}
+
 export function readFormAnswer(answer,candidates,current,choiceKey,questions=[]) {
    const raw=unescape(answer),parts=raw.split(/([?;\n]|\b(?:and|y)\b)/i),asked=[];
    let consumed=false;
@@ -421,19 +434,18 @@ export function matchInputs(answer, candidates, current, choiceKey) {
       // no number read out of order, or nothing of the answer's digits is left over
    }
 
-   // input.confirm_out_of_order {words, message, message_es}: out of order a number fills this input only beside one of its
-   // words ("account 5373850"). Alone it may be anything (a code said with an extra digit, owner 2026-11-02), so the caller is
-   // told how to mean it and the current question is asked again. `{value}` in a message is the number.
+   // input.confirm_out_of_order {word, word_es, message, message_es}: out of order a number fills this input only beside its
+   // word ("account 5373850"). Alone it may be anything (a code said with an extra digit, owner 2026-11-02), so the caller is
+   // told how to mean it and the current question is asked again.
    const clarify = [];
-   const namedBy = (field) => (field.confirm_out_of_order.words || []).some((word) => matchesChoice(raw, [word]));
    readings = readings.filter((reading) => {
       const field = fieldOf(reading);
-      if (reading.rule !== 'out_of_order' || !field.confirm_out_of_order || namedBy(field)) {
+      if (reading.rule !== 'out_of_order' || !field.confirm_out_of_order || saysConfirmWord(raw, field.confirm_out_of_order)) {
          return true;
       } else {
          refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'confirm_out_of_order', spans: reading.spans });
          const taken = readings.some((other) => inOrder(other) && !other.fallback && (other.spans || []).some(([s, e]) => (reading.spans || []).some(([t, u]) => s < u && t < e)));
-         if (!taken) clarify.push({ form: reading.form, name: reading.name, value: reading.value, message: field.confirm_out_of_order.message, message_es: field.confirm_out_of_order.message_es });
+         if (!taken) clarify.push({ form: reading.form, name: reading.name, value: reading.value, ...field.confirm_out_of_order });
          return false;
       }
    });

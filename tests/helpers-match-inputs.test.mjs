@@ -126,7 +126,7 @@ eq(names(r), ['word=visa'], 'a word: the nearest form takes it');
 
 // confirm_out_of_order: a number alone is not taken; beside its word it is (owner 2026-11-02)
 {
-   const acct = { form: 'pay', name: 'acct_number', profile: { kind: 'identifier', pattern: '^5\\d{6,7}$' }, confirm_out_of_order: { words: ['account', 'cuenta'], message: 'switch to {value}', message_es: 'cambiar a {value}' } };
+   const acct = { form: 'pay', name: 'acct_number', profile: { kind: 'identifier', pattern: '^5\\d{6,7}$' }, confirm_out_of_order: { word: 'ACCOUNT', word_es: 'CUENTA', message: 'switch to {value}, add {word}', message_es: 'cambiar a {value}, agregue {word}' } };
    const otp = { form: 'pay', name: 'code', digits: { min: 6, max: 6 }, profile: { kind: 'digits', min: 6, max: 6 } };
    const atCode = { form: 'pay', name: 'code' };
    for (const said of ['5519936.', '5 9. 5 9 4 6 7 0.']) {

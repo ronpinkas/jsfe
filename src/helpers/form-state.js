@@ -35,7 +35,7 @@ export function resolveFormInputs(inputs, presets = {}) {
          if(!input.profile || input.form || input.any_of || input.bind)throw new Error('FORM proposal requires a readable leaf input; declare it on each group member or inside the subform');
          validateFormProposalPolicy(input.proposal);
       }
-      if(input.confirm_out_of_order!==undefined&&(!Array.isArray(input.confirm_out_of_order?.words)||!input.confirm_out_of_order.words.length||typeof input.confirm_out_of_order.message!=='string'))throw new Error('FORM confirm_out_of_order needs words and a message');
+      if(input.confirm_out_of_order!==undefined&&(typeof input.confirm_out_of_order?.word!=='string'||!input.confirm_out_of_order.word||typeof input.confirm_out_of_order.message!=='string'))throw new Error('FORM confirm_out_of_order needs a word and a message');
       if(input.must_complete!==undefined&&typeof input.must_complete!=='boolean')throw new Error('FORM must_complete must be true or false');
       if(input.max_misses!==undefined&&(!Number.isInteger(input.max_misses)||input.max_misses<1))throw new Error('FORM max_misses must be a positive integer');
       if (input.max_attempts !== undefined && (!Number.isInteger(input.max_attempts) || input.max_attempts < 1)) throw new Error('FORM max_attempts must be a positive integer');
