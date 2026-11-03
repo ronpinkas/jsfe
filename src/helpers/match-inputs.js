@@ -60,7 +60,8 @@ function amountMasked(raw) {
 
 /** Source intervals let different readers recognize the same evidence without agreeing on its type. */
 function numberSpans(raw, value, amount = false) {
-   const runs = [...raw.matchAll(/\d(?:[\s.,-]?\d)*/g)];
+   // A field's number is located as its reader found it: DIGIT_RUN joins "31, 0 31". An unlocated number escaped every span rule.
+   const runs = [...raw.matchAll(amount ? /\d(?:[\s.,-]?\d)*/g : DIGIT_RUN)];
    if (!amount) {
       const wanted = String(value).replace(/\D/g, '');
       return runs.filter(m => { const d = m[0].replace(/\D/g, ''); return d === wanted || d === '1' + wanted; })
@@ -244,6 +245,7 @@ export function readInputProfile(profile, answer, isCurrent = true) {
  *   2. else the one input of the current form that fits takes it, and parent forms are not considered;
  *   3. else the same test one form up, and so on;
  *   4. two inputs at the nearest form that fits are ambiguous: asked, never ranked.
+ * Exception: a number that fits two inputs out of order is asked about wherever they are (owner 2026-11-02).
  * Exception: an input that declares `confirm_against: [names]` is asked about together with those inputs whenever both
  * fit the same words, wherever scope would have put it ('62' at the payment offer: $62 or sub-account 62, prod
  * 2026-10-19 07:38).
@@ -332,7 +334,7 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    // A declared confirm_against pair with the current question is relevant to it as well: the pair is asked about.
    const pairedWithCurrent = (reading) => list.some((c) => isCur(c) && c.form === reading.form && ((c.confirm_against || []).includes(reading.name) || (fieldOf(reading).confirm_against || []).includes(c.name)));
    const inOrder = (reading) => reading.current || invited(reading) || pairedWithCurrent(reading);
-   // Rule 3: a number read out of order must be whole: every digit run its evidence touches lies entirely inside it,
+   // Rule 3, the whole number: every digit run a number read out of order touches lies entirely inside it,
    // so the last four of "88 91 7112" fill nothing. A written decimal is a run of its own ("51 72.45": 51, then 72.45).
    const decimalRuns = [...raw.matchAll(DECIMAL_AMOUNT)].map((m) => [m.index, m.index + m[0].length]);
    const undecimal = decimalRuns.reduce((text, [a, b]) => text.slice(0, a) + ' '.repeat(b - a) + text.slice(b), raw);
@@ -405,6 +407,19 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    }
    // Rule 4: a single digit the current question offers as a key is that key (the keypad reading wins its group below);
    // one it does not offer reaches the invited amount, whose own validation decides ("3 dollars?").
+
+   // Rule 3, a perfect match (owner 2026-11-02): a number read out of order accounts for every digit of the answer. "0 4 guion
+   // 31, 0 31" at the expiration is not a ZIP 31031 and "31st. 9 3 1." not a code 931. Several numbers are a compound answer only
+   // when each is read, and a free-text answer owns its own digits. An amount has rule 4, a choice its declared phrases.
+   const readsDigits = (reading) => !['choice', 'amount', 'text'].includes(fieldOf(reading).profile.kind) && /\d/.test(spanText(reading) + String(reading.value));
+   const outOfOrderDigits = readings.filter((reading) => reading.rule === 'out_of_order' && readsDigits(reading));
+   const unread = unclaimedSpans(raw, readings.filter((reading) => reading.unlocated !== true)).map(([a, b]) => raw.slice(a, b)).join(' ');
+   if (outOfOrderDigits.length && /\d/.test(unread)) {
+      for (const reading of outOfOrderDigits) refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'not_whole_answer', spans: reading.spans });
+      readings = readings.filter((reading) => !outOfOrderDigits.includes(reading));
+   } else {
+      // no number read out of order, or nothing of the answer's digits is left over
+   }
 
    // profile.whole_phrases (a choice, or a pattern that reads words): a phrase picks only when the answer is accounted
    // for: its phrases, the arguments read beside them (numbers, amounts, a card), courtesy or connecting words
@@ -489,8 +504,9 @@ export function matchInputs(answer, candidates, current, choiceKey) {
       } else if (members.some((m) => m.current)) {
          winners = members.filter((m) => m.current);
       } else {
+         // A number that fits two inputs out of order is asked about wherever they are (owner 2026-11-02); scope settles words.
          const nearest = Math.min(...members.map((m) => m.level));
-         winners = members.filter((m) => m.level === nearest);
+         winners = members.every(readsDigits) ? members : members.filter((m) => m.level === nearest);
       }
       // a winner declared to be confirmed against another member is asked about together with it
       const confirmWith = winners.length === 1 ? members.filter((m) => m !== winners[0] && paired(m, winners[0])) : [];

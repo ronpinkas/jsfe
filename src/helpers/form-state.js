@@ -169,7 +169,7 @@ export function enrichFormMatches(matches,chain,form,names=[],asked='') {
    const enrich=h=>{
       const spec=chain.find(c=>c.form===h.form&&c.name===h.name)||{};
       return {...h,label:h.option_label||spec.label||h.name,label_es:h.option_label_es||spec.label_es||spec.label||h.name,...(h.option_label?{option:true}:{}),
-         validator:spec.validator||'',...(spec.response?{response:spec.response}:{}),after:spec.after||'',validate_always:spec.validate_always===true,...(spec.activation?{activation:spec.activation}:{}),...(spec.silent===true?{silent:true}:{}),pii:spec.pii===true,current:h.form===form&&names.includes(h.name),asked};
+         validator:spec.validator||'',...(!(h.form===form&&names.includes(h.name))&&spec.profile&&!['choice','amount','text'].includes(spec.profile.kind)&&/\d/.test(String(h.value))?{out_of_order_number:true}:{}),...(spec.response?{response:spec.response}:{}),after:spec.after||'',validate_always:spec.validate_always===true,...(spec.activation?{activation:spec.activation}:{}),...(spec.silent===true?{silent:true}:{}),pii:spec.pii===true,current:h.form===form&&names.includes(h.name),asked};
    };
    return {...matches,hits:matches.hits.map(enrich),ambiguous:matches.ambiguous.map(enrich),remaining:(matches.remaining||[]).map(group=>group.map(enrich))};
 }
@@ -201,6 +201,10 @@ export function expandFormActivations(cargo,hits=[]) {
 }
 /** No partial activation: validation failure suppresses inferred changes; pending prerequisites retain the complete group. */
 export function settleFormActivations(batch={},cargo=null) {
+   // A number read out of order is taken only when it is valid (owner 2026-11-02): one its validator rejects fills nothing and
+   // says nothing, and the current question is asked again.
+   const invalidNumbers=(batch.rejected||[]).filter(h=>h.out_of_order_number===true);
+   batch={...batch,rejected:(batch.rejected||[]).filter(h=>h.out_of_order_number!==true),ignored:[...(batch.ignored||[]),...invalidNumbers]};
    const accepted=[...(batch.accepted||[])],rejected=[...(batch.rejected||[])],pending=[...(batch.pending||[])];
    const all=accepted.concat(rejected,pending),keys=new Set(all.map(h=>h.activation_group).filter(Boolean));
    const held=new Set(),discarded=new Set();

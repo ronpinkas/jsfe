@@ -76,11 +76,53 @@ eq(r.hits, [{ form: 'pay-bill', name: 'amount', value: '40', known: false }], 't
 const cardZip = { form: 'collect-credit-card', name: 'card_zip', profile: { kind: 'digits', min: 5, max: 5 } };
 const homeZip = { form: 'pay-bill', name: 'home_zip', profile: { kind: 'digits', min: 5, max: 5 } };
 r = matchInputs('90012', [cvv, cardZip, homeZip], { form: 'collect-credit-card', name: 'card_cvv' });
-eq(names(r), ['card_zip=90012'], "the sub-form's one fitting input takes it over the parent's");
-// Two parents' inputs that fit, nothing in the sub-form: the nearest parent's
+eq(r.ambiguous.map((x) => x.name), ['card_zip', 'home_zip'], 'a number that fits two inputs out of order is asked about, wherever they are (owner 2026-11-02)');
+// Two parents' inputs that fit, nothing in the sub-form: asked too
 const grandZip = { form: 'checkout', name: 'ship_zip', profile: { kind: 'digits', min: 5, max: 5 } };
 r = matchInputs('90012', [cvv, homeZip, grandZip], { form: 'collect-credit-card', name: 'card_cvv' });
-eq(names(r), ['home_zip=90012'], 'the nearest form up takes it');
+eq(r.ambiguous.map((x) => x.name), ['home_zip', 'ship_zip'], 'two parents: asked, not the nearest');
+// Words still settle by scope: only a number is asked about across forms
+const cardWord = { form: 'collect-credit-card', name: 'word', profile: { kind: 'pattern', regex: 'visa' } };
+const parentWord = { form: 'pay-bill', name: 'word2', profile: { kind: 'pattern', regex: 'visa' } };
+r = matchInputs('visa', [cvv, cardWord, parentWord], { form: 'collect-credit-card', name: 'card_cvv' });
+eq(names(r), ['word=visa'], 'a word: the nearest form takes it');
+
+// Out of order a number is a perfect match: every digit of the answer (owner 2026-11-02; prod 2026-11-01)
+{
+   const exp = { form: 'card', name: 'card_expiration', label: 'expiration date', label_es: 'fecha de vencimiento', digits: { min: 3, max: 6 }, profile: { kind: 'pattern', regex: '\\b(0?[1-9]|1[0-2])\\.?(?:\\s*(?:/|-|del?|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b' } };
+   const code = { form: 'card', name: 'card_cvv', label: 'security code', label_es: 'código de seguridad', profile: { kind: 'digits', min: 3, max: 4 } };
+   const zip = { form: 'card', name: 'card_zip', label: 'billing ZIP code', label_es: 'código postal de facturación', profile: { kind: 'digits', min: 5, max: 5 } };
+   const account = { form: 'pay', name: 'acct_number', label: 'account number', label_es: 'número de cuenta', profile: { kind: 'digits', min: 7, max: 8 } };
+   const card = { form: 'card', name: 'card_number', label: 'card number', digits: { min: 13, max: 19 }, profile: { kind: 'digits', min: 13, max: 19 } };
+   const atExp = { form: 'card', name: 'card_expiration' }, atCard = { form: 'card', name: 'card_number' };
+   const set = [exp, code, zip, account];
+   for (const said of ['0 4 guion 31, 0 31.', '0 4 guion 0 31.', '31st. 9 3 1.']) {
+      r = matchInputs(said, set, atExp);
+      eq(names(r), [], `"${said}" at the expiration fills nothing`);
+      eq((r.refused || []).map((x) => x.rule).includes('not_whole_answer'), true, `"${said}": refused, not_whole_answer`);
+   }
+   eq(names(matchInputs('code 931', [code, zip], { form: 'card', name: 'card_zip' })), ['card_cvv=931'], 'a word beside the whole number: taken');
+   eq(names(matchInputs('mi código postal es 90026', set, atExp)), ['card_zip=90026'], 'in Spanish: taken');
+   eq(names(matchInputs('account number 5 3 7 3 8 5 0 9.', set, atExp)), ['acct_number=53738509'], 'the account by name: taken');
+   eq(names(matchInputs('90026', [card, exp, code, zip], atCard)), ['card_zip=90026'], 'the whole answer, one candidate: taken');
+   eq(matchInputs('123', [card, exp, code, zip], atCard).ambiguous.map((x) => x.name).sort(), ['card_cvv', 'card_expiration'], 'two candidates: asked');
+   eq(names(matchInputs('13 40 y 92, 80 4', [zip, code], { form: 'card', name: 'card_zip' })).sort(), ['card_cvv=1340', 'card_zip=92804'], 'two perfect parts: a compound answer');
+}
+
+// The expiration said with a spoken separator, its digits together or apart (owner 2026-11-02)
+{
+   const { FIELD_PRESETS } = await import('../dist/forms/index.js');
+   const exp = { form: 'card', name: 'card_expiration', ...FIELD_PRESETS.card_expiration };
+   const zip = { form: 'card', name: 'card_zip', profile: { kind: 'digits', min: 5, max: 5 } };
+   const cvv2 = { form: 'card', name: 'card_cvv', profile: { kind: 'digits', min: 3, max: 4 } };
+   for (const said of ['04 guion 31', '0 4 guion 31', '04 guion 3 1', '0 4 guion 3 1', '0 4 guión 3 1.', '12 dash 31', '1 2 guion 2 0 3 1', '04 slash 31', '0 4 slash 3 1', '0 4 barra 3 1', '04 diagonal 31', '0 4 hyphen 3 1']) {
+      r = matchInputs(said, [exp, cvv2, zip], { form: 'card', name: 'card_expiration' });
+      eq(r.hits.map((h) => h.name), ['card_expiration'], `"${said}" is the expiration`);
+      eq(/gui[oó]n|dash|hyphen|slash|barra|diagonal/i.test(r.hits[0].value), true, `"${said}": read whole [${r.hits[0].value}]`);
+   }
+   r = matchInputs('0 4 guion 31', [cvv2, zip, exp], { form: 'card', name: 'card_zip' });
+   eq(names(r).map((x) => x.split('=')[0]), ['card_expiration'], 'out of order too');
+}
 
 // Free text fills only the input that was asked
 const reason = { form: 'return', name: 'reason', profile: { kind: 'text' } };

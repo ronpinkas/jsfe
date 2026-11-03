@@ -232,16 +232,21 @@ Rules, in order:
    `depends_on` prerequisites are not filled yet (the sub-account before the account is known); a named answer ("50
    dollars") still waits as a pending value. **The whole signature:** A digit field takes a number only when the whole number fits its
    length; a pattern only when it covers the whole number; a choice only its declared or prepared values. A fragment of
-   a longer number (the last four of "88 91 7112") fills nothing.
+   a longer number (the last four of "88 91 7112") fills nothing. **A perfect match:** a number read out of order accounts for every digit
+   of the answer, alone or with the other fields a compound answer fills. "0 4 guion 31, 0 31" at the expiration fills no ZIP;
+   "the line is 8185551234" fills the phone. Its validation decides too: a number its validator rejects fills nothing and says nothing, and the question
+   is asked again.
 4. **A bare number** (no money mark, no word naming a field) is an amount only at a question that is, invites or is
    declared `confirm_against` an amount. A single digit the question offers as a key is that key; one it does not offer reaches the invited amount,
-   whose validation decides (Curacao asks for it in dollars). A bare number that does not fit the current question is
+   whose validation decides. The engine holds no amounts, so "only a known amount" is the amount validator's rule: Curacao's
+   takes a bare number at the amount question, and at a question that only invites an amount only when it is an amount the
+   caller can pay (else it asks for it in dollars). A bare number that does not fit the current question is
    read out of order under rule 3.
 5. **Compound answers.** Several fields fill from one answer only through the form's compound parser, or when every
    part of the answer fits exactly one field. **One part of an answer never fills two fields**; the engine refuses that
    reading and records the refusal.
 6. **Scope.** Across forms the nearest form wins; two fields of the same form that fit the same part are asked about,
-   never ranked.
+   never ranked. A number that fits two fields out of order is asked about wherever they are.
 
 Every result records why: `decisions` lists each field filled other than as the current answer with its rule (`invited`, `out_of_order`, `compound`), and every
 refused reading is listed with its rule, so hosts can log what was filled out of order and what was refused.
