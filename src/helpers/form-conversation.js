@@ -44,7 +44,7 @@ export function formInputPrompt(cargo,id,input,spec,data={},language='en') {
    const question=spec.question_from&&(es?(data[spec.question_from+'_es']||data[spec.question_from]):data[spec.question_from]) || written('question') || (es?(spec.question_es||spec.question):spec.question) || '';
    const retry=written('retry') || (es?spec.retry_es:spec.retry);
    if(feedback==='partial')return es?'Continúe.':'Go on.';
-   if(feedback==='first')return formFirstLine(cargo,id,input,es)+question;
+   if(feedback==='first')return formFirstLine(cargo,id,input,es)+(retry||question);
    if(feedback&&retry)return retry;
    return (feedback==='miss'?sorryNotCaught(es?'es':'en',cargo):'')+question;
 }
