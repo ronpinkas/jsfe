@@ -36,6 +36,13 @@ export function spokenDigitsText(input, mode = true) {
       from = cut.index + cut[0].length;
    }
    keep(from, raw.length);
+   // A pause after the house number: "2 18, Nice Dr" (prod 11-02 CA120bcd), "633, North Normandy".
+   const pause = mode === 'house_number' ? /^\s*\d{1,6}([,.])\s/.exec(text) : null;
+   if (pause) {
+      const cut = pause[0].length - 2;
+      text = text.slice(0, cut) + text.slice(cut + 1);
+      origin.splice(cut, 1);
+   } else { /* no pause there */ }
    return { text, at: (i) => (i < origin.length ? origin[i] : raw.length) };
 }
 

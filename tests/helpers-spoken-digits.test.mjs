@@ -4,7 +4,7 @@ import { joinSpokenDigits, readInputProfile, amountInAnswer } from '../dist/help
 import { addressDraft } from '../dist/forms/index.js';
 const eq = (a, b, m) => assert.deepEqual(a, b, m);
 for (const [said, want] of [['5 0 9 Lazy Lane', '509 Lazy Lane'], ['50 9 Lazy Lane', '509 Lazy Lane'], ['5, 0, 9 Lazy Lane', '509 Lazy Lane'], ['5-0-9 Lazy Lane', '509 Lazy Lane'], ['5. 0. 9 Lazy Lane', '509 Lazy Lane'],
-   ['509 Lazy Lane', '509 Lazy Lane'], ['509 12 Ave', '509 12 Ave'], ['12-34 Main St', '12-34 Main St'], ['5 0 9 5th Street', '509 5th Street']]) {
+   ['509 Lazy Lane', '509 Lazy Lane'], ['2 18, Nice Dr', '218 Nice Dr'], ['6 33, North Normandy Avenue', '633 North Normandy Avenue'], ['509, Lazy Lane', '509 Lazy Lane'], ['509 12 Ave', '509 12 Ave'], ['12-34 Main St', '12-34 Main St'], ['5 0 9 5th Street', '509 5th Street']]) {
    eq(joinSpokenDigits(said, 'house_number'), want, said);
 }
 eq(joinSpokenDigits('654 6'), '6546'); eq(joinSpokenDigits('90 023'), '90023'); eq(joinSpokenDigits('apt 2 0 4'), 'apt 204'); eq(joinSpokenDigits('5.50 and 7.25'), '5.50 and 7.25');
