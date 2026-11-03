@@ -379,6 +379,8 @@ instructions with its text model.
 
 An input with `profile.whole_phrases` (default off; `choice`, or a `pattern` that reads words) keeps its word reader only for a reply wholly made of its phrase, arguments, courtesy, connecting words and its `template_words`; any other reply goes to this ranker.
 
+**A number that must name itself.** `input.confirm_out_of_order: {word, word_es, message, message_es}` (default off): out of order a number fills this input only beside its word, in either language ("account 5373850"). Alone it may be something else, a code said with an extra digit, so nothing is filled: the caller hears `message` (`{value}` the number, digit by digit on a call; `{word}` the word) and the current question again, which counts as an attempt at that question. It works at `collect-input` and `confirm-form` questions. At its own question the number needs no word. `authenticate-user`'s `code_confirm` takes the same declaration for a `code_validator`, whose flow reads it with the helpers `saysConfirmWord(answer, spec)` and `confirmOutOfOrderLine(spec, value, language, voice)`.
+
 **Declared choices (`responseChoices`, jsfe 1.14):** a step may name a flow variable of type array holding
 `[{ key, label, parameters? }]` (`parameters`: extracted on a pick, read as `{ key, arguments }`); the ranker is then also offered `choice:<key>` for each (before the fixed options), and `answers`
 means a reply that picks none of them. A picked choice sets `responseVariable` to `{ key }`, plus `arguments` when it declares `parameters` (the pick stands if extraction finds nothing or fails);
