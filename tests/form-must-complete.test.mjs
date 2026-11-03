@@ -72,14 +72,14 @@ for(const language of ['en','es'])for(const option of ['answers','irrelevant','a
   await t.say('90001');assert.deepEqual(t.session.cargo.done.length,1);
  });
 }
-await test('a declared first_task is rejected by no form and absent means the generic line',async()=>{
+await test('without a first_task the line is generic',async()=>{
  const t=fixture([pay({must_complete:true})]);await t.say('begin','pay');
  assert.ok((await t.say(LONG[1])).startsWith("I understand, first let's finish this. "));
 });
-await test('three unheeded replies still end by the declared attempts',async()=>{
+await test('replies that pick nothing use no attempt: the form stays open however many',async()=>{
  const t=fixture([pay({must_complete:true})]);await t.say('begin','pay');
- for(const said of LONG)await t.say(said);
- assert.ok(!t.session.cargo.done);
+ for(const said of [...LONG,...LONG])stillAsking(t,await t.say(said),'en');
+ await t.say('90001');assert.deepEqual(t.session.cargo.done,[{zip:'90001'}]);
 });
 console.log(`form-must-complete: ${checks} passed, ${failures.length} failed`);
 if(failures.length)process.exit(1);
