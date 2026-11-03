@@ -253,7 +253,7 @@ const collectInput = {
    id: 'collect-input', name: 'CollectInput', version: '1.0.0', scope: 'isolated',
    description: "Worker: ask the form's current input once and file the answer wherever it belongs in the form chain (matchInputs, decided by scope; a declared confirm_against pair is asked). One reading → collect-input-accept; ambiguous → disambiguate-input; a question about the form's data → provide-data; a short miss → counted, the loop re-asks; 3+ words that fit nothing → DISPATCH. Params: form, current, questions, provides, exit_context(_es).",
    parameters: ['form', 'current', 'questions', 'provides', 'exit_context', 'exit_context_es'].map((n) => ({ name: n, type: ['questions'].includes(n) ? 'array' : n === 'provides' ? 'object' : 'string', description: n })),
-   variables: vars({ ci_partial:'', ci_no_owner:'', ci_no_flow:'', ci_no_up:false, ci_reply_reader:'', ci_exhaustion:null, ci_d: {}, ci_pre: '', ci_val: '', ci_routed: '', ci_names: [], ci_chain: [], ci_spec: null, ci_choices: [], ci_q: '', ci_q_es: '', ci_missed: 0, ci_max: 3, ci_misses:0,ci_miss_limit:2,ci_must:false, ci_m: null, ci_qkey: '', ci_skip_gate:'', ci_words: 0, ci_digits: null, ci_amount: false, ci_as_spoken:false, ci_reader:{}, ci_pii: false, ci_ctx: '', ci_ctx_es: '' }),
+   variables: vars({ ci_clarify:null, ci_clarify_number:'', ci_partial:'', ci_no_owner:'', ci_no_flow:'', ci_no_up:false, ci_reply_reader:'', ci_exhaustion:null, ci_d: {}, ci_pre: '', ci_val: '', ci_routed: '', ci_names: [], ci_chain: [], ci_spec: null, ci_choices: [], ci_q: '', ci_q_es: '', ci_missed: 0, ci_max: 3, ci_misses:0,ci_miss_limit:2,ci_must:false, ci_m: null, ci_qkey: '', ci_skip_gate:'', ci_words: 0, ci_digits: null, ci_amount: false, ci_as_spoken:false, ci_reader:{}, ci_pii: false, ci_ctx: '', ci_ctx_es: '' }),
    steps: [
       SET('ci_find_spec', 'ci_spec', "(function () { var s = ((cargo.forms[form] || {}).specs || []).filter(function (s) { return s.name === current; })[0]; return s ? (Array.isArray(s.any_of) ? Object.assign({}, s, { profile: { kind: 'group' } }) : s) : null; })()"),
       SET('ci_current_names', 'ci_names', "Array.isArray(ci_spec && ci_spec.any_of) ? ci_spec.any_of.map(function (m) { return m.name; }) : [current]"),
@@ -326,6 +326,12 @@ const collectInput = {
       WHEN('ci_explicit_question','ci_m.questions.length > 0',FLOW('ci_explicit_provide','provide-data','call',{form:'{{form}}',provides:'{{provides}}',asked:'{{ci_qkey}}',asked_keys:'{{ci_m.questions}}',no_menu:'true',no_gate:'{{ci_skip_gate}}'})),
       WHEN('ci_explicit_question_done','ci_m.questions.length > 0',END('ci_explicit_question_end')),
       SET('ci_reply_reader','ci_reply_reader',"ci_choices.length ? 'read-form-choice' : 'read-form-reply'"),
+      // input.confirm_out_of_order: the number filled nothing; say how to mean it, then the question again. It counts as an attempt.
+      SET('ci_clarify','ci_clarify',"!ci_m.hits.length && !ci_m.ambiguous.length && !ci_m.questions.length && Array.isArray(ci_m.clarify) && ci_m.clarify.length ? ci_m.clarify[0] : null"),
+      WHEN('ci_clarify_attempt','ci_clarify',SIDE('ci_clarify_count',"(cargo.forms[form].attempts=cargo.forms[form].attempts || {},cargo.forms[form].attempts[current]=Number(cargo.forms[form].attempts[current] || 0)+1,true)")),
+      SET('ci_clarify_number','ci_clarify_number',"ci_clarify ? String(ci_clarify.value).split('').join(cargo.voice ? ' ' : '') : ''"),
+      WHEN('ci_clarify_say','ci_clarify',SAY('ci_clarify_line',"{{ci_clarify.message.replace('{value}', ci_clarify_number)}}","{{(ci_clarify.message_es || ci_clarify.message).replace('{value}', ci_clarify_number)}}")),
+      WHEN('ci_clarify_end','ci_clarify',END('ci_clarify_done')),
       { id: 'ci_route', type: 'CASE', branches: {
          'condition: ci_m.ambiguous.length > 0': FLOW('ci_ambiguous', 'disambiguate-input', 'call', { readings: '{{ci_m.ambiguous}}', hits: '{{ci_m.hits}}', remaining:'{{ci_m.remaining}}' }),
          'condition: ci_m.hits.length > 0': FLOW('ci_accept', 'collect-input-accept', 'call', { hits: '{{ci_m.hits}}' }),

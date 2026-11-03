@@ -124,6 +124,23 @@ eq(names(r), ['word=visa'], 'a word: the nearest form takes it');
    eq(names(r).map((x) => x.split('=')[0]), ['card_expiration'], 'out of order too');
 }
 
+// confirm_out_of_order: a number alone is not taken; beside its word it is (owner 2026-11-02)
+{
+   const acct = { form: 'pay', name: 'acct_number', profile: { kind: 'identifier', pattern: '^5\\d{6,7}$' }, confirm_out_of_order: { words: ['account', 'cuenta'], message: 'switch to {value}', message_es: 'cambiar a {value}' } };
+   const otp = { form: 'pay', name: 'code', digits: { min: 6, max: 6 }, profile: { kind: 'digits', min: 6, max: 6 } };
+   const atCode = { form: 'pay', name: 'code' };
+   for (const said of ['5519936.', '5 9. 5 9 4 6 7 0.']) {
+      r = matchInputs(said, [otp, acct], atCode);
+      eq(r.hits, [], `"${said}": fills nothing`);
+      eq(r.clarify?.[0]?.name, 'acct_number', `"${said}": the caller is told how to mean it`);
+   }
+   for (const said of ['account 5519936', 'mi cuenta es 5 5 1 9 9 3 6']) eq(names(matchInputs(said, [otp, acct], atCode)), ['acct_number=5519936'], `"${said}": taken`);
+   r = matchInputs('519936', [otp, acct], atCode);
+   eq(names(r), ['code=519936'], 'the code itself');
+   eq(r.clarify, undefined, 'no clarification');
+   eq(names(matchInputs('5519936', [acct], { form: 'pay', name: 'acct_number' })), ['acct_number=5519936'], 'at its own question: taken');
+}
+
 // Free text fills only the input that was asked
 const reason = { form: 'return', name: 'reason', profile: { kind: 'text' } };
 r = matchInputs('it shrank in the wash', [reason, size], { form: 'return', name: 'size' });

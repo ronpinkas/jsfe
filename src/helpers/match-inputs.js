@@ -421,6 +421,23 @@ export function matchInputs(answer, candidates, current, choiceKey) {
       // no number read out of order, or nothing of the answer's digits is left over
    }
 
+   // input.confirm_out_of_order {words, message, message_es}: out of order a number fills this input only beside one of its
+   // words ("account 5373850"). Alone it may be anything (a code said with an extra digit, owner 2026-11-02), so the caller is
+   // told how to mean it and the current question is asked again. `{value}` in a message is the number.
+   const clarify = [];
+   const namedBy = (field) => (field.confirm_out_of_order.words || []).some((word) => matchesChoice(raw, [word]));
+   readings = readings.filter((reading) => {
+      const field = fieldOf(reading);
+      if (reading.rule !== 'out_of_order' || !field.confirm_out_of_order || namedBy(field)) {
+         return true;
+      } else {
+         refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'confirm_out_of_order', spans: reading.spans });
+         const taken = readings.some((other) => inOrder(other) && !other.fallback && (other.spans || []).some(([s, e]) => (reading.spans || []).some(([t, u]) => s < u && t < e)));
+         if (!taken) clarify.push({ form: reading.form, name: reading.name, value: reading.value, message: field.confirm_out_of_order.message, message_es: field.confirm_out_of_order.message_es });
+         return false;
+      }
+   });
+
    // profile.whole_phrases (a choice, or a pattern that reads words): a phrase picks only when the answer is accounted
    // for: its phrases, the arguments read beside them (numbers, amounts, a card), courtesy or connecting words
    // (isReaderFiller) and the field's own profile.template_words. A template such as "pay 50 with my Visa card" stays;
@@ -539,6 +556,6 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    if (current?.whole_reply === true && hits.length && !isReaderFiller(unclaimedSpans(raw, kept).map(([a, b]) => raw.slice(a, b)).join(' '))) {
       return { hits: [], ambiguous, refused: [...stopped, ...hits.map((hit) => ({ form: hit.form, name: hit.name, value: hit.value, rule: 'unaccounted_words', spans: hit.spans }))], ...(decisions.length ? {decisions} : {}) };
    } else {
-      return { hits, ambiguous, ...(remaining.length ? {remaining} : {}), ...(stopped.length ? {refused: stopped} : {}), ...(decisions.length ? {decisions} : {}) };
+      return { hits, ambiguous, ...(remaining.length ? {remaining} : {}), ...(stopped.length ? {refused: stopped} : {}), ...(decisions.length ? {decisions} : {}), ...(clarify.length ? {clarify} : {}) };
    }
 }
