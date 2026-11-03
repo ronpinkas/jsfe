@@ -63,7 +63,7 @@ await test('a JSON declaration carries must_complete',async()=>{
 
 // Owner 2026-11-02: every verdict that picks nothing stays and is acknowledged, in the form's own words; a pick is taken.
 const carded=(extra={})=>formFlow({id:'pay',name:'Pay',version:'1',must_complete:true,first_task:'record your new card',first_task_es:'registrar su tarjeta nueva',inputs:[{name:'zip',field:'zip',question:'ZIP?',question_es:'¿CÓDIGO?'}],after:[commit],...extra});
-for(const language of ['en','es'])for(const option of ['answers','irrelevant','abort','new_request']){
+for(const language of ['en','es'])for(const option of ['answers','irrelevant','new_request']){
  await test(`${language} ${option} under must_complete stays, with the form's first_task`,async()=>{
   const t=fixture([carded()],{language});t.rank(option);await t.say('begin','pay');
   const response=await t.say('porque me dices eso');
@@ -72,6 +72,10 @@ for(const language of ['en','es'])for(const option of ['answers','irrelevant','a
   await t.say('90001');assert.deepEqual(t.session.cargo.done.length,1);
  });
 }
+await test('a clear withdrawal under must_complete ends the flow, nothing done',async()=>{
+ const t=fixture([carded()]);t.rank('abort');await t.say('begin','pay');
+ await t.say('ya no quiero pagar');assert.equal(t.session.flowStacks.flat().length,0);assert.ok(!t.session.cargo.done);assert.equal(t.calls.length,0);
+});
 await test('without a first_task the line is generic',async()=>{
  const t=fixture([pay({must_complete:true})]);await t.say('begin','pay');
  assert.ok((await t.say(LONG[1])).startsWith("I understand, first let's finish this. "));

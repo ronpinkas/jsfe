@@ -334,7 +334,7 @@ lives:
 | "Yes, but make it 60" is not consent | an answer with YES plus a correction or another request is not approval of the old request |
 | No guessed success | an executor reports success, failure or unknown; unknown holds the action, it is never retried as if it failed |
 | One effect, once | effects run only through `CALL-TOOL`; the session records the attempt (`lastTurnToolCalls`) and the host never rolls such a turn back |
-| No escape from a half-finished effect | `must_complete` keeps a payment's card questions in place: the ranker reads a worded reply, a pick is taken and any other verdict stays, saying the form's `first_task` |
+| No escape from a half-finished effect | `must_complete` keeps a payment's card questions in place: the ranker reads a worded reply, a pick is taken, a clear withdrawal ends the flows, and any other verdict stays, saying the form's `first_task` |
 
 The host keeps its side of the contract: one `updateActivity` at a time per conversation; a cancelled turn is awaited,
 not abandoned; a turn that attempted a tool is never restored to its earlier session; and external effects carry an

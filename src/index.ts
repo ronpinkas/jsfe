@@ -7369,9 +7369,9 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
       } else {
         // an ordinary option or choice
       }
-      // responseStay: this reply cannot leave the question. A withdrawal or a new request is one more reply that picked nothing.
-      if ((option === 'abort' || option === 'new_request') && step.responseStay && frame.variables[step.responseStay] === true) {
-        logger.info(`Contextual DISPATCH in '${frame.flowName}': the reply is ${option}, and the question must be completed; the flow continues`);
+      // responseStay: a new request cannot leave the question, it is one more reply that picked nothing. A clear withdrawal still ends the flows.
+      if (option === 'new_request' && step.responseStay && frame.variables[step.responseStay] === true) {
+        logger.info(`Contextual DISPATCH in '${frame.flowName}': a new request, and the question must be completed; the flow continues`);
         ranked = 'answers';
         frame.variables[declaration!.variable] = declaration!.parameters.length ? {} : { key: '' };
         return false;

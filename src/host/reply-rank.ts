@@ -78,8 +78,8 @@ const CRITERIA: Record<typeof REPLY_OPTIONS[number], { true: string; false: stri
     false: 'It withdraws the request, or asks for a different service or an unrelated question.',
   },
   abort: {
-    true: 'The latest message withdraws the current request (never mind, forget it, I no longer want it) and asks for nothing else.',
-    false: 'It responds to the current question, or asks for something.',
+    true: 'The latest message withdraws the current request (never mind, forget it, cancel it, I no longer want it) and asks for nothing else.',
+    false: 'It responds to the current question, or asks for something else.',
   },
   new_request: {
     true: 'The latest message clearly asks for a different service, product or action, by name or in words, or asks a question unrelated to the current question. A stray word, an unfinished sentence, a remark or speech addressed to someone else does not qualify.',

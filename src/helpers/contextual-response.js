@@ -25,7 +25,7 @@ export function validateContextualResponseStep(step,flow) {
   if(p.verbatim!==undefined&&(p.verbatim!==true||p.type!==undefined&&p.type!=='string'||p.enum!==undefined))fail('verbatim is true on an open string parameter only');
   if(Object.keys(p).some(k=>!['name','description','type','enum','internal','verbatim'].includes(k)))fail('responseParameters accepts only canonical parameter descriptors');
  }
- // responseStay: names a frame variable; while it is true a withdrawal or a new request is not taken, and the flow continues (must_complete).
+ // responseStay: names a frame variable; while it is true a new request is not taken and the flow continues (must_complete); a withdrawal still ends the flows.
  if(own(step,'responseStay')&&(typeof step.responseStay!=='string'||!step.responseStay.trim()))fail('responseStay names a variable');
  // responseReasonFor: what the caller does not want; the reply is ranked as the reason for not wanting it (owner 2026-10-31).
  if(own(step,'responseReasonFor')&&(typeof step.responseReasonFor!=='string'||choices))fail('responseReasonFor is a string, on a question without responseChoices');
