@@ -27,6 +27,13 @@ export function formMustComplete(cargo,id,input) {
    }
    return false;
 }
+/** A must_complete question's reply that picks nothing the ranker was offered is acknowledged, then the question again (owner
+ * 2026-11-02): "I understand, first let's record your new card." The task is the nearest enclosing form's first_task. */
+export function formFirstLine(cargo,id,input,es) {
+   const seen=new Set();let task='';
+   while(id&&cargo.forms?.[id]&&!seen.has(id)&&!task){seen.add(id);const state=cargo.forms[id];task=(es?state.first_task_es||state.first_task:state.first_task)||'';id=state.parent;}
+   return es?`Entiendo, primero vamos a ${task||'terminar esto'}. `:`I understand, first let's ${task||'finish this'}. `;
+}
 /**
  * Explicit retry wins. Otherwise acknowledge only an actual unrecognized answer, once per re-ask.
  * question_text / retry_text (and _es): the written-channel wording, used only when the conversation is not a call.
@@ -37,17 +44,19 @@ export function formInputPrompt(cargo,id,input,spec,data={},language='en') {
    const question=spec.question_from&&(es?(data[spec.question_from+'_es']||data[spec.question_from]):data[spec.question_from]) || written('question') || (es?(spec.question_es||spec.question):spec.question) || '';
    const retry=written('retry') || (es?spec.retry_es:spec.retry);
    if(feedback==='partial')return es?'Continúe.':'Go on.';
+   if(feedback==='first')return formFirstLine(cargo,id,input,es)+question;
    if(feedback&&retry)return retry;
    return (feedback==='miss'?sorryNotCaught(es?'es':'en',cargo):'')+question;
 }
 /** Whether an accepted input is acknowledged ("Got it, your amount."). A form declaring acknowledge: 'data' (jsfe 1.20.0,
  * owner 2026-10-31), or the nearest enclosing form that declares it, acknowledges only a value the caller supplied (digits,
- * email, phone, amount, identifier, account, text), never a pick among offered words (choice, pattern). Default: every input. */
+ * email, phone, amount, identifier, account, text), never a pick among offered words (choice, pattern) to the question asked.
+ * An input filled out of order is always acknowledged (owner 2026-11-02). Default: every input. */
 const DATA_KINDS=new Set(['digits','email','phone','amount','identifier','account','text']);
 export function formAcknowledges(cargo,reading) {
    const seen=new Set();let id=reading&&reading.form,mode='all';
    while(id&&cargo.forms?.[id]&&!seen.has(id)){seen.add(id);const state=cargo.forms[id];if(state.acknowledge){mode=state.acknowledge;break;}id=state.parent;}
-   if(mode!=='data')return true;
+   if(mode!=='data'||reading.out_of_order===true)return true;
    const state=cargo.forms[reading.form]||{},group=(state.specs||[]).find(s=>s.name===reading.name||s.any_of?.some(i=>i.name===reading.name));
    const spec=group?.any_of?.find(i=>i.name===reading.name)||group,kind=spec?.profile?.kind;
    return DATA_KINDS.has(kind);

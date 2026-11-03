@@ -471,6 +471,24 @@ export function matchInputs(answer, candidates, current, choiceKey) {
       }
    });
 
+   // Rule 1, a full match (owner 2026-11-02): one part of the answer read out of order, with nothing read for the question asked,
+   // accounts for the whole answer: the reading, courtesy or connecting words, and the words of the field itself (its names, label,
+   // template words, its confirmation word). Any other word means the matcher does not decide: the reply ranker does ("Si son 129"
+   // at the card number). An input asked keeps its reading ("mi código es 129"), several parts read are a compound answer, a
+   // confirmation asks no input (its fields are corrections, current.whole_reply declares when they must be whole), and an amount has rule 4.
+   const fieldWords = (reading) => { const field = fieldOf(reading), said = [String(field.name || '').replace(/_/g, ' '), ...(field.names || []), field.label, field.label_es, ...(field.profile.template_words || []), field.confirm_out_of_order?.word, field.confirm_out_of_order?.word_es].filter(Boolean); return said.flatMap((s) => String(s).split(/\s+/)); };
+   const unaccounted = unclaimedSpans(raw, readings.filter((reading) => !reading.fallback && reading.unlocated !== true)).map(([a, b]) => raw.slice(a, b)).join(' ');
+   const spansMeet = (a, b) => (a.spans || []).some(([s, e]) => (b.spans || []).some(([t, u]) => s < u && t < e));
+   const onePartAlone = !!cur.name && !readings.some(inOrder) && readings.every((reading) => spansMeet(reading, readings[0]));
+   readings = readings.filter((reading) => {
+      if (!onePartAlone || reading.rule !== 'out_of_order' || reading.unlocated === true || fieldOf(reading).profile.kind === 'amount' || isReaderFiller(unaccounted, fieldWords(reading))) {
+         return true;
+      } else {
+         refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'unaccounted_words', spans: reading.spans });
+         return false;
+      }
+   });
+
    const paired = (a, b) => a.confirm.indexOf(b.name) > -1 || b.confirm.indexOf(a.name) > -1;
    // Narrative ownership protects ancestor choices and same-form choices that reset
    // the requested field. Other sibling choices remain independent compound data. A current choice can carry narrative context too (e.g. a channel plus a

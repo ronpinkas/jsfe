@@ -7369,6 +7369,15 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
       } else {
         // an ordinary option or choice
       }
+      // responseStay: this reply cannot leave the question. A withdrawal or a new request is one more reply that picked nothing.
+      if ((option === 'abort' || option === 'new_request') && step.responseStay && frame.variables[step.responseStay] === true) {
+        logger.info(`Contextual DISPATCH in '${frame.flowName}': the reply is ${option}, and the question must be completed; the flow continues`);
+        ranked = 'answers';
+        frame.variables[declaration!.variable] = declaration!.parameters.length ? {} : { key: '' };
+        return false;
+      } else {
+        // the reply may leave, or it did not ask to
+      }
       ranked = option.startsWith(CHOICE_PREFIX) ? 'answers' : option;
       if (option.startsWith(CHOICE_PREFIX)) {
         // A declared choice is the whole answer, unless it declares arguments: they are extracted like a flow's, and the
@@ -9092,7 +9101,7 @@ export class WorkflowEngine implements Engine {
         try { validateContextualResponseStep(step,flowDef); } catch(error:any) { state.errors.push(`DISPATCH step \"${step.id}\" in flow \"${flowDef.name}\": ${error.message}`); }
         // DISPATCH always routes the turn's own input — no value. It may declare the ending of the
         // flows it ends (`outcome` / `reason`, kept only when no flow matches).
-        const extra = Object.keys(step).filter(k => !['id', 'type', 'outcome', 'reason', 'recovery', 'onResponse', 'responseContext', 'responseParameters', 'responseVariable', 'responseChoices', 'responseReasonFor', 'onNoIntent'].includes(k));
+        const extra = Object.keys(step).filter(k => !['id', 'type', 'outcome', 'reason', 'recovery', 'onResponse', 'responseContext', 'responseParameters', 'responseVariable', 'responseChoices', 'responseReasonFor', 'responseStay', 'onNoIntent'].includes(k));
         if (extra.length > 0) {
           state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" has invalid attribute(s) ${extra.map(k => `"${k}"`).join(', ')} - DISPATCH takes only "id", "outcome", "reason", "recovery", "onResponse" "responseContext", "responseParameters", "responseVariable", "responseChoices" and "onNoIntent"`);
         } else if (step.onResponse !== undefined && step.onResponse !== 'continue') {

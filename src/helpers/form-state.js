@@ -170,7 +170,7 @@ export function enrichFormMatches(matches,chain,form,names=[],asked='') {
    const enrich=h=>{
       const spec=chain.find(c=>c.form===h.form&&c.name===h.name)||{};
       return {...h,label:h.option_label||spec.label||h.name,label_es:h.option_label_es||spec.label_es||spec.label||h.name,...(h.option_label?{option:true}:{}),
-         validator:spec.validator||'',...(!(h.form===form&&names.includes(h.name))&&spec.profile&&!['choice','amount','text'].includes(spec.profile.kind)&&/\d/.test(String(h.value))?{out_of_order_number:true}:{}),...(spec.response?{response:spec.response}:{}),after:spec.after||'',validate_always:spec.validate_always===true,...(spec.activation?{activation:spec.activation}:{}),...(spec.silent===true?{silent:true}:{}),pii:spec.pii===true,current:h.form===form&&names.includes(h.name),asked};
+         validator:spec.validator||'',...((matches.decisions||[]).some(d=>d.form===h.form&&d.name===h.name&&(d.rule==='out_of_order'||d.rule==='compound'))?{out_of_order:true}:{}),...(!(h.form===form&&names.includes(h.name))&&spec.profile&&!['choice','amount','text'].includes(spec.profile.kind)&&/\d/.test(String(h.value))?{out_of_order_number:true}:{}),...(spec.response?{response:spec.response}:{}),after:spec.after||'',validate_always:spec.validate_always===true,...(spec.activation?{activation:spec.activation}:{}),...(spec.silent===true?{silent:true}:{}),pii:spec.pii===true,current:h.form===form&&names.includes(h.name),asked};
    };
    return {...matches,hits:matches.hits.map(enrich),ambiguous:matches.ambiguous.map(enrich),remaining:(matches.remaining||[]).map(group=>group.map(enrich))};
 }
@@ -218,7 +218,7 @@ export function settleFormActivations(batch={},cargo=null) {
       rejected:rejected.map(h=>h.activation_inferred?{...h,...h.activation_entry,activation_inferred:false}:h),pending:pending.concat(accepted.filter(h=>held.has(h.activation_group))).filter(h=>!discarded.has(h.activation_group)).map(h=>held.has(h.activation_group)?{...h,ok:undefined,outcome:'pending',silent:true}:h)};
 }
 /** Explicit ownership: unrelated tasks and sibling inputs never share an instance by definition id. */
-export function openFormInstance(cargo, definition, specs, { parent = null, input = '', resume = '', task = '', providers = null, questions = null, context = false, resume_on_parent_change = undefined, incomplete_outcome = undefined, on_exhausted = undefined, on_no = undefined, acknowledge = undefined, must_complete = undefined } = {}) {
+export function openFormInstance(cargo, definition, specs, { parent = null, input = '', resume = '', task = '', providers = null, questions = null, context = false, resume_on_parent_change = undefined, incomplete_outcome = undefined, on_exhausted = undefined, on_no = undefined, acknowledge = undefined, must_complete = undefined, first_task = undefined, first_task_es = undefined } = {}) {
    const incomplete=validateFormIncompleteOutcome(incomplete_outcome);
    validateFormExhaustion(on_exhausted);
    if(acknowledge!==undefined&&acknowledge!=='all'&&acknowledge!=='data')throw new Error("FORM acknowledge must be 'all' or 'data'");
@@ -232,6 +232,8 @@ export function openFormInstance(cargo, definition, specs, { parent = null, inpu
       if(on_exhausted!==undefined)existing.on_exhausted=on_exhausted;
       if(on_no!==undefined)existing.on_no=on_no || '';
       if(must_complete!==undefined)existing.must_complete=must_complete===true;
+      if(first_task!==undefined)existing.first_task=first_task;
+      if(first_task_es!==undefined)existing.first_task_es=first_task_es;
       if(acknowledge!==undefined)existing.acknowledge=acknowledge;
       return resume;
    }
@@ -246,6 +248,8 @@ export function openFormInstance(cargo, definition, specs, { parent = null, inpu
          if(on_exhausted!==undefined)cargo.forms[child].on_exhausted=on_exhausted;
          if(on_no!==undefined)cargo.forms[child].on_no=on_no || '';
          if(must_complete!==undefined)cargo.forms[child].must_complete=must_complete===true;
+         if(first_task!==undefined)cargo.forms[child].first_task=first_task;
+         if(first_task_es!==undefined)cargo.forms[child].first_task_es=first_task_es;
          if(acknowledge!==undefined)cargo.forms[child].acknowledge=acknowledge;
          return child;
       }
@@ -253,7 +257,7 @@ export function openFormInstance(cargo, definition, specs, { parent = null, inpu
    cargo.formSequence = Number(cargo.formSequence || 0) + 1;
    const id = `${definition}:${cargo.formSequence}`;
    cargo.forms[id] = { id, definition, task: owner?.task || task || id, parent, result_input: input,
-      on_exhausted:on_exhausted || '', on_no:on_no || '', must_complete:must_complete===true, ...(acknowledge!==undefined?{acknowledge}:{}), incomplete_outcome:incomplete, context_only:!!context, resume_on_parent_change:resume_on_parent_change===true, parent_revision:owner?.revision ?? null, specs, values: {}, accepted: {}, errors: {}, pending: {}, seeds:{}, attempts: {}, misses:{}, feedback:{}, prepared: {}, data:{}, arguments:{}, contexts:{}, children: {}, childResults:{}, revision: 0,
+      on_exhausted:on_exhausted || '', on_no:on_no || '', must_complete:must_complete===true, ...(first_task!==undefined?{first_task}:{}), ...(first_task_es!==undefined?{first_task_es}:{}), ...(acknowledge!==undefined?{acknowledge}:{}), incomplete_outcome:incomplete, context_only:!!context, resume_on_parent_change:resume_on_parent_change===true, parent_revision:owner?.revision ?? null, specs, values: {}, accepted: {}, errors: {}, pending: {}, seeds:{}, attempts: {}, misses:{}, feedback:{}, prepared: {}, data:{}, arguments:{}, contexts:{}, children: {}, childResults:{}, revision: 0,
       providers: providers || owner?.providers || null, questions: questions?.length ? questions : owner?.questions || [], status: 'collecting' };
    if (owner) {if(context){owner.contexts ||= {};owner.contexts[definition]=id;}else owner.children[input]=id;}
    return id;

@@ -40,7 +40,7 @@ r = matchInputs('4321', [ssn, pin], { form: 'verify', name: 'ssn_last4' });
 eq(names(r), ['ssn_last4=4321'], 'the asked input takes a same-shape answer');
 
 // Already known: the SSN after the account was found (prod call 2026-10-19 08:55)
-r = matchInputs('Y mi número de seguro social es 8944.', [{ ...ssn, value: '8944' }], { form: 'verify', name: 'dob' });
+r = matchInputs('Y mi número de seguro social es 8944.', [{ ...ssn, label: 'número de seguro social', value: '8944' }], { form: 'verify', name: 'dob' });
 eq(r.hits, [{ form: 'verify', name: 'ssn_last4', value: '8944', known: true }], 'a value equal to the stored one is marked known');
 
 // A direct pick of the current input's own choice wins outright
