@@ -164,11 +164,11 @@ export function readInputProfile(profile, answer, isCurrent = true) {
       const money=profile.money;
       if(isPartialMoneyAnswer(raw))return {value:raw,incompleteMoney:true,spans:[[0,raw.length]],evidence:['partial-money']};
       const read=money?text=>readMoneyAmount(text,money):amountInAnswer;
-      // At its own question, an amount said digit by digit is the amount ("1 5 0"); out of order such digits are a code,
-      // and four of them are a card ending anywhere ("6 5 4 6" with the card question open too).
-      const spelled = isCurrent && /^\d(?:[\s.,-]+\d)+[\s.]*$/.test(raw.trim()) && raw.replace(/\D/g, '').length !== 4;
-      const text = spelled ? raw.replace(/\D/g, '') : raw.replace(/^\s*\d(?:[\s.,-]+\d)+(?=\s*(?:dollars?|d[oó]lar(?:es)?|bucks?)\b)/i, (digits) => digits.replace(/\D/g, ''));
-      const n = (profile.marked === 'out_of_order' ? !isCurrent : profile.marked) ? (isAmountAnswer(raw) ? read(text) : NaN) : read(text);
+      // A number said in pieces is the same number: "1 5 0", "1, 5, 0.", "1-5-0" read as 150 does, and the rules decide as for 150.
+      // A period with no space after it stays a decimal point ("4.5").
+      const spelled = /^\s*\d(?:(?:\s+|,\s*|-|\.\s+)\d)+[\s.]*$/.test(raw);
+      const text = spelled ? raw.replace(/\D/g, '') : raw.replace(/^\s*\d(?:(?:\s+|,\s*|-|\.\s+)\d)+(?=\s*(?:dollars?|d[oó]lar(?:es)?|bucks?)\b)/i, (digits) => digits.replace(/\D/g, ''));
+      const n = (profile.marked === 'out_of_order' ? !isCurrent : profile.marked) ? (isAmountAnswer(text) ? read(text) : NaN) : read(text);
       const inRange = !isNaN(n) && (profile.min === undefined || n >= Number(profile.min)) && (profile.max === undefined || n <= Number(profile.max));
       if (inRange) {
          // the digits it was read from: the runs that start with its whole-dollar part ("82.50" said as "82 50" → 8250)

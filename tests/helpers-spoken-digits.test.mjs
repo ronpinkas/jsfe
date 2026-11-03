@@ -19,7 +19,13 @@ eq(readInputProfile(unit, 'apt 12B', true).value, '12B');
 eq(readInputProfile({ kind: 'pattern', regex: '\\d{4}' }, '6 5 4 6', true), null);
 const amount = { kind: 'amount', min: 0.5 };
 for (const [said, want] of [['1 5 0', '150'], ['1, 5, 0.', '150'], ['150', '150'], ['129 94', '129.94']]) eq(readInputProfile(amount, said, true).value, want, said);
-eq(readInputProfile(amount, '6 5 4 6', true), null, 'four digits one by one are a card ending');
+// Parity: said in pieces, the amount reader answers exactly as it does for the joined number.
+for (const isCurrent of [true, false]) {
+   for (const [spaced, joined] of [['6 5 4 6', '6546'], ['1 5 0', '150'], ['1, 5, 0.', '150'], ['1-5-0', '150'], ['1. 5. 0.', '150'], ['9 0 0', '900']]) {
+      eq(readInputProfile(amount, spaced, isCurrent)?.value, readInputProfile(amount, joined, isCurrent)?.value, `${spaced} reads as ${joined}`);
+   }
+}
+eq(readInputProfile(amount, '4.5', true)?.value, readInputProfile(amount, '4.50', true)?.value, 'a period with no space is a decimal point');
 eq(readInputProfile({ ...amount, marked: 'out_of_order' }, '1 5 0', false), null, 'out of order, digit by digit is never an amount');
 eq(amountInAnswer('1 5 0 dollars'), 150);
 eq(readInputProfile({ kind: 'amount', min: 0.01, marked: false, money: { currency: 'USD', cardinals: true, intent: 'payment' } }, '1 5 0 dollars', true).value, '150', 'the money reader too'); eq(Number.isNaN(amountInAnswer('2 4 8 6')), true, 'alone, a card ending or a code');
