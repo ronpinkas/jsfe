@@ -14,7 +14,7 @@ import { readEmail, readPhone, readInternationalPhone, readIdentifier } from './
 import { readSpokenMoney } from './spoken-money.js';
 import {readMoneyAmount,isPartialMoneyAnswer} from './money.js';
 import { pickProviderQuestion } from './form-sources.js';
-import { spokenDigitsText } from './spoken-digits.js';
+import { spokenDigitsText, wholeSpokenNumber } from './spoken-digits.js';
 
 /**
  * This turn's acceptance decisions for the host to log, appended per match: fields filled out of order, in a compound
@@ -164,10 +164,10 @@ export function readInputProfile(profile, answer, isCurrent = true) {
       const money=profile.money;
       if(isPartialMoneyAnswer(raw))return {value:raw,incompleteMoney:true,spans:[[0,raw.length]],evidence:['partial-money']};
       const read=money?text=>readMoneyAmount(text,money):amountInAnswer;
-      // A number said in pieces is the same number: "1 5 0", "1, 5, 0.", "1-5-0" read as 150 does, and the rules decide as for 150.
-      // A period with no space after it stays a decimal point ("4.5").
-      const spelled = /^\s*\d(?:(?:\s+|,\s*|-|\.\s+)\d)+[\s.]*$/.test(raw);
-      const text = spelled ? raw.replace(/\D/g, '') : raw.replace(/^\s*\d(?:(?:\s+|,\s*|-|\.\s+)\d)+(?=\s*(?:dollars?|d[oó]lar(?:es)?|bucks?)\b)/i, (digits) => digits.replace(/\D/g, ''));
+      // A number said in pieces is the same number; the rules decide as for that number.
+      const whole = wholeSpokenNumber(raw);
+      const spelled = whole !== raw;
+      const text = spelled ? whole : raw.replace(/^\s*\d(?:(?:\s+|,\s*|-|\.\s+)\d)+(?=\s*(?:dollars?|d[oó]lar(?:es)?|bucks?)\b)/i, (digits) => digits.replace(/\D/g, ''));
       const n = (profile.marked === 'out_of_order' ? !isCurrent : profile.marked) ? (isAmountAnswer(text) ? read(text) : NaN) : read(text);
       const inRange = !isNaN(n) && (profile.min === undefined || n >= Number(profile.min)) && (profile.max === undefined || n <= Number(profile.max));
       if (inRange) {
@@ -294,7 +294,7 @@ export function readFormAnswer(answer,candidates,current,choiceKey,questions=[])
    return {...matches,hits:matches.hits.map(provenance),ambiguous:matches.ambiguous.map(provenance),remaining:(matches.remaining||[]).map(group=>group.map(provenance)),questions:[...new Set(asked)]};
 }
 export function matchInputs(answer, candidates, current, choiceKey) {
-   const raw = unescape(answer);
+   const raw = wholeSpokenNumber(unescape(answer));
    const list = Array.isArray(candidates) ? candidates.filter((c) => c && c.name && c.profile) : [];
    const cur = current && typeof current === 'object' ? current : {};
    const isCur = (c) => (Array.isArray(cur.names) ? cur.names.indexOf(c.name) > -1 : c.name === cur.name) && (cur.form === undefined || c.form === cur.form);

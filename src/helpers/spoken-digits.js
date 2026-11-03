@@ -49,3 +49,12 @@ export function spokenDigitsText(input, mode = true) {
 export function joinSpokenDigits(input, mode = true) {
    return spokenDigitsText(input, mode).text;
 }
+
+/**
+ * A whole answer that is one number said digit by digit reads as that number: "6 5 4 6", "6, 5, 4, 6.", "6-5-4-6", "6. 5. 4. 6.".
+ * Anything else comes back as it was. A period with no space after it stays a decimal point ("4.5").
+ */
+export function wholeSpokenNumber(input) {
+   const text = String(input ?? '');
+   return /^\s*\d(?:(?:\s+|,\s*|-|\.\s+)\d)+[\s.]*$/.test(text) ? text.replace(/\D/g, '') : text;
+}
