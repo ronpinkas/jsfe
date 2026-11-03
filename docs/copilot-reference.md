@@ -253,7 +253,7 @@ refused reading is listed with its rule, so hosts can log what was filled out of
 
 ## 6. Validation, reentry and contextual uncertainty
 
-A field validator receives `{form,input,value,values,reading}` and writes `cargo.inputCheck={ok:true,value?}` or `{ok:false,message?,message_es?}`. Missing/malformed results fail closed. Activation values and conversational answers use the same validation path. `value` may normalize a valid input; never return success for a refusal to satisfy an effect's prerequisites.
+A field validator receives `{form,input,value,values,reading}` and writes `cargo.inputCheck={ok:true,value?}` or `{ok:false,message?,message_es?,uncounted?}`. `uncounted:true` asks again without spending `max_attempts`: the answer was no failed attempt at this field, so the message only clarifies (a bare number that may not be an amount at all). Missing/malformed results fail closed. Activation values and conversational answers use the same validation path. `value` may normalize a valid input; never return success for a refusal to satisfy an effect's prerequisites.
 
 A whole-form validator writes `cargo.formCheck={ok:true}` or `{ok:false,invalid:[{name,message?,message_es?}],message?,message_es?}`. Only declared fields may be rejected. The shared loop invalidates the affected branch and reasks; it does not discard independent valid fields.
 
