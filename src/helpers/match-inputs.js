@@ -14,6 +14,7 @@ import { readEmail, readPhone, readInternationalPhone, readIdentifier } from './
 import { readSpokenMoney } from './spoken-money.js';
 import {readMoneyAmount,isPartialMoneyAnswer} from './money.js';
 import { pickProviderQuestion } from './form-sources.js';
+import { spokenDigitsText } from './spoken-digits.js';
 
 /**
  * This turn's acceptance decisions for the host to log, appended per match: fields filled out of order, in a compound
@@ -163,12 +164,16 @@ export function readInputProfile(profile, answer, isCurrent = true) {
       const money=profile.money;
       if(isPartialMoneyAnswer(raw))return {value:raw,incompleteMoney:true,spans:[[0,raw.length]],evidence:['partial-money']};
       const read=money?text=>readMoneyAmount(text,money):amountInAnswer;
-      const n = (profile.marked === 'out_of_order' ? !isCurrent : profile.marked) ? (isAmountAnswer(raw) ? read(raw) : NaN) : read(raw);
+      // At its own question, an amount said digit by digit is the amount ("1 5 0"); out of order such digits are a code,
+      // and four of them are a card ending anywhere ("6 5 4 6" with the card question open too).
+      const spelled = isCurrent && /^\d(?:[\s.,-]+\d)+[\s.]*$/.test(raw.trim()) && raw.replace(/\D/g, '').length !== 4;
+      const text = spelled ? raw.replace(/\D/g, '') : raw.replace(/^\s*\d(?:[\s.,-]+\d)+(?=\s*(?:dollars?|d[oó]lar(?:es)?|bucks?)\b)/i, (digits) => digits.replace(/\D/g, ''));
+      const n = (profile.marked === 'out_of_order' ? !isCurrent : profile.marked) ? (isAmountAnswer(raw) ? read(text) : NaN) : read(text);
       const inRange = !isNaN(n) && (profile.min === undefined || n >= Number(profile.min)) && (profile.max === undefined || n <= Number(profile.max));
       if (inRange) {
          // the digits it was read from: the runs that start with its whole-dollar part ("82.50" said as "82 50" → 8250)
          const runs = digitRuns(raw).filter((d) => d.indexOf(String(Math.trunc(n))) === 0);
-         return { value: String(n), spans: [...amountSpans(raw, n),...(money?.cardinals?readSpokenMoney(raw).filter(reading=>reading.value===n).map(reading=>[reading.start,reading.end]):[])], evidence: runs.length ? runs.map((d) => `d:${d}`) : ['amount'] };
+         return { value: String(n), spans: [...(spelled ? [[raw.search(/\d/), raw.search(/\d[^\d]*$/) + 1]] : amountSpans(raw, n)),...(money?.cardinals?readSpokenMoney(raw).filter(reading=>reading.value===n).map(reading=>[reading.start,reading.end]):[])], evidence: runs.length ? runs.map((d) => `d:${d}`) : ['amount'] };
       } else {
          return null;
       }
@@ -208,17 +213,20 @@ export function readInputProfile(profile, answer, isCurrent = true) {
          return null;   // none, or two different numbers of that length: not this input's answer by shape alone
       }
    } else if (kind === 'pattern') {
+      // spoken_digits: the pattern reads a number said in pieces as one number ("5 0 9 Lazy Lane", "apt 2 0 4").
+      const said = profile.spoken_digits ? spokenDigitsText(raw, profile.spoken_digits) : { text: raw, at: (i) => i };
       let m = null;
       try {
-         m = new RegExp(profile.regex, profile.flags || 'i').exec(raw);
+         m = new RegExp(profile.regex, profile.flags || 'i').exec(said.text);
       } catch {
          m = null;   // an invalid pattern in a spec reads nothing
       }
       if (m) {
          const v = m[profile.group || 0] || m[0];
-         return { value: v, spans: [[m.index + m[0].indexOf(v), m.index + m[0].indexOf(v) + v.length]], evidence: [`p:${String(v).toLowerCase()}`] };
+         const start = m.index + m[0].indexOf(v);
+         return { value: v, spans: [[said.at(start), said.at(start + v.length - 1) + 1]], evidence: [`p:${String(v).toLowerCase()}`] };
       } else {
-         return isCurrent&&profile.accept_other===true&&raw.trim()?{value:raw.trim(),fallback:true,spans:[[0,raw.length]]}:null;
+         return isCurrent&&profile.accept_other===true&&raw.trim()?{value:said.text.trim(),fallback:true,spans:[[0,raw.length]]}:null;
       }
    } else if (kind === 'text') {
       const t = raw.trim();

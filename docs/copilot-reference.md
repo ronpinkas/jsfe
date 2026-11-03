@@ -193,7 +193,7 @@ Profiles:
 | `choice` | `choices:[{key,phrases,label?,label_es?,keys?,exact?,neutral?,negative?,current_only?}]`; optional `accept_other`, `numeric_values`, `narrative`, `whole_phrases`, `template_words`. |
 | `digits` | `min`, `max`: one unambiguous digit run of that length. |
 | `identifier` | `pattern`: permitted account identifier shape. |
-| `pattern` | `regex`, optional `flags`, `group`; optional `accept_other` for the current field only, `whole_phrases`, `template_words`. |
+| `pattern` | `regex`, optional `flags`, `group`; optional `accept_other` for the current field only, `whole_phrases`, `template_words`; `spoken_digits` (`true`, or `'house_number'` when a numbered street can follow) reads a number said in pieces as one number ("5 0 9 Lazy Lane", "apt 2 0 4"), required on any pattern that reads digits. |
 | `phone`, `email` | Typed readers; email `literal:true` preserves an explicit visible address token in surrounding prose. |
 | `amount` | `min`, `max`, optional `marked:true` or `marked:"out_of_order"`; optional `money:{currency:"USD",cardinals:true,intent:"payment"}`. |
 | `text` | Current-field text fallback; `narrative:true` retains a substantive answer alongside independent structured fields. |

@@ -317,6 +317,8 @@ export function isAmountAnswer(input) {
 const IDENTIFIER_NUMBER = /\b(?:sub[\s-]?accounts?|accounts?|subcuentas?|cuentas?|cards?|tarjetas?|ending(?:\s+in)?|terminad[ao]s?\s+en|que\s+termina(?:\s+en)?|termina(?:\s+en)?|codes?|c[oó]digos?|zip(?:\s+code)?|postal|n[uú]mero|number)\s*(?:de\s+|is\s+|es\s+)?\d[\d\s-]*/gi;
 // Digits spoken one at a time ("2 4 8 6"): a card ending or a code read back, never an amount.
 const SPELLED_DIGITS = /\b\d(?:\s+\d\b){2,}/g;
+// The same digits with a money word after them are the amount: "1 5 0 dollars".
+const SPELLED_DOLLARS = /\b\d(?:\s+\d\b)+(?=\s*(?:dollars?|d[oó]lar(?:es)?|bucks?)\b)/gi;
 // "10 con 18 centavos", "10 dollars and 18 cents", "$10 y 18 centavos"; speech-to-text also writes "76 con50 centavos", and
 // callers say "171 con un 6 centavos" (owner 2026-10-18; a prod call went to the guru): an "un" before the cents.
 const DOLLARS_AND_CENTS = /(\d+)\s*(?:dollars?|d[oó]lar(?:es)?|bucks?)?\s*(?:and|con|y)\s*(?:un\s+)?(\d{1,2})\s*(?:cents?|centavos?)\b/i;
@@ -358,7 +360,7 @@ export function numericAmountReading(input) {
    } else {
       // no dollars-and-cents phrase
    }
-   t = t.replace(IDENTIFIER_NUMBER, ' ').replace(SPELLED_DIGITS, ' ').replace(DOLLARS_JOINED_CENTS, (m, sign, d, word, joiner, c) => (sign || word || (CENTS_JOINERS.includes(joiner.toLowerCase()) && c.length === 2) ? ` $${d}.${c.padStart(2, '0')} ` : m))
+   t = t.replace(SPELLED_DOLLARS, (digits) => digits.replace(/\s+/g, '')).replace(IDENTIFIER_NUMBER, ' ').replace(SPELLED_DIGITS, ' ').replace(DOLLARS_JOINED_CENTS, (m, sign, d, word, joiner, c) => (sign || word || (CENTS_JOINERS.includes(joiner.toLowerCase()) && c.length === 2) ? ` $${d}.${c.padStart(2, '0')} ` : m))
       .replace(DOLLARS_SPACE_CENTS, (m, sign, d, c) => ` $${d}.${c} `);
    const found = [...t.matchAll(/(\$\s*)?(\d+(?:\.\d{1,2})?)(\s*(?:dollars?|d[oó]lar(?:es)?|bucks?|cents?|centavos?)\b)?/gi)]
       .map((m) => ({ v: parseFloat(m[2]), marked: !!(m[1] || m[3] || m[2].includes('.')), cents: !m[1] && /cent/i.test(m[3] || '') }));

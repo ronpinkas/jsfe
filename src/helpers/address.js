@@ -1,6 +1,7 @@
 /** Address interpretation and geocoder projection, independent of collection order. */
+import { joinSpokenDigits } from './spoken-digits.js';
 export function addressDraft(raw) {
-   const said=String(raw || '').trim();
+   const said=joinSpokenDigits(String(raw || '').trim(),'house_number');
    const zip=/(?:^|\D)(\d{5})(?:-\d{4})?(?:\D|$)/.exec(said)?.[1] || '';
    const unit=/(?:\bapt\.?|\bunit|#)\s*([\w-]+)/i.exec(said)?.[1] || '';
    let street=said.split(/[,\n]/)[0].replace(/\s*(?:apt\.?|unit|#)\s*[\w-]+.*$/i,'').trim();
