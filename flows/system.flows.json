@@ -297,6 +297,11 @@
         "description": "code validator"
       },
       {
+        "name": "code_confirm",
+        "type": "string",
+        "description": "code confirm"
+      },
+      {
         "name": "answer_handler",
         "type": "string",
         "description": "answer handler"
@@ -373,6 +378,10 @@
         "value": ""
       },
       "code_validator": {
+        "type": "string",
+        "value": ""
+      },
+      "code_confirm": {
         "type": "string",
         "value": ""
       },
@@ -605,6 +614,12 @@
         "value": "auth_restart && cargo.authOptions ? cargo.authOptions.code_validator || '' : code_validator"
       },
       {
+        "id": "auth_option_code_confirm",
+        "type": "SET",
+        "variable": "code_confirm",
+        "value": "auth_restart && cargo.authOptions ? cargo.authOptions.code_confirm || '' : code_confirm"
+      },
+      {
         "id": "auth_option_answer_handler",
         "type": "SET",
         "variable": "answer_handler",
@@ -656,7 +671,7 @@
         "id": "auth_options",
         "type": "SET",
         "variable": "noop",
-        "value": "(cargo.authOptions={retry_flow:retry_flow,cancel_flow:cancel_flow,email_validator:email_validator,cell_validator:cell_validator,code_validator:code_validator,answer_handler:answer_handler,retry_returns:retry_returns,parent_form:parent_form,task:task,task_es:task_es,failed_flow:failed_flow},cargo.authCancelFlow=cancel_flow,cargo.authRetry=!!(auth_restart && !cell_number && !email && retry_returns),true)"
+        "value": "(cargo.authOptions={retry_flow:retry_flow,cancel_flow:cancel_flow,email_validator:email_validator,cell_validator:cell_validator,code_validator:code_validator,code_confirm:code_confirm,answer_handler:answer_handler,retry_returns:retry_returns,parent_form:parent_form,task:task,task_es:task_es,failed_flow:failed_flow},cargo.authCancelFlow=cancel_flow,cargo.authRetry=!!(auth_restart && !cell_number && !email && retry_returns),true)"
       },
       {
         "id": "auth_return_to_caller",
@@ -7677,6 +7692,10 @@
         "scope": "flow",
         "value": false
       },
+      "ci_clarify": {
+        "type": "object",
+        "value": null
+      },
       "ci_partial": {
         "type": "string",
         "value": ""
@@ -8474,7 +8493,65 @@
         "id": "ci_reply_reader",
         "type": "SET",
         "variable": "ci_reply_reader",
-        "value": "ci_choices.length ? 'read-form-choice' : 'read-form-reply'"
+        "value": "'read-form-choice'"
+      },
+      {
+        "id": "ci_clarify",
+        "type": "SET",
+        "variable": "ci_clarify",
+        "value": "!ci_m.hits.length && !ci_m.ambiguous.length && !ci_m.questions.length && Array.isArray(ci_m.clarify) && ci_m.clarify.length ? ci_m.clarify[0] : null"
+      },
+      {
+        "id": "ci_clarify_attempt",
+        "type": "CASE",
+        "branches": {
+          "condition: ci_clarify": {
+            "id": "ci_clarify_count",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.forms[form].attempts=cargo.forms[form].attempts || {},cargo.forms[form].attempts[current]=Number(cargo.forms[form].attempts[current] || 0)+1,true)"
+          },
+          "default": {
+            "id": "ci_clarify_attempt_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ci_clarify_say",
+        "type": "CASE",
+        "branches": {
+          "condition: ci_clarify": {
+            "id": "ci_clarify_line",
+            "type": "SAY",
+            "value": "{{confirmOutOfOrderLine(ci_clarify,ci_clarify.value,'en',cargo.voice)}}",
+            "value_es": "{{confirmOutOfOrderLine(ci_clarify,ci_clarify.value,'es',cargo.voice)}}"
+          },
+          "default": {
+            "id": "ci_clarify_say_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ci_clarify_end",
+        "type": "CASE",
+        "branches": {
+          "condition: ci_clarify": {
+            "id": "ci_clarify_done",
+            "type": "END"
+          },
+          "default": {
+            "id": "ci_clarify_end_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
       },
       {
         "id": "ci_route",
@@ -8517,7 +8594,7 @@
               "no_gate": "{{ci_skip_gate}}"
             }
           },
-          "condition: !ci_must && ci_words > 0": {
+          "condition: ci_words > 0": {
             "id": "ci_elsewhere",
             "type": "FLOW",
             "value": "{{ci_reply_reader}}",
@@ -10963,7 +11040,7 @@
             "label_es": "fecha de vencimiento",
             "profile": {
               "kind": "pattern",
-              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b"
+              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b|\\b(?:0\\s?[1-9]|1\\s?[0-2]|[1-9])\\s*(?:gui[oó]n|dash|hyphen|slash|barra|diagonal)\\s*(?:2\\s?0\\s?)?\\d\\s?\\d\\b"
             },
             "digits": {
               "min": 3,
@@ -12093,7 +12170,7 @@
             "label_es": "fecha de vencimiento",
             "profile": {
               "kind": "pattern",
-              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b"
+              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b|\\b(?:0\\s?[1-9]|1\\s?[0-2]|[1-9])\\s*(?:gui[oó]n|dash|hyphen|slash|barra|diagonal)\\s*(?:2\\s?0\\s?)?\\d\\s?\\d\\b"
             },
             "digits": {
               "min": 3,
@@ -12221,7 +12298,7 @@
         "id": "collect-credit-card_open",
         "type": "SET",
         "variable": "form_instance",
-        "value": "openFormInstance(cargo, \"collect-credit-card\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-credit-card\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete })"
+        "value": "openFormInstance(cargo, \"collect-credit-card\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-credit-card\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete, first_task: \"record your new card\", first_task_es: \"registrar su tarjeta nueva\" })"
       },
       {
         "id": "collect-credit-card_task",
@@ -13206,6 +13283,10 @@
         "scope": "flow",
         "value": false
       },
+      "cf_clarify": {
+        "type": "object",
+        "value": null
+      },
       "named_fields": {
         "type": "boolean",
         "value": false
@@ -13399,7 +13480,7 @@
             "label_es": "fecha de vencimiento",
             "profile": {
               "kind": "pattern",
-              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b"
+              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b|\\b(?:0\\s?[1-9]|1\\s?[0-2]|[1-9])\\s*(?:gui[oó]n|dash|hyphen|slash|barra|diagonal)\\s*(?:2\\s?0\\s?)?\\d\\s?\\d\\b"
             },
             "digits": {
               "min": 3,
@@ -13758,9 +13839,39 @@
         "value": "formMustComplete(cargo,form,'__confirm')"
       },
       {
+        "id": "cf_clarify",
+        "type": "SET",
+        "variable": "cf_clarify",
+        "value": "cargo.choice !== 'yes' && !cf_m.questions.length && !cf_m.ambiguous.length && !cf_m.hits.length && Array.isArray(cf_m.clarify) && cf_m.clarify.length ? cf_m.clarify[0] : null"
+      },
+      {
+        "id": "cf_clarify_say",
+        "type": "CASE",
+        "branches": {
+          "condition: cf_clarify": {
+            "id": "cf_clarify_line",
+            "type": "SAY",
+            "value": "{{confirmOutOfOrderLine(cf_clarify,cf_clarify.value,'en',cargo.voice)}}",
+            "value_es": "{{confirmOutOfOrderLine(cf_clarify,cf_clarify.value,'es',cargo.voice)}}"
+          },
+          "default": {
+            "id": "cf_clarify_say_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "cf_route",
         "type": "CASE",
         "branches": {
+          "condition: cf_clarify": {
+            "id": "cf_clarified",
+            "type": "SET",
+            "variable": "cf_result",
+            "value": "'unclear'"
+          },
           "condition: cf_m.questions.length > 0": {
             "id": "cf_question_repeat",
             "type": "SET",
@@ -13805,7 +13916,7 @@
             "variable": "cf_result",
             "value": "'clarification'"
           },
-          "condition: !cf_must && cf_words > 0": {
+          "condition: cf_words > 0": {
             "id": "cf_elsewhere",
             "type": "FLOW",
             "value": "read-confirm-reply",
@@ -13843,6 +13954,24 @@
         "type": "SET",
         "variable": "cf_tries",
         "value": "cf_result === 'unclear' ? missFormInput(cargo,form,'__confirm') : (clearFormMisses(cargo,form,'__confirm'),0)"
+      },
+      {
+        "id": "cf_first",
+        "type": "CASE",
+        "branches": {
+          "condition: cf_must && cf_result === 'unclear' && cf_words > 0": {
+            "id": "cf_first_line",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.forms[form].feedback['__confirm']='first',true)"
+          },
+          "default": {
+            "id": "cf_first_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
       },
       {
         "id": "cf_optional_exhausted",
@@ -13910,6 +14039,24 @@
           },
           "default": {
             "id": "cf_misses_exhausted_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "cf_clarified_no_sorry",
+        "type": "CASE",
+        "branches": {
+          "condition: cf_clarify": {
+            "id": "cf_clarified_feedback",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "consumeFormFeedback(cargo,form,'__confirm')"
+          },
+          "default": {
+            "id": "cf_clarified_no_sorry_skip",
             "type": "SET",
             "variable": "noop",
             "value": "true"
@@ -16377,6 +16524,7 @@
             "profile": {
               "kind": "pattern",
               "regex": "\\b\\d{1,6}\\s+(?:[A-Za-z0-9.\\xC0-\\xFF-]+\\s+){1,8}(?:st(?:reet)?|ave(?:nue)?|blvd|boulevard|rd|road|ln|lane|dr(?:ive)?|way|ct|court|pl(?:ace)?|pkwy|parkway|cir(?:cle)?|ter(?:race)?)\\b",
+              "spoken_digits": "house_number",
               "accept_other": true
             },
             "depends_on": [
@@ -16408,6 +16556,7 @@
               "kind": "pattern",
               "regex": "(?:\\bapartment|\\bapartamento|\\bdepartamento|\\bapt\\.?|\\bunit|\\bunidad|#)\\s*([\\w-]+)",
               "group": 1,
+              "spoken_digits": true,
               "accept_other": true
             },
             "question": "Is there an apartment or unit number? Type the number, or NONE.",
@@ -16574,7 +16723,7 @@
         "id": "address_draft",
         "type": "SET",
         "variable": "draft",
-        "value": "(function addressDraft(raw) {\n   const said=String(raw || '').trim();\n   const zip=/(?:^|\\D)(\\d{5})(?:-\\d{4})?(?:\\D|$)/.exec(said)?.[1] || '';\n   const unit=/(?:\\bapt\\.?|\\bunit|#)\\s*([\\w-]+)/i.exec(said)?.[1] || '';\n   let street=said.split(/[,\\n]/)[0].replace(/\\s*(?:apt\\.?|unit|#)\\s*[\\w-]+.*$/i,'').trim();\n   street=street.replace(/\\s+\\d{5}(?:-\\d{4})?$/,'').replace(/\\s+[A-Z]{2}$/,'').trim();\n   if(!/^\\d{1,6}\\s+\\S/.test(street))street='';\n   return {zip,street,unit,said:street};\n})(given || (cargo.forms[form_instance].seeds && cargo.forms[form_instance].seeds.given) || '')"
+        "value": "(function addressDraft(raw) {\n   const said=joinSpokenDigits(String(raw || '').trim(),'house_number');\n   const zip=/(?:^|\\D)(\\d{5})(?:-\\d{4})?(?:\\D|$)/.exec(said)?.[1] || '';\n   const unit=/(?:\\bapt\\.?|\\bunit|#)\\s*([\\w-]+)/i.exec(said)?.[1] || '';\n   let street=said.split(/[,\\n]/)[0].replace(/\\s*(?:apt\\.?|unit|#)\\s*[\\w-]+.*$/i,'').trim();\n   street=street.replace(/\\s+\\d{5}(?:-\\d{4})?$/,'').replace(/\\s+[A-Z]{2}$/,'').trim();\n   if(!/^\\d{1,6}\\s+\\S/.test(street))street='';\n   return {zip,street,unit,said:street};\n})(given || (cargo.forms[form_instance].seeds && cargo.forms[form_instance].seeds.given) || '')"
       },
       {
         "id": "address_seed_zip",
@@ -16968,10 +17117,16 @@
         "requireTrue": true
       },
       {
+        "id": "address_street_said",
+        "type": "SET",
+        "variable": "value",
+        "value": "joinSpokenDigits(String(value),'house_number')"
+      },
+      {
         "id": "address_street_malformed",
         "type": "CASE",
         "branches": {
-          "condition: !/^\\d{1,6}\\s+[A-Za-z\\xC0-\\xFF]/.test(String(value))": {
+          "condition: !/^\\d{1,6}\\s+(?:\\d{1,3}\\s+)?[A-Za-z\\xC0-\\xFF]/.test(String(value))": {
             "id": "address_street_invalid",
             "type": "SET",
             "variable": "noop",
@@ -16989,7 +17144,7 @@
         "id": "address_street_stop",
         "type": "CASE",
         "branches": {
-          "condition: !/^\\d{1,6}\\s+[A-Za-z\\xC0-\\xFF]/.test(String(value))": {
+          "condition: !/^\\d{1,6}\\s+(?:\\d{1,3}\\s+)?[A-Za-z\\xC0-\\xFF]/.test(String(value))": {
             "id": "address_street_invalid_end",
             "type": "END"
           },
@@ -19110,7 +19265,7 @@
         "id": "reply_miss",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(cargo.forms[form].attempts=cargo.forms[form].attempts || {},cargo.forms[form].attempts[input]=Number(cargo.forms[form].attempts[input] || 0)+1,cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[input]='miss',true)"
+        "value": "(formMustComplete(cargo,form,input) ? (missFormInput(cargo,form,input),cargo.forms[form].feedback[input]='first') : (cargo.forms[form].attempts=cargo.forms[form].attempts || {},cargo.forms[form].attempts[input]=Number(cargo.forms[form].attempts[input] || 0)+1,cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[input]='miss'),true)"
       }
     ],
     "safetyRevision": "dispatch-intake-2026-10-22"
@@ -19201,6 +19356,10 @@
         "type": "object",
         "value": null
       },
+      "stay": {
+        "type": "boolean",
+        "value": false
+      },
       "contract": {
         "type": "object",
         "value": {
@@ -19243,10 +19402,16 @@
         "value": "formInputChain(cargo.forms, form, cargo)"
       },
       {
+        "id": "choice_stay",
+        "type": "SET",
+        "variable": "stay",
+        "value": "formMustComplete(cargo,form,input)"
+      },
+      {
         "id": "choice_others",
         "type": "SET",
         "variable": "others",
-        "value": "(function(){var seen=(choices || []).map(function(c){return String(c.key);}).concat(['yes','no']);return (chain || []).filter(function(i){return i.form===form && i.name!==input && !i.confirmation && i.profile && i.profile.kind==='choice' && Array.isArray(i.profile.choices);}).reduce(function(all,i){return all.concat(i.profile.choices.filter(function(c){var k=String(c.key);if(c.current_only===true||seen.indexOf(k)>=0)return false;seen.push(k);return true;}).map(function(c){return {key:String(c.key),label:(function(c){var said=(Array.isArray(c.phrases) ? c.phrases : []).map(String).filter(function(p){return /[a-zà-ÿ]/i.test(p) && p!==String(c.key);}).slice(0,6);return String(c.label || (said.length ? c.key+' ('+said.join(', ')+')' : c.key));})(c),owner:{form:i.form,name:i.name}};}));},[]);})()"
+        "value": "(function(){var seen=(choices || []).map(function(c){return String(c.key);}).concat(['yes','no']);return (chain || []).filter(function(i){return !(i.form===form && i.name===input) && !i.confirmation && i.profile && i.profile.kind==='choice' && Array.isArray(i.profile.choices);}).reduce(function(all,i){return all.concat(i.profile.choices.filter(function(c){var k=String(c.key);if(c.current_only===true||seen.indexOf(k)>=0)return false;seen.push(k);return true;}).map(function(c){return {key:String(c.key),label:(function(c){var said=(Array.isArray(c.phrases) ? c.phrases : []).map(String).filter(function(p){return /[a-zà-ÿ]/i.test(p) && p!==String(c.key);}).slice(0,6);return String(c.label || (said.length ? c.key+' ('+said.join(', ')+')' : c.key));})(c),owner:{form:i.form,name:i.name}};}));},[]);})()"
       },
       {
         "id": "choice_ranked",
@@ -19269,7 +19434,8 @@
         "onResponse": "continue",
         "responseContext": "Current question: {{asked}}",
         "responseChoices": "ranked",
-        "responseVariable": "reply"
+        "responseVariable": "reply",
+        "responseStay": "stay"
       },
       {
         "id": "choice_escape_agent",
@@ -19309,7 +19475,7 @@
             "id": "choice_miss",
             "type": "SET",
             "variable": "assignment_side_effect",
-            "value": "(cargo.forms[form].attempts=cargo.forms[form].attempts || {},cargo.forms[form].attempts[input]=Number(cargo.forms[form].attempts[input] || 0)+1,cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[input]='miss',true)"
+            "value": "(formMustComplete(cargo,form,input) ? (missFormInput(cargo,form,input),cargo.forms[form].feedback[input]='first') : (cargo.forms[form].attempts=cargo.forms[form].attempts || {},cargo.forms[form].attempts[input]=Number(cargo.forms[form].attempts[input] || 0)+1,cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[input]='miss'),true)"
           },
           "default": {
             "id": "choice_none_skip",
@@ -19355,7 +19521,7 @@
             "id": "choice_unread_miss",
             "type": "SET",
             "variable": "assignment_side_effect",
-            "value": "(cargo.forms[form].attempts=cargo.forms[form].attempts || {},cargo.forms[form].attempts[input]=Number(cargo.forms[form].attempts[input] || 0)+1,cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[input]='miss',true)"
+            "value": "(formMustComplete(cargo,form,input) ? (missFormInput(cargo,form,input),cargo.forms[form].feedback[input]='first') : (cargo.forms[form].attempts=cargo.forms[form].attempts || {},cargo.forms[form].attempts[input]=Number(cargo.forms[form].attempts[input] || 0)+1,cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[input]='miss'),true)"
           },
           "default": {
             "id": "choice_unread_skip",
@@ -19497,6 +19663,10 @@
         "type": "string",
         "value": ""
       },
+      "stay": {
+        "type": "boolean",
+        "value": false
+      },
       "contract": {
         "type": "object",
         "value": {
@@ -19531,6 +19701,12 @@
         "type": "SET",
         "variable": "asked",
         "value": "(language === 'es' && question_es ? question_es : question)+(reply_context ? ' '+reply_context : '')"
+      },
+      {
+        "id": "confirm_stay",
+        "type": "SET",
+        "variable": "stay",
+        "value": "formMustComplete(cargo,form,'__confirm')"
       },
       {
         "id": "confirm_chain",
@@ -19583,7 +19759,8 @@
         "onResponse": "continue",
         "responseContext": "Current question: {{asked}}",
         "responseChoices": "ranked",
-        "responseVariable": "reply"
+        "responseVariable": "reply",
+        "responseStay": "stay"
       },
       {
         "id": "confirm_escape_agent",
