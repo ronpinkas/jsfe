@@ -602,7 +602,7 @@ const confirmForm = {
    id: 'confirm-form', name: 'ConfirmForm', version: '1.0.0', scope: 'isolated',
    description: "Worker: ask a form's confirmation (exact YES / NO; keys 1 and 2). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
    parameters: ['form', 'question', 'question_es', 'exit_context', 'exit_context_es','phrases','words','interrupts','no_keys','clarifications','invites'].map((n) => ({ name: n, type: ['phrases','words','interrupts','no_keys','clarifications','invites'].includes(n)?'array':'string', description: n })).concat([{ name: 'named_fields', type: 'boolean', description: "true: an answer that names one of the form's inputs (its names) without a value re-asks only that input" }]),
-   variables: vars({ named_fields: false, reply_context: '', cf_must: false, cf_presets: FIELD_PRESETS, cf_chain: [], cf_m: null, cf_current:null, cf_result: '',cf_prompt:'',cf_prompt_es:'', cf_words: 0, cf_tries: 0, phrases:null, words:[], clarifications:[], no_keys:['2'], interrupts:[], invites:[], cf_choices:[], cf_event:'', cf_amount:false, cf_questions:[],cf_provides:null,cf_skip_gate:'' }),
+   variables: vars({ cf_clarify:null, cf_clarify_number:'', named_fields: false, reply_context: '', cf_must: false, cf_presets: FIELD_PRESETS, cf_chain: [], cf_m: null, cf_current:null, cf_result: '',cf_prompt:'',cf_prompt_es:'', cf_words: 0, cf_tries: 0, phrases:null, words:[], clarifications:[], no_keys:['2'], interrupts:[], invites:[], cf_choices:[], cf_event:'', cf_amount:false, cf_questions:[],cf_provides:null,cf_skip_gate:'' }),
    steps: [
       SIDE('cf_reset', "(cargo.formConfirm = cargo.formConfirm || {}, cargo.formConfirm[form] = '', cargo.confirmRanked = '', true)"),
       SET('cf_choices','cf_choices',`[{key:'yes',phrases:['1'].concat(Array.isArray(phrases)?phrases:Array.isArray(words)?words:[]),exact:true},{key:'no',phrases:(Array.isArray(no_keys)?no_keys:['2']).concat(${JSON.stringify(ANSWER_WORDS.no)}),exact:true}].concat((Array.isArray(interrupts)?interrupts:[]).map(function(event){return {key:'event:'+event.key,phrases:event.phrases ?? event.words,exact:event.exact!==false};}))`),
@@ -628,7 +628,12 @@ const confirmForm = {
       WHEN('cf_question_fields','cf_m.questions.length > 0 && cf_m.hits.length > 0',FLOW('cf_question_accept','collect-input-accept','call',{hits:'{{cf_m.hits}}'})),
       WHEN('cf_question_provide','cf_m.questions.length > 0',FLOW('cf_question_answer','provide-data','call',{form:'{{form}}',provides:'{{cf_provides}}',asked_keys:'{{cf_m.questions}}',no_menu:'true',no_gate:'{{cf_skip_gate}}'})),
       SET('cf_must_complete','cf_must',"formMustComplete(cargo,form,'__confirm')"),
+      // input.confirm_out_of_order: a number that filled nothing; say how to mean it, then the question again. A try, without "sorry".
+      SET('cf_clarify','cf_clarify',"cargo.choice !== 'yes' && !cf_m.questions.length && !cf_m.ambiguous.length && !cf_m.hits.length && Array.isArray(cf_m.clarify) && cf_m.clarify.length ? cf_m.clarify[0] : null"),
+      SET('cf_clarify_number','cf_clarify_number',"cf_clarify ? String(cf_clarify.value).split('').join(cargo.voice ? ' ' : '') : ''"),
+      WHEN('cf_clarify_say','cf_clarify',SAY('cf_clarify_line',"{{cf_clarify.message.replace('{value}', cf_clarify_number)}}","{{(cf_clarify.message_es || cf_clarify.message).replace('{value}', cf_clarify_number)}}")),
       { id: 'cf_route', type: 'CASE', branches: {
+         'condition: cf_clarify': SET('cf_clarified','cf_result',"'unclear'"),
          'condition: cf_m.questions.length > 0': SET('cf_question_repeat','cf_result',"'changed'"),
          "condition: cargo.choice === 'yes'": SET('cf_answered', 'cf_result', "'yes'"),
          'condition: cf_m.ambiguous.length > 0': FLOW('cf_ambiguous', 'disambiguate-input', 'call', { readings: '{{cf_m.ambiguous}}', hits: '{{cf_m.hits}}', remaining:'{{cf_m.remaining}}' }),
@@ -646,6 +651,7 @@ const confirmForm = {
       optionalIncomplete('cf_optional_exhausted','cf_tries >= 2 && !cf_must','form',"'confirmation_misses_exhausted'"),
       WHEN('cf_misses_stamp','cf_tries >= 2 && !cf_must',recoveryStamp('cf_failure_stamp','form',"'confirmation_misses_exhausted'")),
       WHEN('cf_misses_exhausted','cf_tries >= 2 && !cf_must',FLOW('cf_give_up','give-up','reboot',{ context: '{{exit_context}}', context_es: '{{exit_context_es}}' })),
+      WHEN('cf_clarified_no_sorry','cf_clarify',SIDE('cf_clarified_feedback',"consumeFormFeedback(cargo,form,'__confirm')")),
       WHEN('cf_bind_revision', "cf_result === 'yes'", SIDE('cf_bind', 'confirmFormRevision(cargo, form)')),
       SIDE('cf_store', "(cargo.formConfirm[form] = cf_result === 'unclear' || cf_result === 'clarification' ? 'changed' : cf_result, true)"),
    ],
