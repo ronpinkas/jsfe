@@ -25,6 +25,8 @@ for (const isCurrent of [true, false]) {
       eq(readInputProfile(amount, spaced, isCurrent)?.value, readInputProfile(amount, joined, isCurrent)?.value, `${spaced} reads as ${joined}`);
    }
 }
+const cardChoice = { kind: 'choice', choices: [{ key: 'card', phrases: ['6546'] }, { key: 'one', keys: ['1'] }, { key: 'two', keys: ['2'] }] };
+for (const said of ['6546', '6 5 4 6', '6, 5, 4, 6.', '6-5-4-6']) eq(readInputProfile(cardChoice, said, true)?.value, 'card', `a declared number: ${said}`);
 eq(readInputProfile(amount, '4.5', true)?.value, readInputProfile(amount, '4.50', true)?.value, 'a period with no space is a decimal point');
 eq(readInputProfile({ ...amount, marked: 'out_of_order' }, '1 5 0', false), null, 'out of order, digit by digit is never an amount');
 eq(amountInAnswer('1 5 0 dollars'), 150);

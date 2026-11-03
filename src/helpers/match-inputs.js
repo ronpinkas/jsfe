@@ -135,7 +135,9 @@ export function readInputProfile(profile, answer, isCurrent = true) {
    if (kind === 'choice') {
       // An amount's own digits are the amount's: a number beside it ("51:72.45", sub account 51 and $72.45) is still a choice.
       const free=isAmountAnswer(raw)?amountMasked(raw):raw;
-      const runs=(free.match(CHOICE_RUN) || []).map((r) => r.replace(/\D/g, '')),joined=free.replace(CHOICE_RUN,run=>' '+run.replace(/\D/g,'')+' ');
+      // A declared number of three or more digits said in pieces is that number ("6, 5, 4, 6"); "1, 2" stays two keys.
+      const whole=wholeSpokenNumber(free),pieces=whole!==free&&whole.length>=3?whole:'';
+      const runs=[...(free.match(CHOICE_RUN) || []).map((r) => r.replace(/\D/g, '')),...(pieces?[pieces]:[])],joined=pieces?` ${pieces} `:free.replace(CHOICE_RUN,run=>' '+run.replace(/\D/g,'')+' ');
       const choices = (Array.isArray(profile.choices) ? profile.choices : []).filter(c=>isCurrent||c.current_only!==true).map(c=>({...c,
          numericWords:(c.phrases ?? c.words ?? []).filter(word=>/^\d{2,}$/.test(String(word).trim())),
          phrases:(c.phrases??c.words??[]).concat(isCurrent ? c.keys || [] : []).filter(word=>!(free!==raw&&/^\d+$/.test(String(word).trim())&&!runs.includes(String(word).trim()))&&(isCurrent||profile.numeric_values===true||!/^[\d*#]$/.test(String(word).trim())))}));
@@ -294,7 +296,7 @@ export function readFormAnswer(answer,candidates,current,choiceKey,questions=[])
    return {...matches,hits:matches.hits.map(provenance),ambiguous:matches.ambiguous.map(provenance),remaining:(matches.remaining||[]).map(group=>group.map(provenance)),questions:[...new Set(asked)]};
 }
 export function matchInputs(answer, candidates, current, choiceKey) {
-   const raw = wholeSpokenNumber(unescape(answer));
+   const raw = unescape(answer);
    const list = Array.isArray(candidates) ? candidates.filter((c) => c && c.name && c.profile) : [];
    const cur = current && typeof current === 'object' ? current : {};
    const isCur = (c) => (Array.isArray(cur.names) ? cur.names.indexOf(c.name) > -1 : c.name === cur.name) && (cur.form === undefined || c.form === cur.form);
