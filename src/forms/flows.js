@@ -421,7 +421,7 @@ const readFormResponse={
 // reaches the ranker, which is offered every choice the chain's reader would accept; a verdict that picks none of them, a
 // withdrawal or a new request included, stays: "I understand, first let's {first_task}." and the question again. It uses no
 // attempt: only a value the field rejected does (its contract: an unreadable answer is never handed away).
-const rankedMiss=(id)=>SIDE(id,"(formMustComplete(cargo,form,input) ? (cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[input]='first') : (cargo.forms[form].attempts=cargo.forms[form].attempts || {},cargo.forms[form].attempts[input]=Number(cargo.forms[form].attempts[input] || 0)+1,cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[input]='miss'),true)");
+const rankedMiss=(id)=>SIDE(id,"(formMustComplete(cargo,form,input) ? (missFormInput(cargo,form,input),cargo.forms[form].feedback[input]='first') : (cargo.forms[form].attempts=cargo.forms[form].attempts || {},cargo.forms[form].attempts[input]=Number(cargo.forms[form].attempts[input] || 0)+1,cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[input]='miss'),true)");
 // The ranker is offered only a person. Text is never offered: its label matched "continuar", "texto" and "enlace", and a
 // call moved to text hangs up (prod 2026-10-28: 7 of 7 such picks were wrong). TEXTO and keypad 9 are read before it.
 const ESCAPES_JS="[{key:'__agent',label:'speak with a person (a live agent)'}]";

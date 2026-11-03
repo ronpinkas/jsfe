@@ -68,7 +68,7 @@ for(const language of ['en','es'])for(const option of ['answers','irrelevant','a
   const t=fixture([carded()],{language});t.rank(option);await t.say('begin','pay');
   const response=await t.say('porque me dices eso');
   assert.ok(response.startsWith(language==='es'?'Entiendo, primero vamos a registrar su tarjeta nueva. ':"I understand, first let's record your new card. "),response);
-  assert.ok(/ZIP\?|¿CÓDIGO\?/.test(response),response);assert.equal(t.calls.length,0);
+  assert.ok(/ZIP|código postal/i.test(response),response);assert.equal(t.calls.length,0);
   await t.say('90001');assert.deepEqual(t.session.cargo.done.length,1);
  });
 }
