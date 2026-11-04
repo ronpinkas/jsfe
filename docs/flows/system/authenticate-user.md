@@ -14,6 +14,7 @@
   - `cell_validator`: cell validator
   - `code_validator`: code validator
   - `code_confirm`: code confirm
+  - `other_whole_answer`: other whole answer
   - `answer_handler`: answer handler
   - `retry_returns`: retry returns
   - `retrying`: retrying

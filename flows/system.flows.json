@@ -302,6 +302,11 @@
         "description": "code confirm"
       },
       {
+        "name": "other_whole_answer",
+        "type": "string",
+        "description": "other whole answer"
+      },
+      {
         "name": "answer_handler",
         "type": "string",
         "description": "answer handler"
@@ -384,6 +389,10 @@
       "code_confirm": {
         "type": "string",
         "value": ""
+      },
+      "other_whole_answer": {
+        "type": "boolean",
+        "value": false
       },
       "answer_handler": {
         "type": "string",
@@ -620,6 +629,12 @@
         "value": "auth_restart && cargo.authOptions ? cargo.authOptions.code_confirm || '' : code_confirm"
       },
       {
+        "id": "auth_option_other_whole_answer",
+        "type": "SET",
+        "variable": "other_whole_answer",
+        "value": "auth_restart && cargo.authOptions ? cargo.authOptions.other_whole_answer || '' : other_whole_answer"
+      },
+      {
         "id": "auth_option_answer_handler",
         "type": "SET",
         "variable": "answer_handler",
@@ -671,7 +686,7 @@
         "id": "auth_options",
         "type": "SET",
         "variable": "noop",
-        "value": "(cargo.authOptions={retry_flow:retry_flow,cancel_flow:cancel_flow,email_validator:email_validator,cell_validator:cell_validator,code_validator:code_validator,code_confirm:code_confirm,answer_handler:answer_handler,retry_returns:retry_returns,parent_form:parent_form,task:task,task_es:task_es,failed_flow:failed_flow},cargo.authCancelFlow=cancel_flow,cargo.authRetry=!!(auth_restart && !cell_number && !email && retry_returns),true)"
+        "value": "(cargo.authOptions={retry_flow:retry_flow,cancel_flow:cancel_flow,email_validator:email_validator,cell_validator:cell_validator,code_validator:code_validator,code_confirm:code_confirm,other_whole_answer:other_whole_answer,answer_handler:answer_handler,retry_returns:retry_returns,parent_form:parent_form,task:task,task_es:task_es,failed_flow:failed_flow},cargo.authCancelFlow=cancel_flow,cargo.authRetry=!!(auth_restart && !cell_number && !email && retry_returns),true)"
       },
       {
         "id": "auth_return_to_caller",
@@ -2278,6 +2293,10 @@
             "label": "use another account"
           },
           {
+            "key": "no_other_account",
+            "label": "says they have no other account, this is their only one"
+          },
+          {
             "key": "where",
             "label": "asks where the code was sent"
           },
@@ -2477,7 +2496,7 @@
         "id": "otp_other_requested",
         "type": "SET",
         "variable": "wants_other_account",
-        "value": "other_account_given || !!(cargo.callerPreselected && normalized_otp_code.length !== 6 && (matchesChoice(user_choice,otp_phrases.other) || otp_phrases.other_alone.includes(user_choice.replace(/[.,!?¡¿]/g,'').trim())))"
+        "value": "other_account_given || !!(cargo.callerPreselected && normalized_otp_code.length !== 6 && ((cargo.authOptions && cargo.authOptions.other_whole_answer ? pickChoice(user_choice,[{key:'other',phrases:otp_phrases.other,exact:true}],false) === 'other' : matchesChoice(user_choice,otp_phrases.other)) || otp_phrases.other_alone.includes(user_choice.replace(/[.,!?¡¿]/g,'').trim())))"
       },
       {
         "id": "otp_tenant_answer",
@@ -2667,7 +2686,7 @@
         "id": "otp_offers",
         "type": "SET",
         "variable": "otp_offers",
-        "value": "otp_reply_choices.filter(function(c){return (c.key !== 'email' || !!cargo.otp_cell_number) && (c.key !== 'another_account' || !!cargo.callerPreselected);}).concat(((typeof $callers !== 'undefined' && $callers && $callers['authenticate-user']) || []).map(function(c){return {key:'usecase:'+c.id,label:'states the reason for the call: '+c.label};})).concat(((typeof $gateExits !== 'undefined' && $gateExits && $gateExits['authenticate-user']) || []).map(function(a){return {key:'exit:'+a.key,label:a.label,route:'new_request'};}))"
+        "value": "otp_reply_choices.filter(function(c){return (c.key !== 'email' || !!cargo.otp_cell_number) && (c.key !== 'another_account' || !!cargo.callerPreselected) && (c.key !== 'no_other_account' || !!(cargo.callerPreselected && cargo.authOptions && cargo.authOptions.other_whole_answer));}).concat(((typeof $callers !== 'undefined' && $callers && $callers['authenticate-user']) || []).map(function(c){return {key:'usecase:'+c.id,label:'states the reason for the call: '+c.label};})).concat(((typeof $gateExits !== 'undefined' && $gateExits && $gateExits['authenticate-user']) || []).map(function(a){return {key:'exit:'+a.key,label:a.label,route:'new_request'};}))"
       },
       {
         "id": "otp_off_topic",
@@ -2785,6 +2804,12 @@
               "question_es": "¿Le gustaría intentar nuevamente obtener acceso a su cuenta?"
             },
             "initializeDefaults": true
+          },
+          "condition: !no_code_given && otp_reply && otp_reply.key === 'no_other_account'": {
+            "id": "otp_ranked_no_other_account",
+            "type": "SAY",
+            "value": "I understand. We still need to secure access to your account.",
+            "value_es": "Entiendo. Aún necesitamos asegurar el acceso a su cuenta."
           },
           "condition: !no_code_given && otp_reply && otp_reply.key === '__agent'": {
             "id": "otp_ranked_agent",
