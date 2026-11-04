@@ -52,62 +52,80 @@ flowchart TD
    b9[["call provide-data"]]
    class b9 flowstep
    c8 -- "cf_m.questions.length #gt; 0" --> b9
-   n10["set cf_must"]
+   n10["set cf_must, cf_clarify"]
    b9 --> n10
    c8 -- "else" --> n10
    c11{"case"}
    n10 --> c11
-   b12["set cf_result"]
-   c11 -- "cf_m.questions.length #gt; 0" --> b12
-   b13["set cf_result"]
-   c11 -- "cargo.choice === 'yes'" --> b13
-   b14[["call disambiguate-input"]]
-   class b14 flowstep
-   c11 -- "cf_m.ambiguous.length #gt; 0" --> b14
-   b15[["call collect-input-accept"]]
-   class b15 flowstep
-   c11 -- "cf_m.hits.length #gt; 0" --> b15
+   b12["say: #123;#123;confirmOutOfOrderLine(cf_clarify,cf_clarify.value,'en',ca…"]
+   c11 -- "cf_clarify" --> b12
+   c13{"case"}
+   b12 --> c13
+   c11 -- "else" --> c13
+   b14["set cf_result"]
+   c13 -- "cf_clarify" --> b14
+   b15["set cf_result"]
+   c13 -- "cf_m.questions.length #gt; 0" --> b15
    b16["set cf_result"]
-   c11 -- "cargo.choice === 'no'" --> b16
-   b17["set cf_result"]
-   c11 -- "Array.isArray(clarifications) && pickChoice(String(cargo.choiceText #124;…" --> b17
-   b18[["call read-confirm-reply"]]
+   c13 -- "cargo.choice === 'yes'" --> b16
+   b17[["call disambiguate-input"]]
+   class b17 flowstep
+   c13 -- "cf_m.ambiguous.length #gt; 0" --> b17
+   b18[["call collect-input-accept"]]
    class b18 flowstep
-   c11 -- "!cf_must && cf_words #gt; 0" --> b18
+   c13 -- "cf_m.hits.length #gt; 0" --> b18
    b19["set cf_result"]
-   c11 -- "else" --> b19
-   n20["set cf_result, cf_tries"]
-   b12 --> n20
-   b13 --> n20
-   b14 --> n20
-   b15 --> n20
-   b16 --> n20
-   b17 --> n20
-   b18 --> n20
-   b19 --> n20
-   c21{"case"}
-   n20 --> c21
-   b22(["dispatch: intent detection"])
-   class b22 endstep
-   c21 -- "(cf_tries #gt;= 2 && !cf_must) && !!formIncompleteOutcome(cargo,form,#123;ou…" --> b22
-   c23{"case"}
-   c21 -- "else" --> c23
+   c13 -- "cargo.choice === 'no'" --> b19
+   b20["set cf_result"]
+   c13 -- "Array.isArray(clarifications) && pickChoice(String(cargo.choiceText #124;…" --> b20
+   b21[["call read-confirm-reply"]]
+   class b21 flowstep
+   c13 -- "cf_words #gt; 0" --> b21
+   b22["set cf_result"]
+   c13 -- "else" --> b22
+   n23["set cf_result, cf_tries"]
+   b14 --> n23
+   b15 --> n23
+   b16 --> n23
+   b17 --> n23
+   b18 --> n23
+   b19 --> n23
+   b20 --> n23
+   b21 --> n23
+   b22 --> n23
    c24{"case"}
-   c23 -- "cf_tries #gt;= 2 && !cf_must" --> c24
-   c23 -- "else" --> c24
-   b25(["reboot → give-up"])
-   class b25 endstep
-   c24 -- "cf_tries #gt;= 2 && !cf_must" --> b25
+   n23 --> c24
+   b25["set assignment_side_effect"]
+   c24 -- "cf_must && cf_result === 'unclear' && cf_words #gt; 0" --> b25
    c26{"case"}
+   b25 --> c26
    c24 -- "else" --> c26
-   b27["set assignment_side_effect"]
-   c26 -- "cf_result === 'yes'" --> b27
-   n28["set assignment_side_effect"]
-   b27 --> n28
-   c26 -- "else" --> n28
+   b27(["dispatch: intent detection"])
+   class b27 endstep
+   c26 -- "(cf_tries #gt;= 2 && !cf_must) && !!formIncompleteOutcome(cargo,form,#123;ou…" --> b27
+   c28{"case"}
+   c26 -- "else" --> c28
+   c29{"case"}
+   c28 -- "cf_tries #gt;= 2 && !cf_must" --> c29
+   c28 -- "else" --> c29
+   b30(["reboot → give-up"])
+   class b30 endstep
+   c29 -- "cf_tries #gt;= 2 && !cf_must" --> b30
+   c31{"case"}
+   c29 -- "else" --> c31
+   b32["set assignment_side_effect"]
+   c31 -- "cf_clarify" --> b32
+   c33{"case"}
+   b32 --> c33
+   c31 -- "else" --> c33
+   b34["set assignment_side_effect"]
+   c33 -- "cf_result === 'yes'" --> b34
+   n35["set assignment_side_effect"]
+   b34 --> n35
+   c33 -- "else" --> n35
    DONE(["end (back to caller)"])
    class DONE endstep
-   n28 --> DONE
+   n35 --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

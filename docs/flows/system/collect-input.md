@@ -12,7 +12,7 @@
   - `provides`: provides
   - `exit_context`: exit_context
   - `exit_context_es`: exit_context_es
-- **Calls:** {{ci_exhaustion.flow}} (reboot), [give-up](give-up.md) (reboot), [prepare-input](prepare-input.md) (call), {{ci_spec.refresh}} (call), [ask-choice](ask-choice.md) (call), {{ci_routed}} (call), {{ci_no_flow}} (call), [resume-form](resume-form.md) (reboot), [disambiguate-input](disambiguate-input.md) (call), [collect-input-accept](collect-input-accept.md) (call), [provide-data](provide-data.md) (call), [read-form-choice](read-form-choice.md) (by name), [read-form-reply](read-form-reply.md) (by name), {{ci_reply_reader}} (call)
+- **Calls:** {{ci_exhaustion.flow}} (reboot), [give-up](give-up.md) (reboot), [prepare-input](prepare-input.md) (call), {{ci_spec.refresh}} (call), [ask-choice](ask-choice.md) (call), {{ci_routed}} (call), {{ci_no_flow}} (call), [resume-form](resume-form.md) (reboot), [disambiguate-input](disambiguate-input.md) (call), [collect-input-accept](collect-input-accept.md) (call), [provide-data](provide-data.md) (call), [read-form-choice](read-form-choice.md) (by name), {{ci_reply_reader}} (call)
 - **Tools:** none
 - **Called by:** [run-form](run-form.md)
 
@@ -146,34 +146,49 @@ flowchart TD
    b48(["end (back to caller)"])
    class b48 endstep
    c47 -- "ci_m.questions.length #gt; 0" --> b48
-   n49["set ci_reply_reader"]
+   n49["set ci_reply_reader, ci_clarify"]
    c47 -- "else" --> n49
    c50{"case"}
    n49 --> c50
-   b51[["call disambiguate-input"]]
-   class b51 flowstep
-   c50 -- "ci_m.ambiguous.length #gt; 0" --> b51
-   b52[["call collect-input-accept"]]
-   class b52 flowstep
-   c50 -- "ci_m.hits.length #gt; 0" --> b52
-   b53(["end (back to caller)"])
-   class b53 endstep
-   c50 -- "ci_m.questions.length #gt; 0" --> b53
-   b54[["call provide-data"]]
-   class b54 flowstep
-   c50 -- "ci_qkey && ci_qkey.indexOf('__') !== 0" --> b54
-   b55[["call #123;#123;ci_reply_reader#125;#125;"]]
-   class b55 flowstep
-   c50 -- "!ci_must && ci_words #gt; 0" --> b55
-   b56["set assignment_side_effect"]
-   c50 -- "else" --> b56
+   b51["set assignment_side_effect"]
+   c50 -- "ci_clarify" --> b51
+   c52{"case"}
+   b51 --> c52
+   c50 -- "else" --> c52
+   b53["say: #123;#123;confirmOutOfOrderLine(ci_clarify,ci_clarify.value,'en',ca…"]
+   c52 -- "ci_clarify" --> b53
+   c54{"case"}
+   b53 --> c54
+   c52 -- "else" --> c54
+   b55(["end (back to caller)"])
+   class b55 endstep
+   c54 -- "ci_clarify" --> b55
+   c56{"case"}
+   c54 -- "else" --> c56
+   b57[["call disambiguate-input"]]
+   class b57 flowstep
+   c56 -- "ci_m.ambiguous.length #gt; 0" --> b57
+   b58[["call collect-input-accept"]]
+   class b58 flowstep
+   c56 -- "ci_m.hits.length #gt; 0" --> b58
+   b59(["end (back to caller)"])
+   class b59 endstep
+   c56 -- "ci_m.questions.length #gt; 0" --> b59
+   b60[["call provide-data"]]
+   class b60 flowstep
+   c56 -- "ci_qkey && ci_qkey.indexOf('__') !== 0" --> b60
+   b61[["call #123;#123;ci_reply_reader#125;#125;"]]
+   class b61 flowstep
+   c56 -- "ci_words #gt; 0" --> b61
+   b62["set assignment_side_effect"]
+   c56 -- "else" --> b62
    DONE(["end (back to caller)"])
    class DONE endstep
-   b51 --> DONE
-   b52 --> DONE
-   b54 --> DONE
-   b55 --> DONE
-   b56 --> DONE
+   b57 --> DONE
+   b58 --> DONE
+   b60 --> DONE
+   b61 --> DONE
+   b62 --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

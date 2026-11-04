@@ -18,16 +18,16 @@
 ```mermaid
 flowchart TD
    START(("start"))
-   n0["set noop"]
+   n0["set value"]
    START --> n0
    c1{"case"}
    n0 --> c1
    c2{"case"}
-   c1 -- "!/^\d#123;1,6#125;\s+[A-Za-z\xC0-\xFF]/.test(String(value))" --> c2
+   c1 -- "!/^\d#123;1,6#125;\s+(?:\d#123;1,3#125;\s+)?[A-Za-z\xC0-\xFF]/.test(String(value))" --> c2
    c1 -- "else" --> c2
    b3(["end (back to caller)"])
    class b3 endstep
-   c2 -- "!/^\d#123;1,6#125;\s+[A-Za-z\xC0-\xFF]/.test(String(value))" --> b3
+   c2 -- "!/^\d#123;1,6#125;\s+(?:\d#123;1,3#125;\s+)?[A-Za-z\xC0-\xFF]/.test(String(value))" --> b3
    n4["set components"]
    c2 -- "else" --> n4
    n5[/"tool: geocode-street"/]

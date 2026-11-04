@@ -15,15 +15,16 @@ const pay={id:'pay',name:'Pay',declarationVersion:2,version:'1',primary:true,des
 const data={id:'test-data',library:'data',declarationVersion:2,data:{gate_exits:{'authenticate-user':[{key:'payment_link',label:'get a payment link instead (no code needed)'}]}}};
 const agent={id:'live-agent-requested',name:'LiveAgentRequested',version:'1',description:'A person',steps:[{id:'ran',type:'SET',variable:'noop',value:'(cargo.agent=true,true)'},{id:'said',type:'SAY',value:'TEST agent'}]};
 let checks=0;
-async function at(answer,option,detected='Balance'){
+async function at(answer,option,detected='Balance',extra={},ranked=true){
  const calls=[],offered={};
  const ai=async(system,user,schema,r)=>{calls.push(r?.task);if(r?.task==='rank_reply'){offered.options=r.options;offered.choices=r.choices;return JSON.stringify({option});}if(r?.task==='detect_flow')return JSON.stringify({flowName:detected});return '{"flowName":"None"}';};
  const engine=new WorkflowEngine(quiet,ai,[...FLOWS,probe,resend,other,agent,pay,data],[],STANDARD_FUNCTIONS,{},false,'en');engine.disableCommands();
  let s=engine.initSession('u','otp-ranked','en');Object.assign(s.cargo,{voice:false,verb:'type',verb_es:'escriba',authOptions:{parent_form:''},authCancelFlow:'contact-support',otpVerified:false,otp_cell_number:'8185550000',otpSentOn:'cell'});
+ Object.assign(s.cargo,extra);
  s=await engine.updateActivity({role:'user',content:'start',start:{flow:'otp-probe',arguments:{}}},JSON.parse(JSON.stringify(s)));
  assert.match(s.response,/Code\?/);
  s=await engine.updateActivity({role:'user',content:answer},JSON.parse(JSON.stringify(s)));
- assert.ok(calls.includes('rank_reply'),answer+': ranked '+JSON.stringify(calls)+' '+s.response);checks++;
+ if(ranked)assert.ok(calls.includes('rank_reply'),answer+': ranked '+JSON.stringify(calls)+' '+s.response);checks++;
  return {s,offered,calls};
 }
 let r=await at('my code never showed up','choice:resend');
@@ -31,6 +32,16 @@ assert.equal(r.s.cargo.testResends,1);assert.doesNotMatch(r.s.response,/Let me e
 assert.deepEqual(r.offered.options.filter(o=>o.startsWith('choice:')),['choice:email','choice:where','choice:cannot_find','choice:another_way','choice:resend','choice:no_phone','choice:__agent','choice:usecase:pay','choice:exit:payment_link'],'the step offers (another account only after a caller-ID preselection), the use cases, the declared exits');
 assert.match(r.offered.choices.find(c=>c.key==='usecase:pay').label,/^states the reason for the call: The caller wants to make a payment\.$/,'a use case is labelled by its description, without its Not: list');
 console.log('PASS a resend said in other words resends');
+// authOptions.other_whole_answer: "another account" inside a sentence goes to the ranker, which also hears "I have no other" (prod 2026-11-03: it switched accounts).
+const wholeOther={callerPreselected:true,authOptions:{parent_form:'',other_whole_answer:true}};
+r=await at("I don't have another account.",'choice:no_other_account','Balance',wholeOther);
+assert.match(r.s.response,/^I understand\. We still need to secure access to your account\./);assert.match(r.s.response,/6-digit verification code/);assert.doesNotMatch(r.s.response,/phone or email/);
+assert.ok(r.offered.options.includes('choice:no_other_account')&&r.offered.options.includes('choice:another_account'));checks++;
+console.log('PASS with other_whole_answer, "no other account" inside a sentence stays and is acknowledged');
+r=await at("I'd like to use a different account please",'choice:another_account','Balance',wholeOther);
+assert.doesNotMatch(r.s.response,/secure access/);console.log('PASS the ranker can still take another account');
+assert.ok(!(await at('my code never showed up','choice:resend')).offered.options.includes('choice:no_other_account'),'not offered unless declared');
+console.log('PASS not offered unless declared');
 r=await at('Ay dónde está?','choice:where');
 assert.match(r.s.response,/I sent it by text message to the cell ending with 0000\. Check your text messages\./,'where the code went: the channel and the masked number');
 assert.match(r.s.response,/6-digit verification code/,'and the code is asked again');assert.equal(r.s.cargo.testResends||0,0,'nothing is sent again');assert.doesNotMatch(r.s.response,/Let me explain/);console.log('PASS a caller asking where the code is hears where it went');

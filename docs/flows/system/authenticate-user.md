@@ -13,6 +13,7 @@
   - `email_validator`: email validator
   - `cell_validator`: cell validator
   - `code_validator`: code validator
+  - `code_confirm`: code confirm
   - `answer_handler`: answer handler
   - `retry_returns`: retry returns
   - `retrying`: retrying
