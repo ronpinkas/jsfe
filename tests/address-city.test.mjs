@@ -15,11 +15,14 @@ const begin=async(language,voice)=>{session=engine.initSession('test',crypto.ran
 const check=(ok,label)=>{assert.ok(ok,label);checks++;};
 await begin('es',true);
 let r=await say('90023');check(r==='¿Qué ciudad es: Commerce, East Los Angeles, Los Angeles o Vernon? Presione 1 para Commerce, 2 para East Los Angeles, 3 para Los Angeles, 4 para Vernon.',`a ZIP code with several names: the list (voice, es) [${r}]`);
+for(const said of ['15','1 5','9','#']){await begin('es',true);await say('90023');r=await say(said);check(/¿Qué ciudad es: Commerce/.test(r)&&!/^Entendido/.test(r),`a number that is no offered choice is not a city (${said}) [${r}]`);check(!JSON.stringify(session.cargo.forms).includes(`"city":"${said}"`),`and fills nothing (${said})`);}
+await begin('es',true);await say('90023');
 r=await say('3');check(/^Entendido, Los Angeles, CA\./.test(r),`its key picks the city [${r}]`);
 await say('100 Main Street');r=await say('2');check(/Apt 2, Los Angeles, CA 90023\. ¿Es correcta\?$/.test(r),`read back with the chosen city [${r}]`);
 await say('sí');check(session.cargo.address?.city==='Los Angeles, CA',`stored [${JSON.stringify(session.cargo.address)}]`);
 await begin('en',false);
 r=await say('90023');check(/Type the city or its number, 1 to 4\.$/.test(r),`text wording [${r}]`);
+r=await say('15');check(/Type the city or its number, 1 to 4\.$/.test(r)&&!/^Got it/.test(r),`typed, the same [${r}]`);
 await say('Los Angeles');await say('100 Main Street');await say('none');
 r=await say('the city is wrong');check(/^Which city is it: Commerce, East Los Angeles, Los Angeles or Vernon\?/.test(r),`a part named without a value: only that part is asked [${r}]`);
 r=await say('2');check(/100 Main Street, East Los Angeles, CA 90023\. Is that correct\?$/.test(r),`and read back again, street kept [${r}]`);

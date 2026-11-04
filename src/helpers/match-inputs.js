@@ -161,6 +161,8 @@ export function readInputProfile(profile, answer, isCurrent = true) {
       readings = readings.filter(r => !readings.some(other => other !== r && r.spans.every(([a,b]) => other.spans.some(([c,d]) => c <= a && d >= b && (c<a || d>b)))));
       if (readings.length > 1) return { alternatives:readings };
       if (readings.length === 1) { const { option_label,option_label_es,...one } = readings[0]; return one; }
+      // other_needs_letter: a name, so a number that is no offered choice is not an answer ("15" at a city list).
+      if(profile.other_needs_letter===true&&!/\p{L}/u.test(raw))return null;
       return isCurrent&&profile.accept_other===true&&raw.trim()?{value:raw.trim(),...(profile.narrative===true?{fallback:true}:{}),spans:[[0,raw.length]]}:null;
    } else if (kind === 'amount') {
       const money=profile.money;
