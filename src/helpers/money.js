@@ -10,7 +10,7 @@ export function validateMoneyOptions(options) {
 // This is an input grammar, not a conversation classifier. Anything outside one complete
 // monetary answer belongs to DISPATCH, including refusals, corrections with context and reports. "157 95" is dollars and
 // cents said with no word between them (owner 2026-10-29); "95 52" is not (a card's last four read in pairs).
-const NUMERIC_MONEY=/^(?:\$\s*)?(?:\d{1,3}(?:[,.]\d{3})+|\d+)(?:[.,]\d{1,2})?(?:\s*(?:dollars?|d[oó]lar(?:es)?|bucks?|\$))?(?:\s*(?:and|con|y)\s*(?:un\s*)?\d{1,2}(?:\s*(?:cents?|centavos?))?)?$|^\d{1,2}\s*(?:cents?|centavos?)$|^(?:\$\s*)?(?:\d|\d{3,})\s+\d{2}$/i;
+const NUMERIC_MONEY=/^(?:\$\s*)?(?:\d{1,3}(?:[,.]\d{3})+|\d+)(?:[.,]\d{1,2})?(?:\s*(?:dollars?|d[oó]lar(?:es)?|bucks?|\$))?(?:\s*(?:and|con|y)\s*(?:un\s*)?\d{1,2}(?:\s*(?:cents?|centavos?))?)?$|^\d{1,2}\s*(?:cents?|centavos?)$|^(?:\$\s*)?(?:\d{1,3}(?:[,.]\d{3})+|\d+)[.,]\d{2}\s*(?:cents?|centavos?)$|^(?:\$\s*)?(?:\d|\d{3,})\s+\d{2}$/i;
 const PAYMENT_PREFIX=/^(?:(?:i (?:want to|would like to|can|am able to|will) |i['’]d like to )?pay|(?:quiero |quisiera |puedo |s[ií] puedo |voy a )?(?:pagar|abonar)|(?:no,?\s+)?make it)\s*(?=\$|\d|[a-záéíóúüñ])/i;
 // The field named with its value ("100 amount", "the amount is 100", "monto 100"): the amount, said as such.
 const AMOUNT_LABEL_PREFIX=/^(?:(?:the|el|la)\s+)?(?:amount|monto|cantidad)(?:\s+(?:is|of|es|de))?[:\s]+(?=\$|\d)/i;

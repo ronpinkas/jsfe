@@ -363,7 +363,8 @@ export function numericAmountReading(input) {
    t = t.replace(SPELLED_DOLLARS, (digits) => digits.replace(/\s+/g, '')).replace(IDENTIFIER_NUMBER, ' ').replace(SPELLED_DIGITS, ' ').replace(DOLLARS_JOINED_CENTS, (m, sign, d, word, joiner, c) => (sign || word || (CENTS_JOINERS.includes(joiner.toLowerCase()) && c.length === 2) ? ` $${d}.${c.padStart(2, '0')} ` : m))
       .replace(DOLLARS_SPACE_CENTS, (m, sign, d, c) => ` $${d}.${c} `);
    const found = [...t.matchAll(/(\$\s*)?(\d+(?:\.\d{1,2})?)(\s*(?:dollars?|d[oó]lar(?:es)?|bucks?|cents?|centavos?)\b)?/gi)]
-      .map((m) => ({ v: parseFloat(m[2]), marked: !!(m[1] || m[3] || m[2].includes('.')), cents: !m[1] && /cent/i.test(m[3] || '') }));
+      // A proper decimal amount before the word is that amount, in dollars (prod 2026-11-03: speech-to-text's "157.95 centavos" read as $1.58; owner 2026-11-04).
+      .map((m) => ({ v: parseFloat(m[2]), marked: !!(m[1] || m[3] || m[2].includes('.')), cents: !m[1] && /cent/i.test(m[3] || '') && !/\.\d{2}$/.test(m[2]) }));
    const values = [...new Set(found.map((f) => f.v))];
    let pick = null;
    if (values.length === 1) {
