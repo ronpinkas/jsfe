@@ -62,4 +62,16 @@ await test('declarations are validated',()=>{
  assert.throws(()=>fixture({method:methodInput({rank_parameters:[{name:'x'}]})}),/rank_parameters must list/);
  assert.throws(()=>fixture({method:methodInput({rank_parameters:[{name:'x',description:'d',extra:1}]})}),/rank_parameters must list/);
 });
+await test('a confirmation: confirm.rank_parameters read the amount and the form is confirmed again',async()=>{
+ const form=defineForm({id:'pay',name:'Pay',primary:true,description:'Pay',contract:{summary:'Pay'},inputs:[{name:'amount',label:'amount',profile:{kind:'amount',min:0.01},question:'How much?'}],confirm:{question:'Pay {{cargo.forms[form_instance].values.amount}} dollars?',invites:['amount'],rank_parameters:[definite]},after:[{id:'done',type:'SET',variable:'noop',value:'(cargo.done=structuredClone(cargo.forms[form_instance].values),true)'}]});
+ const cfg={rank:{option:'answers'},args:{amount:'40'}},calls=[];
+ const ai=async(_s,_u,_schema,r)=>{calls.push(r.task);return JSON.stringify(r.task==='rank_reply'?cfg.rank:r.task==='extract_parameters'?{parameters:cfg.args}:{flowName:'None'});};
+ const engine=new WorkflowEngine(quiet,ai,linkFormSchemas([...FLOWS,form]),[],STANDARD_FUNCTIONS,{},false,'en');engine.disableCommands();engine.intentDetection='two-stage';
+ let session=engine.initSession('synthetic',crypto.randomUUID(),'en');session.cargo.voice=false;
+ const say=async(content,start)=>{session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start:{flow:'pay',arguments:{amount:'25'}}}:{})},session)));return session.response||'';};
+ assert.match(await say('start',true),/Pay 25 dollars/);
+ assert.match(await say('well actually the usual one please'),/Pay 40 dollars/);assert.deepEqual(calls,['rank_reply','extract_parameters']);
+ cfg.args={};assert.match(await say('hmm let me think'),/Pay 40 dollars/,'nothing extracted: asked again');
+ assert.throws(()=>defineForm({id:'bad',name:'Bad',description:'b',contract:{summary:'b'},inputs:[{name:'amount',profile:{kind:'amount'}}],confirm:{question:'q',rank_parameters:[{name:'x'}]}}),/rank_parameters must list/);
+});
 console.log(`form-rank-arguments: ${checks} checks passed`);
