@@ -472,6 +472,7 @@ const readProviderReply={
 // reply answers the question, and a choice's own `parameters`, extracted when it is picked. Each value is read by the form's
 // own reader, as if the caller had said only that: `reads` names the input it answers, else it answers the asked question
 // (so the question's rules decide a number's field). Two readings of one input that differ take nothing: asked again.
+// Each reading carries origin 'rank_argument' and its parameter's name (argument), for the input's validator.
 const RANK_ARGUMENTS_JS=`(function(){
  var own=(choices || []).filter(function(c){return String(c.key)===String(reply && reply.key || '');})[0];
  var declared=reply && reply.key!==undefined ? (own && Array.isArray(own.parameters) ? own.parameters : []) : params;
@@ -484,7 +485,7 @@ const RANK_ARGUMENTS_JS=`(function(){
   if(!said)return;
   var target=p.reads ? {form:form,name:p.reads} : group ? {form:form,names:group} : {form:form,name:input};
   var read=enrichFormMatches(readFormAnswer(said, chain, target, said, []), chain, form, target.names || [target.name], input);
-  read.hits.forEach(function(h){if(!hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)===String(h.value);}))hits.push(h);});
+  read.hits.forEach(function(h){h=Object.assign({},h,{origin:'rank_argument',argument:p.name});if(!hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)===String(h.value);}))hits.push(h);});
   ambiguous=ambiguous.concat(read.ambiguous);
  });
  var conflict=hits.some(function(h){return hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)!==String(h.value);});});
@@ -564,7 +565,7 @@ const readConfirmReply={
     var said=String(reply[p.name]===undefined || reply[p.name]===null ? '' : reply[p.name]).trim();
     if(!said)return;
     var target=p.reads ? {form:form,name:p.reads} : {form:form,name:'',invites:Array.isArray(invites) ? invites : []};
-    enrichFormMatches(readFormAnswer(said, chain, target, '', []), chain, form).hits.forEach(function(h){if(!hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)===String(h.value);}))hits.push(h);});
+    enrichFormMatches(readFormAnswer(said, chain, target, '', []), chain, form).hits.forEach(function(h){h=Object.assign({},h,{origin:'rank_argument',argument:p.name});if(!hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)===String(h.value);}))hits.push(h);});
    });
    return hits.some(function(h){return hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)!==String(h.value);});}) ? {hits:[]} : {hits:hits};
   })()`),

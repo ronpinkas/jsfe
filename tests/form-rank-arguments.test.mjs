@@ -7,6 +7,7 @@ import {FLOWS,defineForm,linkFormSchemas} from '../dist/forms/index.js';
 import {STANDARD_FUNCTIONS} from '../dist/helpers/index.js';
 const quiet={info(){},debug(){},warn(...a){if(process.env.DBG)console.log('WARN',...a);},error(...a){if(process.env.DBG)console.log('ERR',...a);}};
 const definite={name:'amount',reads:'amount',description:'The amount the caller definitely means to pay, as said.'};
+const seen=[];
 const candidate={name:'amount_candidate',description:'A number that may be the amount or may answer another option of this question.'};
 const methodInput=(extra={})=>({name:'method',question:'Card or link?',profile:{kind:'choice',choices:[{key:'card',phrases:['card'],exact:true},{key:'link',phrases:['link'],exact:true},{key:'custom',phrases:['different sum'],exact:true,parameters:[definite]}]},rank_parameters:[definite,candidate],...extra});
 let checks=0;
