@@ -75,4 +75,14 @@ await test('a confirmation: confirm.rank_parameters read the amount and the form
  cfg.args={};assert.match(await say('hmm let me think'),/Pay 40 dollars/,'nothing extracted: asked again');
  assert.throws(()=>defineForm({id:'bad',name:'Bad',description:'b',contract:{summary:'b'},inputs:[{name:'amount',profile:{kind:'amount'}}],confirm:{question:'q',rank_parameters:[{name:'x'}]}}),/rank_parameters must list/);
 });
+await test("a confirmation: another input's picked option carries its parameters (the option, then the amount)",async()=>{
+ const form=defineForm({id:'pay',name:'Pay',primary:true,description:'Pay',contract:{summary:'Pay'},inputs:[{name:'plan',question:'Which plan?',profile:{kind:'choice',choices:[{key:'due',phrases:['due'],exact:true},{key:'custom',phrases:['different sum'],exact:true,parameters:[definite]}]}},{name:'amount',label:'amount',profile:{kind:'amount',min:0.01},question:'How much?'}],confirm:{question:'Pay {{cargo.forms[form_instance].values.plan}} {{cargo.forms[form_instance].values.amount}}?'},after:[{id:'done',type:'SET',variable:'noop',value:'(cargo.done=structuredClone(cargo.forms[form_instance].values),true)'}]});
+ const cfg={rank:{option:'choice:custom'},args:{amount:'40'}},calls=[],offered=[];
+ const ai=async(_s,_u,_schema,r)=>{calls.push(r.task);if(r.task==='rank_reply')offered.push(...(r.options || []));return JSON.stringify(r.task==='rank_reply'?cfg.rank:r.task==='extract_parameters'?{parameters:cfg.args}:{flowName:'None'});};
+ const engine=new WorkflowEngine(quiet,ai,linkFormSchemas([...FLOWS,form]),[],STANDARD_FUNCTIONS,{},false,'en');engine.disableCommands();engine.intentDetection='two-stage';
+ let session=engine.initSession('synthetic',crypto.randomUUID(),'en');session.cargo.voice=false;
+ const say=async(content,start)=>{session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start:{flow:'pay',arguments:{plan:'due',amount:'25'}}}:{})},session)));return session.response||'';};
+ assert.match(await say('start',true),/Pay due 25/);
+ assert.match(await say('make it the usual one instead'),/Pay custom 40/);assert.ok(offered.includes('choice:custom'));assert.deepEqual(calls,['rank_reply','extract_parameters']);
+});
 console.log(`form-rank-arguments: ${checks} checks passed`);

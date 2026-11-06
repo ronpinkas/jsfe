@@ -442,7 +442,7 @@ const RANK_LABEL_JS="function(c){var said=(Array.isArray(c.phrases) ? c.phrases 
 // the pay confirmation): the ranker is offered every choice the reader would accept (owner 2026-10-28). A confirmation
 // input is answered only when asked, a current_only choice only at its own question (as the reader reads it), and a key
 // already offered is not offered twice. Each carries its input, so a pick is read as that input's answer.
-const otherChoicesJS=(asked,taken,scope=`i.form===form && i.name!==${asked}`)=>`(function(){var seen=(${taken}).map(function(c){return String(c.key);}).concat(['yes','no']);return (chain || []).filter(function(i){return ${scope} && !i.confirmation && i.profile && i.profile.kind==='choice' && Array.isArray(i.profile.choices);}).reduce(function(all,i){return all.concat(i.profile.choices.filter(function(c){var k=String(c.key);if(c.current_only===true||seen.indexOf(k)>=0)return false;seen.push(k);return true;}).map(function(c){return {key:String(c.key),label:(${RANK_LABEL_JS})(c),owner:{form:i.form,name:i.name}};}));},[]);})()`;
+const otherChoicesJS=(asked,taken,scope=`i.form===form && i.name!==${asked}`)=>`(function(){var seen=(${taken}).map(function(c){return String(c.key);}).concat(['yes','no']);return (chain || []).filter(function(i){return ${scope} && !i.confirmation && i.profile && i.profile.kind==='choice' && Array.isArray(i.profile.choices);}).reduce(function(all,i){return all.concat(i.profile.choices.filter(function(c){var k=String(c.key);if(c.current_only===true||seen.indexOf(k)>=0)return false;seen.push(k);return true;}).map(function(c){return Object.assign({key:String(c.key),label:(${RANK_LABEL_JS})(c),owner:{form:i.form,name:i.name}},Array.isArray(c.parameters) && c.parameters.length ? {parameters:c.parameters} : {});}));},[]);})()`;
 const escapeRoutes=(id)=>[WHEN(`${id}_agent`,"reply && reply.key === '__agent'",FLOW(`${id}_agent_flow`,'live-agent-requested','reboot'))];
 const rankedDispatch=(id,reason,stay=false,parameters='')=>({...yieldDispatch(id,'form',`'${reason}'`),onResponse:'continue',responseContext:'Current question: {{asked}}',responseChoices:'ranked',responseVariable:'reply',...(parameters?{responseParameters:parameters}:{}),...(stay?{responseStay:'stay'}:{})});
 const readFormReply={
@@ -474,7 +474,7 @@ const readProviderReply={
 // (so the question's rules decide a number's field). Two readings of one input that differ take nothing: asked again.
 // Each reading carries origin 'rank_argument' and its parameter's name (argument), for the input's validator.
 const RANK_ARGUMENTS_JS=`(function(){
- var own=(choices || []).filter(function(c){return String(c.key)===String(reply && reply.key || '');})[0];
+ var own=(choices || []).concat(others || []).filter(function(c){return String(c.key)===String(reply && reply.key || '');})[0];
  var declared=reply && reply.key!==undefined ? (own && Array.isArray(own.parameters) ? own.parameters : []) : params;
  var values=reply && reply.key!==undefined ? (reply.arguments || {}) : (reply || {});
  var spec=((cargo.forms[form] || {}).specs || []).filter(function(i){return i.name===input;})[0] || {};
@@ -501,7 +501,7 @@ const readFormChoice={
   SET('choice_chain','chain','formInputChain(cargo.forms, form, cargo)'),
   SET('choice_stay','stay','formMustComplete(cargo,form,input)'),
   SET('choice_others','others',otherChoicesJS('input','choices || []',"!(i.form===form && i.name===input)")),
-  rankedChoices('choice_ranked',`(choices || []).filter(function(c,i,all){return !(firm==='firm' && String(c.key)==='yes') && all.findIndex(function(o){return String(o.key)===String(c.key);})===i;}).map(function(c){return Object.assign({key:String(c.key),label:(${RANK_LABEL_JS})(c)},Array.isArray(c.parameters) && c.parameters.length ? {parameters:c.parameters.map(function(p){return {name:p.name,type:p.type || 'string',description:p.description};})} : {});}).concat(others.map(function(c){return {key:c.key,label:c.label};}))`),
+  rankedChoices('choice_ranked',`(choices || []).filter(function(c,i,all){return !(firm==='firm' && String(c.key)==='yes') && all.findIndex(function(o){return String(o.key)===String(c.key);})===i;}).map(function(c){return Object.assign({key:String(c.key),label:(${RANK_LABEL_JS})(c)},Array.isArray(c.parameters) && c.parameters.length ? {parameters:c.parameters.map(function(p){return {name:p.name,type:p.type || 'string',description:p.description};})} : {});}).concat(others.map(function(c){return Object.assign({key:c.key,label:c.label},c.parameters ? {parameters:c.parameters.map(function(p){return {name:p.name,type:p.type || 'string',description:p.description};})} : {});}))`),
   rankedDispatch('choice_dispatch','input_not_matched',true,'rank_params'),
   ...escapeRoutes('choice_escape'),
   SET('choice_picked','picked',"(function(){var k=String(reply && reply.key || '');var c=(choices || []).filter(function(c){return String(c.key)===k;})[0] || others.filter(function(c){return c.key===k;})[0];return c ? String(c.key) : '';})()"),
@@ -545,7 +545,7 @@ const readConfirmReply={
   SET('confirm_fields','fields',"named_fields === true || named_fields === 'true' ? (chain || []).filter(function(i){var v=cargo.forms[form] && cargo.forms[form].values;return i.form===form && !i.confirmation && Array.isArray(i.names) && i.names.length && v && v[i.name]!==undefined && v[i.name]!==null && v[i.name]!=='';}).map(function(i){var l=String(i.label || i.names[0]);return {key:'field:'+i.name,label:'says the '+l+' read back is wrong, or gives a different '+l,owner:{form:i.form,name:i.name}};}) : []"),
   // A correction may name several fields ('it is Long Beach, apartment 4'): any field's pick extracts every named field's new value.
   SET('confirm_field_arguments','field_arguments',"fields.map(function(c){var i=(chain || []).filter(function(i){return i.form===c.owner.form && i.name===c.owner.name;})[0];var l=String(i.label || i.names[0]);return {name:c.owner.name,type:'string',description:'The correct '+(i.argument_description || l)+' the caller gives now. Leave it empty when they give none.'};})"),
-  rankedChoices('confirm_ranked_choices',"[{key:'no',label:'no: declines or refuses what the question asks to confirm'}].concat(others.map(function(c){return {key:c.key,label:c.label};})).concat(fields.map(function(c){return {key:c.key,label:c.label,parameters:field_arguments};}))"),
+  rankedChoices('confirm_ranked_choices',"[{key:'no',label:'no: declines or refuses what the question asks to confirm'}].concat(others.map(function(c){return Object.assign({key:c.key,label:c.label},c.parameters ? {parameters:c.parameters.map(function(p){return {name:p.name,type:p.type || 'string',description:p.description};})} : {});})).concat(fields.map(function(c){return {key:c.key,label:c.label,parameters:field_arguments};}))"),
   // confirm.rank_parameters: values extracted when the ranker says the reply answers (owner 2026-11-06), read as RANK_ARGUMENTS_JS says
   SET('confirm_rank_params','rank_params',"(Array.isArray(rank_parameters) ? rank_parameters : []).map(function(p){return {name:p.name,type:p.type || 'string',description:p.description};})"),
   rankedDispatch('confirm_dispatch','confirmation_not_matched',true,'rank_params'),
@@ -553,23 +553,27 @@ const readConfirmReply={
   // a correction picked by the ranker is read as its input's answer: the form changes and is confirmed again, never confirmed
   SET('confirm_picked','picked',"others.filter(function(c){return reply && c.key===reply.key;})[0] || null"),
   SET('confirm_read','reading',"picked ? enrichFormMatches(readFormAnswer(picked.key, chain, picked.owner, picked.key, []), chain, form, [picked.owner.name], picked.owner.name) : null"),
-  WHEN('confirm_change','reading && reading.hits.length',FLOW('confirm_change_accept','collect-input-accept','call',{hits:'{{reading.hits}}'})),
-  SET('confirm_field','field',"fields.filter(function(c){return reply && c.key===reply.key;})[0] || null"),
-  SET('confirm_corrections','corrections',"field && reply.arguments ? fields.reduce(function(all,c){var said=String(reply.arguments[c.owner.name] || '').trim();return said ? all.concat(enrichFormMatches(readFormAnswer(said, chain, c.owner, said, []), chain, form, [c.owner.name], c.owner.name).hits) : all;},[]) : []"),
-  WHEN('confirm_correct','corrections.length',FLOW('confirm_correct_accept','collect-input-accept','call',{hits:'{{corrections}}'})),
-  WHEN('confirm_field_reset','field && !corrections.length',SIDE('confirm_field_ask','(resetFormInputs(cargo, field.owner.form, [field.owner.name]), true)')),
   SET('confirm_args','args',`(function(){
-   if(!reply || reply.key!==undefined || !Array.isArray(rank_parameters))return {hits:[]};
+   var declared=reply && reply.key!==undefined ? (picked && Array.isArray(picked.parameters) ? picked.parameters : []) : (Array.isArray(rank_parameters) ? rank_parameters : []);
+   var values=reply && reply.key!==undefined ? (reply.arguments || {}) : (reply || {});
    var hits=[];
-   rank_parameters.forEach(function(p){
-    var said=String(reply[p.name]===undefined || reply[p.name]===null ? '' : reply[p.name]).trim();
+   declared.forEach(function(p){
+    var said=String(values[p.name]===undefined || values[p.name]===null ? '' : values[p.name]).trim();
     if(!said)return;
     var target=p.reads ? {form:form,name:p.reads} : {form:form,name:'',invites:Array.isArray(invites) ? invites : []};
     enrichFormMatches(readFormAnswer(said, chain, target, '', []), chain, form).hits.forEach(function(h){h=Object.assign({},h,{origin:'rank_argument',argument:p.name});if(!hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)===String(h.value);}))hits.push(h);});
    });
    return hits.some(function(h){return hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)!==String(h.value);});}) ? {hits:[]} : {hits:hits};
   })()`),
-  WHEN('confirm_args_accept','args.hits.length',FLOW('confirm_args_accept_flow','collect-input-accept','call',{hits:'{{args.hits}}'})),
+  // a picked correction's arguments are read after it, so the choice is applied first
+  SET('confirm_read_args','reading',"reading && reading.hits.length ? Object.assign({},reading,{hits:reading.hits.concat(args.hits)}) : reading"),
+  WHEN('confirm_change','reading && reading.hits.length',FLOW('confirm_change_accept','collect-input-accept','call',{hits:'{{reading.hits}}'})),
+  SET('confirm_field','field',"fields.filter(function(c){return reply && c.key===reply.key;})[0] || null"),
+  SET('confirm_corrections','corrections',"field && reply.arguments ? fields.reduce(function(all,c){var said=String(reply.arguments[c.owner.name] || '').trim();return said ? all.concat(enrichFormMatches(readFormAnswer(said, chain, c.owner, said, []), chain, form, [c.owner.name], c.owner.name).hits) : all;},[]) : []"),
+  WHEN('confirm_correct','corrections.length',FLOW('confirm_correct_accept','collect-input-accept','call',{hits:'{{corrections}}'})),
+  WHEN('confirm_field_reset','field && !corrections.length',SIDE('confirm_field_ask','(resetFormInputs(cargo, field.owner.form, [field.owner.name]), true)')),
+
+  WHEN('confirm_args_accept','!picked && args.hits.length',FLOW('confirm_args_accept_flow','collect-input-accept','call',{hits:'{{args.hits}}'})),
   SIDE('confirm_ranked',"(cargo.confirmRanked=reading && reading.hits.length || field || args.hits.length ? 'changed' : reply && reply.key==='no' ? 'no' : 'none',true)")]
 };
 const collectContextualAnswer=formFlow({id:'collect-contextual-answer',name:'CollectContextualAnswer',description:'Collect one open-ended answer using contextual DISPATCH and preserve the caller wording.',
