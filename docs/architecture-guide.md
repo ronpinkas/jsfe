@@ -274,11 +274,63 @@ does this reply do with the question the flow asked? The model picks from a clos
 | `new_request` | the caller clearly asks for something else | DISPATCH: the message goes to intent detection |
 | `irrelevant` | the reply means nothing here: a stray word, an unfinished sentence, speech to someone else | the question is asked again; no flow moves |
 
-**Arguments in an unread form answer** (jsfe 1.36, opt-in): an input's `rank_parameters` are extracted on `answers` and a profile choice's `parameters` on its pick; the form's own reader reads each value as if said alone (`reads`: the input it answers, else the asked question). The model only finds the words; validation is unchanged.
-
 **Options with arguments.** A declared choice may carry `parameters` (`{name,type,description}`): a pick then extracts them from the reply with the same stage as a flow's parameters, and the flow reads `{ key, arguments }`. The pick stands when extraction finds nothing or fails. The ranker is generic, so the flow supplies the context: a form's `confirm.reply_context` says what a reply may contain. The address read-back uses this: "It's Long Beach, apartment 4" changes the city and the apartment and reads the address back, with no further question.
 
-**Word readers and the ranker.** An input with `profile.whole_phrases` reads a choice from words only when the whole reply is accounted for: its phrase, another input's argument, courtesy, connecting words and the input's `template_words`. A reply with any other word goes to the ranker, so a word inside a sentence ("Quiero hacer una nueva compra" at a pay menu) never picks an option. Compound answers that carry arguments stay with the reader ("pay $50 with my Visa card"), because a picked option extracts no arguments. A proposal's confirmation offers the ranker its input's choices, so a correction ("yes, it was stolen") picks the changed candidate.
+### Arguments in free-form answers
+
+A caller rarely answers in the shape a reader expects: "Voy a hacer un pago de 100 dólares", "I'd like to fly to
+Cancún the week after Easter". The readers cannot read such a sentence, so it goes to the reply ranker. A flow can
+declare the values to look for in it (jsfe 1.36, opt-in). The ranker then decides what the reply does, the parameter
+stage (the same one that extracts a flow's arguments in intent detection) finds the values, and **the form's own
+readers decide what each value is.** The model only finds the words; every reader rule and validator still applies.
+
+**Where to declare them.** Each is a list of `{ name, description, type?, reads? }`:
+
+| Declared on | Extracted when | Example |
+| --- | --- | --- |
+| an input: `rank_parameters` | the ranker says the reply `answers` the question | the amount question, the travel search question |
+| a profile choice: `parameters` | the ranker picks that choice: the asked question's own, or another input's option offered with it | "different amount" carries the amount |
+| a form's confirmation: `confirm.rank_parameters` | the ranker says the reply `answers` the confirmation | "No, make it 200 dollars" at "I'll charge $119.77…" |
+
+**`reads` decides which question a value answers.** With `reads: '<input>'` the value is read as that input's
+answer, wherever the question was: it can only become that input. Without `reads` it is read as the answer to the
+question asked, exactly as if the caller had said only that value, so that question's rules decide where it goes (a
+key, a sub account number, an invited amount). At a confirmation, a value without `reads` is read as a correction there.
+Use `reads` for a value the caller clearly meant for one field; leave it out for a value whose field the question's
+rules should decide.
+
+**How the values are taken:**
+
+- Each value is read by the readers as if said alone, then validated and stored like a typed answer, with the same
+  acknowledgement, attempts and confirmation. A value read at a confirmation changes the form, which is confirmed again.
+- Nothing read: the question is asked again, as without the declaration. Extraction failing behaves the same.
+- Two readings of one input that differ take nothing: the question is asked again.
+- A picked choice is applied first, then its arguments. An argument that answers the choice's own exclusive group
+  replaces it, being the more specific answer ("other amount" with $100 is the amount $100).
+- Each reading carries `origin: 'rank_argument'` and `argument: '<name>'`, so the input's validator can tell an
+  extracted value from a typed one (the Curacao amount check treats an extracted definite amount as an amount, never a
+  key or a sub account number).
+
+**Writing the descriptions.** The description is the whole instruction to the model, so it states what counts and what
+does not: "The amount the caller definitely wants to pay now … Empty when no number is meant as the amount to pay now:
+an amount already paid, owed or asked about is not one." Ask for the value as the caller said it ("as the digits they
+said, with cents only if they said cents"): the reader applies the rules, and a model that normalises a value can change
+which rule applies. Use `type: 'string'` (the default) for anything a reader reads.
+
+**Cost.** One extraction call, only on replies that already went to the ranker; a reply the readers read never reaches
+it.
+
+```js
+{ name: 'selection', exclusive: true,
+  rank_parameters: [
+    { name: 'amount', reads: 'amount', description: 'The amount the caller definitely wants to pay now, …' },
+    { name: 'amount_candidate', description: 'A number that may be the amount to pay now but could answer another option of this question, …' }],
+  any_of: [ { name: 'option', profile: { kind: 'choice', choices: [ /* … */
+      { key: 'amount', phrases: ['other amount', 'otro monto'], parameters: [{ name: 'amount', reads: 'amount', description: '…' }] } ] } },
+    { name: 'amount', profile: { kind: 'amount', min: 0.01 } } ] }
+```
+
+**Word readers and the ranker.** An input with `profile.whole_phrases` reads a choice from words only when the whole reply is accounted for: its phrase, another input's argument, courtesy, connecting words and the input's `template_words`. A reply with any other word goes to the ranker, so a word inside a sentence ("Quiero hacer una nueva compra" at a pay menu) never picks an option. Compound answers that carry arguments stay with the reader ("pay $50 with my Visa card"), because a picked option extracts only the arguments it declares. A proposal's confirmation offers the ranker its input's choices, so a correction ("yes, it was stolen") picks the changed candidate.
 
 **A number that must name itself.** `input.confirm_out_of_order: {word, word_es, message, message_es}` (default off): out of order a number fills this input only beside its word, in either language ("account 5373850"). Alone it may be something else, a code said with an extra digit, so nothing is filled: the caller hears `message` (`{value}` the number, digit by digit on a call; `{word}` the word) and the current question again, which counts as an attempt at that question. It works at `collect-input` and `confirm-form` questions. At its own question the number needs no word. `authenticate-user`'s `code_confirm` takes the same declaration for a `code_validator`, whose flow reads it with the helpers `saysConfirmWord(answer, spec)` and `confirmOutOfOrderLine(spec, value, language, voice)`.
 
