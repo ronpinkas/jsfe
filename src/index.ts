@@ -3,7 +3,7 @@ import {findFlowTraps, formatFlowTrap} from './forms/flow-traps.js';
 import {compileNamedFunctions} from './helpers/named-functions.js';
 import {closeFormInstance} from './helpers/form-state.js';
 import {storedSession,restoreStoredSession} from './helpers/stored-session.js';
-import {validateContextualResponseStep} from './helpers/contextual-response.js';
+import {validateContextualResponseStep,validateResponseParameters} from './helpers/contextual-response.js';
 import {validateFlowRecovery} from './host/flow-recovery.js';
 import type {FlowRecovery} from './host/flow-recovery.js';
 export type {FlowRecovery} from './host/flow-recovery.js';
@@ -608,7 +608,7 @@ export interface FlowStep {
   id?: string;
   type: StepType;
   recovery?: {version:1;mode:string;reason:string;form?:string;flow?:string};
-  responseParameters?: FlowParameterDefinition[]; // Opt-in typed extraction when the reply answers (rank_reply).
+  responseParameters?: FlowParameterDefinition[] | string; // Opt-in typed extraction when the reply answers (rank_reply); a string names a declared array variable read when ranked (beside responseChoices).
   responseVariable?: string; // Declared object variable assigned only when the reply answers.
   responseChoices?: string; // Declared array variable of { key, label }: the ranker may pick one; responseVariable gets { key }.
   responseReasonFor?: string; // What the caller does not want (interpolated): the reply is ranked as the reason for not wanting it.
@@ -7347,6 +7347,12 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
       let declaration;
       try { declaration = validateContextualResponseStep(step,engine.flowsMenu.find(flow=>flow.id===frame.flowId)); if(activatedThisTurn && declaration)throw new Error('Typed contextual response cannot classify after a flow activation this turn'); } catch(error) { guardedRoutingFailed = true; throw error; }
       const question = interpolateMessage(step.responseContext,frame.contextStack,frame.variables,engine).trim();
+      // Parameters a question declares (responseParameters naming a variable) are read as they stand now; none is an empty list.
+      if(declaration?.parametersFrom) {
+        try { declaration.parameters = validateResponseParameters(frame.variables[declaration.parametersFrom] ?? []); } catch (error) { guardedRoutingFailed = true; throw error; }
+      } else {
+        // the step's own parameters, or none
+      }
       if(declaration) {
         declaration.parameters = declaration.parameters.map((parameter: FlowParameterDefinition)=>({...parameter,description:interpolateMessage(parameter.description,frame.contextStack,frame.variables,engine).trim()}));
         if(declaration.parameters.some((parameter: FlowParameterDefinition)=>!parameter.description)) { guardedRoutingFailed=true; throw new Error('Contextual response parameter description resolved empty'); }

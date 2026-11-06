@@ -119,6 +119,12 @@ const FIELD_COLLECTORS = { 'collect-phone': 'phone', 'collect-email': 'email', '
  * at definition time: a confirmation is a firm or soft choice keyed yes and no; invites list input names (of this form
  * or an enclosing one, resolved at run time by scope).
  */
+/** rank_parameters and a choice's parameters: [{ name, description, type?, reads? }] (reads: the input the value answers). */
+export function validateRankParameters(id, name, what, list) {
+   if (list === undefined) return;
+   else if (!Array.isArray(list) || !list.length || list.some((p) => !p || typeof p !== 'object' || !/^[A-Za-z_$][\w$]*$/.test(String(p.name || '')) || typeof p.description !== 'string' || !p.description.trim() || (p.type !== undefined && !['string', 'number', 'integer', 'boolean'].includes(p.type)) || (p.reads !== undefined && (typeof p.reads !== 'string' || !p.reads)) || Object.keys(p).some((k) => !['name', 'description', 'type', 'reads'].includes(k)))) throw new Error(`FORM ${id}: ${name} ${what} must list { name, description, type?, reads? }`);
+   else { /* a valid list */ }
+}
 function validateAcceptanceDeclarations(id, inputs) {
    for (const input of (inputs || []).flatMap((i) => i.any_of || [i])) {
       if (input.confirmation !== undefined) {
@@ -127,6 +133,8 @@ function validateAcceptanceDeclarations(id, inputs) {
       } else {
          // not a confirmation
       }
+      validateRankParameters(id, input.name, 'rank_parameters', input.rank_parameters);
+      for (const choice of input.profile?.choices || []) validateRankParameters(id, input.name, `choice ${choice.key} parameters`, choice.parameters);
       if (input.invites !== undefined && (!Array.isArray(input.invites) || !input.invites.every((name) => typeof name === 'string' && name))) throw new Error(`FORM ${id}: ${input.name} invites must list input names`);
       else { /* no invites, or a list of names */ }
    }
@@ -434,7 +442,7 @@ const RANK_LABEL_JS="function(c){var said=(Array.isArray(c.phrases) ? c.phrases 
 // already offered is not offered twice. Each carries its input, so a pick is read as that input's answer.
 const otherChoicesJS=(asked,taken,scope=`i.form===form && i.name!==${asked}`)=>`(function(){var seen=(${taken}).map(function(c){return String(c.key);}).concat(['yes','no']);return (chain || []).filter(function(i){return ${scope} && !i.confirmation && i.profile && i.profile.kind==='choice' && Array.isArray(i.profile.choices);}).reduce(function(all,i){return all.concat(i.profile.choices.filter(function(c){var k=String(c.key);if(c.current_only===true||seen.indexOf(k)>=0)return false;seen.push(k);return true;}).map(function(c){return {key:String(c.key),label:(${RANK_LABEL_JS})(c),owner:{form:i.form,name:i.name}};}));},[]);})()`;
 const escapeRoutes=(id)=>[WHEN(`${id}_agent`,"reply && reply.key === '__agent'",FLOW(`${id}_agent_flow`,'live-agent-requested','reboot'))];
-const rankedDispatch=(id,reason,stay=false)=>({...yieldDispatch(id,'form',`'${reason}'`),onResponse:'continue',responseContext:'Current question: {{asked}}',responseChoices:'ranked',responseVariable:'reply',...(stay?{responseStay:'stay'}:{})});
+const rankedDispatch=(id,reason,stay=false,parameters='')=>({...yieldDispatch(id,'form',`'${reason}'`),onResponse:'continue',responseContext:'Current question: {{asked}}',responseChoices:'ranked',responseVariable:'reply',...(parameters?{responseParameters:parameters}:{}),...(stay?{responseStay:'stay'}:{})});
 const readFormReply={
  id:'read-form-reply',name:'ReadFormReply',version:'1.1.0',scope:'isolated',description:'Rank an unreadable answer against its question: a request for a person or for text is taken; an answer is asked again; a withdrawal or a new request leaves with saved form progress.',
  parameters:[{name:'form',type:'string'},{name:'input',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'}],
@@ -458,24 +466,56 @@ const readProviderReply={
   ...escapeRoutes('provider_reply_escape'),
   SIDE('provider_reply_take',"(cargo.providerReply=reply || {},true)")]
 };
+// Arguments in an unread answer (owner 2026-11-06): the asked input's `rank_parameters`, extracted when the ranker says the
+// reply answers the question, and a choice's own `parameters`, extracted when it is picked. Each value is read by the form's
+// own reader, as if the caller had said only that: `reads` names the input it answers, else it answers the asked question
+// (so the question's rules decide a number's field). Two readings of one input that differ take nothing: asked again.
+const RANK_ARGUMENTS_JS=`(function(){
+ var own=(choices || []).filter(function(c){return String(c.key)===String(reply && reply.key || '');})[0];
+ var declared=reply && reply.key!==undefined ? (own && Array.isArray(own.parameters) ? own.parameters : []) : params;
+ var values=reply && reply.key!==undefined ? (reply.arguments || {}) : (reply || {});
+ var spec=((cargo.forms[form] || {}).specs || []).filter(function(i){return i.name===input;})[0] || {};
+ var group=Array.isArray(spec.any_of) ? spec.any_of.map(function(i){return i.name;}) : null;
+ var hits=[],ambiguous=[];
+ declared.forEach(function(p){
+  var said=String(values[p.name]===undefined || values[p.name]===null ? '' : values[p.name]).trim();
+  if(!said)return;
+  var target=p.reads ? {form:form,name:p.reads} : group ? {form:form,names:group} : {form:form,name:input};
+  var read=enrichFormMatches(readFormAnswer(said, chain, target, said, []), chain, form, target.names || [target.name], input);
+  read.hits.forEach(function(h){if(!hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)===String(h.value);}))hits.push(h);});
+  ambiguous=ambiguous.concat(read.ambiguous);
+ });
+ var conflict=hits.some(function(h){return hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)!==String(h.value);});});
+ return conflict ? {hits:[],ambiguous:[],conflict:true} : {hits:hits,ambiguous:hits.length ? [] : ambiguous,conflict:false};
+})()`;
 const readFormChoice={
- id:'read-form-choice',name:'ReadFormChoice',version:'1.3.0',scope:'isolated',description:'Rank an unreadable answer to a choice question and take the offered option it picks, or a request for a person or for text; otherwise ask again. A withdrawal or a new request leaves with saved form progress.',
+ id:'read-form-choice',name:'ReadFormChoice',version:'1.4.0',scope:'isolated',description:'Rank an unreadable answer to a choice question and take the offered option it picks, or a request for a person or for text; otherwise ask again. A withdrawal or a new request leaves with saved form progress.',
  parameters:[{name:'form',type:'string'},{name:'input',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'},{name:'choices',type:'array'},{name:'firm',type:'string'}],
- variables:vars({question:'',question_es:'',choices:[],firm:'',asked:'',ranked:[],reply:null,picked:'',chain:null,reading:null,others:[],owner:null,stay:false}),
+ variables:vars({question:'',question_es:'',choices:[],firm:'',asked:'',ranked:[],reply:null,picked:'',chain:null,reading:null,others:[],owner:null,stay:false,params:[],rank_params:[],args:null}),
  steps:[SET('choice_asked','asked',"language === 'es' && question_es ? question_es : question"),
+  SET('choice_params','params',"(function(){var spec=((cargo.forms[form] || {}).specs || []).filter(function(i){return i.name===input;})[0];return spec && Array.isArray(spec.rank_parameters) ? spec.rank_parameters : [];})()"),
+  SET('choice_rank_params','rank_params',"params.map(function(p){return {name:p.name,type:p.type || 'string',description:p.description};})"),
   SET('choice_chain','chain','formInputChain(cargo.forms, form, cargo)'),
   SET('choice_stay','stay','formMustComplete(cargo,form,input)'),
   SET('choice_others','others',otherChoicesJS('input','choices || []',"!(i.form===form && i.name===input)")),
-  rankedChoices('choice_ranked',`(choices || []).filter(function(c,i,all){return !(firm==='firm' && String(c.key)==='yes') && all.findIndex(function(o){return String(o.key)===String(c.key);})===i;}).map(function(c){return {key:String(c.key),label:(${RANK_LABEL_JS})(c)};}).concat(others.map(function(c){return {key:c.key,label:c.label};}))`),
-  rankedDispatch('choice_dispatch','input_not_matched',true),
+  rankedChoices('choice_ranked',`(choices || []).filter(function(c,i,all){return !(firm==='firm' && String(c.key)==='yes') && all.findIndex(function(o){return String(o.key)===String(c.key);})===i;}).map(function(c){return Object.assign({key:String(c.key),label:(${RANK_LABEL_JS})(c)},Array.isArray(c.parameters) && c.parameters.length ? {parameters:c.parameters.map(function(p){return {name:p.name,type:p.type || 'string',description:p.description};})} : {});}).concat(others.map(function(c){return {key:c.key,label:c.label};}))`),
+  rankedDispatch('choice_dispatch','input_not_matched',true,'rank_params'),
   ...escapeRoutes('choice_escape'),
   SET('choice_picked','picked',"(function(){var k=String(reply && reply.key || '');var c=(choices || []).filter(function(c){return String(c.key)===k;})[0] || others.filter(function(c){return c.key===k;})[0];return c ? String(c.key) : '';})()"),
   // A question over any_of asks one name and its choices belong to a member ('selection' asks, 'option' holds PAST DUE): the pick is read as the member's answer.
   SET('choice_owner','owner',"(others.filter(function(c){return c.key===picked && !(choices || []).some(function(own){return String(own.key)===picked;});})[0] || {}).owner || (function(){var asked=(chain || []).filter(function(i){return i.form===form && i.name===input;})[0];if(asked || !picked)return null;var spec=((cargo.forms[form] || {}).specs || []).filter(function(i){return i.name===input;})[0];var names=((spec || {}).any_of || []).map(function(i){return i.name;});var member=(chain || []).filter(function(i){return i.form===form && names.indexOf(i.name)>=0 && i.profile && (i.profile.choices || []).some(function(c){return String(c.key)===picked;});})[0];return member ? {form:member.form,name:member.name} : null;})()"),
+  SET('choice_args','args',RANK_ARGUMENTS_JS),
+  WHEN('choice_args_clear','!picked && args.hits.length',SIDE('choice_args_clear_misses','clearFormMisses(cargo,form,input)')),
+  WHEN('choice_args_accept','!picked && args.hits.length',FLOW('choice_args_accept_flow','collect-input-accept','call',{hits:'{{args.hits}}'})),
+  WHEN('choice_args_done','!picked && args.hits.length',END('choice_args_end')),
+  WHEN('choice_args_ambiguous','!picked && args.ambiguous.length',FLOW('choice_args_clarify','disambiguate-input','call',{readings:'{{args.ambiguous}}',hits:[],remaining:[]})),
+  WHEN('choice_args_ambiguous_done','!picked && args.ambiguous.length',END('choice_args_ambiguous_end')),
   WHEN('choice_none','!picked',rankedMiss('choice_miss')),
   WHEN('choice_none_end','!picked',END('choice_none_done')),
   SIDE('choice_take',"(cargo.choice=picked,cargo.choiceText=picked,true)"),
   SET('choice_read','reading',"owner ? enrichFormMatches(readFormAnswer(picked, chain, owner, picked, []), chain, form, [owner.name], owner.name) : enrichFormMatches(readFormAnswer(picked, chain, { form: form, name: input }, picked, []), chain, form, [input], input)"),
+  // a picked choice's arguments are read after it, so the choice is applied first
+  SET('choice_read_args','reading',"Object.assign({},reading,{hits:reading.hits.length ? reading.hits.concat(args.hits) : reading.hits})"),
   WHEN('choice_unread','!reading.hits.length',rankedMiss('choice_unread_miss')),
   WHEN('choice_unread_end','!reading.hits.length',END('choice_unread_done')),
   SIDE('choice_clear','clearFormMisses(cargo,form,input)'),

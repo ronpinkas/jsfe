@@ -12,10 +12,25 @@ export function validateContextualResponseStep(step,flow) {
  if(!safeName(step.responseVariable)||['cargo','currentContext','userInput','language','globalVariables'].includes(step.responseVariable)||!own(flow?.variables,step.responseVariable)||flow.variables[step.responseVariable]?.type!=='object')fail('responseVariable must name a declared object variable in this flow');
  const choices=own(step,'responseChoices');
  if(choices&&(!safeName(step.responseChoices)||step.responseChoices===step.responseVariable||!own(flow?.variables,step.responseChoices)||flow.variables[step.responseChoices]?.type!=='array'))fail('responseChoices must name a declared array variable in this flow');
+ // responseParameters may name a declared array variable (a form reader's question declares them: rank_parameters); it
+ // is read when the reply is ranked, and an empty list there declares none. Only beside responseChoices.
+ const dynamic=typeof step.responseParameters==='string';
+ if(dynamic&&(!choices||!safeName(step.responseParameters)||[step.responseVariable,step.responseChoices].includes(step.responseParameters)||!own(flow?.variables,step.responseParameters)||flow.variables[step.responseParameters]?.type!=='array'))fail('responseParameters naming a variable needs responseChoices and a declared array variable in this flow');
  // With choices, extraction is optional: a reply that picks none of them is { key: '' } unless parameters are declared.
- if(!(choices&&!own(step,'responseParameters'))&&(!Array.isArray(step.responseParameters)||!step.responseParameters.length))fail('responseParameters must be a nonempty canonical parameter array');
+ if(!dynamic&&!(choices&&!own(step,'responseParameters'))&&(!Array.isArray(step.responseParameters)||!step.responseParameters.length))fail('responseParameters must be a nonempty canonical parameter array');
+ if(!dynamic)validateResponseParameters(step.responseParameters || []);
+ else { /* validated when the reply is ranked */ }
+ // responseStay: names a frame variable; while it is true a new request is not taken and the flow continues (must_complete); a withdrawal still ends the flows.
+ if(own(step,'responseStay')&&(typeof step.responseStay!=='string'||!step.responseStay.trim()))fail('responseStay names a variable');
+ // responseReasonFor: what the caller does not want; the reply is ranked as the reason for not wanting it (owner 2026-10-31).
+ if(own(step,'responseReasonFor')&&(typeof step.responseReasonFor!=='string'||choices))fail('responseReasonFor is a string, on a question without responseChoices');
+ try{return structuredClone({parameters:dynamic?[]:step.responseParameters || [],...(dynamic?{parametersFrom:step.responseParameters}:{}),variable:step.responseVariable,...(choices?{choices:step.responseChoices}:{}),...(own(step,'responseReasonFor')?{reasonFor:step.responseReasonFor}:{})});}catch{fail('response parameters must be cloneable declaration data');}
+}
+/** The canonical response parameter list: a declared array (a step's own, or the variable it names when ranked). */
+export function validateResponseParameters(list) {
+ if(!Array.isArray(list))fail('response parameters must be an array');
  const names=new Set();
- for(const p of step.responseParameters || []){
+ for(const p of list){
   if(!p||typeof p!=='object'||Array.isArray(p)||!safeName(p.name)||names.has(p.name))fail('response parameter names must be unique safe identifiers');names.add(p.name);
   if(typeof p.description!=='string'||!p.description.trim())fail('response parameters need a description');
   if(p.type!==undefined&&!['string','boolean','number','integer'].includes(p.type))fail('unsupported response parameter type');
@@ -25,11 +40,7 @@ export function validateContextualResponseStep(step,flow) {
   if(p.verbatim!==undefined&&(p.verbatim!==true||p.type!==undefined&&p.type!=='string'||p.enum!==undefined))fail('verbatim is true on an open string parameter only');
   if(Object.keys(p).some(k=>!['name','description','type','enum','internal','verbatim'].includes(k)))fail('responseParameters accepts only canonical parameter descriptors');
  }
- // responseStay: names a frame variable; while it is true a new request is not taken and the flow continues (must_complete); a withdrawal still ends the flows.
- if(own(step,'responseStay')&&(typeof step.responseStay!=='string'||!step.responseStay.trim()))fail('responseStay names a variable');
- // responseReasonFor: what the caller does not want; the reply is ranked as the reason for not wanting it (owner 2026-10-31).
- if(own(step,'responseReasonFor')&&(typeof step.responseReasonFor!=='string'||choices))fail('responseReasonFor is a string, on a question without responseChoices');
- try{return structuredClone({parameters:step.responseParameters || [],variable:step.responseVariable,...(choices?{choices:step.responseChoices}:{}),...(own(step,'responseReasonFor')?{reasonFor:step.responseReasonFor}:{})});}catch{fail('response parameters must be cloneable declaration data');}
+ try{return structuredClone(list);}catch{fail('response parameters must be cloneable declaration data');}
 }
 export function contextualResponseRuntimeSteps(id,steps,requirements=[]) {
  if(!requirements.includes(CONTEXTUAL_RESPONSES_REQUIREMENT))return steps;
