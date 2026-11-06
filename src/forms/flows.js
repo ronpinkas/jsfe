@@ -126,6 +126,8 @@ export function validateRankParameters(id, name, what, list) {
    else { /* a valid list */ }
 }
 function validateAcceptanceDeclarations(id, inputs) {
+   // rank_parameters belong to the asked input: a group (any_of) is asked as one
+   for (const input of inputs || []) { validateRankParameters(id, input.name, 'rank_parameters', input.rank_parameters); for (const member of input.any_of || []) validateRankParameters(id, member.name, 'rank_parameters', member.rank_parameters); }
    for (const input of (inputs || []).flatMap((i) => i.any_of || [i])) {
       if (input.confirmation !== undefined) {
          const keys = (input.profile?.choices || []).map((choice) => choice.key);
@@ -133,7 +135,6 @@ function validateAcceptanceDeclarations(id, inputs) {
       } else {
          // not a confirmation
       }
-      validateRankParameters(id, input.name, 'rank_parameters', input.rank_parameters);
       for (const choice of input.profile?.choices || []) validateRankParameters(id, input.name, `choice ${choice.key} parameters`, choice.parameters);
       if (input.invites !== undefined && (!Array.isArray(input.invites) || !input.invites.every((name) => typeof name === 'string' && name))) throw new Error(`FORM ${id}: ${input.name} invites must list input names`);
       else { /* no invites, or a list of names */ }
