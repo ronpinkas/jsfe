@@ -85,4 +85,14 @@ await test("a confirmation: another input's picked option carries its parameters
  assert.match(await say('start',true),/Pay due 25/);
  assert.match(await say('make it the usual one instead'),/Pay custom 40/);assert.ok(offered.includes('choice:custom'));assert.deepEqual(calls,['rank_reply','extract_parameters']);
 });
+await test("an argument answering the picked option's exclusive group replaces the option",async()=>{
+ const form=defineForm({id:'pay',name:'Pay',primary:true,description:'Pay',contract:{summary:'Pay'},inputs:[{name:'selection',exclusive:true,question:'Due or another amount?',any_of:[{name:'option',profile:{kind:'choice',choices:[{key:'due',phrases:['due'],exact:true},{key:'amount',phrases:['different sum'],exact:true,parameters:[definite]}]}},{name:'amount',label:'amount',profile:{kind:'amount',min:0.01}}]}],confirm:{question:'Pay {{cargo.forms[form_instance].values.option}} {{cargo.forms[form_instance].values.amount}}?'},after:[{id:'done',type:'SET',variable:'noop',value:'(cargo.done=structuredClone(cargo.forms[form_instance].values),true)'}]});
+ const cfg={rank:{option:'choice:amount'},args:{amount:'40'}};
+ const ai=async(_s,_u,_schema,r)=>JSON.stringify(r.task==='rank_reply'?cfg.rank:r.task==='extract_parameters'?{parameters:cfg.args}:{flowName:'None'});
+ const engine=new WorkflowEngine(quiet,ai,linkFormSchemas([...FLOWS,form]),[],STANDARD_FUNCTIONS,{},false,'en');engine.disableCommands();engine.intentDetection='two-stage';
+ let session=engine.initSession('synthetic',crypto.randomUUID(),'en');session.cargo.voice=false;
+ const say=async(content,start)=>{session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start:{flow:'pay',arguments:{}}}:{})},session)));return session.response||'';};
+ assert.match(await say('start',true),/Due or another/);
+ const r=await say('I would like to pay something else, like the usual');assert.match(r,/ 40\?$/,r);assert.doesNotMatch(r,/option or/i);
+});
 console.log(`form-rank-arguments: ${checks} checks passed`);

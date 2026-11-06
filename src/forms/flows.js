@@ -518,7 +518,8 @@ const readFormChoice={
   SIDE('choice_take',"(cargo.choice=picked,cargo.choiceText=picked,true)"),
   SET('choice_read','reading',"owner ? enrichFormMatches(readFormAnswer(picked, chain, owner, picked, []), chain, form, [owner.name], owner.name) : enrichFormMatches(readFormAnswer(picked, chain, { form: form, name: input }, picked, []), chain, form, [input], input)"),
   // a picked choice's arguments are read after it, so the choice is applied first
-  SET('choice_read_args','reading',"Object.assign({},reading,{hits:reading.hits.length ? reading.hits.concat(args.hits) : reading.hits})"),
+  // an argument that answers the option's own exclusive group replaces it: the more specific answer ('other amount', $100)
+  SET('choice_read_args','reading',"Object.assign({},reading,{hits:reading.hits.length ? (function(hits,args){var groupOf=function(h){var st=cargo.forms[h.form];var g=st && (st.specs || []).filter(function(s){return s.exclusive && Array.isArray(s.any_of) && s.any_of.some(function(i){return i.name===h.name;});})[0];return g ? h.form+'.'+g.name : '';};return hits.filter(function(h){var g=groupOf(h);return !(g && args.some(function(a){return groupOf(a)===g;}));}).concat(args);})(reading.hits,args.hits) : reading.hits})"),
   WHEN('choice_unread','!reading.hits.length',rankedMiss('choice_unread_miss')),
   WHEN('choice_unread_end','!reading.hits.length',END('choice_unread_done')),
   SIDE('choice_clear','clearFormMisses(cargo,form,input)'),
@@ -565,8 +566,8 @@ const readConfirmReply={
    });
    return hits.some(function(h){return hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)!==String(h.value);});}) ? {hits:[]} : {hits:hits};
   })()`),
-  // a picked correction's arguments are read after it, so the choice is applied first
-  SET('confirm_read_args','reading',"reading && reading.hits.length ? Object.assign({},reading,{hits:reading.hits.concat(args.hits)}) : reading"),
+  // a picked correction's arguments are read after it, so the choice is applied first; one answering its exclusive group replaces it
+  SET('confirm_read_args','reading',"reading && reading.hits.length ? Object.assign({},reading,{hits:(function(hits,args){var groupOf=function(h){var st=cargo.forms[h.form];var g=st && (st.specs || []).filter(function(s){return s.exclusive && Array.isArray(s.any_of) && s.any_of.some(function(i){return i.name===h.name;});})[0];return g ? h.form+'.'+g.name : '';};return hits.filter(function(h){var g=groupOf(h);return !(g && args.some(function(a){return groupOf(a)===g;}));}).concat(args);})(reading.hits,args.hits)}) : reading"),
   WHEN('confirm_change','reading && reading.hits.length',FLOW('confirm_change_accept','collect-input-accept','call',{hits:'{{reading.hits}}'})),
   SET('confirm_field','field',"fields.filter(function(c){return reply && c.key===reply.key;})[0] || null"),
   SET('confirm_corrections','corrections',"field && reply.arguments ? fields.reduce(function(all,c){var said=String(reply.arguments[c.owner.name] || '').trim();return said ? all.concat(enrichFormMatches(readFormAnswer(said, chain, c.owner, said, []), chain, form, [c.owner.name], c.owner.name).hits) : all;},[]) : []"),
