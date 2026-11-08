@@ -66,7 +66,7 @@ flowchart LR
 | [provide-data](provide-data.md) | steps | Worker: answer a question about a provider catalog. Resolves `asked` (a fact or set key; empty = ask which), passes the catalog's gate for … |
 | [load-source](load-source.md) | steps | Worker: load a provider's data when missing or stale (refresh: per_session / per_turn / max_age_ms) through the tenant's loader flow (sourc… |
 | [answer-facts](answer-facts.md) | steps | Worker: say the facts `keys` of a provider catalog in one message, each from its path in the source result through its sentence template (s… |
-| [confirm-form](confirm-form.md) | steps | Worker: ask a form's confirmation (exact YES / NO; keys 1 and 2). A correction instead ('no, make it $40') is read against the form chain a… |
+| [confirm-form](confirm-form.md) | steps | Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm when an action it authorizes is exact; otherwise soft: YES is read as a sof… |
 | [provider-menu](provider-menu.md) | steps | Worker: after a provider answered, offer its menu (provides.menu: question(_voice)(_es) with {verb} / {name}; choices [{ key, phrases, flow… |
 | [validate-input-batch](validate-input-batch.md) | steps | Worker: validate dependency-ordered candidates; return accepted, rejected and pending readings before a single commit. |
 | [input-accepted-effects](input-accepted-effects.md) | steps | Worker: acknowledge accepted or rejected candidates and run their callbacks after the batch commit. |

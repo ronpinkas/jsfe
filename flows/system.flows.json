@@ -13239,12 +13239,17 @@
     "name": "ConfirmForm",
     "version": "1.0.0",
     "scope": "isolated",
-    "description": "Worker: ask a form's confirmation (exact YES / NO; keys 1 and 2). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
+    "description": "Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm when an action it authorizes is exact; otherwise soft: YES is read as a soft confirmation's and offered to the reply ranker). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
     "parameters": [
       {
         "name": "form",
         "type": "string",
         "description": "form"
+      },
+      {
+        "name": "confirmation",
+        "type": "string",
+        "description": "confirmation"
       },
       {
         "name": "question",
@@ -13312,6 +13317,10 @@
         "type": "boolean",
         "scope": "flow",
         "value": false
+      },
+      "confirmation": {
+        "type": "string",
+        "value": ""
       },
       "cf_clarify": {
         "type": "object",
@@ -13648,7 +13657,7 @@
         "type": "object",
         "value": {
           "version": 1,
-          "summary": "Worker: ask a form's confirmation (exact YES / NO; keys 1 and 2). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
+          "summary": "Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm when an action it authorizes is exact; otherwise soft: YES is read as a soft confirmation's and offered to the reply ranker). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
           "parametersFrom": "parameters",
           "role": "worker",
           "requires": [
@@ -13675,7 +13684,7 @@
         "id": "cf_choices",
         "type": "SET",
         "variable": "cf_choices",
-        "value": "[{key:'yes',phrases:['1'].concat(Array.isArray(phrases)?phrases:Array.isArray(words)?words:[]),exact:true},{key:'no',phrases:(Array.isArray(no_keys)?no_keys:['2']).concat([\"no\",\"nope\",\"nah\",\"no thanks\",\"no thank you\",\"not now\",\"not today\",\"no gracias\",\"ahora no\",\"hoy no\"]),exact:true}].concat((Array.isArray(interrupts)?interrupts:[]).map(function(event){return {key:'event:'+event.key,phrases:event.phrases ?? event.words,exact:event.exact!==false};}))"
+        "value": "[{key:'yes',phrases:['1'].concat(Array.isArray(phrases)?phrases:Array.isArray(words)?words:[]).concat(confirmation==='soft'?[\"yes\",\"yeah\",\"yea\",\"yep\",\"yup\",\"sure\",\"ok\",\"okay\",\"okey\",\"please\",\"of course\",\"correct\",\"right\",\"go ahead\",\"alright\",\"all right\",\"absolutely\",\"definitely\",\"certainly\",\"sounds good\",\"that's fine\",\"that is fine\",\"fine\",\"that's ok\",\"that's okay\",\"that's right\",\"that is right\",\"that's correct\",\"that works\",\"agree\",\"i agree\",\"agreed\",\"approve\",\"i approve\",\"approved\",\"confirm\",\"i confirm\",\"confirmed\",\"proceed\",\"do it\",\"perfect\",\"exactly\",\"i do\",\"si\",\"sí\",\"claro\",\"claro que sí\",\"claro que si\",\"seguro\",\"por favor\",\"correcto\",\"está bien\",\"esta bien\",\"de acuerdo\",\"estoy de acuerdo\",\"dale\",\"por supuesto\",\"bueno\",\"confirmo\",\"confirmado\",\"apruebo\",\"aprobado\",\"adelante\",\"hazlo\",\"procede\",\"perfecto\",\"exacto\",\"eso es\",\"así es\",\"asi es\",\"ese mismo\",\"esa misma\",\"eso mismo\",\"el mismo\",\"la misma\",\"that's the one\",\"that is the one\",\"the same one\",\"continue\",\"i want to continue\",\"go on\",\"go ahead please\",\"please do\",\"yes i do\",\"sí quiero\",\"si quiero\",\"continuar\",\"quiero continuar\",\"seguir\",\"sigue\",\"continúe\",\"continue por favor\",\"proceder\",\"procedo\",\"procede por favor\",\"proceda\",\"proceda por favor\",\"sí proceda\",\"si proceda\"]:[]),exact:confirmation!=='soft'},{key:'no',phrases:(Array.isArray(no_keys)?no_keys:['2']).concat([\"no\",\"nope\",\"nah\",\"no thanks\",\"no thank you\",\"not now\",\"not today\",\"no gracias\",\"ahora no\",\"hoy no\"]),exact:true}].concat((Array.isArray(interrupts)?interrupts:[]).map(function(event){return {key:'event:'+event.key,phrases:event.phrases ?? event.words,exact:event.exact!==false};}))"
       },
       {
         "id": "cf_initial_chain",
@@ -13957,6 +13966,7 @@
             "callType": "call",
             "parameters": {
               "form": "{{form}}",
+              "confirmation": "{{confirmation}}",
               "question": "{{cf_prompt}}",
               "question_es": "{{cf_prompt_es}}",
               "named_fields": "{{named_fields}}",
@@ -13977,7 +13987,7 @@
         "id": "cf_ranked",
         "type": "SET",
         "variable": "cf_result",
-        "value": "cf_result ? cf_result : cargo.confirmRanked === 'no' ? 'no' : cargo.confirmRanked === 'none' ? 'unclear' : ''"
+        "value": "cf_result ? cf_result : cargo.confirmRanked === 'yes' ? 'yes' : cargo.confirmRanked === 'no' ? 'no' : cargo.confirmRanked === 'none' ? 'unclear' : ''"
       },
       {
         "id": "cf_changed",
@@ -16897,6 +16907,7 @@
             "callType": "call",
             "parameters": {
               "form": "{{form_instance}}",
+              "confirmation": "firm",
               "question": "{{form_confirm_q}}",
               "question_es": "{{form_confirm_q_es}}",
               "phrases": "{{form_confirmation.phrases}}",
@@ -18298,6 +18309,7 @@
             "callType": "call",
             "parameters": {
               "form": "{{form_instance}}",
+              "confirmation": "firm",
               "question": "{{form_confirm_q}}",
               "question_es": "{{form_confirm_q_es}}",
               "phrases": "{{form_confirmation.phrases}}",
@@ -19747,6 +19759,10 @@
         "type": "string"
       },
       {
+        "name": "confirmation",
+        "type": "string"
+      },
+      {
         "name": "question",
         "type": "string"
       },
@@ -19776,6 +19792,10 @@
         "type": "boolean",
         "scope": "flow",
         "value": false
+      },
+      "confirmation": {
+        "type": "string",
+        "value": ""
       },
       "question": {
         "type": "string",
@@ -19936,7 +19956,7 @@
         "id": "confirm_ranked_choices",
         "type": "SET",
         "variable": "ranked",
-        "value": "([{key:'no',label:'no: declines or refuses what the question asks to confirm'}].concat(others.map(function(c){return Object.assign({key:c.key,label:c.label},c.parameters ? {parameters:c.parameters.map(function(p){return {name:p.name,type:p.type || 'string',description:p.description};})} : {});})).concat(fields.map(function(c){return {key:c.key,label:c.label,parameters:field_arguments};}))).concat([{key:'__agent',label:'speak with a person (a live agent)'}])"
+        "value": "((confirmation==='soft' ? [{key:'yes',label:'yes: agrees to what the question asks to confirm'}] : []).concat([{key:'no',label:'no: declines or refuses what the question asks to confirm'}]).concat(others.map(function(c){return Object.assign({key:c.key,label:c.label},c.parameters ? {parameters:c.parameters.map(function(p){return {name:p.name,type:p.type || 'string',description:p.description};})} : {});})).concat(fields.map(function(c){return {key:c.key,label:c.label,parameters:field_arguments};}))).concat([{key:'__agent',label:'speak with a person (a live agent)'}])"
       },
       {
         "id": "confirm_rank_params",
@@ -20102,7 +20122,7 @@
         "id": "confirm_ranked",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(cargo.confirmRanked=reading && reading.hits.length || field || args.hits.length ? 'changed' : reply && reply.key==='no' ? 'no' : 'none',true)"
+        "value": "(cargo.confirmRanked=reading && reading.hits.length || field || args.hits.length ? 'changed' : reply && (reply.key==='yes' || reply.key==='no') ? reply.key : 'none',true)"
       }
     ],
     "safetyRevision": "dispatch-intake-2026-10-22"

@@ -26,6 +26,7 @@ flowchart TD
    class b2 endstep
    c1 -- "!reading #124;#124; reading.origin!=='activation'" --> b2
    n3["set noop"]
+   c1 -- "/^\d#123;5#125;(?:\d#123;4#125;)?$/.test(wholeSpokenNumber(String(value #124;#124; '').trim()…" --> n3
    c1 -- "else" --> n3
    DONE(["end (back to caller)"])
    class DONE endstep

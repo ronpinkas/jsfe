@@ -2229,6 +2229,12 @@
         "id": "product_city_needs_classification",
         "type": "CASE",
         "branches": {
+          "condition: /^\\d{5}(?:\\d{4})?$/.test(wholeSpokenNumber(String(value || '').trim()))": {
+            "id": "product_city_spoken_zip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          },
           "condition: !reading || reading.origin!=='activation'": {
             "id": "product_city_dispatch",
             "type": "DISPATCH",
@@ -2255,7 +2261,7 @@
         "id": "product_city_valid",
         "type": "SET",
         "variable": "noop",
-        "value": "(cargo.inputCheck={ok:!!(reading && reading.origin==='activation' ? typeof value==='string' && value.trim() : response && typeof response.user_city==='string' && response.user_city.trim()),value:String(value || '').trim()},true)"
+        "value": "(cargo.inputCheck=(function(zip){return /^\\d{5}(?:\\d{4})?$/.test(zip)?{ok:true,value:zip}:{ok:!!(reading && reading.origin==='activation' ? typeof value==='string' && value.trim() : response && typeof response.user_city==='string' && response.user_city.trim()),value:String(value || '').trim()};})(wholeSpokenNumber(String(value || '').trim())),true)"
       }
     ]
   },
