@@ -110,8 +110,9 @@ const FIELD_COLLECTORS = { 'collect-phone': 'phone', 'collect-email': 'email', '
 /**
  * The form shell: declare inputs, run the loop, hand the result on. `after` = the form's own steps once complete.
  * `confirm` ({ question, question_es } — SAY-style templates that may read cargo.forms[<id>].values; build them in
- * `before_confirm` SET steps when they need computing): the exact confirmation, asked every time after the loop and
- * never an input. YES runs `after`; NO runs `declined`; a correction given there goes through the form's own matching
+ * `before_confirm` SET steps when they need computing): the confirmation, asked every time after the loop and
+ * never an input. It is firm unless `confirm_soft` (definePerformer: no action it authorizes declares `confirm.exact`): a soft
+ * confirmation's YES is read as a soft input confirmation's and is offered to the reply ranker; a firm one's is neither. YES runs `after`; NO runs `declined`; a correction given there goes through the form's own matching
  * and the form runs again (so whatever the correction made missing is asked).
  */
 /**
@@ -141,7 +142,7 @@ function validateAcceptanceDeclarations(id, inputs) {
    }
 }
 
-export function formFlow({ id, name, version, description, inputs, after = [], extraVars = {}, parameters = [], confirm = null, before_confirm = [], declined = [], stop = '', close_on_stop = false, on_no = '', resume_on_parent_change = false, before = [], done = true, primary = false, scope = 'isolated', validator = '', confirmation_condition = 'true', prompt = undefined, prompt_es = undefined, incomplete_outcome = null, on_exhausted = null, must_complete = false, first_task = '', first_task_es = '', acknowledge = 'all' }) {
+export function formFlow({ id, name, version, description, inputs, after = [], extraVars = {}, parameters = [], confirm = null, confirm_soft = false, before_confirm = [], declined = [], stop = '', close_on_stop = false, on_no = '', resume_on_parent_change = false, before = [], done = true, primary = false, scope = 'isolated', validator = '', confirmation_condition = 'true', prompt = undefined, prompt_es = undefined, incomplete_outcome = null, on_exhausted = null, must_complete = false, first_task = '', first_task_es = '', acknowledge = 'all' }) {
    validateFormExhaustion(on_exhausted);
    if (acknowledge !== 'all' && acknowledge !== 'data') throw new Error(`FORM ${id}: acknowledge must be 'all' or 'data'`);
    if (on_no !== '' && (typeof on_no !== 'string' || !/^[\w-]+$/.test(on_no))) throw new Error(`FORM ${id}: on_no must be a flow id`);
@@ -157,7 +158,7 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
       // FLOW parameters are paths only: the question is built here, as a SAY-style template, then passed by name
       SET(`${id}_confirm_q`, 'form_confirm_q', textValue(confirm.question)),
       SET(`${id}_confirm_q_es`, 'form_confirm_q_es', textValue(confirm.question_es || confirm.question)),
-      FLOW(`${id}_confirm`, 'confirm-form', 'call', { form: '{{form_instance}}', question: '{{form_confirm_q}}', question_es: '{{form_confirm_q_es}}', phrases:'{{form_confirmation.phrases}}', words:'{{form_confirmation.words}}', clarifications:'{{form_confirmation.clarifications}}', no_keys:'{{form_confirmation.no_keys}}', interrupts:'{{form_confirmation.interrupts}}', invites:'{{form_confirmation.invites}}', named_fields:'{{form_confirmation.named_fields}}', reply_context:'{{form_confirmation.reply_context}}', rank_parameters:'{{form_confirmation.rank_parameters}}', exit_context: '{{exit_context}}', exit_context_es: '{{exit_context_es}}' }),
+      FLOW(`${id}_confirm`, 'confirm-form', 'call', { form: '{{form_instance}}', confirmation: confirm_soft === true ? 'soft' : 'firm', question: '{{form_confirm_q}}', question_es: '{{form_confirm_q_es}}', phrases:'{{form_confirmation.phrases}}', words:'{{form_confirmation.words}}', clarifications:'{{form_confirmation.clarifications}}', no_keys:'{{form_confirmation.no_keys}}', interrupts:'{{form_confirmation.interrupts}}', invites:'{{form_confirmation.invites}}', named_fields:'{{form_confirmation.named_fields}}', reply_context:'{{form_confirmation.reply_context}}', rank_parameters:'{{form_confirmation.rank_parameters}}', exit_context: '{{exit_context}}', exit_context_es: '{{exit_context_es}}' }),
       { id: `${id}_confirmed`, type: 'CASE', branches: {
          [`condition: (cargo.formConfirm || {})[form_instance] === 'changed'`]: FLOW(`${id}_again`, id, 'replace', { parent_form: '{{parent_form}}', result_input: '{{result_input}}', form_instance: '{{form_instance}}' }),
          // NO: the declined flow takes the form's place, so the action below never runs
@@ -526,13 +527,14 @@ const readFormChoice={
   FLOW('choice_accept','collect-input-accept','call',{hits:'{{reading.hits}}'})]
 };
 // A confirmation's unread answer goes to the reply ranker with the confirmation question (owner 2026-10-27), never
-// straight to the host. A form's confirmation is exact (it authorizes the form's action), so the ranker is offered NO, the
-// form's other choices (a correction) and a person, never YES. Result: cargo.confirmRanked = 'no' | 'changed' | 'none'
+// straight to the host. A firm confirmation authorizes the form's action, so the ranker is offered NO, the form's other
+// choices (a correction) and a person, never YES; a soft one (no exact action) is offered YES too (owner 2026-11-08:
+// prod 11:07 "Sí, para enviar." at a ticket's confirmation). Result: cargo.confirmRanked = 'yes' | 'no' | 'changed' | 'none'
 // (ConfirmForm reads it); `abort` ends every flow; `new_request` goes to intent detection.
 const readConfirmReply={
  id:'read-confirm-reply',name:'ReadConfirmReply',version:'1.4.0',scope:'isolated',description:'Rank an unreadable answer to a confirmation: it declines (NO), picks another of the form\'s choices (a correction, read as that input\'s answer), says a named field read back is wrong (confirm.named_fields: that input is asked again), asks for a person, or is asked again; a withdrawal or a new request leaves with saved form progress. Never confirms.',
- parameters:[{name:'form',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'},{name:'named_fields',type:'boolean'},{name:'reply_context',type:'string'},{name:'rank_parameters',type:'array'},{name:'invites',type:'array'}],
- variables:vars({question:'',question_es:'',asked:'',ranked:[],reply:null,chain:null,others:[],fields:[],field:null,picked:null,reading:null,named_fields:false,prompt:null,field_arguments:[],corrections:[],reply_context:'',stay:false,rank_parameters:[],invites:[],rank_params:[],args:null}),
+ parameters:[{name:'form',type:'string'},{name:'confirmation',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'},{name:'named_fields',type:'boolean'},{name:'reply_context',type:'string'},{name:'rank_parameters',type:'array'},{name:'invites',type:'array'}],
+ variables:vars({confirmation:'',question:'',question_es:'',asked:'',ranked:[],reply:null,chain:null,others:[],fields:[],field:null,picked:null,reading:null,named_fields:false,prompt:null,field_arguments:[],corrections:[],reply_context:'',stay:false,rank_parameters:[],invites:[],rank_params:[],args:null}),
  steps:[// confirm.reply_context: what the form says a reply may contain, for the ranker and the extraction (never spoken)
   SET('confirm_asked','asked',"(language === 'es' && question_es ? question_es : question)+(reply_context ? ' '+reply_context : '')"),
   SET('confirm_stay','stay',"formMustComplete(cargo,form,'__confirm')"),
@@ -546,7 +548,7 @@ const readConfirmReply={
   SET('confirm_fields','fields',"named_fields === true || named_fields === 'true' ? (chain || []).filter(function(i){var v=cargo.forms[form] && cargo.forms[form].values;return i.form===form && !i.confirmation && Array.isArray(i.names) && i.names.length && v && v[i.name]!==undefined && v[i.name]!==null && v[i.name]!=='';}).map(function(i){var l=String(i.label || i.names[0]);return {key:'field:'+i.name,label:'says the '+l+' read back is wrong, or gives a different '+l,owner:{form:i.form,name:i.name}};}) : []"),
   // A correction may name several fields ('it is Long Beach, apartment 4'): any field's pick extracts every named field's new value.
   SET('confirm_field_arguments','field_arguments',"fields.map(function(c){var i=(chain || []).filter(function(i){return i.form===c.owner.form && i.name===c.owner.name;})[0];var l=String(i.label || i.names[0]);return {name:c.owner.name,type:'string',description:'The correct '+(i.argument_description || l)+' the caller gives now. Leave it empty when they give none.'};})"),
-  rankedChoices('confirm_ranked_choices',"[{key:'no',label:'no: declines or refuses what the question asks to confirm'}].concat(others.map(function(c){return Object.assign({key:c.key,label:c.label},c.parameters ? {parameters:c.parameters.map(function(p){return {name:p.name,type:p.type || 'string',description:p.description};})} : {});})).concat(fields.map(function(c){return {key:c.key,label:c.label,parameters:field_arguments};}))"),
+  rankedChoices('confirm_ranked_choices',"(confirmation==='soft' ? [{key:'yes',label:'yes: agrees to what the question asks to confirm'}] : []).concat([{key:'no',label:'no: declines or refuses what the question asks to confirm'}]).concat(others.map(function(c){return Object.assign({key:c.key,label:c.label},c.parameters ? {parameters:c.parameters.map(function(p){return {name:p.name,type:p.type || 'string',description:p.description};})} : {});})).concat(fields.map(function(c){return {key:c.key,label:c.label,parameters:field_arguments};}))"),
   // confirm.rank_parameters: values extracted when the ranker says the reply answers (owner 2026-11-06), read as RANK_ARGUMENTS_JS says
   SET('confirm_rank_params','rank_params',"(Array.isArray(rank_parameters) ? rank_parameters : []).map(function(p){return {name:p.name,type:p.type || 'string',description:p.description};})"),
   rankedDispatch('confirm_dispatch','confirmation_not_matched',true,'rank_params'),
@@ -575,7 +577,7 @@ const readConfirmReply={
   WHEN('confirm_field_reset','field && !corrections.length',SIDE('confirm_field_ask','(resetFormInputs(cargo, field.owner.form, [field.owner.name]), true)')),
 
   WHEN('confirm_args_accept','!picked && args.hits.length',FLOW('confirm_args_accept_flow','collect-input-accept','call',{hits:'{{args.hits}}'})),
-  SIDE('confirm_ranked',"(cargo.confirmRanked=reading && reading.hits.length || field || args.hits.length ? 'changed' : reply && reply.key==='no' ? 'no' : 'none',true)")]
+  SIDE('confirm_ranked',"(cargo.confirmRanked=reading && reading.hits.length || field || args.hits.length ? 'changed' : reply && (reply.key==='yes' || reply.key==='no') ? reply.key : 'none',true)")]
 };
 const collectContextualAnswer=formFlow({id:'collect-contextual-answer',name:'CollectContextualAnswer',description:'Collect one open-ended answer using contextual DISPATCH and preserve the caller wording.',
  parameters:[...['question','question_es','description','context','context_es'].map(name=>({name,type:'string'})),{name:'choices',type:'array'},{name:'digits',type:'object'}],
@@ -669,12 +671,12 @@ const disambiguate = {
 // ── confirm-form: the exact confirmation of a finished form; a correction is matched against the form chain ───────
 const confirmForm = {
    id: 'confirm-form', name: 'ConfirmForm', version: '1.0.0', scope: 'isolated',
-   description: "Worker: ask a form's confirmation (exact YES / NO; keys 1 and 2). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
-   parameters: ['form', 'question', 'question_es', 'exit_context', 'exit_context_es','phrases','words','interrupts','no_keys','clarifications','invites','rank_parameters'].map((n) => ({ name: n, type: ['phrases','words','interrupts','no_keys','clarifications','invites','rank_parameters'].includes(n)?'array':'string', description: n })).concat([{ name: 'named_fields', type: 'boolean', description: "true: an answer that names one of the form's inputs (its names) without a value re-asks only that input" }]),
-   variables: vars({ cf_clarify:null, named_fields: false, reply_context: '', rank_parameters: [], cf_must: false, cf_presets: FIELD_PRESETS, cf_chain: [], cf_m: null, cf_current:null, cf_result: '',cf_prompt:'',cf_prompt_es:'', cf_words: 0, cf_tries: 0, phrases:null, words:[], clarifications:[], no_keys:['2'], interrupts:[], invites:[], cf_choices:[], cf_event:'', cf_amount:false, cf_questions:[],cf_provides:null,cf_skip_gate:'' }),
+   description: "Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm when an action it authorizes is exact; otherwise soft: YES is read as a soft confirmation's and offered to the reply ranker). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
+   parameters: ['form', 'confirmation', 'question', 'question_es', 'exit_context', 'exit_context_es','phrases','words','interrupts','no_keys','clarifications','invites','rank_parameters'].map((n) => ({ name: n, type: ['phrases','words','interrupts','no_keys','clarifications','invites','rank_parameters'].includes(n)?'array':'string', description: n })).concat([{ name: 'named_fields', type: 'boolean', description: "true: an answer that names one of the form's inputs (its names) without a value re-asks only that input" }]),
+   variables: vars({ confirmation: '', cf_clarify:null, named_fields: false, reply_context: '', rank_parameters: [], cf_must: false, cf_presets: FIELD_PRESETS, cf_chain: [], cf_m: null, cf_current:null, cf_result: '',cf_prompt:'',cf_prompt_es:'', cf_words: 0, cf_tries: 0, phrases:null, words:[], clarifications:[], no_keys:['2'], interrupts:[], invites:[], cf_choices:[], cf_event:'', cf_amount:false, cf_questions:[],cf_provides:null,cf_skip_gate:'' }),
    steps: [
       SIDE('cf_reset', "(cargo.formConfirm = cargo.formConfirm || {}, cargo.formConfirm[form] = '', cargo.confirmRanked = '', true)"),
-      SET('cf_choices','cf_choices',`[{key:'yes',phrases:['1'].concat(Array.isArray(phrases)?phrases:Array.isArray(words)?words:[]),exact:true},{key:'no',phrases:(Array.isArray(no_keys)?no_keys:['2']).concat(${JSON.stringify(ANSWER_WORDS.no)}),exact:true}].concat((Array.isArray(interrupts)?interrupts:[]).map(function(event){return {key:'event:'+event.key,phrases:event.phrases ?? event.words,exact:event.exact!==false};}))`),
+      SET('cf_choices','cf_choices',`[{key:'yes',phrases:['1'].concat(Array.isArray(phrases)?phrases:Array.isArray(words)?words:[]).concat(confirmation==='soft'?${JSON.stringify(ANSWER_WORDS.yes)}:[]),exact:confirmation!=='soft'},{key:'no',phrases:(Array.isArray(no_keys)?no_keys:['2']).concat(${JSON.stringify(ANSWER_WORDS.no)}),exact:true}].concat((Array.isArray(interrupts)?interrupts:[]).map(function(event){return {key:'event:'+event.key,phrases:event.phrases ?? event.words,exact:event.exact!==false};}))`),
       SET('cf_initial_chain','cf_chain',CHAIN_JS),
       SET('cf_amount_context','cf_amount',"cf_chain.some(function(input){return input.profile && input.profile.kind==='amount';})"),
       SET('cf_prompt','cf_prompt',"formInputPrompt(cargo,form,'__confirm',{question:question,question_es:question_es},{},'en')"),
@@ -708,10 +710,10 @@ const confirmForm = {
          'condition: cf_m.hits.length > 0': FLOW('cf_accept', 'collect-input-accept', 'call', { hits: '{{cf_m.hits}}' }),
          "condition: cargo.choice === 'no'": SET('cf_declined', 'cf_result', "'no'"),
          "condition: Array.isArray(clarifications) && pickChoice(String(cargo.choiceText || '').replace(/[?¿]/g,''),[{key:'clarify',phrases:clarifications,exact:true}],false)==='clarify'": SET('cf_clarification','cf_result',"'clarification'"),
-         'condition: cf_words > 0': FLOW('cf_elsewhere', 'read-confirm-reply', 'call', { form: '{{form}}', question: '{{cf_prompt}}', question_es: '{{cf_prompt_es}}', named_fields: '{{named_fields}}', reply_context: '{{reply_context}}', rank_parameters: '{{rank_parameters}}', invites: '{{invites}}' }),
+         'condition: cf_words > 0': FLOW('cf_elsewhere', 'read-confirm-reply', 'call', { form: '{{form}}', confirmation: '{{confirmation}}', question: '{{cf_prompt}}', question_es: '{{cf_prompt_es}}', named_fields: '{{named_fields}}', reply_context: '{{reply_context}}', rank_parameters: '{{rank_parameters}}', invites: '{{invites}}' }),
          default: SET('cf_unclear', 'cf_result', "'unclear'") } },
       // the ranker's reading of an unread answer: a decline is the NO; an answer that declines nothing is asked again
-      SET('cf_ranked', 'cf_result', "cf_result ? cf_result : cargo.confirmRanked === 'no' ? 'no' : cargo.confirmRanked === 'none' ? 'unclear' : ''"),
+      SET('cf_ranked', 'cf_result', "cf_result ? cf_result : cargo.confirmRanked === 'yes' ? 'yes' : cargo.confirmRanked === 'no' ? 'no' : cargo.confirmRanked === 'none' ? 'unclear' : ''"),
       SET('cf_changed', 'cf_result', "cf_result ? cf_result : 'changed'"),
       // an unclear answer is asked again (the form runs again and reaches this question), at most twice
       SET('cf_tries_count', 'cf_tries', "cf_result === 'unclear' ? missFormInput(cargo,form,'__confirm') : (clearFormMisses(cargo,form,'__confirm'),0)"),

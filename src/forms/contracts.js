@@ -113,7 +113,7 @@ export function defineProvider({provides,contract,parameters=[],variables={},ste
       {role:'provider',...contract,catalog:'provides'});
 }
 export function defineForm({contract,provides,...spec}) {
-   const flow=formFlow({...spec,...(provides?{extraVars:{...spec.extraVars,provides,questions:providerQuestions(provides)}}:{})});
+   const flow=formFlow({...spec,confirm_soft:false,...(provides?{extraVars:{...spec.extraVars,provides,questions:providerQuestions(provides)}}:{})});
    return declared(flow,{role:'collector',...contract,form:{inputs:'inputs'},...(provides?{catalog:'provides'}:{})});
 }
 export function definePerformer({performs,contract,prepare,present,project=[],provides,...spec}) {
@@ -133,7 +133,8 @@ export function definePerformer({performs,contract,prepare,present,project=[],pr
          {id:`${spec.id}_prepare_failed`,type:'FLOW',value:'give-up',callType:'reboot',recovery:{version:1,mode:'none',reason:'performer_request_invalid'},parameters:{context:'{{exit_context}}',context_es:'{{exit_context_es}}'}}),
       set('proposal','pf_record',"pf_action ? prepareFormAction(cargo, form_instance, pf_action, pf_request) : null"),
    ];
-   const flow=formFlow({...spec,confirm,confirmation_condition:"pf_action !== null && pf_action && typeof pf_action === 'object'",
+   // its confirmation is as firm as what it authorizes: firm when an action is exact (charge, cancel, irreversible), else soft
+   const flow=formFlow({...spec,confirm,confirm_soft:!performs.some(action=>action.confirm?.exact),confirmation_condition:"pf_action !== null && pf_action && typeof pf_action === 'object'",
       extraVars:{...spec.extraVars,...(provides?{provides,questions:providerQuestions(provides)}:{}),performs,projection:project,pf_action:null,pf_request:null,pf_record:null,pf_result:null,pf_receipt:null},
       before_confirm:confirm?[...prepareSteps,...(spec.before_confirm || [])]:spec.before_confirm || [],
       after:[...(confirm?[]:prepareSteps),

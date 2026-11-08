@@ -214,7 +214,7 @@ Declarations:
 
 | Declaration | Meaning |
 | --- | --- |
-| input `confirmation:"firm"` / `"soft"` | A yes/no decision. Firm (consent to a charge, a cancellation, storing a card, filing): YES only by `CONFIRM_WORDS` or the option's own exact phrases. Soft (an offer): the wider YES vocabulary. NO by the NO vocabulary or the option's own phrases. |
+| input `confirmation:"firm"` / `"soft"` | A yes/no decision. Firm (consent to a charge, a cancellation, storing a card): YES only by `CONFIRM_WORDS` or the option's own exact phrases. Soft (an offer): the wider YES vocabulary. NO by the NO vocabulary or the option's own phrases. |
 | input `invites:[names]`, `form.confirm.invites` | The other inputs this question (or the read-back) also asks for ("NEW CARD, LINK, or a different amount" invites `amount`), in its form or an enclosing one; read as in order while it is asked. |
 | profile `out_of_order:{…}` | A narrower signature for out-of-order reading: the payment card takes a bare last four when asked, but out of order only a card word or "ending in 4242". |
 | `authenticate-user` `other_whole_answer:true` | At the code question "another account" switches only as the whole answer; inside a sentence the reply ranker decides, offered `another_account` and `no_other_account` ("I understand. We still need to secure access to your account.", then the question). Default off. |

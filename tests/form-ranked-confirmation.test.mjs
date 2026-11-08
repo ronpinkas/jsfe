@@ -4,12 +4,12 @@
  * intent detection. */
 import assert from 'node:assert/strict';
 import {WorkflowEngine} from '../dist/index.js';
-import {FLOWS,defineForm,linkFormSchemas} from '../dist/forms/index.js';
+import {FLOWS,defineForm,definePerformer,formFlow,linkFormSchemas} from '../dist/forms/index.js';
 import {STANDARD_FUNCTIONS} from '../dist/helpers/index.js';
 const quiet={info(){},debug(){},warn(){},error(){}};
 let checks=0;const test=async(name,fn)=>{await fn();checks++;console.log('PASS '+name);};
-function fixture({option='answers',key='no'}={}){
- const form=defineForm({id:'pay',name:'Pay',primary:true,description:'Make a payment',contract:{summary:'Make a payment'},
+function fixture({option='answers',key='no',soft=false}={}){
+ const form=(soft?(spec)=>formFlow({...spec,confirm_soft:true}):defineForm)({id:'pay',name:'Pay',primary:true,description:'Make a payment',contract:{summary:'Make a payment'},
   inputs:[{name:'amount',label:'amount',profile:{kind:'text'},question:'How much?'}],
   confirm:{question:'Charge it now? Say YES or NO.'},
   after:[{id:'effect',type:'SET',variable:'noop',value:'(cargo.paid=true,true)'}]});
@@ -51,4 +51,23 @@ await test('a new request goes to intent detection',async()=>{
 await test('a one-word unread answer is ranked too',async()=>{
  const t=fixture();await atConfirm(t);await t.say('hmm');assert.deepEqual(t.calls,['rank_reply']);assert.deepEqual(Object.values(t.session.cargo.formConfirm),['no']);
 });
+// A soft confirmation (a performer none of whose actions is exact; owner 2026-11-08, prod 11:07 "Sí, para enviar." at a
+// ticket's confirmation was asked again): its YES is read as a soft confirmation's and is offered to the ranker.
+await test('soft: the ranker is offered YES, and a YES pick confirms',async()=>{
+ const t=fixture({key:'yes',soft:true});await atConfirm(t);await t.say('sure thing go right ahead with it');
+ assert.deepEqual(t.cfg.offered,['choice:yes','choice:no','choice:__agent','answers','abort','new_request','irrelevant']);assert.equal(t.session.cargo.paid,true);
+});
+await test('soft: a decline is still the NO',async()=>{
+ const t=fixture({soft:true});await atConfirm(t);await t.say('that card was lost and I have another one');
+ assert.equal(t.session.cargo.paid,undefined);assert.deepEqual(Object.values(t.session.cargo.formConfirm),['no']);
+});
+await test('soft: a plain YES word confirms without the ranker',async()=>{
+ const t=fixture({soft:true});await atConfirm(t);await t.say('okay');assert.equal(t.session.cargo.paid,true);assert.deepEqual(t.calls,[]);
+});
+// Firmness comes from what the confirmation authorizes: an exact action (charge, cancel, irreversible) makes it firm.
+const confirmationOf=(actions)=>{const f=definePerformer({id:'act',name:'Act',description:'An action',inputs:[],contract:{summary:'Act'},performs:actions,prepare:'prepare-act',present:'present-act'});
+ const find=(o)=>o && typeof o==='object' ? (o.type==='FLOW' && o.value==='confirm-form' ? o : Object.values(o).map(find).find(Boolean)) : null;return find(f)?.parameters?.confirmation ?? null;};
+await test('a performer with an exact action confirms firmly',async()=>{assert.equal(confirmationOf([{action:'charge',effect:'charge',flow:'charge-effect',confirm:{exact:true,question:'Charge it? YES or NO.'},outcomes:{paid:'resolved'}}]),'firm');});
+await test('a performer with no exact action confirms softly',async()=>{assert.equal(confirmationOf([{action:'file',effect:'create',flow:'file-effect',confirm:{question:'Submit it? YES or NO.'},outcomes:{filed:'resolved'}}]),'soft');});
+await test('a plain form confirms firmly',async()=>{assert.ok(!JSON.stringify(defineForm({id:'f',name:'F',description:'F',contract:{summary:'F'},inputs:[{name:'a',profile:{kind:'text'},question:'A?'}],confirm:{question:'OK?'}})).includes('"confirmation":"soft"'));});
 console.log(`Ranked form confirmation: all checks passed (${checks})`);

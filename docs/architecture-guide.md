@@ -336,11 +336,12 @@ it.
 
 **A provider's menu.** `provides.menu.whole_phrases: true` (default off) applies the same rule to a menu: a fact's phrase answers only as the whole reply, and a phrase inside a longer sentence goes to the reply ranker, offered every fact with phrases, every action, `done` and a person. A fact pick is answered with every other fact that cleared `REPLY_ALSO_CUT` (0.6), so one sentence that asks two things hears both; an action pick runs alone. `answers` and `irrelevant` fall to the menu's plain DISPATCH, which hands the turn to the host without intent detection (a Guru answers from the user context the flow set); `new_request` runs intent detection. A reply with no phrase is unchanged. `menu.unanswered` handles a question the provider cannot answer: when a reply from its own menu comes back to it through intent detection with no fact to say, the caller hears the declared apology and offer (`provider-unanswered`) instead of the same facts again.
 
-Some options are **never offered**, so the ranker cannot pick them: the YES of a firm confirmation or of a form's
-confirmation, a `current_only` choice while another question is asked, and text. `exact` on a choice says how words
+Some options are **never offered**, so the ranker cannot pick them: the YES of a firm confirmation (an input's, or a form's
+confirmation of an exact action), a `current_only` choice while another question is asked, and text. `exact` on a choice says how words
 match it, not what it does, so exact choices are offered. A charge or a cancellation is guarded by `confirm: {exact: true}`
 on its action, whose form confirmation offers the ranker NO, corrections and a person: a ranker can understand "no thanks,
-maybe later" as NO; it can never produce a YES to a payment. Options that cost more when wrong need a higher score (a NO that would cancel what the
+maybe later" as NO; it can never produce a YES to a payment. A form whose actions are none of them exact (filing a request)
+confirms softly: its YES is read as a soft confirmation's and is offered to the ranker too. Options that cost more when wrong need a higher score (a NO that would cancel what the
 caller was confirming, or a new request that leaves the question unanswered). A reply that clears no option is
 `answers`, and the question is asked again if nothing usable was in it.
 
@@ -409,7 +410,7 @@ Cancellation and Concurrency" explains each rule and the production incident beh
 
 - **Choices.** A choice has a key, phrases in each language and, on a call, keypad keys. A key matches only as the
   whole answer. Sensitive choices are `exact`.
-- **Confirmations.** `confirmation: "firm"` for consent (a charge, a cancellation, storing a card, filing a request):
+- **Confirmations.** `confirmation: "firm"` for consent (a charge, a cancellation, storing a card):
   only confirmation words. `"soft"` for an offer ("Would you like a link?"): the wider YES vocabulary.
 - **Proposals.** When the flow infers a value ("Is this the card ending in 4242?"), a proposal asks the caller to
   approve that one value. It never authorizes the final action.
