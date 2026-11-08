@@ -17,6 +17,7 @@
   - `no_keys`: no_keys
   - `clarifications`: clarifications
   - `invites`: invites
+  - `rank_parameters`: rank_parameters
   - `named_fields`: true: an answer that names one of the form's inputs (its names) without a value re-asks only that input
 - **Calls:** [validate-card-number](validate-card-number.md) (validator), [validate-card-expiration](validate-card-expiration.md) (validator), [validate-card-cvv](validate-card-cvv.md) (validator), [ask-choice](ask-choice.md) (call), {{cf_event}} (reboot), [collect-input-accept](collect-input-accept.md) (call), [provide-data](provide-data.md) (call), [disambiguate-input](disambiguate-input.md) (call), [read-confirm-reply](read-confirm-reply.md) (call), [give-up](give-up.md) (reboot)
 - **Tools:** none
