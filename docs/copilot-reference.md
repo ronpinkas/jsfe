@@ -347,7 +347,7 @@ A Performer requires `form`, nonempty `performs`, `prepare` worker and `present`
 | `subject` | Ownership path such as `form.data.account` or `form.data.subject`; bind account/service identity, not an unrelated session flag. |
 | `gate:{flow?,verified:[paths]}` | Execution-time verification; rerun the declared flow before each fresh effect. |
 | `flow`, `tool` | Installed executor worker and/or registered tool identity. |
-| `confirm:{exact:true}` | Required for charge, cancel or `reversible:false`. This requires a real form confirmation question. |
+| `confirm:{exact:true}` | Required for charge, cancel or `reversible:false`. This requires a real form confirmation question, and makes it firm (YES only by `CONFIRM_WORDS` or its own exact phrases, never offered to the reply ranker). A performer none of whose actions is exact (filing a request) confirms softly: the wider YES vocabulary, and YES is offered to the ranker. There is no separate attribute for this. |
 | `outcomes` | Map declared executor statuses to business outcomes, including unknown results. |
 | `retry` | Explicit policies: `after:[knownStatuses]`; unknown retry only for SEND with `unknown:"explicit"` and a new accepted recovery choice. |
 

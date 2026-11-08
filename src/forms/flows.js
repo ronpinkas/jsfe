@@ -142,6 +142,11 @@ function validateAcceptanceDeclarations(id, inputs) {
    }
 }
 
+/** How firm a form's confirmation is: firm when an action it authorizes declares confirm.exact (charge, cancel, irreversible)
+ * or it authorizes none (a plain form); soft when it authorizes actions and none is exact (owner 2026-11-08). */
+export function confirmationFirmness(performs) {
+   return Array.isArray(performs) && performs.length && !performs.some((action) => action?.confirm?.exact) ? 'soft' : 'firm';
+}
 export function formFlow({ id, name, version, description, inputs, after = [], extraVars = {}, parameters = [], confirm = null, confirm_soft = false, before_confirm = [], declined = [], stop = '', close_on_stop = false, on_no = '', resume_on_parent_change = false, before = [], done = true, primary = false, scope = 'isolated', validator = '', confirmation_condition = 'true', prompt = undefined, prompt_es = undefined, incomplete_outcome = null, on_exhausted = null, must_complete = false, first_task = '', first_task_es = '', acknowledge = 'all' }) {
    validateFormExhaustion(on_exhausted);
    if (acknowledge !== 'all' && acknowledge !== 'data') throw new Error(`FORM ${id}: acknowledge must be 'all' or 'data'`);

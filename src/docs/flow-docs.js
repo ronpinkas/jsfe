@@ -15,6 +15,7 @@
 import fs from 'fs';
 import path from 'path';
 import { resolveSetDataReferences } from '../forms/declarations.js';
+import { confirmationFirmness } from '../forms/flows.js';
 
 export function generateFlowDocs({ sets, root, check = false, hostRun = {}, log = console.log }) {
    // A catalog or value written as {"$data": path} is documented as compilation resolves it.
@@ -177,14 +178,14 @@ export function generateFlowDocs({ sets, root, check = false, hostRun = {}, log 
       return c.done();
    }
 
-   function formChart(fm) {
+   function formChart(fm, performs) {
       const c = builder();
       if (fm.before && fm.before.length) { c.steps(fm.before); } else { /* nothing before */ }
       for (const i of fm.inputs || []) {
          const extra = [i.when ? 'when ' + cut(i.when, 40) : '', i.form ? 'form ' + i.form : '', i.profile && i.profile.kind ? i.profile.kind : ''].filter(Boolean).join(' · ');
          c.then({ label: `${i.name}${i.label ? ' (' + i.label + ')' : ''}${extra ? ': ' + extra : ''}`, kind: 'input' });
       }
-      if (fm.confirm) { c.then({ label: 'confirm', kind: 'decision' }); } else { /* no confirmation */ }
+      if (fm.confirm) { c.then({ label: `confirm (${confirmationFirmness(performs)})`, kind: 'decision' }); } else { /* no confirmation */ }
       if (fm.after && fm.after.length) { c.steps(fm.after); } else { /* nothing after */ }
       return c.done();
    }
@@ -217,7 +218,7 @@ export function generateFlowDocs({ sets, root, check = false, hostRun = {}, log 
       if (flow.provides) {
          out.push('', '### Provider', '', ...(flow.provides.facts || []).map((f) => `- fact \`${f.key}\`: ${f.description || ''}${f.path ? ' (from `' + f.path + '`)' : ''}`), ...providerMenuNotes(flow.provides.menu), '', providerChart(flow.provides));
       } else { /* not a provider */ }
-      if (flow.form) { out.push('', '### Form', '', formChart(flow.form)); } else { /* not a form */ }
+      if (flow.form) { out.push('', '### Form', '', formChart(flow.form, flow.performs)); } else { /* not a form */ }
       // A form the jsfe SDK compiled (the system set) carries its inputs as a variable; its steps are the engine's run-form loop.
       const compiled = flow.metadata && flow.metadata.formProtocol && flow.variables && flow.variables.inputs && Array.isArray(flow.variables.inputs.value) ? flow.variables.inputs.value : null;
       if (!flow.form && compiled && compiled.length) { out.push('', '### Form inputs', '', formChart({ inputs: compiled })); } else { /* not a compiled form */ }

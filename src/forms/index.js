@@ -5,7 +5,7 @@ import {FLOWS as FORM_FLOWS} from './flows.js';
 import {FLOWS as CHOICE_FLOWS} from './choice-flow.js';
 import {FLOWS as IDENTITY} from './identity-flows.js';
 export const FLOWS=[...FORM_FLOWS,...ADDRESS_FLOWS,...CHOICE_FLOWS,...IDENTITY].map(flow=>withSafetyRevision(flow,'dispatch-intake-2026-10-22'));
-export { FIELD_PRESETS, formFlow, declinedFlow, textValue } from './flows.js';
+export { FIELD_PRESETS, formFlow, declinedFlow, textValue, confirmationFirmness } from './flows.js';
 export {FLOWS as IDENTITY_FLOWS} from './identity-flows.js';
 export { linkFormSchemas, defineWorker, defineProvider, defineForm, definePerformer, validateFlowContracts, operationWorkers, providerQuestions, providerParameter } from './contracts.js';
 
