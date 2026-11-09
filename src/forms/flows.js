@@ -111,7 +111,7 @@ const FIELD_COLLECTORS = { 'collect-phone': 'phone', 'collect-email': 'email', '
  * The form shell: declare inputs, run the loop, hand the result on. `after` = the form's own steps once complete.
  * `confirm` ({ question, question_es } — SAY-style templates that may read cargo.forms[<id>].values; build them in
  * `before_confirm` SET steps when they need computing): the confirmation, asked every time after the loop and
- * never an input. It is firm unless `confirm_soft` (definePerformer: no action it authorizes declares `confirm.exact`): a soft
+ * never an input. It is soft unless `confirm_soft` is false (confirmationFirmness: firm only for a payment): a soft
  * confirmation's YES is read as a soft input confirmation's and is offered to the reply ranker; a firm one's is neither. YES runs `after`; NO runs `declined`; a correction given there goes through the form's own matching
  * and the form runs again (so whatever the correction made missing is asked).
  */
@@ -142,12 +142,13 @@ function validateAcceptanceDeclarations(id, inputs) {
    }
 }
 
-/** How firm a form's confirmation is: firm when an action it authorizes declares confirm.exact (charge, cancel, irreversible)
- * or it authorizes none (a plain form); soft when it authorizes actions and none is exact (owner 2026-11-08). */
+/** How firm a form's confirmation is: firm ONLY when an action it authorizes is a payment (effect 'charge'); every other
+ * confirmation is soft, a plain form's (no action) included (owner 2026-11-09). confirm.exact is separate: it binds the
+ * action to the confirmed values, whatever the confirmation's firmness. */
 export function confirmationFirmness(performs) {
-   return Array.isArray(performs) && performs.length && !performs.some((action) => action?.confirm?.exact) ? 'soft' : 'firm';
+   return Array.isArray(performs) && performs.some((action) => action?.effect === 'charge') ? 'firm' : 'soft';
 }
-export function formFlow({ id, name, version, description, inputs, after = [], extraVars = {}, parameters = [], confirm = null, confirm_soft = false, before_confirm = [], declined = [], stop = '', close_on_stop = false, on_no = '', resume_on_parent_change = false, before = [], done = true, primary = false, scope = 'isolated', validator = '', confirmation_condition = 'true', prompt = undefined, prompt_es = undefined, incomplete_outcome = null, on_exhausted = null, must_complete = false, first_task = '', first_task_es = '', acknowledge = 'all' }) {
+export function formFlow({ id, name, version, description, inputs, after = [], extraVars = {}, parameters = [], confirm = null, confirm_soft = confirmationFirmness([]) === 'soft', before_confirm = [], declined = [], stop = '', close_on_stop = false, on_no = '', resume_on_parent_change = false, before = [], done = true, primary = false, scope = 'isolated', validator = '', confirmation_condition = 'true', prompt = undefined, prompt_es = undefined, incomplete_outcome = null, on_exhausted = null, must_complete = false, first_task = '', first_task_es = '', acknowledge = 'all' }) {
    validateFormExhaustion(on_exhausted);
    if (acknowledge !== 'all' && acknowledge !== 'data') throw new Error(`FORM ${id}: acknowledge must be 'all' or 'data'`);
    if (on_no !== '' && (typeof on_no !== 'string' || !/^[\w-]+$/.test(on_no))) throw new Error(`FORM ${id}: on_no must be a flow id`);
@@ -676,7 +677,7 @@ const disambiguate = {
 // ── confirm-form: the exact confirmation of a finished form; a correction is matched against the form chain ───────
 const confirmForm = {
    id: 'confirm-form', name: 'ConfirmForm', version: '1.0.0', scope: 'isolated',
-   description: "Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm when an action it authorizes is exact; otherwise soft: YES is read as a soft confirmation's and offered to the reply ranker). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
+   description: "Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm only when an action it authorizes is a payment; otherwise soft: YES is read as a soft confirmation's and offered to the reply ranker). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
    parameters: ['form', 'confirmation', 'question', 'question_es', 'exit_context', 'exit_context_es','phrases','words','interrupts','no_keys','clarifications','invites','rank_parameters'].map((n) => ({ name: n, type: ['phrases','words','interrupts','no_keys','clarifications','invites','rank_parameters'].includes(n)?'array':'string', description: n })).concat([{ name: 'named_fields', type: 'boolean', description: "true: an answer that names one of the form's inputs (its names) without a value re-asks only that input" }]),
    variables: vars({ confirmation: '', cf_clarify:null, named_fields: false, reply_context: '', rank_parameters: [], cf_must: false, cf_presets: FIELD_PRESETS, cf_chain: [], cf_m: null, cf_current:null, cf_result: '',cf_prompt:'',cf_prompt_es:'', cf_words: 0, cf_tries: 0, phrases:null, words:[], clarifications:[], no_keys:['2'], interrupts:[], invites:[], cf_choices:[], cf_event:'', cf_amount:false, cf_questions:[],cf_provides:null,cf_skip_gate:'' }),
    steps: [

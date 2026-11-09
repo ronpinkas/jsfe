@@ -113,7 +113,7 @@ export function defineProvider({provides,contract,parameters=[],variables={},ste
       {role:'provider',...contract,catalog:'provides'});
 }
 export function defineForm({contract,provides,...spec}) {
-   const flow=formFlow({...spec,confirm_soft:false,...(provides?{extraVars:{...spec.extraVars,provides,questions:providerQuestions(provides)}}:{})});
+   const flow=formFlow({...spec,confirm_soft:confirmationFirmness([])==='soft',...(provides?{extraVars:{...spec.extraVars,provides,questions:providerQuestions(provides)}}:{})});
    return declared(flow,{role:'collector',...contract,form:{inputs:'inputs'},...(provides?{catalog:'provides'}:{})});
 }
 export function definePerformer({performs,contract,prepare,present,project=[],provides,...spec}) {
