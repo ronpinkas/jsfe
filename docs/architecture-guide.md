@@ -339,9 +339,10 @@ it.
 Some options are **never offered**, so the ranker cannot pick them: the YES of a firm confirmation (an input's, or a form's
 confirmation of an exact action), a `current_only` choice while another question is asked, and text. `exact` on a choice says how words
 match it, not what it does, so exact choices are offered. A charge or a cancellation is guarded by `confirm: {exact: true}`
-on its action, whose form confirmation offers the ranker NO, corrections and a person: a ranker can understand "no thanks,
-maybe later" as NO; it can never produce a YES to a payment. A form whose actions are none of them exact (filing a request)
-confirms softly: its YES is read as a soft confirmation's and is offered to the ranker too. Options that cost more when wrong need a higher score (a NO that would cancel what the
+on its action. A form confirmation is firm only when it authorizes a payment (effect `charge`), unless the form declares
+`confirm.confirmation`: a firm one offers the ranker NO, corrections and a person (a ranker can understand "no thanks,
+maybe later" as NO; it can never produce a YES to a payment). Every other confirmation is soft: its YES is read as a
+soft confirmation's and is offered to the ranker too. Options that cost more when wrong need a higher score (a NO that would cancel what the
 caller was confirming, or a new request that leaves the question unanswered). A reply that clears no option is
 `answers`, and the question is asked again if nothing usable was in it.
 
@@ -410,8 +411,9 @@ Cancellation and Concurrency" explains each rule and the production incident beh
 
 - **Choices.** A choice has a key, phrases in each language and, on a call, keypad keys. A key matches only as the
   whole answer. Sensitive choices are `exact`.
-- **Confirmations.** `confirmation: "firm"` for consent (a charge, a cancellation, storing a card):
-  only confirmation words. `"soft"` for an offer ("Would you like a link?"): the wider YES vocabulary.
+- **Confirmations.** One attribute, `confirmation: "firm" | "soft"`, on all three confirmations: an input's, a form's
+  `confirm`, and a proposal's policy. Declared, it is definite. Absent: firm only for a payment, soft otherwise (a
+  proposal is soft). Firm: only confirmation words. Soft: the wider YES vocabulary, and the reply ranker may pick YES.
 - **Proposals.** When the flow infers a value ("Is this the card ending in 4242?"), a proposal asks the caller to
   approve that one value. It never authorizes the final action.
 - **Questions in the middle of a task.** "When is it due?" asked while paying is answered from the provider's catalog,

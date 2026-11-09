@@ -155,6 +155,11 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
    if (typeof must_complete !== 'boolean') throw new Error(`FORM ${id}: must_complete must be true or false`);
    validateAcceptanceDeclarations(id, inputs);
    if (confirm && typeof confirm === 'object') validateRankParameters(id, 'confirm', 'rank_parameters', confirm.rank_parameters); else { /* no confirmation */ }
+   // confirm.confirmation ('firm' | 'soft', the attribute inputs declare) is definite when declared; a template ('{{…}}')
+   // is resolved at run time (an inferred value's descriptor); absent, confirm_soft (confirmationFirmness) decides.
+   if (confirm && typeof confirm === 'object' && confirm.confirmation !== undefined && !['firm', 'soft'].includes(confirm.confirmation) && !String(confirm.confirmation).includes('{{')) throw new Error(`FORM ${id}: confirm.confirmation must be "firm" or "soft"`);
+   else { /* declared, or derived below */ }
+   const confirmFirmness = confirm && typeof confirm === 'object' && confirm.confirmation !== undefined ? confirm.confirmation : (confirm_soft === true ? 'soft' : 'firm');
    const incompleteFrom=incomplete_outcome && Object.hasOwn(incomplete_outcome,'from');
    if(incompleteFrom) {
       if(Object.keys(incomplete_outcome).length!==1||typeof incomplete_outcome.from!=='string'||!/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(incomplete_outcome.from)||!parameters.some(p=>p.name===incomplete_outcome.from.split('.')[0]&&p.type==='object'))throw new Error('FORM incomplete_outcome.from must reference a declared object parameter');
@@ -164,7 +169,8 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
       // FLOW parameters are paths only: the question is built here, as a SAY-style template, then passed by name
       SET(`${id}_confirm_q`, 'form_confirm_q', textValue(confirm.question)),
       SET(`${id}_confirm_q_es`, 'form_confirm_q_es', textValue(confirm.question_es || confirm.question)),
-      FLOW(`${id}_confirm`, 'confirm-form', 'call', { form: '{{form_instance}}', confirmation: confirm_soft === true ? 'soft' : 'firm', question: '{{form_confirm_q}}', question_es: '{{form_confirm_q_es}}', phrases:'{{form_confirmation.phrases}}', words:'{{form_confirmation.words}}', clarifications:'{{form_confirmation.clarifications}}', no_keys:'{{form_confirmation.no_keys}}', interrupts:'{{form_confirmation.interrupts}}', invites:'{{form_confirmation.invites}}', named_fields:'{{form_confirmation.named_fields}}', reply_context:'{{form_confirmation.reply_context}}', rank_parameters:'{{form_confirmation.rank_parameters}}', exit_context: '{{exit_context}}', exit_context_es: '{{exit_context_es}}' }),
+      SET(`${id}_confirm_firmness`, 'form_confirm_firmness', textValue(confirmFirmness)),
+      FLOW(`${id}_confirm`, 'confirm-form', 'call', { form: '{{form_instance}}', confirmation: '{{form_confirm_firmness}}', question: '{{form_confirm_q}}', question_es: '{{form_confirm_q_es}}', phrases:'{{form_confirmation.phrases}}', words:'{{form_confirmation.words}}', clarifications:'{{form_confirmation.clarifications}}', no_keys:'{{form_confirmation.no_keys}}', interrupts:'{{form_confirmation.interrupts}}', invites:'{{form_confirmation.invites}}', named_fields:'{{form_confirmation.named_fields}}', reply_context:'{{form_confirmation.reply_context}}', rank_parameters:'{{form_confirmation.rank_parameters}}', exit_context: '{{exit_context}}', exit_context_es: '{{exit_context_es}}' }),
       { id: `${id}_confirmed`, type: 'CASE', branches: {
          [`condition: (cargo.formConfirm || {})[form_instance] === 'changed'`]: FLOW(`${id}_again`, id, 'replace', { parent_form: '{{parent_form}}', result_input: '{{result_input}}', form_instance: '{{form_instance}}' }),
          // NO: the declined flow takes the form's place, so the action below never runs
@@ -173,7 +179,7 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
    ] : [];
    return {
       id, name, version, description, scope, metadata:{formProtocol:2}, parameters: [...parameters, { name: 'form_instance', type: 'string', internal: true, description: 'Internal instance to resume' }], ...(primary ? { primary: true } : {}), ...(prompt ? { prompt, prompt_es } : {}),
-      variables: vars({ form_on_exhausted:on_exhausted, form_on_no:on_no, form_must_complete:must_complete, form_incomplete_outcome:incompleteFrom?null:incomplete_outcome, form_instance: '', form_internal_resume: false, form_resume_owner:'', form_arguments:{}, form_exhaustion:null, form_values: {}, form_validation: '', initial_readings: [], inputs: resolveFormInputs(inputs, FIELD_PRESETS), parent_form: '', result_input: '', questions: [], provides: null, exit_context: '', exit_context_es: '', form_confirm_q: '', form_confirm_q_es: '', form_confirmation:confirm || {}, form_should_confirm:false, ...extraVars }),
+      variables: vars({ form_on_exhausted:on_exhausted, form_on_no:on_no, form_must_complete:must_complete, form_incomplete_outcome:incompleteFrom?null:incomplete_outcome, form_instance: '', form_internal_resume: false, form_resume_owner:'', form_arguments:{}, form_exhaustion:null, form_values: {}, form_validation: '', initial_readings: [], inputs: resolveFormInputs(inputs, FIELD_PRESETS), parent_form: '', result_input: '', questions: [], provides: null, exit_context: '', exit_context_es: '', form_confirm_q: '', form_confirm_q_es: '', form_confirm_firmness: '', form_confirmation:confirm || {}, form_should_confirm:false, ...extraVars }),
       steps: [
          ...contextualResponseRuntimeSteps(id,[],hasFormResponse(inputs)?[CONTEXTUAL_RESPONSES_REQUIREMENT]:[]),
          ...(hasFormResponse(inputs)?[{...SET(`${id}_response_reader_required`,'noop',"typeof validateFormResponse === 'function'"),requireTrue:true}]:[]),
@@ -745,7 +751,7 @@ const confirmInputProposal=formFlow({id:'confirm-input-proposal',name:'ConfirmIn
       {...SIDE('proposal_bind','(bindFormProposal(cargo,parent_form,input,form_instance),true)'),requireTrue:true},
       SET('proposal_confirmation','form_confirmation','Object.assign({},proposal.descriptor)'),
    ],
-   confirm:{question:'{{proposal.descriptor.question}}',question_es:'{{proposal.descriptor.question_es || proposal.descriptor.question}}'},
+   confirm:{question:'{{proposal.descriptor.question}}',question_es:'{{proposal.descriptor.question_es || proposal.descriptor.question}}',confirmation:"{{proposal.descriptor.confirmation || 'soft'}}"},
    after:[{...SIDE('proposal_confirmed',"decideFormProposal(cargo,parent_form,input,form_instance,'confirmed')"),requireTrue:true}],
    declined:[NOOP('proposal_declined_marker')],
 });

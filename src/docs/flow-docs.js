@@ -185,7 +185,7 @@ export function generateFlowDocs({ sets, root, check = false, hostRun = {}, log 
          const extra = [i.when ? 'when ' + cut(i.when, 40) : '', i.form ? 'form ' + i.form : '', i.profile && i.profile.kind ? i.profile.kind : ''].filter(Boolean).join(' · ');
          c.then({ label: `${i.name}${i.label ? ' (' + i.label + ')' : ''}${extra ? ': ' + extra : ''}`, kind: 'input' });
       }
-      if (fm.confirm) { c.then({ label: `confirm (${confirmationFirmness(performs)})`, kind: 'decision' }); } else { /* no confirmation */ }
+      if (fm.confirm) { c.then({ label: `confirm (${['firm','soft'].includes(fm.confirm?.confirmation) ? fm.confirm.confirmation : confirmationFirmness(performs)})`, kind: 'decision' }); } else { /* no confirmation */ }
       if (fm.after && fm.after.length) { c.steps(fm.after); } else { /* nothing after */ }
       return c.done();
    }

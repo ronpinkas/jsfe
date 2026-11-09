@@ -66,9 +66,10 @@ await test('soft: a plain YES word confirms without the ranker',async()=>{
 });
 // Firmness comes from what the confirmation authorizes: only a payment (effect 'charge') makes it firm (owner 2026-11-09).
 const confirmationOf=(actions)=>{const f=definePerformer({id:'act',name:'Act',description:'An action',inputs:[],contract:{summary:'Act'},performs:actions,prepare:'prepare-act',present:'present-act'});
- const find=(o)=>o && typeof o==='object' ? (o.type==='FLOW' && o.value==='confirm-form' ? o : Object.values(o).map(find).find(Boolean)) : null;return find(f)?.parameters?.confirmation ?? null;};
+ return firmnessOf(f);};
+function firmnessOf(f){const find=(o)=>o && typeof o==='object' ? (o.type==='SET' && o.variable==='form_confirm_firmness' ? o : Object.values(o).map(find).find(Boolean)) : null;const v=find(f)?.value;return v ? JSON.parse(v) : null;}
 await test('a performer with a payment confirms firmly',async()=>{assert.equal(confirmationOf([{action:'charge',effect:'charge',flow:'charge-effect',confirm:{exact:true,question:'Charge it? YES or NO.'},outcomes:{paid:'resolved'}}]),'firm');});
 await test('a performer with no exact action confirms softly',async()=>{assert.equal(confirmationOf([{action:'file',effect:'create',flow:'file-effect',confirm:{question:'Submit it? YES or NO.'},outcomes:{filed:'resolved'}}]),'soft');});
 await test('an exact cancellation confirms softly',async()=>{assert.equal(confirmationOf([{action:'cancel',effect:'cancel',flow:'cancel-effect',confirm:{exact:true,question:'Cancel it? YES or NO.'},outcomes:{cancelled:'resolved'}}]),'soft');});
-await test('a plain form confirms softly',async()=>{assert.ok(JSON.stringify(defineForm({id:'f',name:'F',description:'F',contract:{summary:'F'},inputs:[{name:'a',profile:{kind:'text'},question:'A?'}],confirm:{question:'OK?'}})).includes('"confirmation":"soft"'));});
+await test('a plain form confirms softly',async()=>{assert.equal(firmnessOf(defineForm({id:'f',name:'F',description:'F',contract:{summary:'F'},inputs:[{name:'a',profile:{kind:'text'},question:'A?'}],confirm:{question:'OK?'}})),'soft');});
 console.log(`Ranked form confirmation: all checks passed (${checks})`);

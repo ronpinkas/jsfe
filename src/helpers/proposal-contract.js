@@ -19,11 +19,12 @@ export function validateProposalData(value,seen=new Set()) {
    if(array&&keys.length!==value.length+1)fail('binding cannot contain array holes');
    seen.delete(value);return value;
 }
-const confirmationKeys=['question','question_es','binding','phrases','words','interrupts','no_keys','clarifications','on_declined'];
+const confirmationKeys=['question','question_es','confirmation','binding','phrases','words','interrupts','no_keys','clarifications','on_declined'];
 function confirmation(value,required) {
    if(required&&!string(value.question))fail('needs a nonempty question');
    for(const key of ['question','question_es'])if(value[key]!==undefined&&!string(value[key]))fail(key+' must be nonempty text');
    if(value.on_declined!==undefined&&!safeName(value.on_declined))fail('on_declined needs a static worker id');
+   if(value.confirmation!==undefined&&!['firm','soft'].includes(value.confirmation))fail('confirmation must be "firm" or "soft"');
    for(const key of ['phrases','words','no_keys','clarifications'])if(value[key]!==undefined&&(!Array.isArray(value[key])||!value[key].every(string)))fail(key+' must be an array of nonempty phrases');
    if(value.interrupts!==undefined){if(!Array.isArray(value.interrupts))fail('interrupts must be an array');const keys=new Set();for(const event of value.interrupts){if(!plain(event)||Object.keys(event).some(k=>!['key','phrases','words','flow','exact'].includes(k))||!safeName(event.key)||keys.has(event.key)||!safeName(event.flow)||!Array.isArray(event.phrases ?? event.words)||!(event.phrases ?? event.words).length||!(event.phrases ?? event.words).every(string)||event.exact!==undefined&&typeof event.exact!=='boolean')fail('invalid interrupt declaration');keys.add(event.key);}}
    if(value.binding!==undefined)validateProposalData(value.binding);
