@@ -983,9 +983,11 @@ await persist(session);
 ### Declared flow outcomes: `lastFlowOutcome`
 
 A flow can say how it ended, not just that it ended. An optional `outcome` (and `reason`) on a step
-is remembered on the flow and applied when the flow terminates. Put it on the step that ends the
-flow: a `RETURN`, an `END`, a `DISPATCH` or a final `SAY`. Both may use `{{…}}` interpolation with
-the flow's variables; an `outcome` that interpolates to empty declares nothing:
+is remembered on the flow and applied when the flow terminates. Any step may carry it, so a flow
+declares the outcome the moment it achieves (or fails) its objective, even when it goes on talking; a
+later declaration replaces it. On a `FLOW` step it is the calling flow's declaration. Both may use
+`{{…}}` interpolation with the flow's variables; an `outcome` that interpolates to empty declares
+nothing:
 
 ```json
 { "id": "say_support_message", "type": "SAY", "value": "Sorry I couldn't help! ...",
@@ -1016,6 +1018,13 @@ It is **one-shot**: cleared at the start of every `updateActivity`, and set only
 declared an outcome terminated during that call. Hosts use it to run a recovery turn after an
 `"unresolved"` ending. When a `RETURN` terminates several flows, only the flow that executed it
 carries the RETURN's declaration; the others finalize with their own (usually none).
+
+**Flows read it as `$outcome` (jsfe 1.41.0):** `{ outcome, reason, flowName }` of the declaration in
+force for the running flow, its own, else the nearest among the flows that called it on this stack;
+`null` when none declared. A flow that starts declares nothing (a `replace` keeps the frame, and its
+declaration), and a called flow's declaration ends with it. A `reboot` ends every flow, so the flow
+that reboots hands the outcome over as a parameter, a path like any other: `{ "exit_outcome":
+"{{$outcome.outcome}}" }`. The outcome belongs to the flows; a host only reads `lastFlowOutcome`.
 
 ## Architecture Overview
 
@@ -1270,7 +1279,7 @@ their original workflow seamlessly.
 - ✅ **END** - Return from the current flow only, resuming the parent flow — a functional `return` (no value; variables are shared with the parent)
 - ✅ **DISPATCH** - End all flows and route this turn's input through intent detection, as if no flow had been active (a matched flow starts in the same turn; no match → no response, the host answers). Resets everything; the ended flows' declared outcome is kept only when no flow matches. Takes `id`, `outcome`, `reason`. See the user guide's *DISPATCH Steps*
 
-A terminal step (`RETURN`, `END`, `DISPATCH` or a final `SAY`) may also carry `outcome` / `reason`; see
+Any step may also carry `outcome` / `reason` (it applies when the flow terminates); see
 [Declared flow outcomes](#declared-flow-outcomes-lastflowoutcome).
 
 ### Step Reliability: Validation & Retry

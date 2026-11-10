@@ -580,7 +580,7 @@ export interface ToolCallRecord {
 
 /**
  * Host-facing outcome a flow declares about its own ending, via an optional
- * `outcome` (+ `reason`) attribute on a terminal step (RETURN / END / final SAY):
+ * `outcome` (+ `reason`) attribute on any step, applied when the flow terminates (flows read it as `$outcome`):
  *
  *   { "type": "RETURN", "value": "''", "outcome": "unresolved", "reason": "otp_retries_exhausted" }
  *
@@ -6738,6 +6738,11 @@ function getEngineSessionVariables(engine: Engine, contextStack: ContextEntry[])
     // with `language === 'es'` (prod 2026-09-24, a receipt reply).
     sessionVars.language = engine.getSessionLanguage() || engine.language;
 
+    // $outcome: the declared outcome in force for the running flow (see FlowOutcome) — its own declaration, else the
+    // nearest one among the flows that called it on this stack; null when none declared. A flow that starts declares
+    // nothing, and a called flow's declaration ends with it, so the caller it resumes reads its own again.
+    sessionVars.$outcome = outcomeInForce(engine);
+
     // Special function-like variables
     sessionVars['currentTime()'] = new Date().toISOString();
 
@@ -6751,6 +6756,20 @@ function getEngineSessionVariables(engine: Engine, contextStack: ContextEntry[])
   }
 
   return sessionVars;
+}
+
+// The nearest declared outcome on the current stack, from the running flow down to the first flow of the stack.
+function outcomeInForce(engine: Engine): { outcome: string; reason?: string; flowName: string } | null {
+  const stack = getCurrentStack(engine);
+  for (let i = stack.length - 1; i > -1; i--) {
+    const declared = stack[i].declaredOutcome;
+    if (declared) {
+      return { outcome: declared.outcome, reason: declared.reason, flowName: stack[i].flowName };
+    } else {
+      continue;
+    }
+  }
+  return null;
 }
 
 /**
