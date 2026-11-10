@@ -32,6 +32,8 @@ assert.equal(JSON.stringify(stored), storedBefore, 'compact projection has no st
 assert.equal(view.fields.find(f=>f.name==='card').fields.length,4,'unopened nested schema is projected');
 assert.deepEqual(view.fields.find(f=>f.name==='service').choices,[{key:'a',label:'First'},{key:'b',label:'Second'}]);
 assert(!JSON.stringify(view).includes('validator'));
+const currentPaths=fields=>fields.flatMap(f=>[...(f.current?[f.path]:[]),...(f.fields?currentPaths(f.fields):[])]);
+assert.deepEqual(currentPaths(view.fields),['email'],'the asked field alone is current');
 const encode=values=>'JSFE_FORM_V1:'+JSON.stringify({form:projectForm(session).form,values});
 const note='O\'Brien says "hello"; C:\\docs\\new\nsecond line';
 const card={card_number:'4111111111111111',card_expiration:'12/39',card_cvv:'837',card_zip:'90001'};
@@ -51,6 +53,7 @@ assert.equal(state.values.note,note,'strict values retain escapes, quotes and ne
 assert.equal(state.values.service,'a','independent enum accepted');
 assert.match(session.response, /Got it, your service\./, 'a genuinely out-of-order field is acknowledged');
 assert(state.errors.email);
+assert.deepEqual(currentPaths(projectForm(session).fields),['email'],'a redrawn form points at the field asked again');
 assert(!JSON.stringify(projectForm(session)).includes(card.card_number),'sensitive accepted values omitted');
 assert.equal(session.cargo.completed,undefined);
 cargoLogs.length=0;

@@ -51,14 +51,14 @@ export function projectForm(session, flows) {
         // An alternative is a group constraint, not several individually required fields.
         const members = fields(input.any_of, state, prefix, depth + 1).map(field => ({...field, required: false}));
         const groupLabel = language === 'es' ? input.label_es || input.label : input.label;
-        if (members.length) out.push({name: input.name, path, kind: 'alternatives', label: groupLabel || '', required, exclusive: input.exclusive === true, fields: members});
+        if (members.length) out.push({name: input.name, path, kind: 'alternatives', label: groupLabel || '', required, exclusive: input.exclusive === true, ...(isCurrent ? {current: true} : {}), fields: members});
       } else if (input.form && input.schema) {
         if (input.prepare && !state.prepared?.[input.name]) continue;
         const child = cargo.forms[state.children?.[input.name]];
         const snapshot = state.childResults?.[input.name];
         const virtual = child || {values: state.values?.[input.name] || {}, data: snapshot?.data || {}, prepared: snapshot?.prepared || {}, errors: {}};
         const nested = fields(child?.specs || input.schema.inputs, virtual, path + '.', depth + 1);
-        if (nested.length) out.push({name: input.name, path, kind: 'group', label: label(input, language), required, fields: nested});
+        if (nested.length) out.push({name: input.name, path, kind: 'group', label: label(input, language), required, ...(isCurrent ? {current: true} : {}), fields: nested});
       } else if (input.profile) {
         const profile = input.profile;
         if (!['choice','email','phone','amount','digits','identifier','pattern','text'].includes(profile.kind)) continue;
@@ -84,6 +84,8 @@ export function projectForm(session, flows) {
         field.constraints = Object.fromEntries(['min','max'].filter(key => typeof profile[key] === 'number').map(key => [key, profile[key]]));
         if (!field.sensitive && ['string','number','boolean'].includes(typeof state.values?.[input.name])) field.value = state.values[input.name];
         if (state.errors?.[input.name]) field.error = String(state.errors[input.name]);
+        // The field the conversation is asking for now, so a client can point at it on a redrawn form.
+        if (isCurrent) field.current = true;
         out.push(field);
       }
     }
