@@ -110,6 +110,11 @@ for (const field of ['route', 'correction', 'chatOnly']) {
   const prompt = 'JSFE_FORM_V1:' + JSON.stringify({form: filtered.form, values: {[field]: 'a'}});
   assert.throws(() => parseFormSubmission(prompt, filtered), /Unknown form field/);
 }
+for (const field of ['internal', 'chatOnly', 'notReady']) {
+  context.current = field;
+  assert.equal(projectForm(snapshot), null, `no card while the asked field (${field}) has no place on it`);
+}
+context.current = 'prepared';
 context.current = 'correction';
 assert.deepEqual(projectForm(snapshot).fields.map(f=>f.name),['optional','correction','prepared']);
 console.log('form-client: sibling ownership, prepared choices, applicability, localization and visibility passed');

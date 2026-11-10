@@ -37,6 +37,7 @@ export function projectForm(session, flows) {
   const {state: root, context} = pending, cargo = session.cargo, language = session.language || 'en';
   // Both the code field and its free-text fallback can contain the one-time code.
   const collectingOtp = session.flowStacks.flat().some(frame => frame.flowId === 'get-and-validate-otp-code');
+  let askedShown = false;
   const fields = (specs, state, prefix = '', depth = 0) => {
     if (depth > 16) return [];
     const out = [];
@@ -51,6 +52,7 @@ export function projectForm(session, flows) {
         // An alternative is a group constraint, not several individually required fields.
         const members = fields(input.any_of, state, prefix, depth + 1).map(field => ({...field, required: false}));
         const groupLabel = language === 'es' ? input.label_es || input.label : input.label;
+        if (members.length && isCurrent) askedShown = true;
         if (members.length) out.push({name: input.name, path, kind: 'alternatives', label: groupLabel || '', required, exclusive: input.exclusive === true, ...(isCurrent ? {current: true} : {}), fields: members});
       } else if (input.form && input.schema) {
         if (input.prepare && !state.prepared?.[input.name]) continue;
@@ -58,6 +60,7 @@ export function projectForm(session, flows) {
         const snapshot = state.childResults?.[input.name];
         const virtual = child || {values: state.values?.[input.name] || {}, data: snapshot?.data || {}, prepared: snapshot?.prepared || {}, errors: {}};
         const nested = fields(child?.specs || input.schema.inputs, virtual, path + '.', depth + 1);
+        if (nested.length && isCurrent) askedShown = true;
         if (nested.length) out.push({name: input.name, path, kind: 'group', label: label(input, language), required, ...(isCurrent ? {current: true} : {}), fields: nested});
       } else if (input.profile) {
         const profile = input.profile;
@@ -85,13 +88,17 @@ export function projectForm(session, flows) {
         if (!field.sensitive && ['string','number','boolean'].includes(typeof state.values?.[input.name])) field.value = state.values[input.name];
         if (state.errors?.[input.name]) field.error = String(state.errors[input.name]);
         // The field the conversation is asking for now, so a client can point at it on a redrawn form.
-        if (isCurrent) field.current = true;
+        if (isCurrent) {field.current = true; askedShown = true;}
         out.push(field);
       }
     }
     return out;
   };
   const projected = fields(root.specs, root);
+  // A card that cannot take the answer being asked for (an internal, chat-only or not yet prepared field) is not drawn: the
+  // question is answered in chat, never beside a form that has no place for it.
+  const asked = context.names?.length || context.current;
+  if (asked && !askedShown) return null;
   return projected.length ? {version: 1, form: root.id, language, fields: projected} : null;
 }
 
