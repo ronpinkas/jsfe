@@ -100,23 +100,24 @@ const snapshot={language:'es',cargo:{forms:{root:{id:'root',values:{route:'a'},s
 ],data:{options:[{key:'x',label:'Ready',label_es:'Lista'}]}}}},flowStacks:[[{pendingVariable:'answer',variables:{form_context:{form:'root',current:'route'}}}]]};
 const frozen=JSON.stringify(snapshot);const p=projectForm(snapshot);
 assert.equal(JSON.stringify(snapshot),frozen);
-assert.deepEqual(p.fields.map(f=>f.name),['route','optional','prepared']);
+assert.deepEqual(p.fields.map(f=>f.name),['route','optional','prepared','internal'],'an internal input (never extracted, answered when asked) is drawn');
 assert.equal(p.fields[2].choices[0].label,'Lista');
 const context = snapshot.flowStacks[0][0].variables.form_context;
 context.current = 'prepared';
 const filtered = projectForm(snapshot);
-assert.deepEqual(filtered.fields.map(f=>f.name),['optional','prepared']);
+assert.deepEqual(filtered.fields.map(f=>f.name),['optional','prepared','internal']);
 for (const field of ['route', 'correction', 'chatOnly']) {
   const prompt = 'JSFE_FORM_V1:' + JSON.stringify({form: filtered.form, values: {[field]: 'a'}});
   assert.throws(() => parseFormSubmission(prompt, filtered), /Unknown form field/);
 }
-for (const field of ['internal', 'chatOnly', 'notReady']) {
+context.current = 'internal';
+assert.deepEqual(projectForm(snapshot).fields.filter(f=>f.current).map(f=>f.name),['internal'],'an asked internal input is on the card, current');
+for (const field of ['chatOnly', 'notReady']) {
   context.current = field;
   assert.equal(projectForm(snapshot), null, `no card while the asked field (${field}) has no place on it`);
 }
-context.current = 'prepared';
 context.current = 'correction';
-assert.deepEqual(projectForm(snapshot).fields.map(f=>f.name),['optional','correction','prepared']);
+assert.deepEqual(projectForm(snapshot).fields.map(f=>f.name),['optional','correction','prepared','internal']);
 console.log('form-client: sibling ownership, prepared choices, applicability, localization and visibility passed');
 // A shared collector that reads the answer's text (ask-email, the retry menu) reads the submitted value, not the turn's marker.
 const asker={id:'email-asker',name:'EmailAsker',primary:true,description:'Ask an email',steps:[{id:'ask',type:'FLOW',value:'ask-email',parameters:{question:'Your email?',question_es:'¿Su correo?'}},{id:'done',type:'SAY',value:'Saved {{cargo.email}}.'}]};

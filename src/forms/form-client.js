@@ -42,7 +42,7 @@ export function projectForm(session, flows) {
     if (depth > 16) return [];
     const out = [];
     for (const input of specs || []) {
-      if (!safe(input.name) || input.form_client === false || input.internal || input.bind || input.confirmation || !formInputApplies(input, state.values, cargo, state)) continue;
+      if (!safe(input.name) || input.form_client === false || input.bind || input.confirmation || !formInputApplies(input, state.values, cargo, state)) continue;
       const path = prefix + input.name;
       const required = input.required_when === undefined || formInputApplies({when: input.required_when}, state.values, cargo, state);
       const isCurrent = state.id === context.form && (input.name === context.current || context.names?.includes(input.name));
@@ -95,7 +95,7 @@ export function projectForm(session, flows) {
     return out;
   };
   const projected = fields(root.specs, root);
-  // A card that cannot take the answer being asked for (an internal, chat-only or not yet prepared field) is not drawn: the
+  // A card that cannot take the answer being asked for (a chat-only or not yet prepared field) is not drawn: the
   // question is answered in chat, never beside a form that has no place for it.
   const asked = context.names?.length || context.current;
   if (asked && !askedShown) return null;
