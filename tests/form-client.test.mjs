@@ -110,6 +110,9 @@ for (const field of ['route', 'correction', 'chatOnly']) {
   const prompt = 'JSFE_FORM_V1:' + JSON.stringify({form: filtered.form, values: {[field]: 'a'}});
   assert.throws(() => parseFormSubmission(prompt, filtered), /Unknown form field/);
 }
+snapshot.cargo.forms.root.errors={optional:'invalid',prepared:'Pick one of the listed options.'};
+{const shown=projectForm(snapshot).fields;assert.equal(shown.find(f=>f.name==='optional').error,undefined,'the bare invalid flag is not caller text');assert.equal(shown.find(f=>f.name==='prepared').error,'Pick one of the listed options.','a worded refusal is shown');}
+delete snapshot.cargo.forms.root.errors;
 context.current = 'internal';
 assert.deepEqual(projectForm(snapshot).fields.filter(f=>f.current).map(f=>f.name),['internal'],'an asked internal input is on the card, current');
 for (const field of ['chatOnly', 'notReady']) {

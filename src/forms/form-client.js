@@ -86,7 +86,10 @@ export function projectForm(session, flows) {
         }
         field.constraints = Object.fromEntries(['min','max'].filter(key => typeof profile[key] === 'number').map(key => [key, profile[key]]));
         if (!field.sensitive && ['string','number','boolean'].includes(typeof state.values?.[input.name])) field.value = state.values[input.name];
-        if (state.errors?.[input.name]) field.error = String(state.errors[input.name]);
+        // A worded refusal is shown with its field; the bare 'invalid' flag (a refusal with no message, or a whole-form
+        // validator asking for this field) is not caller text: the reply above says what is needed and `current` points here.
+        const error = state.errors?.[input.name];
+        if (error && error !== 'invalid') field.error = String(error);
         // The field the conversation is asking for now, so a client can point at it on a redrawn form.
         if (isCurrent) {field.current = true; askedShown = true;}
         out.push(field);
