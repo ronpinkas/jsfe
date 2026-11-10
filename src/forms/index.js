@@ -21,3 +21,5 @@ export {compileFlowDeclarations,serializeFlowDeclaration,captureOriginalDeclarat
 export {continuationBreaks} from './continuation-compat.js';
 export {inheritFlowDeclaration} from './declaration-capture.js';
 export { findFlowTraps, formatFlowTrap } from './flow-traps.js';
+
+export {projectForm, parseFormSubmission, formSubmissionReaders, FORM_SUBMISSION_PREFIX} from './form-client.js';

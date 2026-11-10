@@ -19,6 +19,21 @@ const worker=(id,name,summary,extra)=>defineWorker({id,name,scope:'shared',descr
 const otpMenuMessages=[];
 const raw={name:'raw',label:'answer',label_es:'respuesta',profile:{kind:'text'}};
 const SERVICE_RESULT='cargo.serviceAnswer';
+function serviceAnswer(state, raw) {
+   const values = {...state.values};
+   const submittedFields = Object.keys(values).filter(name => state.accepted?.[name]?.origin === 'form_submission');
+   // A form turn's text is a marker: the answer's text is the value submitted, which workers reading `raw` (the email
+   // collector, the retry menu) then read as if it had been typed.
+   const text = submittedFields.length ? String(values[submittedFields[0]]) : raw;
+   return {raw:text, values, instance:state.id, ...(submittedFields.length ? {submittedFields} : {})};
+}
+function contactAnswer(answer) {
+   // Use the accepted, named input when the contact was submitted through a form.
+   for (const name of ['account', 'phone', 'email_address']) {
+      if (answer.submittedFields?.includes(name)) return String(answer.values[name]);
+   }
+   return String(answer.raw || '');
+}
 const service=defineForm({id:'collect-service-answer',name:'CollectServiceAnswer',description:'Collect one protocol answer against explicit profiles and the owning FORM ancestry; return its accepted readings and original text.',contract:{summary:'Shared FORM adapter for field-specific protocol services',result:{path:SERVICE_RESULT,type:'object'}},parameters:[param('profiles','Declared alternative input profiles','array'),param('question','English prompt'),param('question_es','Spanish prompt'),param('keypad','Keypad completion metadata','object'),param('prefill','An activation answer to validate through the same profiles'),param('context','Exit context'),param('context_es','Spanish exit context'),param('stop_path','State path that completes this protocol without another answer'),param('own_identifiers','This question reads identifiers itself: an owner form\'s identifier input never takes the answer','boolean')],extraVars:{profiles:[],question:'',question_es:'',keypad:null,prefill:'',context:'your request',context_es:'su solicitud',stop_path:'',service_initial:[],service_raw:'',service_chain:[],service_matches:null,service_prefilled:false},stop:'{{stop_path}}',close_on_stop:true,inputs:[{name:'answer',any_of:[raw],question_from:'question',answer_precheck:'service-answer-raw'}],
    before:[
       effect('service_declaration',"(function () {var state=cargo.forms[form_instance];state.data={question:question,question_es:question_es};state.specs=[{name:'answer',any_of:Array.isArray(profiles) && profiles.length?profiles:[{name:'raw',label:'answer',label_es:'respuesta',profile:{kind:'text'}}],question_from:'question',digits:keypad,answer_precheck:'service-answer-raw',as_spoken:true,own_identifiers:own_identifiers===true||own_identifiers==='true'}];return true;})()"),
@@ -28,7 +43,7 @@ const service=defineForm({id:'collect-service-answer',name:'CollectServiceAnswer
       when('service_accept_prefill','!service_matches.ambiguous.length && service_matches.hits.length > 0',call('service_accept_initial','collect-input-accept',{hits:'{{service_matches.hits}}'})),
       set('service_prefill_taken','service_prefilled',"!!prefill && nextFormInput(cargo.forms[form_instance],cargo) === ''"),
       set('service_context','exit_context','context'),set('service_context_es','exit_context_es','context_es')],
-   after:[effect('service_return',"(cargo.serviceAnswer={raw:service_prefilled ? prefill : String(cargo.choiceText || ''),values:Object.assign({},cargo.forms[form_instance].values),instance:form_instance},true)")]});
+   after:[effect('service_return',"(cargo.serviceAnswer="+expression(serviceAnswer,'cargo.forms[form_instance]', "service_prefilled ? prefill : String(cargo.choiceText || '')")+",true)")]});
 /** Bind an idempotent gate lifecycle marker to its owning task, independent of the authentication protocol. */
 export function setTaskGate(cargo,form,gate,active) {
    const state=cargo.forms && cargo.forms[form];
@@ -68,7 +83,7 @@ export function contactPrompt(cargo,options,callerAllowed,partial=false,es=false
 }
 const contactParams=[param('retry_flow','Retry destination'),param('cancel_flow','Exit destination'),param('cell_number','Phone already supplied'),param('email','Email already supplied'),param('acct_number','Account identifier already supplied'),param('account_pattern','Tenant account identifier pattern'),param('account_name','English account identifier label'),param('account_name_es','Spanish account identifier label'),param('account_shape','Tenant keypad identifier shapes','array'),param('intro','English introduction'),param('intro_es','Spanish introduction'),param('caller_on_file','yes, no or unknown caller-ID eligibility'),param('retry_call_type','Retry destination invocation policy'),param('validate_flow','Contact existence validator'),param('merge_partials','Allow split account identifiers','boolean'),param('parent_form','Owning task FORM instance'),param('contact_options','Internal options across protocol transitions','object'),param('retrying','Retry-menu continuation','boolean'),param('gce_partial','Internal split identifier continuation','boolean'),param('gce_rejected','Internal rejected contact continuation','boolean')];
 const contactDefaults={retry_flow:'authenticate-user',cancel_flow:'contact-support',cell_number:'',email:'',acct_number:'',account_pattern:'',account_name:'',account_name_es:'',account_shape:[],intro:'',intro_es:'',caller_on_file:'',retry_call_type:'reboot',validate_flow:'',merge_partials:false,parent_form:'',contact_options:null,retrying:false,gce_partial:false,gce_rejected:false,contact_allowed:false,contact_prefill:'',contact_partial:false,contact_text:'',contact_digits:'',contact_mail:'',contact_phone:'',contact_id:null,contact_profiles:[],contact_keypad:null,contact_question:'',contact_question_es:'',contact_check_key:'',contact_error:'',contact_error_es:'',contact_kind:''};
-const contactProfiles=[{name:'phone',label:'phone number',label_es:'número de teléfono',profile:{kind:'phone'}},{name:'email_address',label:'email address',label_es:'correo electrónico',profile:{kind:'email'}},{name:'account',label:'account number',label_es:'número de cuenta',profile:{kind:'identifier',pattern:'(?!)'}},raw];
+const contactProfiles=[{name:'phone',label:'phone number',label_es:'número de teléfono',profile:{kind:'phone'}},{name:'email_address',label:'email address',label_es:'correo electrónico',profile:{kind:'email'}},{name:'account',label:'account number',label_es:'número de cuenta',profile:{kind:'identifier',pattern:'(?!)'}},{...raw,form_client:false}];
 const contactReplay=(id,extra={})=>call(id,'get-cell-or-email',{contact_options:'{{contact_options}}',cell_number:'',email:'',acct_number:'',...extra},'replace');
 const contactMenu=id=>call(id,'generic-retry-with-options',{error_message:'{{contact_error}}',error_message_es:'{{contact_error_es}}',retry_flow:'{{contact_options.retry_flow}}',cancel_flow:'{{contact_options.cancel_flow}}',capture_patterns:'{{cargo.authCapture}}',retry_call_type:'{{contact_options.retry_call_type}}',parent_form:'{{contact_options.parent_form}}',contact_options:'{{contact_options}}',gce_menu:true},'replace');
 export function contactError(kind,options,es=false) {
@@ -97,7 +112,7 @@ const contact=worker('get-cell-or-email','GetCellOrEmail','Identify a supplied c
       set('identity_contact_question','contact_question',expression(contactPrompt,'cargo','contact_options','contact_allowed','contact_partial')),
       set('identity_contact_question_es','contact_question_es',expression(contactPrompt,'cargo','contact_options','contact_allowed','contact_partial','true')),
       call('identity_contact_collect','collect-service-answer',{profiles:'{{contact_profiles}}',question:'{{contact_question}}',question_es:'{{contact_question_es}}',keypad:'{{contact_keypad}}',prefill:'{{contact_prefill}}',parent_form:'{{contact_options.parent_form}}',context:'account verification',context_es:'verificación de cuenta'}),
-      set('identity_contact_answer','contact_text','String(cargo.serviceAnswer.raw || "")'),
+      set('identity_contact_answer','contact_text',expression(contactAnswer,'cargo.serviceAnswer')),
       set('identity_contact_spoken','contact_digits',`(${serviceDigits.toString()})(contact_text)`),
       set('identity_contact_piece','contact_digits',"!/@/.test(contact_text) && !readEmail(contact_text) && /^[^0-9]*[0-9][0-9\\s.,-]*[^0-9]*$/.test(contact_digits) ? contact_digits.replace(/\\D/g,'') : ''"),
       set('identity_contact_join','contact_text',"contact_partial && contact_digits ? String(cargo.gcePartial)+contact_digits : contact_text"),
@@ -199,7 +214,7 @@ const emailToo=worker('send-otp-email-too','SendOtpEmailToo',"Email a second one
    set('otp_email_too_said','also_sent',expression(otpAlsoSent,'cargo')),set('otp_email_too_said_es','also_sent_es',expression(otpAlsoSent,'cargo','true')),
    set('otp_email_too_where','otp_where',expression(otpWhere,'cargo')),set('otp_email_too_where_es','otp_where_es',expression(otpWhere,'cargo','true')),
    cases('otp_email_too_say',{'condition: cargo.otpAltSent === true':say('otp_email_too_sent','{{also_sent}}','{{also_sent_es}}'),default:say('otp_email_too_refused','{{otp_where}}','{{otp_where_es}}')})]});
-const OTP_PROFILES=[{name:'code',label:'verification code',label_es:'código de verificación',profile:{kind:'digits',min:6,max:6}},raw];
+const OTP_PROFILES=[{name:'code',label:'verification code',label_es:'código de verificación',profile:{kind:'digits',min:6,max:6}},{...raw,form_client:false}];
 const code=worker('get-and-validate-otp-code','GetAndValidateOtpCode','Collect a one-time-code answer through the owning FORM ancestry, preserving protocol commands for validation.',{variables:vars({otp_code:'',user_choice:'',normalized_otp_code:'',otp_question:'',otp_question_es:'',otp_profiles:OTP_PROFILES}),contract:{role:'collector',summary:'One-time-code answer collector using shared FORM matching'},steps:[
    when('otp_already_verified','cargo.otpVerified === true',end('otp_existing_verification')),
    set('otp_question','otp_question',expression(otpPrompt,'cargo')),set('otp_question_es','otp_question_es',expression(otpPrompt,'cargo','true')),

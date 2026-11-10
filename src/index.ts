@@ -8093,8 +8093,11 @@ export class WorkflowEngine implements Engine {
       }
       if (this.actionJournal || this.actionPersistence === 'session-only') engineSessionContext.actionPersistence = this.actionPersistence;
       this.cargo = engineSessionContext.cargo || {};
-      // a security code under any key that names one (a form stores it as `card_cvv`)
-      logger.info(`Received Cargo: ${JSON.stringify(this.cargo, (k, v) => (/(cvv|cvc|card_?code|security_?code)/i.test(k) && v ? '•••' : v))}`);
+      // Batch and validator scratch data can carry raw form inputs under generic value/raw keys.
+      logger.info(`Received Cargo: ${JSON.stringify(this.cargo, (k, v) => {
+        if (k === 'inputBatch' || k === 'inputCheck') return undefined;
+        return /^(?:code|otp_code|normalized_otp_code)$|(?:cvv|cvc|card_?code|security_?code)/i.test(k) && v ? '•••' : v;
+      })}`);
       this.sessionId = engineSessionContext.sessionId;
       this.createdAt = engineSessionContext.createdAt;
 
