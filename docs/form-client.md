@@ -26,4 +26,4 @@ Keep the raw envelope out of language preprocessing, Guru requests and chat logs
 
 The adapter preserves existing reentry, partial acceptance, corrections and confirmation. It adds no submission receipts, view revisions, cross-save deduplication or new effect guarantees. A host must still serialize its turns and retain the engine's action/recovery guarantees. Browser drafts are in memory; sensitive edits are not retained across view replacement, and no editable form view is restored from chat history.
 
-Run `npm run build`, `node tests/form-client.test.mjs`, and `npm test` from the JSFE checkout. Since jsfe 1.39.0. In hy-rag-lambdas the widget opts in per page (`window.instantAIguru.form_client = true`); the mock host for local HTTP/browser tests is AIDevelopment `jsfe-flows/dev/`.
+Run `npm run build`, `node tests/form-client.test.mjs`, and `npm test` from the JSFE checkout. Since jsfe 1.39.0. In hy-rag-lambdas the widget is capable and the tenant turns form cards on (`formRendering`, user-admin → JSFE Workflows); the mock host for local HTTP/browser tests is AIDevelopment `jsfe-flows/dev/`.
