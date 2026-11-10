@@ -126,3 +126,15 @@ assert.match(m.response,/I have owner@example\.com/,'the submitted email is read
 await submit({decision:'yes'});
 assert.equal(m.cargo.email,'owner@example.com');
 console.log('form-client: a raw-reading collector reads the submitted value');
+// The contact form offers "account number" only when the tenant declares an account pattern (Shopify has none).
+const fieldNames=v=>JSON.stringify(v).match(/"name":"[a-z_]+"/g).map(s=>s.slice(8,-1));
+for (const [pattern,offered] of [['',false],['^\\d{8}$',true]]) {
+  const who={id:'who',name:'Who',primary:true,description:'Identify',steps:[{id:'ask',type:'FLOW',value:'get-cell-or-email',parameters:{account_pattern:pattern,account_name:pattern?'account number':''}},{id:'done',type:'SAY',value:'ok'}]};
+  const e=new WorkflowEngine(quiet,async()=>'{"option":"new_request","flowName":"None"}',[...FLOWS,who],[],STANDARD_FUNCTIONS,{},false,'en');e.disableCommands();
+  let w=e.initSession('test','who','en');w.cargo.voice=false;
+  w=await e.updateActivity({role:'user',content:'begin',start:{flow:'who'}},w);
+  const names=fieldNames(projectForm(w));
+  assert(names.includes('phone') && names.includes('email_address'),names.join());
+  assert.equal(names.includes('account'),offered,`account field ${offered?'offered':'absent'} with pattern '${pattern}': ${names.join()}`);
+}
+console.log('form-client: the contact form offers an account number only with a tenant account pattern');
