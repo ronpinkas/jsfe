@@ -231,19 +231,39 @@ language is genuinely ambiguous, and the host last.**
 ```mermaid
 flowchart TD
    M[Caller message] --> A{Flow waiting for an answer?}
-   A -->|yes| R[Deterministic readers: keys, numbers, typed fields, exact phrases]
+   A -->|yes| G{Whole answer *, EXIT, QUIT, SALIR, or keypad 9 on a call?}
+   G -->|exit, not a declared choice| GX[End flows: global-exit answers]
+   G -->|9, not a declared choice| GT[End flows: switch-to-text]
+   G -->|no| R[Deterministic readers: keys, numbers, typed fields, exact phrases]
    R -->|read| V[Validate, store, ask next question]
    R -->|not read| K[Reply ranker: a closed choice]
    K -->|answers / a choice| V
    K -->|abort| X[End flows: request cancelled]
    K -->|new_request| D[DISPATCH]
    K -->|irrelevant| Q[Ask the question again; no flow moves]
+   K -->|concern| C[Say what the process does and how to cancel; ask again]
    A -->|no| D
    D --> S1[Intent detection, stage 1: which primary flow, or None]
    S1 -->|a flow| S2[Stage 2: that flow's parameters]
    S2 --> F[Start the flow; its form validates every value]
    S1 -->|None| HA[Host answers with its own AI]
 ```
+
+### Global keys: EXIT and keypad 9
+
+Before any reader, a waiting question checks two whole answers that work everywhere (jsfe 1.42.0):
+
+- **The global exit.** `*`, EXIT, QUIT or SALIR (repeated, or with please / por favor / now / ahora; CANCEL is not one) ends
+  every flow, outcome `user_aborted`, reason `exit_requested`. The engine then starts `global-exit`: by default a reboot to the
+  set's `contact-support`, which thanks a caller whose request was already resolved. A tenant gives the exit its own path with a
+  flow that `wraps: "global-exit"`. A set with neither a wrapper nor `contact-support` keeps the generic cancel reply.
+- **Keypad 9 switches a call to text,** when the caller's number can take texts and the set has `switch-to-text`. Keypad 8
+  (language) and 0 (a person) are the host's, before the engine.
+- **A declared choice wins.** A question that offers its own choice for the word (its key or a phrase is `*`, EXIT, QUIT,
+  SALIR, or 9) takes the answer, so a flow overrides a global key by declaring it. An amount question keeps a 9.
+
+The reply ranker's `abort` is not the global exit: a model's reading of a withdrawal ends the flows with the generic cancel
+reply.
 
 ### Deterministic readers
 
@@ -273,6 +293,11 @@ does this reply do with the question the flow asked? The model picks from a clos
 | `abort` | the caller withdraws the request | every flow ends; the caller hears that the request was cancelled |
 | `new_request` | the caller clearly asks for something else | DISPATCH: the message goes to intent detection |
 | `irrelevant` | the reply means nothing here: a stray word, an unfinished sentence, speech to someone else | the question is asked again; no flow moves |
+| `concern` | the caller objects to or misunderstands what the process does ("It's not a new address, I'm just changing the delivery address") | offered only when a form in the chain declares `user_description`: the caller hears it, how to cancel, and the question again; no attempt is counted |
+
+**Saying what a process does.** A form declares `user_description` / `user_description_es` (`{{path}}` read from its values,
+then data, then cargo); the nearest form in the chain that declares one is used. It is never offered at a reason question. A
+top-scoring `concern` (cut 0.6) wins over a cleared choice.
 
 **Options with arguments.** A declared choice may carry `parameters` (`{name,type,description}`): a pick then extracts them from the reply with the same stage as a flow's parameters, and the flow reads `{ key, arguments }`. The pick stands when extraction finds nothing or fails. The ranker is generic, so the flow supplies the context: a form's `confirm.reply_context` says what a reply may contain. The address read-back uses this: "It's Long Beach, apartment 4" changes the city and the apartment and reads the address back, with no further question.
 
