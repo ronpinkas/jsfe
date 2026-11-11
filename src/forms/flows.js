@@ -862,7 +862,7 @@ export function finishProviderRequest(cargo,owner,provides,keys) {
    return {keys:own?own.keys:keys,remaining:queue.filter(entry=>entry.catalog!==catalog)};
 }
 const provideData = {
-   id: 'provide-data', name: 'ProvideData', version: '1.0.0', scope: 'isolated',
+   id: 'provide-data', name: 'ProvideData', version: '1.1.0', scope: 'isolated',
    description: "Worker: answer a question about a provider catalog. Resolves `asked` (a fact or set key; empty = ask which), passes the catalog's gate for non-public facts (gate.flow, called with gate_params; then every path in gate.verified must be truthy), loads the source (load-source), says the facts (answer-facts). Params: provides, asked.",
    parameters: [{name:'form',type:'string',description:'Originating FORM instance for task-owned deferred questions'}, { name: 'provides', type: 'object', description: 'The provider catalog' }, { name: 'asked', type: 'string', description: 'Fact or set key' }, { name: 'reply', type: 'string', description: 'The words that started the provider, this turn: tells a question back from its own menu from a later one' }, {name:'asked_keys',type:'array',description:'Independent requested facts or sets'}, { name: 'no_menu', type: 'string', description: "'true': answer only (a question asked inside a form)" }, { name: 'gate_params', type: 'object', description: 'Identifiers the caller already gave, passed to the gate flow as gate_params' }, { name: 'no_gate', type: 'string', description: "'true': the caller is inside a task on the verified account; the gate flow is not run (the verified paths are still checked)" }],
    variables: vars({reply:'',pd_unanswered:false,form:'',pd_request:null,pd_deferred:null,pd_ready:[],asked_keys:[], no_gate: '', pd_close: false, pd_who: '', no_menu: '', gate_params: null, pd_keys: [], pd_menu: [], pd_mkeys: [], pd_q: '', pd_q_es: '', pd_gated: false, pd_ok: false }),
@@ -890,7 +890,8 @@ const provideData = {
       SET('pd_gate_check', 'pd_ok', `!pd_gated || [].concat(provides.gate.verified).every(function (p) { return !!${PATH_JS}(p); })`),
       WHEN('pd_not_verified', '!pd_ok', END('pd_not_verified_end', { outcome: 'unresolved', reason: 'provide_data_not_verified',recovery:{version:1,mode:'none',reason:'provide_data_not_verified'} })),
       WHEN('pd_load', 'provides.source && provides.source.flow', FLOW('pd_load_flow', 'load-source', 'call', { source: '{{provides.source}}' })),
-      FLOW('pd_answer', 'answer-facts', 'call', { provides: '{{provides}}', keys: '{{pd_keys}}' }),
+      // the asked facts answered: this flow achieved its objective (flows read it as $outcome; a later step may replace it)
+      { ...FLOW('pd_answer', 'answer-facts', 'call', { provides: '{{provides}}', keys: '{{pd_keys}}' }), outcome: "{{pd_keys.length > 0 ? 'resolved' : ''}}", reason: 'fact_answered' },
       WHEN('pd_deferred_more','pd_deferred.remaining.length > 0',FLOW('pd_answer_deferred','provide-queued-data','call',{form:'{{form}}',requests:'{{pd_deferred.remaining}}'})),
       SET('pd_ready','pd_ready',`(${takeReadyProviderRequests.toString()})(cargo,form)`),
       WHEN('pd_ready_more','pd_ready.length > 0',FLOW('pd_answer_ready','provide-queued-data','call',{form:'{{form}}',requests:'{{pd_ready}}'})),
@@ -940,7 +941,7 @@ const providerUnanswered = {
 };
 
 const providerMenu = {
-   id: 'provider-menu', name: 'ProviderMenu', version: '1.1.0', scope: 'isolated',
+   id: 'provider-menu', name: 'ProviderMenu', version: '1.2.0', scope: 'isolated',
    description: "Worker: after a provider answered, offer its menu (provides.menu: question(_voice)(_es) with {verb} / {name}; choices [{ key, phrases, flow, exact, set }]; done { phrases, say(_es) }). A fact or set named by its words is answered and the menu comes back (menu.whole_phrases: only when the phrase is the whole reply; a phrase inside a sentence goes to the reply ranker, whose no-pick is the host's); an action runs its flow (replace) after setting its `set` cargo fields; done says goodbye. Other phrases: DISPATCH. No phrases: asked once more, then 'anything else?'. Params: provides, retry.",
    parameters: [{ name: 'provides', type: 'object', description: 'The provider catalog' }, { name: 'retry', type: 'string', description: "'1' on the re-ask" }],
    variables: vars({ retry: '', pm_q: '', pm_q_es: '', pm_choices: [], pm_key: '', pm_keys: [], pm_contained:false, pm_also: [], pm_close:false, pm_flow: '', pm_bye: '', pm_bye_es: '', pm_who: '', pm_sorry: '', pm_sorry_es: '' }),
@@ -970,7 +971,7 @@ const providerMenu = {
       SET('pm_sorry_en', 'pm_sorry', "\"Sorry, I didn't catch that. \" + anythingElse('en', pm_who)"),
       SET('pm_sorry_es_text', 'pm_sorry_es', "'Disculpe, no le entendí. ' + anythingElse('es', pm_who)"),
       { id: 'pm_route', type: 'CASE', branches: {
-         'condition: pm_keys.length > 0': FLOW('pm_answer', 'answer-facts', 'call', { provides: '{{provides}}', keys: '{{pm_keys}}' }),
+         'condition: pm_keys.length > 0': { ...FLOW('pm_answer', 'answer-facts', 'call', { provides: '{{provides}}', keys: '{{pm_keys}}' }), outcome: 'resolved', reason: 'fact_answered' },
          'condition: pm_flow': FLOW('pm_act', '{{pm_flow}}', 'replace'),
          "condition: pm_key === 'done'": { id: 'pm_done', type: 'SAY', value: '{{pm_bye}}', value_es: '{{pm_bye_es}}', outcome: 'resolved' },
          "condition: /[a-záéíóúüñ]/i.test(String(cargo.choiceText || ''))": { id: 'pm_elsewhere', type: 'DISPATCH' },
