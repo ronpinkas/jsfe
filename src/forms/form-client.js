@@ -25,6 +25,12 @@ const pendingForm = session => {
   return {state, context};
 };
 
+/** Today in an IANA time zone, moved by whole days, as YYYY-MM-DD (UTC arithmetic: no DST shift). */
+function daysFromToday(days, timeZone) {
+  const [year, month, day] = new Intl.DateTimeFormat('en-CA', {timeZone, year: 'numeric', month: '2-digit', day: '2-digit'}).format(new Date()).split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + days)).toISOString().slice(0, 10);
+}
+
 /** A public rendering projection, never a serialized flow, executable expression, or session. */
 export function projectForm(session, flows) {
   if (flows && Object.values(session?.cargo?.forms || {}).some(state => state?.derived)) {
@@ -85,6 +91,15 @@ export function projectForm(session, flows) {
           if (!field.choices.length || profile.accept_other) continue;
         }
         field.constraints = Object.fromEntries(['min','max'].filter(key => typeof profile[key] === 'number').map(key => [key, profile[key]]));
+        // The control the input declares (validated at definition time). Its bounds replace the profile's, which for
+        // some kinds are lengths: a number's are values, a date's are days from today turned into YYYY-MM-DD dates.
+        const control = input.form_client?.control;
+        if (control === 'number' || control === 'date') {
+          field.control = control;
+          field.constraints = Object.fromEntries(['min','max'].filter(key => Number.isInteger(input.form_client[key]))
+            .map(key => [key, control === 'date' ? daysFromToday(input.form_client[key], input.form_client.timezone) : input.form_client[key]]));
+          if (control === 'date' && input.form_client.range_from) field.range_from = prefix + input.form_client.range_from;
+        } else { /* the profile's own box */ }
         if (!field.sensitive && ['string','number','boolean'].includes(typeof state.values?.[input.name])) field.value = state.values[input.name];
         // A worded refusal is shown with its field; the bare 'invalid' flag (a refusal with no message, or a whole-form
         // validator asking for this field) is not caller text: the reply above says what is needed and `current` points here.

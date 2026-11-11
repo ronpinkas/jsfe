@@ -145,6 +145,44 @@ function validateAcceptanceDeclarations(id, inputs) {
    }
 }
 
+/**
+ * input.form_client: false (never on a form card) or the control a form card draws for it (docs/form-client.md):
+ * {control: 'date', range_from?, min?, max?, timezone?} or {control: 'number', min?, max?}. A date's min and max are whole
+ * days from today in `timezone` (required with either); range_from names the start of a range, a date input of this
+ * form that is not itself an end. A number's min and max bound its value. Checked at definition time; malformed fails.
+ */
+const FORM_CLIENT_KEYS = { date: ['control', 'range_from', 'min', 'max', 'timezone'], number: ['control', 'min', 'max'] };
+const FORM_CLIENT_KINDS = ['pattern', 'text', 'digits', 'amount', 'identifier'];
+function validateFormClientControls(id, inputs) {
+   const all = (inputs || []).flatMap((input) => input.any_of || [input]);
+   const fail = (input, message) => { throw new Error(`FORM ${id}: ${input.name} form_client ${message}`); };
+   for (const input of all) {
+      const declared = input.form_client;
+      if (declared === undefined || declared === false) continue;
+      else if (!declared || typeof declared !== 'object' || Array.isArray(declared)) fail(input, 'must be false or {control, ...}');
+      else if (!Object.hasOwn(FORM_CLIENT_KEYS, declared.control)) fail(input, 'control must be "date" or "number"');
+      else { /* a control object, checked below */ }
+      const extra = Object.keys(declared).filter((key) => !FORM_CLIENT_KEYS[declared.control].includes(key));
+      if (extra.length) fail(input, `${declared.control} cannot declare ${extra.join(', ')}`);
+      if (!FORM_CLIENT_KINDS.includes(input.profile?.kind)) fail(input, `control needs a profile of kind ${FORM_CLIENT_KINDS.join(', ')}`);
+      if (input.pii === true) fail(input, 'control cannot draw a sensitive input');
+      for (const key of ['min', 'max']) if (declared[key] !== undefined && !Number.isInteger(declared[key])) fail(input, `${key} must be a whole number`);
+      if (Number.isInteger(declared.min) && Number.isInteger(declared.max) && declared.min > declared.max) fail(input, 'min is above max');
+      if (declared.control === 'date') {
+         if ((declared.min !== undefined || declared.max !== undefined) && declared.timezone === undefined) fail(input, 'min and max are days from today: declare the timezone they count in');
+         if (declared.timezone !== undefined) {
+            try { new Intl.DateTimeFormat('en-CA', { timeZone: declared.timezone }); } catch { fail(input, `timezone ${JSON.stringify(declared.timezone)} is not an IANA time zone`); }
+         } else { /* no bounds, no time zone */ }
+         if (declared.range_from !== undefined) {
+            const start = all.find((other) => other.name === declared.range_from);
+            if (!start || start === input) fail(input, 'range_from must name another input of this form');
+            else if (start.form_client?.control !== 'date' || start.form_client.range_from !== undefined) fail(input, `range_from ${start.name} must be a date control that is not itself a range end`);
+            else { /* a valid range start */ }
+         } else { /* a single date or a range start */ }
+      } else { /* a number */ }
+   }
+}
+
 /** How firm a form's confirmation is: firm ONLY when an action it authorizes is a payment (effect 'charge'); every other
  * confirmation is soft, a plain form's (no action) included (owner 2026-11-09). confirm.exact is separate: it binds the
  * action to the confirmed values, whatever the confirmation's firmness. */
@@ -157,6 +195,7 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
    if (on_no !== '' && (typeof on_no !== 'string' || !/^[\w-]+$/.test(on_no))) throw new Error(`FORM ${id}: on_no must be a flow id`);
    if (typeof must_complete !== 'boolean') throw new Error(`FORM ${id}: must_complete must be true or false`);
    validateAcceptanceDeclarations(id, inputs);
+   validateFormClientControls(id, inputs);
    if (confirm && typeof confirm === 'object') validateRankParameters(id, 'confirm', 'rank_parameters', confirm.rank_parameters); else { /* no confirmation */ }
    // confirm.confirmation ('firm' | 'soft', the attribute inputs declare) is definite when declared; a template ('{{…}}')
    // is resolved at run time (an inferred value's descriptor); absent, confirm_soft (confirmationFirmness) decides.

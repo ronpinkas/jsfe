@@ -8,6 +8,18 @@ The host owns the `formClient: 1` capability; `initSession` and `updateActivity`
 
 The view has `version: 1`, the owning root instance `form`, `language`, and recursive `fields`. A field has `name`, qualified `path`, `kind`, localized `label`, `required`, `sensitive`, `filled`, optional primitive `value`, optional `error`, and safe numeric `constraints`. A field, group or alternatives the conversation is asking for now carries `current: true` (absent on every other), so a client can point at it when a partly answered form is drawn again. Choice fields have `choices: [{key,label}]`. Nested forms have `kind: 'group'` and `fields`; alternatives have `kind: 'alternatives'`, `required`, `exclusive` and `fields`. Alternative member paths remain relative to their actual form; the group does not introduce a submission object.
 
+## Controls
+
+An input may name the control a card draws for it with `form_client` (still `false` to keep it off the card). It changes only presentation: the profile, validator and conversational reading are unchanged, and the card submits a string the profile already reads.
+
+| Declaration | View | Card |
+|---|---|---|
+| `{control: 'date', min?, max?, timezone?}` | `control: 'date'`; `constraints` `{min, max}` as `YYYY-MM-DD` | a date picker submitting `YYYY-MM-DD` |
+| `{control: 'date', range_from: '<input>', ...}` | adds `range_from`: the start's `path` | the end of a range: one calendar fills the start and this end |
+| `{control: 'number', min?, max?}` | `control: 'number'`; `constraints` `{min, max}` | a − / + stepper submitting a whole number |
+
+A date's `min` and `max` are whole days from today in `timezone` (an IANA zone, required with either), turned into dates at each projection; write them as `{"$data": "path"}` to share the values the validator reads. With a control, its bounds replace the profile's (which for some kinds are lengths). Checked at definition time: a control on a profile kind other than pattern, text, digits, amount or identifier, on a `pii` input, an unknown key, a bound that is not a whole number, `min` above `max`, an unknown time zone, or a `range_from` that is not another date input of the form (itself not an end) fails. The profile must still read the submitted shape (`YYYY-MM-DD`, or digits). A client without the control draws its ordinary box.
+
 Projection reads resolved presets, linked schemas, existing child instances/results and prepared choice data. It does not open child instances or run preparation/tools. Inapplicable, bound and confirmation fields are omitted (an `internal` input is a question the caller answers when asked, never filled by extraction, so it is drawn); dynamic choices without prepared data wait for the ordinary flow. A sensitive field exposes presence (`filled`) but never its accepted value. `error` carries a worded refusal only; the engine's bare `invalid` flag is not projected. Field questions and unsupported shapes continue to work conversationally; while the field being asked for is one the view omits (`form_client: false`, unprepared choices), `projectForm` returns `null`, so no card stands beside a question it cannot answer.
 
 ## Strict prompt convention
@@ -26,4 +38,4 @@ Keep the raw envelope out of language preprocessing, Guru requests and chat logs
 
 The adapter preserves existing reentry, partial acceptance, corrections and confirmation. It adds no submission receipts, view revisions, cross-save deduplication or new effect guarantees. A host must still serialize its turns and retain the engine's action/recovery guarantees. Browser drafts are in memory; sensitive edits are not retained across view replacement, and no editable form view is restored from chat history.
 
-Run `npm run build`, `node tests/form-client.test.mjs`, and `npm test` from the JSFE checkout. Since jsfe 1.39.0. In hy-rag-lambdas the widget is capable and the tenant turns form cards on (`formRendering`, user-admin → JSFE Workflows); the mock host for local HTTP/browser tests is AIDevelopment `jsfe-flows/dev/`.
+Run `npm run build`, `node tests/form-client.test.mjs`, and `npm test` from the JSFE checkout. Since jsfe 1.39.0; controls since 1.44.0. In hy-rag-lambdas the widget is capable and the tenant turns form cards on (`formRendering`, user-admin → JSFE Workflows); the mock host for local HTTP/browser tests is AIDevelopment `jsfe-flows/dev/`.
