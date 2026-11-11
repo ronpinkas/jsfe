@@ -55,4 +55,20 @@ await test('a tenant flow that wraps global-exit is started instead',async()=>{
 await test('Spanish SALIR in a Spanish session',async()=>{
  const t=fixture({language:'es'});assert.match(await t.say('empezar',true),/¿Cuánto\?/);assert.match(await t.say('SALIR'),/Cierre\./);
 });
+await test("the question's exit context reaches contact-support; a declared cancel_flow is the flow's own exit",async()=>{
+ const supportCtx={...support,parameters:[{name:'support_context',type:'string'},{name:'support_context_es',type:'string'}],steps:[{id:'cs_say',type:'SAY',value:"Closing for {{support_context || 'nothing'}}.",value_es:'Cierre.'}]};
+ const ask={id:'ask',name:'Ask',primary:true,description:'Ask',steps:[{id:'a',type:'FLOW',value:'ask-choice',callType:'call',parameters:{question:'Pick one.',question_es:'Elija.',choices:[{key:'1',phrases:['1','one']}],exit_context:'your payment',exit_context_es:'su pago'}}]};
+ const t1=(()=>{const e=new WorkflowEngine({info(){},debug(){},warn(){},error(){}},async(s,u)=>/voice input cleaner/.test(s)?(String(u).match(/voice response: "([\s\S]*)"\n/)||[,String(u)])[1]:'{"flowName":"None"}',linkFormSchemas([...FLOWS,ask,supportCtx]),[],STANDARD_FUNCTIONS,{},false,'en');e.disableCommands();return e;})();
+ let s1=t1.initSession('x',crypto.randomUUID(),'en');s1.cargo.voice=true;
+ s1=JSON.parse(JSON.stringify(await t1.updateActivity({role:'user',content:'go',start:{flow:'ask',arguments:{}}},s1)));
+ s1=JSON.parse(JSON.stringify(await t1.updateActivity({role:'user',content:'*'},s1)));
+ assert.match(String(s1.response),/Closing for your payment\./);
+ const own={id:'cancel-process',name:'CancelProcess',description:'Own exit',steps:[{id:'c',type:'SAY',value:'Cancelled here.',value_es:'Cancelado.'}]};
+ const menu={id:'m2',name:'M2',primary:true,description:'M2',variables:{cancel_flow:{type:'string',value:'cancel-process'}},steps:[{id:'q',type:'SAY-GET',variable:'x',value:'Say something.'},{id:'d',type:'SAY',value:'done'}]};
+ const t2=new WorkflowEngine({info(){},debug(){},warn(){},error(){}},async(s,u)=>/voice input cleaner/.test(s)?(String(u).match(/voice response: "([\s\S]*)"\n/)||[,String(u)])[1]:'{"flowName":"None"}',linkFormSchemas([...FLOWS,menu,own,supportCtx]),[],STANDARD_FUNCTIONS,{},false,'en');t2.disableCommands();
+ let s2=t2.initSession('y',crypto.randomUUID(),'en');s2.cargo.voice=true;
+ s2=JSON.parse(JSON.stringify(await t2.updateActivity({role:'user',content:'go',start:{flow:'m2',arguments:{}}},s2)));
+ s2=JSON.parse(JSON.stringify(await t2.updateActivity({role:'user',content:'exit'},s2)));
+ assert.match(String(s2.response),/Cancelled here\./);
+});
 console.log(`Global exit: all ${checks} checks passed`);

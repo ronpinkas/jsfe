@@ -5258,11 +5258,23 @@ async function handleDispatchStep(currentFlowFrame: FlowFrame, engine: Engine): 
 export const GLOBAL_EXIT_FLOW = 'global-exit';
 function globalExitStart(engine: Engine): { flow: string; arguments: Record<string, unknown> } | null {
   const menu = engine.flowsMenu || [];
+  // What the waiting stack declared about leaving (shared workers' own parameters), nearest frame first: an exit destination
+  // other than the default (cancel_flow, e.g. the retry menu's) is the flow's own exit and starts as its local exit did; the
+  // question's exit_context (ask-choice, forms) tells contact-support what the caller needed help with.
+  const frames = [...(engine.flowStacks[engine.flowStacks.length - 1] || [])].reverse();
+  const declared = (name: string) => frames.map(f => (f as any)?.variables?.[name]).find(v => typeof v === 'string' && v.trim()) as string | undefined;
+  const cancelFlow = declared('cancel_flow');
+  if (cancelFlow && cancelFlow !== 'contact-support' && menu.some(f => f.id === cancelFlow || f.name === cancelFlow)) {
+    return { flow: cancelFlow, arguments: {} };
+  } else {
+    // no declared destination of its own: the global exit
+  }
   const base = menu.find(f => f.id === GLOBAL_EXIT_FLOW);
   const wrapper = base ? menu.find(f => f.wraps === base.id || f.wraps === base.name) : undefined;
   // The default reboots to the set's `contact-support`; a set without one keeps the generic reply (a FLOW to a missing flow is skipped).
   const flow = wrapper || (base && menu.some(f => f.id === 'contact-support') ? base : undefined);
-  return flow ? { flow: flow.id, arguments: { exit_outcome: outcomeInForce(engine)?.outcome || '' } } : null;
+  const context = declared('exit_context'), contextEs = declared('exit_context_es');
+  return flow ? { flow: flow.id, arguments: { exit_outcome: outcomeInForce(engine)?.outcome || '', ...(context ? { support_context: context, support_context_es: contextEs || context } : {}) } } : null;
 }
 
 /**

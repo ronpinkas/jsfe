@@ -426,7 +426,7 @@ const failed=worker('verification-failed','VerificationFailed','End a verificati
 // The global exit (owner 2026-11-11): the engine starts this flow when the whole answer is *, EXIT, QUIT or SALIR (and the
 // question declares no choice of its own for it), after every flow has ended. Default: the tenant's support closing with the outcome in force. A tenant
 // gives the global exit its own path with a flow that `wraps` this one; the engine then starts that wrapper.
-const globalExit=worker('global-exit','GlobalExit','Worker (started by the engine): the caller exited; give the support closing with the outcome in force.',{scope:'isolated',parameters:[param('exit_outcome','The declared outcome in force when the caller exited (resolved: thanks)')],steps:[
-   call('global_exit_support','contact-support',{exit_outcome:'{{exit_outcome}}'},'reboot')]});
+const globalExit=worker('global-exit','GlobalExit','Worker (started by the engine): the caller exited; give the support closing with the outcome in force.',{scope:'isolated',parameters:[param('exit_outcome','The declared outcome in force when the caller exited (resolved: thanks)'),param('support_context','What the caller needed help with (the question\'s exit_context), English'),param('support_context_es','The same in Spanish')],steps:[
+   call('global_exit_support','contact-support',{exit_outcome:'{{exit_outcome}}',support_context:'{{support_context}}',support_context_es:'{{support_context_es}}'},'reboot')]});
 export const FLOWS=[taskGate,resume,service,rawTransport,contact,declined,splitFailed,rejected,auth,code,validateCode,emailToo,retry,email,failed,globalExit];
 
