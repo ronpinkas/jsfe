@@ -16611,6 +16611,7 @@
             "depends_on": [
               "zip"
             ],
+            "question_from": "city_state_question",
             "question": "What city and state is that in?",
             "question_es": "¿En qué ciudad y estado está?"
           },
@@ -16661,6 +16662,7 @@
               "spoken_digits": true,
               "accept_other": true
             },
+            "question_from": "unit_question",
             "question": "Is there an apartment or unit number? Type the number, or NONE.",
             "question_es": "¿Hay un número de apartamento o unidad? Escriba el número, o NINGUNO."
           }
@@ -16717,8 +16719,8 @@
             "no es correcta",
             "incorrecta"
           ],
-          "question": "Your new address is {{address_result.line}}. Is that correct?",
-          "question_es": "Su nueva dirección es {{address_result.line}}. ¿Es correcta?"
+          "question": "Your {{address_label}} is {{address_result.line}}. Is that correct?",
+          "question_es": "Su {{address_label_es}} es {{address_result.line}}. ¿Es correcta?"
         }
       },
       "form_should_confirm": {
@@ -16748,6 +16750,18 @@
       "address_result": {
         "type": "object",
         "value": null
+      },
+      "address_spec": {
+        "type": "object",
+        "value": null
+      },
+      "address_label": {
+        "type": "string",
+        "value": "new address"
+      },
+      "address_label_es": {
+        "type": "string",
+        "value": "nueva dirección"
       },
       "contract": {
         "type": "object",
@@ -16856,6 +16870,30 @@
         "value": "(cargo.forms[form_instance].data=Object.assign({need_city:false},cargo.forms[form_instance].data || {}), draft.street ? (cargo.addressDraft={said:draft.street}) : null, true)"
       },
       {
+        "id": "address_spec",
+        "type": "SET",
+        "variable": "address_spec",
+        "value": "(function(f){var p=f&&f.parent?cargo.forms[f.parent]:null,s=p&&p.specs,n=f&&f.result_input,x=null;if(n&&Array.isArray(s)){for(var i=0;i<s.length;i++){if(s[i]&&s[i].name===n){x=s[i];break;}}}else if(n&&s&&typeof s==='object'){x=s[n]||null;}return x||{};})(cargo.forms[form_instance])"
+      },
+      {
+        "id": "address_label",
+        "type": "SET",
+        "variable": "address_label",
+        "value": "typeof address_spec.label==='string'&&address_spec.label.trim()?address_spec.label.trim():'new address'"
+      },
+      {
+        "id": "address_label_es",
+        "type": "SET",
+        "variable": "address_label_es",
+        "value": "typeof address_spec.label_es==='string'&&address_spec.label_es.trim()?address_spec.label_es.trim():'nueva dirección'"
+      },
+      {
+        "id": "address_label_data",
+        "type": "SET",
+        "variable": "noop",
+        "value": "(function(d,labelled){d.label=address_label;d.label_es=address_label_es;d.labelled=labelled;d.city_state_question=labelled?'What city and state is your '+address_label+' in?':'What city and state is that in?';d.city_state_question_es=labelled?'¿En qué ciudad y estado está su '+address_label_es+'?':'¿En qué ciudad y estado está?';d.unit_question=labelled?'Is there an apartment or unit number in your '+address_label+'? Type the number, or NONE.':'Is there an apartment or unit number? Type the number, or NONE.';d.unit_question_es=labelled?'¿Hay un número de apartamento o unidad en su '+address_label_es+'? Escriba el número, o NINGUNO.':'¿Hay un número de apartamento o unidad? Escriba el número, o NINGUNO.';return true;})(cargo.forms[form_instance].data,typeof address_spec.label==='string'&&!!address_spec.label.trim())"
+      },
+      {
         "id": "collect-geocoded-address_initial",
         "type": "SET",
         "variable": "initial_readings",
@@ -16927,7 +16965,7 @@
             "id": "collect-geocoded-address_confirm_q",
             "type": "SET",
             "variable": "form_confirm_q",
-            "value": "Your new address is {{address_result.line}}. Is that correct?"
+            "value": "Your {{address_label}} is {{address_result.line}}. Is that correct?"
           },
           "default": {
             "id": "collect-geocoded-address_confirmation_guard_0_skip",
@@ -16945,7 +16983,7 @@
             "id": "collect-geocoded-address_confirm_q_es",
             "type": "SET",
             "variable": "form_confirm_q_es",
-            "value": "Su nueva dirección es {{address_result.line}}. ¿Es correcta?"
+            "value": "Su {{address_label_es}} es {{address_result.line}}. ¿Es correcta?"
           },
           "default": {
             "id": "collect-geocoded-address_confirmation_guard_1_skip",
@@ -17324,7 +17362,7 @@
     "version": "1.0.0",
     "id": "address-zip-prompt",
     "name": "AddressZipPrompt",
-    "description": "Render the ZIP retry wording from the owned address instance.",
+    "description": "Render the ZIP question from the owned address instance, naming the calling form's label.",
     "parameters": [
       {
         "name": "form",
@@ -17344,7 +17382,7 @@
         "id": "address_zip_prompt",
         "type": "SET",
         "variable": "noop",
-        "value": "(cargo.forms[form].data.zip_question=(cargo.forms[form].data.retry ? \"Let's try again. \" : '')+'What is the 5-digit zip code of your new address?',cargo.forms[form].data.zip_question_es=(cargo.forms[form].data.retry?'Intentémoslo otra vez. ':'')+'¿Cuál es el código postal de 5 dígitos de su nueva dirección?',true)"
+        "value": "(cargo.forms[form].data.zip_question=(cargo.forms[form].data.retry ? \"Let's try again. \" : '')+'What is the 5-digit zip code of your '+(cargo.forms[form].data.label||'new address')+'?',cargo.forms[form].data.zip_question_es=(cargo.forms[form].data.retry?'Intentémoslo otra vez. ':'')+'¿Cuál es el código postal de 5 dígitos de su '+(cargo.forms[form].data.label_es||'nueva dirección')+'?',true)"
       }
     ],
     "variables": {
@@ -17358,7 +17396,7 @@
         "value": {
           "version": 1,
           "role": "worker",
-          "summary": "Render the ZIP retry wording from the owned address instance.",
+          "summary": "Render the ZIP question from the owned address instance, naming the calling form's label.",
           "result": {
             "path": "cargo.forms[form].data",
             "type": "object"
@@ -17397,7 +17435,7 @@
         "id": "address_street_prompt",
         "type": "SET",
         "variable": "noop",
-        "value": "(cargo.forms[form].data.street_question=(cargo.forms[form].data.location?'Got it, '+(cargo.forms[form].values.city?cargo.forms[form].values.city+', '+cargo.forms[form].data.location.state:cargo.forms[form].data.location.line)+'. ':'')+'What is the street address?',cargo.forms[form].data.street_question_es=(cargo.forms[form].data.location?'Entendido, '+(cargo.forms[form].values.city?cargo.forms[form].values.city+', '+cargo.forms[form].data.location.state:cargo.forms[form].data.location.line)+'. ':'')+'¿Cuál es la dirección?',true)"
+        "value": "(cargo.forms[form].data.street_question=(cargo.forms[form].data.location?'Got it, '+(cargo.forms[form].values.city?cargo.forms[form].values.city+', '+cargo.forms[form].data.location.state:cargo.forms[form].data.location.line)+'. ':'')+(cargo.forms[form].data.labelled?'What is the street of your '+cargo.forms[form].data.label+'?':'What is the street address?'),cargo.forms[form].data.street_question_es=(cargo.forms[form].data.location?'Entendido, '+(cargo.forms[form].values.city?cargo.forms[form].values.city+', '+cargo.forms[form].data.location.state:cargo.forms[form].data.location.line)+'. ':'')+(cargo.forms[form].data.labelled?'¿Cuál es la calle de su '+cargo.forms[form].data.label_es+'?':'¿Cuál es la dirección?'),true)"
       }
     ],
     "variables": {
@@ -19270,7 +19308,7 @@
         "id": "address_city_prompt",
         "type": "SET",
         "variable": "noop",
-        "value": "(function(data,voice){var names=(data.location&&data.location.cities)||[],n=names.length,list=function(and){return names.slice(0,-1).join(', ')+' '+and+' '+names[n-1];};if(n<2){data.city_question='What city is it?';data.city_question_es='¿Qué ciudad es?';return true;}data.city_question='Which city is it: '+list('or')+'? '+(voice?names.map(function(c,i){return (i?'':'Press ')+(i+1)+' for '+c;}).join(', ')+'.':'Type the city or its number, 1 to '+n+'.');data.city_question_es='¿Qué ciudad es: '+list('o')+'? '+(voice?names.map(function(c,i){return (i?'':'Presione ')+(i+1)+' para '+c;}).join(', ')+'.':'Escriba la ciudad o su número, del 1 al '+n+'.');return true;})(cargo.forms[form].data,cargo.voice===true)"
+        "value": "(function(data,voice){var names=(data.location&&data.location.cities)||[],n=names.length,list=function(and){return names.slice(0,-1).join(', ')+' '+and+' '+names[n-1];};if(n<2){data.city_question=data.labelled?'What city is your '+data.label+' in?':'What city is it?';data.city_question_es=data.labelled?'¿En qué ciudad está su '+data.label_es+'?':'¿Qué ciudad es?';return true;}data.city_question=(data.labelled?'Which city is your '+data.label+' in: ':'Which city is it: ')+list('or')+'? '+(voice?names.map(function(c,i){return (i?'':'Press ')+(i+1)+' for '+c;}).join(', ')+'.':'Type the city or its number, 1 to '+n+'.');data.city_question_es=(data.labelled?'¿En qué ciudad está su '+data.label_es+': ':'¿Qué ciudad es: ')+list('o')+'? '+(voice?names.map(function(c,i){return (i?'':'Presione ')+(i+1)+' para '+c;}).join(', ')+'.':'Escriba la ciudad o su número, del 1 al '+n+'.');return true;})(cargo.forms[form].data,cargo.voice===true)"
       }
     ],
     "variables": {
