@@ -12,7 +12,7 @@
   - `closing_prompt_es`: Optional Spanish sentence spoken after the contact info
 - **Calls:** no other flow
 - **Tools:** none
-- **Called by:** [authenticate-user](authenticate-user.md) (by name), [get-cell-or-email](get-cell-or-email.md) (value, by name), [validate-otp-code](validate-otp-code.md) (value, by name), [generic-retry-with-options](generic-retry-with-options.md) (value, by name), [ask-choice](ask-choice.md), [ask-email](ask-email.md), [shopify-ql-tracking-unavailable](../shopify/shopify-ql-tracking-unavailable.md) (shopify), [shopify-ql-track-order](../shopify/shopify-ql-track-order.md) (shopify) (cancel_flow of authenticate-user, cancel_flow), [shopify-ql-order-gate](../shopify/shopify-ql-order-gate.md) (shopify) (cancel_flow of authenticate-user, cancel_flow), [shopify-ql-order-desk](../shopify/shopify-ql-order-desk.md) (shopify), [shopify-ql-no-orders](../shopify/shopify-ql-no-orders.md) (shopify)
+- **Called by:** [authenticate-user](authenticate-user.md) (by name), [get-cell-or-email](get-cell-or-email.md) (value, by name), [validate-otp-code](validate-otp-code.md) (value, by name), [generic-retry-with-options](generic-retry-with-options.md) (value, by name), [ask-choice](ask-choice.md), [ask-email](ask-email.md), [global-exit](global-exit.md), [shopify-ql-tracking-unavailable](../shopify/shopify-ql-tracking-unavailable.md) (shopify), [shopify-ql-track-order](../shopify/shopify-ql-track-order.md) (shopify) (cancel_flow of authenticate-user, cancel_flow), [shopify-ql-order-gate](../shopify/shopify-ql-order-gate.md) (shopify) (cancel_flow of authenticate-user, cancel_flow), [shopify-ql-order-desk](../shopify/shopify-ql-order-desk.md) (shopify), [shopify-ql-no-orders](../shopify/shopify-ql-no-orders.md) (shopify)
 
 ### Steps
 

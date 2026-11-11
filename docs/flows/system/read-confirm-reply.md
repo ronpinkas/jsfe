@@ -32,38 +32,48 @@ flowchart TD
    b3(["reboot → live-agent-requested"])
    class b3 endstep
    c2 -- "reply && reply.key === '__agent'" --> b3
-   n4["set picked, reading, args"]
-   c2 -- "else" --> n4
-   c5{"case"}
-   n4 --> c5
-   b6[["call collect-input-accept"]]
-   class b6 flowstep
-   c5 -- "reading && reading.hits.length" --> b6
-   n7["set field, corrections"]
-   b6 --> n7
-   c5 -- "else" --> n7
-   c8{"case"}
-   n7 --> c8
-   b9[["call collect-input-accept"]]
-   class b9 flowstep
-   c8 -- "corrections.length" --> b9
-   c10{"case"}
-   b9 --> c10
-   c8 -- "else" --> c10
-   b11["set assignment_side_effect"]
-   c10 -- "field && !corrections.length" --> b11
+   c4{"case"}
+   c2 -- "else" --> c4
+   b5["set assignment_side_effect"]
+   c4 -- "reply && reply.concern === true" --> b5
+   c6{"case"}
+   b5 --> c6
+   c4 -- "else" --> c6
+   b7(["end (back to caller)"])
+   class b7 endstep
+   c6 -- "reply && reply.concern === true" --> b7
+   n8["set picked, reading, args"]
+   c6 -- "else" --> n8
+   c9{"case"}
+   n8 --> c9
+   b10[["call collect-input-accept"]]
+   class b10 flowstep
+   c9 -- "reading && reading.hits.length" --> b10
+   n11["set field, corrections"]
+   b10 --> n11
+   c9 -- "else" --> n11
    c12{"case"}
-   b11 --> c12
-   c10 -- "else" --> c12
+   n11 --> c12
    b13[["call collect-input-accept"]]
    class b13 flowstep
-   c12 -- "!picked && args.hits.length" --> b13
-   n14["set assignment_side_effect"]
-   b13 --> n14
-   c12 -- "else" --> n14
+   c12 -- "corrections.length" --> b13
+   c14{"case"}
+   b13 --> c14
+   c12 -- "else" --> c14
+   b15["set assignment_side_effect"]
+   c14 -- "field && !corrections.length" --> b15
+   c16{"case"}
+   b15 --> c16
+   c14 -- "else" --> c16
+   b17[["call collect-input-accept"]]
+   class b17 flowstep
+   c16 -- "!picked && args.hits.length" --> b17
+   n18["set assignment_side_effect"]
+   b17 --> n18
+   c16 -- "else" --> n18
    DONE(["end (back to caller)"])
    class DONE endstep
-   n14 --> DONE
+   n18 --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

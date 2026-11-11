@@ -28,11 +28,21 @@ flowchart TD
    b3(["reboot → live-agent-requested"])
    class b3 endstep
    c2 -- "reply && reply.key === '__agent'" --> b3
-   n4["set assignment_side_effect"]
-   c2 -- "else" --> n4
+   c4{"case"}
+   c2 -- "else" --> c4
+   b5["set assignment_side_effect"]
+   c4 -- "reply && reply.concern === true" --> b5
+   c6{"case"}
+   b5 --> c6
+   c4 -- "else" --> c6
+   b7(["end (back to caller)"])
+   class b7 endstep
+   c6 -- "reply && reply.concern === true" --> b7
+   n8["set assignment_side_effect"]
+   c6 -- "else" --> n8
    DONE(["end (back to caller)"])
    class DONE endstep
-   n4 --> DONE
+   n8 --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80
