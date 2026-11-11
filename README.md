@@ -374,9 +374,9 @@ the field is the reply as said. Unmarked fields (a product, a city) always need 
 `fallback` answer extraction is the judge, and ReadFormResponse asks the question again when it finds nothing; `abort` is a RETURN: every flow ends and the reply is system message `cmd_request_aborted`
 ("The process has been cancelled at your request - how can I help you?"),
 outcome `user_aborted`, no recovery stamp (never the global exit flow below);
-`concern` (jsfe 1.42.0, owner 2026-11-11; offered only when the step declares `responseConcern`, which form readers set from the nearest form
-in the chain declaring `user_description` / `user_description_es`, `{{path}}` read from the form's values, then data, then cargo; never at
-a reason question; cut 0.6, and the top score wins over a cleared choice): the caller objects to or misunderstands what the process does.
+`concern` (jsfe 1.42.0, owner 2026-11-11; offered only when the step declares `responseConcern` (a string) or `responseConcernForm` (a form instance; form readers pass their own): the nearest form
+in the chain declaring `user_description` / `user_description_es`, written with the engine's own `{{...}}` expressions, every input of the declaring form in scope ('' until answered) with its data; never at
+a reason question; cut 0.6, and the top score wins over a cleared choice): the caller expresses doubt that the current process is what they need.
 The reader says the description, how to cancel ("To cancel, press the asterisk key or say EXIT." / "To cancel, type EXIT."; Spanish
 SALIR) and the question again; no attempt is counted;
 `irrelevant` (a stray word, an unfinished sentence, speech to someone else; cut 0.7, and 0.8 to outrank a cleared choice) extracts nothing and asks again: no flow moves. `new_request` ends the flows and routes the input through intent detection. Only a new request is routed: after

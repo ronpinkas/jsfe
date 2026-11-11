@@ -4,6 +4,7 @@ import {compileNamedFunctions} from './helpers/named-functions.js';
 import {closeFormInstance} from './helpers/form-state.js';
 import {isGlobalExit} from './helpers/answer.js';
 import {callerTextNumber} from './helpers/contact.js';
+import {formUserDescriptionSource} from './helpers/form-conversation.js';
 import {storedSession,restoreStoredSession} from './helpers/stored-session.js';
 import {validateContextualResponseStep,validateResponseParameters} from './helpers/contextual-response.js';
 import {validateFlowRecovery} from './host/flow-recovery.js';
@@ -614,7 +615,8 @@ export interface FlowStep {
   responseVariable?: string; // Declared object variable assigned only when the reply answers.
   responseChoices?: string; // Declared array variable of { key, label }: the ranker may pick one; responseVariable gets { key }.
   responseReasonFor?: string; // What the caller does not want (interpolated): the reply is ranked as the reason for not wanting it.
-  responseConcern?: string; // What the process does (interpolated; a form's user_description): offers the ranker `concern`.
+  responseConcern?: string; // What the process does (interpolated): offers the ranker `concern`.
+  responseConcernForm?: string; // A form instance (interpolated): its chain's user_description, rendered with that form's data and values in scope, offers `concern`.
   tool?: string;
   args?: Record<string, unknown>;
   variable?: string;
@@ -5279,6 +5281,29 @@ function textSwitchStart(input: string, frame: FlowFrame | undefined, engine: En
   else return { flow: TEXT_SWITCH_FLOW, arguments: {} };
 }
 
+/**
+ * What the process does, for the reply ranker's `concern` ('' offers nothing): the step's responseConcern rendered in the step's
+ * scope, or (responseConcernForm) the user_description of the nearest form in that form's chain that declares one, rendered with
+ * the engine's own {{...}} expressions and that form's data and values in scope, in the session language.
+ */
+function renderConcern(declaration: any, frame: FlowFrame, engine: Engine): string {
+  if (declaration?.concernForm) {
+    const formId = interpolateMessage(declaration.concernForm, frame.contextStack, frame.variables, engine).trim();
+    const es = (engine.getSessionLanguage() || engine.language || 'en') === 'es';
+    const source = formUserDescriptionSource(engine.cargo, formId, es);
+    const state = source ? (engine.cargo as any)?.forms?.[source.form] : null;
+    if (!source || !state) return '';
+    // Every input the form declares is in scope ('' until answered), so an expression over a value not given yet reads ''.
+    const declared: Record<string, unknown> = {};
+    for (const spec of state.specs || []) for (const name of [spec?.name, ...((spec?.any_of || []).map((i: any) => i?.name))]) if (typeof name === 'string' && name) declared[name] = '';
+    return interpolateMessage(source.text, frame.contextStack, { ...declared, ...(state.data || {}), ...(state.values || {}) }, engine).replace(/\s+/g, ' ').trim();
+  } else if (declaration?.concern) {
+    return interpolateMessage(declaration.concern, frame.contextStack, frame.variables, engine).trim();
+  } else {
+    return '';
+  }
+}
+
 /** Whether the question waiting in this frame declares a choice (its key or a phrase) that this test accepts. */
 function declaresChoiceFor(frame: FlowFrame | undefined, test: (p: string) => boolean): boolean {
   const choices = frame?.variables?.choices;
@@ -7458,7 +7483,7 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
       // A reason question names what the caller does not want; empty (or no attribute) ranks the reply generically.
       const reasonFor = declaration?.reasonFor ? interpolateMessage(declaration.reasonFor,frame.contextStack,frame.variables,engine).trim() : '';
       // A question whose process is described (a form's user_description) offers `concern`; empty offers nothing more.
-      const concern = declaration?.concern ? interpolateMessage(declaration.concern,frame.contextStack,frame.variables,engine).trim() : '';
+      const concern = renderConcern(declaration, frame, engine);
       try { ({ option, confident, also } = await rankReply(String(sanitizedInput),engine,question,choices,reasonFor,concern)); } catch (error) { guardedRoutingFailed = true; throw error; }
       // A declared choice routed as a new request (route: 'new_request') leaves like one.
       const pickedChoice = option.startsWith(CHOICE_PREFIX) ? choices.find(c => CHOICE_PREFIX + c.key === option) : undefined;
@@ -7531,7 +7556,7 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         // The caller objects to or misunderstands what the process does: nothing is extracted and no flow moves; the flow
         // reads `concern: true`, says what the process does and how to cancel, and asks again.
         ranked = 'concern';
-        if (declaration) frame.variables[declaration.variable] = declaration.parameters.length ? { concern: true } : { key: '', concern: true };
+        if (declaration) frame.variables[declaration.variable] = declaration.parameters.length ? { concern: true, concern_text: concern } : { key: '', concern: true, concern_text: concern };
         else { /* no typed response: the flow reads the reply itself */ }
         logger.info(`Contextual DISPATCH in '${frame.flowName}': the reply questions what this process does; the flow continues`);
         return false;
@@ -9234,7 +9259,7 @@ export class WorkflowEngine implements Engine {
         try { validateContextualResponseStep(step,flowDef); } catch(error:any) { state.errors.push(`DISPATCH step \"${step.id}\" in flow \"${flowDef.name}\": ${error.message}`); }
         // DISPATCH always routes the turn's own input — no value. It may declare the ending of the
         // flows it ends (`outcome` / `reason`, kept only when no flow matches).
-        const extra = Object.keys(step).filter(k => !['id', 'type', 'outcome', 'reason', 'recovery', 'onResponse', 'responseContext', 'responseParameters', 'responseVariable', 'responseChoices', 'responseReasonFor', 'responseConcern', 'responseStay', 'onNoIntent'].includes(k));
+        const extra = Object.keys(step).filter(k => !['id', 'type', 'outcome', 'reason', 'recovery', 'onResponse', 'responseContext', 'responseParameters', 'responseVariable', 'responseChoices', 'responseReasonFor', 'responseConcern', 'responseConcernForm', 'responseStay', 'onNoIntent'].includes(k));
         if (extra.length > 0) {
           state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" has invalid attribute(s) ${extra.map(k => `"${k}"`).join(', ')} - DISPATCH takes only "id", "outcome", "reason", "recovery", "onResponse" "responseContext", "responseParameters", "responseVariable", "responseChoices" and "onNoIntent"`);
         } else if (step.onResponse !== undefined && step.onResponse !== 'continue') {

@@ -9,7 +9,7 @@
  *   new_request  the caller clearly asks for something else: a different service, product or action, or an unrelated question
  *   irrelevant   the reply means nothing here (a stray word, an unfinished sentence, speech to someone else): the question
  *                is asked again and no flow moves. A reason question does not offer it.
- *   concern      the reply objects to or misunderstands what the process does (offered only when a form declares
+ *   concern      the caller doubts the current process is what they need (offered only when a form declares
  *                user_description, passed as `concern`): the form says what it does and how to cancel, then asks again
  *   choice:<key> the reply picks one of the question's declared choices (only when the step declares them); `answers`
  *                is then a reply that picks none of them
@@ -127,10 +127,10 @@ const choiceCriteria = (c: ReplyChoice) => ({
   true: `The latest message picks the option "${c.label}", in any words, or says it already chose it.`,
   false: 'It picks another option or none of them, withdraws the request, or asks for something else.',
 });
-// The caller objects to or misunderstands what the process does (owner 2026-11-11; prod CA6a93680b…: "It's not a new address.
+// The caller doubts the current process is what they need (owner 2026-11-11; prod CA6a93680b…: "It's not a new address.
 // I'm just changing the delivery address." at the read-back of the new delivery address).
 const concernCriteria = (concern: string) => ({
-  true: `The latest message objects to, questions or misunderstands what this process is doing (${concern}): it says the process is not what the caller wants or meant, corrects how the process describes the request, or asks why it is being asked or what it is for, instead of answering the current question.`,
+  true: `The caller expresses doubt that the current process is what they need (the process: ${concern}): they say it is not what they want or meant, or correct how it describes their request, instead of answering the current question.`,
   false: 'It answers the current question in any words (yes, no, a value, a correction of a value), picks an option, withdraws the request, or asks for a different service.',
 });
 const criteriaOf = (option: ReplyOption, choices: ReplyChoice[], reasonFor = '', concern = '') => {

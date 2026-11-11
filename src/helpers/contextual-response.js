@@ -26,7 +26,9 @@ export function validateContextualResponseStep(step,flow) {
  if(own(step,'responseReasonFor')&&(typeof step.responseReasonFor!=='string'||choices))fail('responseReasonFor is a string, on a question without responseChoices');
  // responseConcern: what the process does (a form's user_description); the ranker may read the reply as a concern about it.
  if(own(step,'responseConcern')&&typeof step.responseConcern!=='string')fail('responseConcern is a string');
- try{return structuredClone({parameters:dynamic?[]:step.responseParameters || [],...(dynamic?{parametersFrom:step.responseParameters}:{}),variable:step.responseVariable,...(choices?{choices:step.responseChoices}:{}),...(own(step,'responseReasonFor')?{reasonFor:step.responseReasonFor}:{}),...(own(step,'responseConcern')?{concern:step.responseConcern}:{})});}catch{fail('response parameters must be cloneable declaration data');}
+ // responseConcernForm: a form instance; the nearest form in its chain declaring user_description, rendered by the engine.
+ if(own(step,'responseConcernForm')&&typeof step.responseConcernForm!=='string')fail('responseConcernForm is a string');
+ try{return structuredClone({parameters:dynamic?[]:step.responseParameters || [],...(dynamic?{parametersFrom:step.responseParameters}:{}),variable:step.responseVariable,...(choices?{choices:step.responseChoices}:{}),...(own(step,'responseReasonFor')?{reasonFor:step.responseReasonFor}:{}),...(own(step,'responseConcern')?{concern:step.responseConcern}:{}),...(own(step,'responseConcernForm')?{concernForm:step.responseConcernForm}:{})});}catch{fail('response parameters must be cloneable declaration data');}
 }
 /** The canonical response parameter list: a declared array (a step's own, or the variable it names when ranked). */
 export function validateResponseParameters(list) {

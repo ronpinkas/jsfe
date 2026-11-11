@@ -293,10 +293,10 @@ does this reply do with the question the flow asked? The model picks from a clos
 | `abort` | the caller withdraws the request | every flow ends; the caller hears that the request was cancelled |
 | `new_request` | the caller clearly asks for something else | DISPATCH: the message goes to intent detection |
 | `irrelevant` | the reply means nothing here: a stray word, an unfinished sentence, speech to someone else | the question is asked again; no flow moves |
-| `concern` | the caller objects to or misunderstands what the process does ("It's not a new address, I'm just changing the delivery address") | offered only when a form in the chain declares `user_description`: the caller hears it, how to cancel, and the question again; no attempt is counted |
+| `concern` | the caller expresses doubt that the current process is what they need ("It's not a new address, I'm just changing the delivery address") | offered only when a form in the chain declares `user_description`: the caller hears it, how to cancel, and the question again; no attempt is counted |
 
-**Saying what a process does.** A form declares `user_description` / `user_description_es` (`{{path}}` read from its values,
-then data, then cargo); the nearest form in the chain that declares one is used. It is never offered at a reason question. A
+**Saying what a process does.** A form declares `user_description` / `user_description_es` (the engine's own `{{...}}`
+expressions, its inputs in scope, '' until answered); the nearest form in the chain that declares one is used. It is never offered at a reason question. A
 top-scoring `concern` (cut 0.6) wins over a cleared choice.
 
 **Options with arguments.** A declared choice may carry `parameters` (`{name,type,description}`): a pick then extracts them from the reply with the same stage as a flow's parameters, and the flow reads `{ key, arguments }`. The pick stands when extraction finds nothing or fails. The ranker is generic, so the flow supplies the context: a form's `confirm.reply_context` says what a reply may contain. The address read-back uses this: "It's Long Beach, apartment 4" changes the city and the apartment and reads the address back, with no further question.

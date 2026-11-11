@@ -62,6 +62,27 @@ await test('at the confirmation: explained, asked again, never confirmed, and ne
  assert.equal(t.session.cargo.changed,undefined);assert.equal(t.session.cargo.gaveUp,undefined);
  await t.say('yes');assert.equal(t.session.cargo.changed,true);
 });
+await test('engine expressions: the description names what the caller chose, and says nothing of it before the choice',async()=>{
+ const desc={user_description:"This process allows you to change the delivery address or delivery date for your order.{{change === 'address' ? ' You chose to change the delivery address.' : change === 'date' ? ' You chose to change the delivery date.' : ''}}",
+  user_description_es:"Este proceso le permite cambiar la dirección o la fecha de entrega de su pedido.{{change === 'address' ? ' Usted eligió cambiar la dirección de entrega.' : change === 'date' ? ' Usted eligió cambiar la fecha de entrega.' : ''}}"};
+ const sub=defineForm({id:'addr2',name:'Addr2',description:'Collect a ZIP.',contract:{summary:'ZIP'},inputs:[{name:'zip',label:'ZIP code',profile:{kind:'digits',min:5,max:5},question:'What is the ZIP code?',question_es:'¿Cuál es el código postal?'}]});
+ const main=defineForm({id:'dc',name:'Dc',primary:true,description:'Change a delivery',contract:{summary:'Dc'},...desc,inputs:[
+  {name:'change',label:'change',profile:{kind:'choice',choices:[{key:'address',phrases:['address','dirección']},{key:'date',phrases:['date','fecha']}]},question:'Address or date?',question_es:'¿Dirección o fecha?'},
+  {name:'zip',form:'addr2',when:{change:'address'}}],after:[{id:'d',type:'SET',variable:'noop',value:'(cargo.done=true,true)'}]});
+ for(const language of ['en','es']){
+  const ai=async(system,user,schema,r)=>{if(r && r.task==='rank_reply')return JSON.stringify({option:r.options.includes('concern')?'concern':'answers'});if(/voice input cleaner/.test(system))return (String(user).match(/voice response: "([\s\S]*)"\n/)||[,String(user)])[1];return '{"flowName":"None"}';};
+  const engine=new WorkflowEngine({info(){},debug(){},warn(){},error(){}},ai,linkFormSchemas([...FLOWS,sub,main]),[],STANDARD_FUNCTIONS,{},false,language);engine.disableCommands();
+  let session=engine.initSession('synthetic',crypto.randomUUID(),language);session.cargo.voice=false;
+  const say=async(content,start)=>{session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start:{flow:'dc',arguments:{}}}:{})},session)));return String(session.response||'');};
+  const es=language==='es';
+  await say('go',true);
+  const before=await say(es?'no sé por qué me pregunta esto':'I do not know why you ask me this');
+  assert.equal(before,es?'Este proceso le permite cambiar la dirección o la fecha de entrega de su pedido. Para cancelar, escriba SALIR. ¿Dirección o fecha?':'This process allows you to change the delivery address or delivery date for your order. To cancel, type EXIT. Address or date?');
+  assert.match(await say(es?'dirección':'address'),es?/código postal/:/ZIP code/);
+  const after=await say(es?'no es una dirección nueva':'it is not a new address');
+  assert.equal(after,es?'Este proceso le permite cambiar la dirección o la fecha de entrega de su pedido. Usted eligió cambiar la dirección de entrega. Para cancelar, escriba SALIR. ¿Cuál es el código postal?':'This process allows you to change the delivery address or delivery date for your order. You chose to change the delivery address. To cancel, type EXIT. What is the ZIP code?');
+ }
+});
 // The request and decoder: offered only with a description and never at a reason question; a top-scoring concern wins over a cleared choice.
 {
  const choices=[{key:'1',label:'standard'}];

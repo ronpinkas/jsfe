@@ -35,25 +35,24 @@ export function formFirstLine(cargo,id,input,es) {
    return es?`Entiendo, primero vamos a ${task||'terminar esto'}. `:`I understand, first let's ${task||'finish this'}. `;
 }
 /**
- * A form's user_description (owner 2026-11-11): what the process does, for a caller who objects to or misunderstands it. The
- * nearest form in the chain that declares one, from the asking form outward, so a shared sub-form (an address) speaks for the
- * task that opened it. {{path}} reads that form's values, then its data, then cargo ('' when missing). '' when none declares one.
+ * A form's user_description (owner 2026-11-11): what the process does, for a caller who doubts the current process is what they
+ * need. The nearest form in the chain that declares one, from the asking form outward, so a shared sub-form (an address) speaks
+ * for the task that opened it. Returns {form, text} with the TEMPLATE as declared (the engine renders it with the engine's own
+ * {{...}} expressions, that form's data and values in scope), or null when none declares one.
  */
-export function formUserDescription(cargo,id,es) {
+export function formUserDescriptionSource(cargo,id,es) {
    const seen=new Set();
    while(id&&cargo?.forms?.[id]&&!seen.has(id)) {
       seen.add(id);const state=cargo.forms[id];const text=es?state.user_description_es||state.user_description:state.user_description;
-      if(typeof text==='string'&&text.trim()) {
-         const read=path=>{const parts=path.split('.');for(const root of [state.values,state.data,{cargo}]){let v=root;for(const p of parts){v=v==null?undefined:v[p];}if(v!==undefined&&v!==null&&v!=='')return String(v);}return '';};
-         return text.replace(/\{\{\s*([A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*)\s*\}\}/g,(m,path)=>read(path)).replace(/\s+/g,' ').trim();
-      }
+      if(typeof text==='string'&&text.trim())return {form:id,text};
       id=state.parent;
    }
-   return '';
+   return null;
 }
-/** CONCERN: the description, how to cancel (the global exit: *, EXIT, SALIR), then the question again. */
+/** CONCERN: the description as the engine rendered it for this verdict (state.concernText), how to cancel (the global exit:
+ * *, EXIT, SALIR), then the question again. */
 export function formConcernLine(cargo,id,es) {
-   const said=formUserDescription(cargo,id,es),end=/[.!?]$/.test(said)?'':'.';
+   const said=String(cargo?.forms?.[id]?.concernText||'').replace(/\s+/g,' ').trim(),end=!said||/[.!?]$/.test(said)?'':'.';
    const cancel=es?(cargo?.voice?'Para cancelar, presione la tecla de asterisco o diga SALIR.':'Para cancelar, escriba SALIR.'):(cargo?.voice?'To cancel, press the asterisk key or say EXIT.':'To cancel, type EXIT.');
    return (said?said+end+' ':'')+cancel+' ';
 }
