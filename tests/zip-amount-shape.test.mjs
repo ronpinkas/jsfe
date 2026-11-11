@@ -1,4 +1,4 @@
-// ZIP fields refuse an amount-shaped number ("119 19") and the card's billing ZIP takes a bare number out of order only
+// ZIP fields refuse an amount-shaped number ("119 19") out of order and the card's billing ZIP takes a bare number out of order only
 // beside its word (owner 2026-11-11; prod "119 19." at a save-card question replaced the billing ZIP and the charge failed AVS).
 //   node tests/zip-amount-shape.test.mjs
 import assert from 'node:assert/strict';
@@ -16,9 +16,14 @@ const addressZip = { ...FIELD_PRESETS.zip, form: 'address', name: 'zip' };
 let r = matchInputs('119 19.', [save, zip], { form: 'card', name: 'save_card' });
 eq(names(r), [], '"119 19." at the save-card question fills nothing');
 
-// At the ZIP question itself, the amount shape is not a ZIP either: asked again.
-for (const said of ['119 19', '119 19.', '900 15']) eq(names(matchInputs(said, [zip], { form: 'card', name: 'card_zip' })), [], `"${said}" at the billing ZIP question is no ZIP`);
-eq(names(matchInputs('119 19', [addressZip], { form: 'address', name: 'zip' })), [], 'the address ZIP refuses it too');
+// At the ZIP question itself the field was asked for: the amount shape reads as the ZIP.
+for (const [said, want] of [['119 19', '11919'], ['119 19.', '11919'], ['900 15', '90015']]) {
+   eq(names(matchInputs(said, [zip], { form: 'card', name: 'card_zip' })), [`card_zip=${want}`], `"${said}" at the billing ZIP question`);
+   eq(names(matchInputs(said, [addressZip], { form: 'address', name: 'zip' })), [`zip=${want}`], `"${said}" at the address ZIP question`);
+}
+// Out of order it is not a ZIP, even beside the word, and not the address ZIP either.
+eq(names(matchInputs('zip 119 19', [save, zip], { form: 'card', name: 'save_card' })), [], '"zip 119 19" out of order fills nothing');
+eq(names(matchInputs('119 19', [save, addressZip], { form: 'card', name: 'save_card' })), [], 'nor the address ZIP out of order');
 
 // Every other way a ZIP is said still reads, at its question.
 for (const [said, want] of [['90015', '90015'], ['9 0 0 1 5', '90015'], ['90 0 15', '90015'], ['90 2 21', '90221'], ['9001 5', '90015'], ['el código postal es 90015', '90015']]) {
