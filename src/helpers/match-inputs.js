@@ -48,6 +48,7 @@ function digitRuns(raw) {
 const CHOICE_RUN = /\d(?:[\s.-]?\d)*/g;
 
 const DECIMAL_AMOUNT = /(?:[$€£]\s?)?\d+[.,]\d{2}(?!\d)/g;   // a written decimal amount, with its currency mark
+const AMOUNT_SHAPED = /(?<!\d[\s.,-]?)\d{3}\s+\d{2}(?![\s.,-]?\d)/g;   // "119 19": dollars and cents as said (profile.refuse_amount_shape)
 /** Where the answer says amount n: a written decimal by itself ("51 72.45" is not one spoken run), else its number spans. */
 function amountSpans(raw, n) {
    const decimals = [...raw.matchAll(DECIMAL_AMOUNT)].filter((m) => Number(m[0].replace(/[^\d.,]/g, '').replace(',', '.')) === n).map((m) => [m.index, m.index + m[0].length]);
@@ -206,11 +207,16 @@ export function readInputProfile(profile, answer, isCurrent = true) {
       const min = Number(profile.min || 1);
       const max = Number(profile.max || min);
       // Out of order a decimal amount ("72.45", "287,15") is never this field's digits.
-      let fits = [...new Set(digitRuns(isCurrent ? raw : raw.replace(DECIMAL_AMOUNT, (m) => ' '.repeat(m.length))).filter((d) => d.length >= min && d.length <= max))];
+      let source = isCurrent ? raw : raw.replace(DECIMAL_AMOUNT, (m) => ' '.repeat(m.length));
+      // profile.refuse_amount_shape: three digits then two ("119 19") read as dollars and cents as readily as one number, so
+      // they are never this field's digits, at its own question or out of order (owner 2026-11-11: prod "119 19." at a
+      // save-card question replaced the billing ZIP with 11919 and the charge failed AVS).
+      if (profile.refuse_amount_shape === true) { source = source.replace(AMOUNT_SHAPED, (m) => ' '.repeat(m.length)); } else { /* every run reads */ }
+      let fits = [...new Set(digitRuns(source).filter((d) => d.length >= min && d.length <= max))];
       // At its own question, an answer of digits and separators alone is one number when its length fits ("4111, 1111,
       // 1111, 1111": a card read in groups of four).
-      const whole = raw.replace(/\D/g, '');
-      if (!fits.length && isCurrent && /^[\d\s.,-]+$/.test(raw.trim()) && whole.length >= min && whole.length <= max) { fits = [whole]; } else { /* read by runs */ }
+      const whole = source.replace(/\D/g, '');
+      if (!fits.length && isCurrent && /^[\d\s.,-]+$/.test(source.trim()) && whole.length >= min && whole.length <= max) { fits = [whole]; } else { /* read by runs */ }
       if (fits.length === 1) {
          return { value: fits[0], spans: numberSpans(raw, fits[0]), evidence: [`d:${fits[0]}`] };
       } else {
@@ -375,7 +381,9 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    // A choice is excluded (a digit it does not offer reaches the invited amount, rule 4), and so is an amount.
    const bareDigits = raw.replace(/\D/g, '');
    const shapeOf = own && own.digits && !['choice', 'amount', 'text'].includes(own.profile.kind) ? own.digits : null;
-   if (shapeOf && bareDigits && /^[\d\s.,/-]+$/.test(raw.trim()) && !isAmountAnswer(raw) && bareDigits.length >= Number(shapeOf.min || 1) && bareDigits.length <= Number(shapeOf.max || shapeOf.min || 1)
+   // profile.refuse_amount_shape: "119 19" is no answer of this shape either.
+   const amountShaped = own?.profile?.refuse_amount_shape === true && new RegExp(AMOUNT_SHAPED.source).test(raw);
+   if (shapeOf && bareDigits && /^[\d\s.,/-]+$/.test(raw.trim()) && !isAmountAnswer(raw) && !amountShaped && bareDigits.length >= Number(shapeOf.min || 1) && bareDigits.length <= Number(shapeOf.max || shapeOf.min || 1)
       && !readings.some((reading) => reading.current || invited(reading))) {
       readings.push({ form: own.form, name: own.name, value: bareDigits, ...(own.validator ? {} : { invalid: true }), known: false, repeatedChoice: false, wholeChoice: false, choice: false, narrative: false, resetOn: [], spans: [[0, raw.length]], keypad: false, fallback: false,
          group: own.group, exclusive: own.exclusive === true, level: forms.indexOf(own.scope || own.form), current: true, confirm: Array.isArray(own.confirm_against) ? own.confirm_against : [] });

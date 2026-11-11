@@ -219,6 +219,7 @@ Declarations:
 | profile `out_of_order:{…}` | A narrower signature for out-of-order reading: the payment card takes a bare last four when asked, but out of order only a card word or "ending in 4242". |
 | `authenticate-user` `other_whole_answer:true` | At the code question "another account" switches only as the whole answer; inside a sentence the reply ranker decides, offered `another_account` and `no_other_account` ("I understand. We still need to secure access to your account.", then the question). Default off. |
 | input `confirm_out_of_order:{word,word_es,message,message_es}` | Out of order a number fills this input only beside its `word`, in either language. Alone, the caller hears `message` (`{value}` is the number, `{word}` the word) and the current question again, which counts as an attempt. `authenticate-user`'s `code_confirm` is the same declaration for a `code_validator`, whose flow reads it with `saysConfirmWord` and `confirmOutOfOrderLine`: an account number at the verification-code question, where it may be a code said with an extra digit. |
+| profile `refuse_amount_shape:true` (digits) | Three digits then two ("119 19") are never this field's digits: they read as dollars and cents. At its question it is asked again; out of order it fills nothing. The `zip` and `card_zip` presets declare it. |
 | input `choices_from` | The choice's values come from prepared data (the caller's saved cards), so its signature is those values. |
 
 Rules, in order:

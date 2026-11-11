@@ -61,7 +61,7 @@ export const FIELD_PRESETS = {
    email: { label: 'email address', label_es: 'correo electrónico', profile: { kind: 'email' },
       question: 'What is your email address?', question_es: '¿Cuál es su correo electrónico?',
       retry: 'Please say your email address, for example juan at gmail dot com.', retry_es: 'Por favor diga su correo electrónico, por ejemplo juan arroba gmail punto com.' },
-   zip: { label: 'ZIP code', label_es: 'código postal', profile: { kind: 'digits', min: 5, max: 5 }, digits: { min: 5, max: 5 },
+   zip: { label: 'ZIP code', label_es: 'código postal', profile: { kind: 'digits', min: 5, max: 5, refuse_amount_shape: true }, digits: { min: 5, max: 5 },
       question: 'What is your ZIP code?', question_es: '¿Cuál es su código postal?',
       retry: 'Please say or enter your 5-digit ZIP code.', retry_es: 'Por favor diga o ingrese su código postal de 5 dígitos.',
       retry_text: 'Please type your 5-digit ZIP code.', retry_text_es: 'Por favor escriba su código postal de 5 dígitos.' },
@@ -97,7 +97,10 @@ export const FIELD_PRESETS = {
    card_cvv: { label: 'security code', label_es: 'código de seguridad', profile: { kind: 'digits', min: 3, max: 4 }, digits: { min: 3, max: 4 }, pii: true,
       validator: 'validate-card-cvv',
       question: 'What is the security code on the back of the card?', question_es: '¿Cuál es el código de seguridad al reverso de la tarjeta?' },
-   card_zip: { label: 'billing ZIP code', label_es: 'código postal de facturación', profile: { kind: 'digits', min: 5, max: 5 }, digits: { min: 5, max: 5 },
+   // A bare five-digit number out of order may be anything (prod 2026-11-11: it replaced an answered ZIP), so it fills the
+   // billing ZIP only beside the word (owner 2026-11-11).
+   card_zip: { label: 'billing ZIP code', label_es: 'código postal de facturación', profile: { kind: 'digits', min: 5, max: 5, refuse_amount_shape: true }, digits: { min: 5, max: 5 },
+      confirm_out_of_order: { word: 'ZIP', word_es: 'CÓDIGO POSTAL', message: 'If {value} is the billing ZIP code of the card, add the word {word}.', message_es: 'Si {value} es el código postal de facturación de la tarjeta, agregue las palabras {word}.' },
       question: 'What is the billing ZIP code for the card?', question_es: '¿Cuál es el código postal de facturación de la tarjeta?' },
 };
 
