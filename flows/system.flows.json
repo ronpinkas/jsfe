@@ -28,7 +28,7 @@
   {
     "id": "contact-support",
     "name": "ContactSupport",
-    "version": "1.2.3",
+    "version": "1.3.0",
     "description": "Worker: give the tenant's customer-service contact information. Params: support_context(_es), closing_prompt(_es).",
     "parameters": [
       {
@@ -75,21 +75,21 @@
         "id": "set_support_message",
         "type": "SET",
         "variable": "support_message",
-        "value": "(cargo.sessionResolved ? \"Thank you for contacting us! \" : \"Sorry I couldn't help! \") + (cargo.support_context ? \"For assistance with your \" + String(cargo.support_context).replace(/^(your|my)\\s+/i, \"\") + \", \" : \"\") + contact_info + \".\" + (typeof closing_prompt !== \"undefined\" && closing_prompt ? \" \" + closing_prompt : \"\")"
+        "value": "((typeof exit_outcome !== 'undefined' && exit_outcome === 'resolved') ? \"Thank you for contacting us! \" : \"Sorry I couldn't help! \") + (cargo.support_context ? \"For assistance with your \" + String(cargo.support_context).replace(/^(your|my)\\s+/i, \"\") + \", \" : \"\") + contact_info + \".\" + (typeof closing_prompt !== \"undefined\" && closing_prompt ? \" \" + closing_prompt : \"\")"
       },
       {
         "id": "set_support_message_es",
         "type": "SET",
         "variable": "support_message_es",
-        "value": "(cargo.sessionResolved ? \"¡Gracias por comunicarte con nosotros! \" : \"¡Lo siento, no pude ayudar! \") + (cargo.support_context ? \"Para asistencia con tu \" + String(cargo.support_context_es || cargo.support_context).replace(/^(su|sus|tu|tus|mi|mis)\\s+/i, \"\") + \", \" : \"\") + contact_info_es + \".\" + (typeof closing_prompt_es !== \"undefined\" && closing_prompt_es ? \" \" + closing_prompt_es : \"\")"
+        "value": "((typeof exit_outcome !== 'undefined' && exit_outcome === 'resolved') ? \"¡Gracias por comunicarte con nosotros! \" : \"¡Lo siento, no pude ayudar! \") + (cargo.support_context ? \"Para asistencia con tu \" + String(cargo.support_context_es || cargo.support_context).replace(/^(su|sus|tu|tus|mi|mis)\\s+/i, \"\") + \", \" : \"\") + contact_info_es + \".\" + (typeof closing_prompt_es !== \"undefined\" && closing_prompt_es ? \" \" + closing_prompt_es : \"\")"
       },
       {
         "id": "say_support_message",
         "type": "SAY",
         "value": "{{support_message}}",
         "value_es": "{{support_message_es}}",
-        "outcome": "{{typeof support_outcome !== 'undefined' && support_outcome ? support_outcome : 'unresolved'}}",
-        "reason": "{{typeof support_reason !== 'undefined' && support_reason ? support_reason : 'contact_support_fallback'}}"
+        "outcome": "{{typeof support_outcome !== 'undefined' && support_outcome ? support_outcome : (typeof exit_outcome !== 'undefined' && exit_outcome === 'resolved') ? 'resolved' : 'unresolved'}}",
+        "reason": "{{typeof support_reason !== 'undefined' && support_reason ? support_reason : (typeof exit_outcome !== 'undefined' && exit_outcome === 'resolved') ? 'left_after_resolved' : 'contact_support_fallback'}}"
       }
     ]
   },
@@ -1292,8 +1292,7 @@
             "label": "account number",
             "label_es": "número de cuenta",
             "profile": {
-              "kind": "identifier",
-              "pattern": "(?!)"
+              "kind": "identifier"
             }
           },
           {
@@ -1302,7 +1301,8 @@
             "label_es": "respuesta",
             "profile": {
               "kind": "text"
-            }
+            },
+            "form_client": false
           }
         ]
       },
@@ -1440,7 +1440,7 @@
         "id": "identity_contact_profiles",
         "type": "SET",
         "variable": "contact_profiles",
-        "value": "contact_profiles_base.map(function (field) {return field.name === 'account' ? Object.assign({},field,{profile:{kind:'identifier',pattern:contact_options.account_pattern || '(?!)'}}) : field;}).concat(contact_allowed ? [{name:'caller_decision',label:'caller ID choice',label_es:'opción del identificador de llamadas',profile:{kind:'choice',choices:[{key:'yes',phrases:['1','yes','si','sí'],exact:true},{key:'no',phrases:['no','nope','nah'],exact:true}]}}] : [])"
+        "value": "contact_profiles_base.filter(function (field) {return field.name !== 'account' || !!contact_options.account_pattern;}).map(function (field) {return field.name === 'account' ? Object.assign({},field,{profile:{kind:'identifier',pattern:contact_options.account_pattern}}) : field;}).concat(contact_allowed ? [{name:'caller_decision',label:'caller ID choice',label_es:'opción del identificador de llamadas',profile:{kind:'choice',choices:[{key:'yes',phrases:['1','yes','si','sí'],exact:true},{key:'no',phrases:['no','nope','nah'],exact:true}]}}] : [])"
       },
       {
         "id": "identity_contact_keypad",
@@ -1480,7 +1480,7 @@
         "id": "identity_contact_answer",
         "type": "SET",
         "variable": "contact_text",
-        "value": "String(cargo.serviceAnswer.raw || \"\")"
+        "value": "(function contactAnswer(answer) {\n   // Use the accepted, named input when the contact was submitted through a form.\n   for (const name of ['account', 'phone', 'email_address']) {\n      if (answer.submittedFields?.includes(name)) return String(answer.values[name]);\n   }\n   return String(answer.raw || '');\n})(cargo.serviceAnswer)"
       },
       {
         "id": "identity_contact_spoken",
@@ -1910,7 +1910,8 @@
             "label_es": "respuesta",
             "profile": {
               "kind": "text"
-            }
+            },
+            "form_client": false
           }
         ]
       },
@@ -3412,7 +3413,8 @@
             "label_es": "respuesta",
             "profile": {
               "kind": "text"
-            }
+            },
+            "form_client": false
           }
         ]
       },
@@ -4425,7 +4427,7 @@
   {
     "id": "ask-choice",
     "name": "AskChoice",
-    "version": "1.21.0",
+    "version": "1.22.0",
     "description": "Worker: ask one question and return cargo.choice plus the original cargo.choiceText. Declared choices, precheck keys and typed answer-validator keys keep priority across both read passes. Exact negative choices accept only their own declared words and keys. With amount, an unowned legacy payment question accepts a complete USD monetary answer or a simple payment instruction through readMoneyAmount; uncertain prose yields to DISPATCH without declaring an action failure. A lone digit keeps the question's keypad policy; amount:'marked' still requires marked money. An owning FORM supplies form_context and performs its own field, correction, provider-question and confirmation matching before deciding to retry or yield, retaining its draft and safety guards. Optional answer_precheck runs before choices; answer_validator runs only when no choice matched. AGENT/0 requests a person; EXIT/* leaves the request; a consumed switch offer routes its declared flow. Params include question(_es), choices [{key,phrases,exact?,negative?,neutral?}], retry(_es), accept_other, expect, amount, digits, exit_context(_es), pii and form_context.",
     "parameters": [
       {
@@ -5113,7 +5115,8 @@
             "callType": "reboot",
             "parameters": {
               "support_context": "{{ac_exit_ctx}}",
-              "support_context_es": "{{ac_exit_ctx_es}}"
+              "support_context_es": "{{ac_exit_ctx_es}}",
+              "exit_outcome": "{{$outcome.outcome}}"
             }
           },
           "condition: ac_key === '__text'": {
@@ -9543,6 +9546,10 @@
         "type": "string",
         "value": ""
       },
+      "form_confirm_firmness": {
+        "type": "string",
+        "value": ""
+      },
       "form_confirmation": {
         "type": "object",
         "value": {}
@@ -9793,6 +9800,10 @@
         "value": ""
       },
       "form_confirm_q_es": {
+        "type": "string",
+        "value": ""
+      },
+      "form_confirm_firmness": {
         "type": "string",
         "value": ""
       },
@@ -10057,6 +10068,10 @@
         "type": "string",
         "value": ""
       },
+      "form_confirm_firmness": {
+        "type": "string",
+        "value": ""
+      },
       "form_confirmation": {
         "type": "object",
         "value": {}
@@ -10308,6 +10323,10 @@
         "type": "string",
         "value": ""
       },
+      "form_confirm_firmness": {
+        "type": "string",
+        "value": ""
+      },
       "form_confirmation": {
         "type": "object",
         "value": {}
@@ -10556,6 +10575,10 @@
         "value": ""
       },
       "form_confirm_q_es": {
+        "type": "string",
+        "value": ""
+      },
+      "form_confirm_firmness": {
         "type": "string",
         "value": ""
       },
@@ -10854,6 +10877,10 @@
         "type": "string",
         "value": ""
       },
+      "form_confirm_firmness": {
+        "type": "string",
+        "value": ""
+      },
       "form_confirmation": {
         "type": "object",
         "value": {}
@@ -11112,6 +11139,10 @@
         "value": ""
       },
       "form_confirm_q_es": {
+        "type": "string",
+        "value": ""
+      },
+      "form_confirm_firmness": {
         "type": "string",
         "value": ""
       },
@@ -11374,6 +11405,10 @@
         "type": "string",
         "value": ""
       },
+      "form_confirm_firmness": {
+        "type": "string",
+        "value": ""
+      },
       "form_confirmation": {
         "type": "object",
         "value": {}
@@ -11628,6 +11663,10 @@
         "value": ""
       },
       "form_confirm_q_es": {
+        "type": "string",
+        "value": ""
+      },
+      "form_confirm_firmness": {
         "type": "string",
         "value": ""
       },
@@ -11926,6 +11965,10 @@
         "value": ""
       },
       "form_confirm_q_es": {
+        "type": "string",
+        "value": ""
+      },
+      "form_confirm_firmness": {
         "type": "string",
         "value": ""
       },
@@ -12281,6 +12324,10 @@
         "type": "string",
         "value": ""
       },
+      "form_confirm_firmness": {
+        "type": "string",
+        "value": ""
+      },
       "form_confirmation": {
         "type": "object",
         "value": {}
@@ -12417,7 +12464,7 @@
   {
     "id": "provide-data",
     "name": "ProvideData",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "scope": "isolated",
     "description": "Worker: answer a question about a provider catalog. Resolves `asked` (a fact or set key; empty = ask which), passes the catalog's gate for non-public facts (gate.flow, called with gate_params; then every path in gate.verified must be truthy), loads the source (load-source), says the facts (answer-facts). Params: provides, asked.",
     "parameters": [
@@ -12825,7 +12872,9 @@
         "parameters": {
           "provides": "{{provides}}",
           "keys": "{{pd_keys}}"
-        }
+        },
+        "outcome": "{{pd_keys.length > 0 ? 'resolved' : ''}}",
+        "reason": "fact_answered"
       },
       {
         "id": "pd_deferred_more",
@@ -13239,7 +13288,7 @@
     "name": "ConfirmForm",
     "version": "1.0.0",
     "scope": "isolated",
-    "description": "Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm when an action it authorizes is exact; otherwise soft: YES is read as a soft confirmation's and offered to the reply ranker). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
+    "description": "Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm only when an action it authorizes is a payment; otherwise soft: YES is read as a soft confirmation's and offered to the reply ranker). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
     "parameters": [
       {
         "name": "form",
@@ -13657,7 +13706,7 @@
         "type": "object",
         "value": {
           "version": 1,
-          "summary": "Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm when an action it authorizes is exact; otherwise soft: YES is read as a soft confirmation's and offered to the reply ranker). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
+          "summary": "Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm only when an action it authorizes is a payment; otherwise soft: YES is read as a soft confirmation's and offered to the reply ranker). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
           "parametersFrom": "parameters",
           "role": "worker",
           "requires": [
@@ -13684,7 +13733,7 @@
         "id": "cf_choices",
         "type": "SET",
         "variable": "cf_choices",
-        "value": "[{key:'yes',phrases:['1'].concat(Array.isArray(phrases)?phrases:Array.isArray(words)?words:[]).concat(confirmation==='soft'?[\"yes\",\"yeah\",\"yea\",\"yep\",\"yup\",\"sure\",\"ok\",\"okay\",\"okey\",\"please\",\"of course\",\"correct\",\"right\",\"go ahead\",\"alright\",\"all right\",\"absolutely\",\"definitely\",\"certainly\",\"sounds good\",\"that's fine\",\"that is fine\",\"fine\",\"that's ok\",\"that's okay\",\"that's right\",\"that is right\",\"that's correct\",\"that works\",\"agree\",\"i agree\",\"agreed\",\"approve\",\"i approve\",\"approved\",\"confirm\",\"i confirm\",\"confirmed\",\"proceed\",\"do it\",\"perfect\",\"exactly\",\"i do\",\"si\",\"sí\",\"claro\",\"claro que sí\",\"claro que si\",\"seguro\",\"por favor\",\"correcto\",\"está bien\",\"esta bien\",\"de acuerdo\",\"estoy de acuerdo\",\"dale\",\"por supuesto\",\"bueno\",\"confirmo\",\"confirmado\",\"apruebo\",\"aprobado\",\"adelante\",\"hazlo\",\"procede\",\"perfecto\",\"exacto\",\"eso es\",\"así es\",\"asi es\",\"ese mismo\",\"esa misma\",\"eso mismo\",\"el mismo\",\"la misma\",\"that's the one\",\"that is the one\",\"the same one\",\"continue\",\"i want to continue\",\"go on\",\"go ahead please\",\"please do\",\"yes i do\",\"sí quiero\",\"si quiero\",\"continuar\",\"quiero continuar\",\"seguir\",\"sigue\",\"continúe\",\"continue por favor\",\"proceder\",\"procedo\",\"procede por favor\",\"proceda\",\"proceda por favor\",\"sí proceda\",\"si proceda\"]:[]),exact:confirmation!=='soft'},{key:'no',phrases:(Array.isArray(no_keys)?no_keys:['2']).concat([\"no\",\"nope\",\"nah\",\"no thanks\",\"no thank you\",\"not now\",\"not today\",\"no gracias\",\"ahora no\",\"hoy no\"]),exact:true}].concat((Array.isArray(interrupts)?interrupts:[]).map(function(event){return {key:'event:'+event.key,phrases:event.phrases ?? event.words,exact:event.exact!==false};}))"
+        "value": "[{key:'yes',phrases:['1'].concat(Array.isArray(phrases)?phrases:Array.isArray(words)?words:[]).concat(confirmation==='soft'?[\"yes\",\"yeah\",\"yea\",\"yep\",\"yup\",\"sure\",\"ok\",\"okay\",\"okey\",\"please\",\"of course\",\"correct\",\"right\",\"go ahead\",\"alright\",\"all right\",\"absolutely\",\"definitely\",\"certainly\",\"sounds good\",\"that's fine\",\"that is fine\",\"fine\",\"that's ok\",\"that's okay\",\"that's right\",\"that is right\",\"that's correct\",\"that works\",\"agree\",\"i agree\",\"agreed\",\"approve\",\"i approve\",\"approved\",\"confirm\",\"i confirm\",\"confirmed\",\"proceed\",\"do it\",\"perfect\",\"exactly\",\"i do\",\"si\",\"sí\",\"claro\",\"claro que sí\",\"claro que si\",\"seguro\",\"por favor\",\"correcto\",\"está bien\",\"esta bien\",\"de acuerdo\",\"estoy de acuerdo\",\"dale\",\"por supuesto\",\"bueno\",\"confirmo\",\"confirmado\",\"apruebo\",\"aprobado\",\"adelante\",\"hazlo\",\"procede\",\"perfecto\",\"exacto\",\"eso es\",\"así es\",\"asi es\",\"ese mismo\",\"esa misma\",\"eso mismo\",\"el mismo\",\"la misma\",\"that's the one\",\"that is the one\",\"the same one\",\"continue\",\"i want to continue\",\"go on\",\"go ahead please\",\"please do\",\"yes i do\",\"sí quiero\",\"si quiero\",\"continuar\",\"quiero continuar\",\"seguir\",\"sigue\",\"continúe\",\"continue por favor\",\"proceder\",\"procedo\",\"procede por favor\",\"proceda\",\"proceda por favor\",\"sí proceda\",\"si proceda\"]:[]),exact:true},{key:'no',phrases:(Array.isArray(no_keys)?no_keys:['2']).concat([\"no\",\"nope\",\"nah\",\"no thanks\",\"no thank you\",\"not now\",\"not today\",\"no gracias\",\"ahora no\",\"hoy no\"]),exact:true}].concat((Array.isArray(interrupts)?interrupts:[]).map(function(event){return {key:'event:'+event.key,phrases:event.phrases ?? event.words,exact:event.exact!==false};}))"
       },
       {
         "id": "cf_initial_chain",
@@ -14139,7 +14188,7 @@
   {
     "id": "provider-menu",
     "name": "ProviderMenu",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "scope": "isolated",
     "description": "Worker: after a provider answered, offer its menu (provides.menu: question(_voice)(_es) with {verb} / {name}; choices [{ key, phrases, flow, exact, set }]; done { phrases, say(_es) }). A fact or set named by its words is answered and the menu comes back (menu.whole_phrases: only when the phrase is the whole reply; a phrase inside a sentence goes to the reply ranker, whose no-pick is the host's); an action runs its flow (replace) after setting its `set` cargo fields; done says goodbye. Other phrases: DISPATCH. No phrases: asked once more, then 'anything else?'. Params: provides, retry.",
     "parameters": [
@@ -14396,7 +14445,9 @@
             "parameters": {
               "provides": "{{provides}}",
               "keys": "{{pm_keys}}"
-            }
+            },
+            "outcome": "resolved",
+            "reason": "fact_answered"
           },
           "condition: pm_flow": {
             "id": "pm_act",
@@ -15763,6 +15814,10 @@
         "type": "string",
         "value": ""
       },
+      "form_confirm_firmness": {
+        "type": "string",
+        "value": ""
+      },
       "form_confirmation": {
         "type": "object",
         "value": {}
@@ -16095,7 +16150,7 @@
         "id": "service_return",
         "type": "SET",
         "variable": "noop",
-        "value": "(cargo.serviceAnswer={raw:service_prefilled ? prefill : String(cargo.choiceText || ''),values:Object.assign({},cargo.forms[form_instance].values),instance:form_instance},true)"
+        "value": "(cargo.serviceAnswer=(function serviceAnswer(state, raw) {\n   const values = {...state.values};\n   const submittedFields = Object.keys(values).filter(name => state.accepted?.[name]?.origin === 'form_submission');\n   // A form turn's text is a marker: the answer's text is the value submitted, which workers reading `raw` (the email\n   // collector, the retry menu) then read as if it had been typed.\n   const text = submittedFields.length ? String(values[submittedFields[0]]) : raw;\n   return {raw:text, values, instance:state.id, ...(submittedFields.length ? {submittedFields} : {})};\n})(cargo.forms[form_instance],service_prefilled ? prefill : String(cargo.choiceText || '')),true)"
       },
       {
         "id": "collect-service-answer_done",
@@ -16643,6 +16698,10 @@
         "type": "string",
         "value": ""
       },
+      "form_confirm_firmness": {
+        "type": "string",
+        "value": ""
+      },
       "form_confirmation": {
         "type": "object",
         "value": {
@@ -16901,13 +16960,31 @@
         "type": "CASE",
         "branches": {
           "condition: form_should_confirm === true": {
+            "id": "collect-geocoded-address_confirm_firmness",
+            "type": "SET",
+            "variable": "form_confirm_firmness",
+            "value": "\"soft\""
+          },
+          "default": {
+            "id": "collect-geocoded-address_confirmation_guard_2_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "collect-geocoded-address_confirmation_guard_3",
+        "type": "CASE",
+        "branches": {
+          "condition: form_should_confirm === true": {
             "id": "collect-geocoded-address_confirm",
             "type": "FLOW",
             "value": "confirm-form",
             "callType": "call",
             "parameters": {
               "form": "{{form_instance}}",
-              "confirmation": "firm",
+              "confirmation": "{{form_confirm_firmness}}",
               "question": "{{form_confirm_q}}",
               "question_es": "{{form_confirm_q_es}}",
               "phrases": "{{form_confirmation.phrases}}",
@@ -16924,7 +17001,7 @@
             }
           },
           "default": {
-            "id": "collect-geocoded-address_confirmation_guard_2_skip",
+            "id": "collect-geocoded-address_confirmation_guard_3_skip",
             "type": "SET",
             "variable": "noop",
             "value": "true"
@@ -16932,7 +17009,7 @@
         }
       },
       {
-        "id": "collect-geocoded-address_confirmation_guard_3",
+        "id": "collect-geocoded-address_confirmation_guard_4",
         "type": "CASE",
         "branches": {
           "condition: form_should_confirm === true": {
@@ -16970,7 +17047,7 @@
             }
           },
           "default": {
-            "id": "collect-geocoded-address_confirmation_guard_3_skip",
+            "id": "collect-geocoded-address_confirmation_guard_4_skip",
             "type": "SET",
             "variable": "noop",
             "value": "true"
@@ -18032,11 +18109,16 @@
         "type": "string",
         "value": ""
       },
+      "form_confirm_firmness": {
+        "type": "string",
+        "value": ""
+      },
       "form_confirmation": {
         "type": "object",
         "value": {
           "question": "{{proposal.descriptor.question}}",
-          "question_es": "{{proposal.descriptor.question_es || proposal.descriptor.question}}"
+          "question_es": "{{proposal.descriptor.question_es || proposal.descriptor.question}}",
+          "confirmation": "{{proposal.descriptor.confirmation || 'soft'}}"
         }
       },
       "form_should_confirm": {
@@ -18303,13 +18385,31 @@
         "type": "CASE",
         "branches": {
           "condition: form_should_confirm === true": {
+            "id": "confirm-input-proposal_confirm_firmness",
+            "type": "SET",
+            "variable": "form_confirm_firmness",
+            "value": "{{proposal.descriptor.confirmation || 'soft'}}"
+          },
+          "default": {
+            "id": "confirm-input-proposal_confirmation_guard_2_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "confirm-input-proposal_confirmation_guard_3",
+        "type": "CASE",
+        "branches": {
+          "condition: form_should_confirm === true": {
             "id": "confirm-input-proposal_confirm",
             "type": "FLOW",
             "value": "confirm-form",
             "callType": "call",
             "parameters": {
               "form": "{{form_instance}}",
-              "confirmation": "firm",
+              "confirmation": "{{form_confirm_firmness}}",
               "question": "{{form_confirm_q}}",
               "question_es": "{{form_confirm_q_es}}",
               "phrases": "{{form_confirmation.phrases}}",
@@ -18326,7 +18426,7 @@
             }
           },
           "default": {
-            "id": "confirm-input-proposal_confirmation_guard_2_skip",
+            "id": "confirm-input-proposal_confirmation_guard_3_skip",
             "type": "SET",
             "variable": "noop",
             "value": "true"
@@ -18334,7 +18434,7 @@
         }
       },
       {
-        "id": "confirm-input-proposal_confirmation_guard_3",
+        "id": "confirm-input-proposal_confirmation_guard_4",
         "type": "CASE",
         "branches": {
           "condition: form_should_confirm === true": {
@@ -18372,7 +18472,7 @@
             }
           },
           "default": {
-            "id": "confirm-input-proposal_confirmation_guard_3_skip",
+            "id": "confirm-input-proposal_confirmation_guard_4_skip",
             "type": "SET",
             "variable": "noop",
             "value": "true"
@@ -18883,6 +18983,10 @@
         "value": ""
       },
       "form_confirm_q_es": {
+        "type": "string",
+        "value": ""
+      },
+      "form_confirm_firmness": {
         "type": "string",
         "value": ""
       },
