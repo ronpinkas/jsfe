@@ -373,7 +373,7 @@ when it declares them. A confident `answers` (no `fallback`) is never lost: when
 the field is the reply as said. Unmarked fields (a product, a city) always need a real extraction. After a
 `fallback` answer extraction is the judge, and ReadFormResponse asks the question again when it finds nothing; `abort` is a RETURN: every flow ends and the reply is system message `cmd_request_aborted`
 ("The process has been cancelled at your request - how can I help you?"),
-outcome `user_aborted`, no recovery stamp, unless the set has the global exit flow (below);
+outcome `user_aborted`, no recovery stamp (never the global exit flow below);
 `concern` (jsfe 1.42.0, owner 2026-11-11; offered only when the step declares `responseConcern`, which form readers set from the nearest form
 in the chain declaring `user_description` / `user_description_es`, `{{path}}` read from the form's values, then data, then cargo; never at
 a reason question; cut 0.6, and the top score wins over a cleared choice): the caller objects to or misunderstands what the process does.
@@ -385,9 +385,14 @@ instructions with its text model.
 
 **The global exit (jsfe 1.42.0, owner 2026-11-11):** a whole answer of `*`, EXIT, QUIT or SALIR (repeated, or with please / por
 favor / now / ahora; CANCEL is not one) ends every flow at any question, before any reader, command or the reply ranker
-(`isGlobalExit`), outcome `user_aborted`, reason `exit_requested`. The ranker's `abort` takes the same path. The engine then starts
+(`isGlobalExit`), outcome `user_aborted`, reason `exit_requested`, unless the question declares a choice of its own for that
+word (its key or a phrase is `*`, EXIT, QUIT or SALIR): that choice takes the answer. The engine then starts
 the worker `global-exit` (default: a reboot to the set's `contact-support` with `exit_outcome`, the outcome in force before the
 flows ended), or the tenant flow that `wraps: "global-exit"`. A set with neither a wrapper nor `contact-support` keeps the generic reply.
+
+**Keypad 9 (jsfe 1.42.0, owner 2026-10-31):** on a call, a whole answer of `9` at any question ends every flow and starts
+`switch-to-text`, when the caller's number can take texts (`callerTextNumber`) and the set has that flow. A question that declares a
+choice for 9, or asks for an amount (ask-choice `amount`), keeps the answer. Keypad 8 (language) is the host's.
 
 An input with `profile.whole_phrases` (default off; `choice`, or a `pattern` that reads words) keeps its word reader only for a reply wholly made of its phrase, arguments, courtesy, connecting words and its `template_words`; any other reply goes to this ranker.
 

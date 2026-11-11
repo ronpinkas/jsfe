@@ -3,6 +3,7 @@ import {findFlowTraps, formatFlowTrap} from './forms/flow-traps.js';
 import {compileNamedFunctions} from './helpers/named-functions.js';
 import {closeFormInstance} from './helpers/form-state.js';
 import {isGlobalExit} from './helpers/answer.js';
+import {callerTextNumber} from './helpers/contact.js';
 import {storedSession,restoreStoredSession} from './helpers/stored-session.js';
 import {validateContextualResponseStep,validateResponseParameters} from './helpers/contextual-response.js';
 import {validateFlowRecovery} from './host/flow-recovery.js';
@@ -5248,7 +5249,7 @@ async function handleDispatchStep(currentFlowFrame: FlowFrame, engine: Engine): 
 }
 
 /**
- * The global exit (owner 2026-11-11). The flow that answers a caller who exits or withdraws, after every flow has ended: the
+ * The global exit (owner 2026-11-11). The flow that answers a caller who exits, after every flow has ended: the
  * system set's `global-exit`, or the tenant flow that `wraps` it. It receives the outcome in force before the flows ended, so
  * a caller who leaves after being served is thanked. Null when the set has neither a wrapper nor `contact-support`: the generic reply answers.
  */
@@ -5260,6 +5261,45 @@ function globalExitStart(engine: Engine): { flow: string; arguments: Record<stri
   // The default reboots to the set's `contact-support`; a set without one keeps the generic reply (a FLOW to a missing flow is skipped).
   const flow = wrapper || (base && menu.some(f => f.id === 'contact-support') ? base : undefined);
   return flow ? { flow: flow.id, arguments: { exit_outcome: outcomeInForce(engine)?.outcome || '' } } : null;
+}
+
+/**
+ * Keypad 9 switches a call to text (owner 2026-10-31, global since 1.42.0), as keypad 8 changes the language in the host: a call,
+ * the whole answer "9", a caller number that can take texts, the set has `switch-to-text`, and the waiting question neither
+ * declares a choice for 9 nor asks for an amount (ask-choice `amount`). The flows end and `switch-to-text` starts.
+ */
+const TEXT_SWITCH_FLOW = 'switch-to-text';
+function textSwitchStart(input: string, frame: FlowFrame | undefined, engine: Engine): { flow: string; arguments: Record<string, unknown> } | null {
+  const cargo: any = engine.cargo || {};
+  if (!cargo.voice || String(input ?? '').trim().replace(/[.,!?;:]+$/, '') !== '9') return null;
+  else if (!callerTextNumber(cargo)) return null;
+  else if (!(engine.flowsMenu || []).some(f => f.id === TEXT_SWITCH_FLOW)) return null;
+  else if (frame?.variables?.amount === true || frame?.variables?.amount === 'true') return null;
+  else if (declaresChoiceFor(frame, p => String(p).trim() === '9')) return null;
+  else return { flow: TEXT_SWITCH_FLOW, arguments: {} };
+}
+
+/** Whether the question waiting in this frame declares a choice (its key or a phrase) that this test accepts. */
+function declaresChoiceFor(frame: FlowFrame | undefined, test: (p: string) => boolean): boolean {
+  const choices = frame?.variables?.choices;
+  return Array.isArray(choices) && choices.some((c: any) => c && [c.key, ...(Array.isArray(c.phrases) ? c.phrases : [])].some(p => typeof p === 'string' || typeof p === 'number' ? test(String(p)) : false));
+}
+
+/** Whether the question waiting in this frame declares its own choice for an exit word: that choice takes the answer. */
+function declaresExitChoice(frame: FlowFrame | undefined): boolean {
+  return declaresChoiceFor(frame, p => isGlobalExit(p));
+}
+
+/** Every flow ends (finalized, audited with `reason`), with no outcome declared: the flow started next declares its own. */
+function endFlowsFor(currentFlowFrame: FlowFrame, engine: Engine, reason: string): void {
+  while (engine.flowStacks.length > 0) {
+    const poppedStack = engine.flowStacks.pop();
+    for (const flow of poppedStack || []) {
+      finalizeFlowTransaction(engine, flow, 'return');
+      auditLogger.logFlowExit(flow.flowName, currentFlowFrame.userId, flow.transaction.id, reason);
+    }
+  }
+  initializeFlowStacks(engine);
 }
 
 /** The whole answer is the global exit: every flow ends as a withdrawal does, before any reader or the reply ranker sees it. */
@@ -7503,10 +7543,9 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         logger.info(`Contextual DISPATCH in '${frame.flowName}': the reply means nothing here; the flow continues`);
         return false;
       } else if (option === 'abort') {
-        // No recovery stamp: the caller chose to stop, so the host has nothing to resume or post-mortem. The global exit's
-        // flow answers (read before the flows end: it carries the outcome in force), else the generic reply.
-        exitStart = globalExitStart(engine);
-        abortReply = exitStart ? null : getSystemMessage(engine,'cmd_request_aborted');
+        // No recovery stamp: the caller chose to stop, so the host has nothing to resume or post-mortem. The generic reply
+        // answers, never the global exit (owner 2026-11-11: a model's reading of a withdrawal is not the caller's EXIT).
+        abortReply = getSystemMessage(engine,'cmd_request_aborted');
         terminateForAbort(frame,engine);
         logger.info(`Contextual DISPATCH in '${frame.flowName}': the caller withdrew the request; every flow ended`);
         return true;
@@ -7536,16 +7575,22 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
     };
 
     // The global exit (owner 2026-11-11): the whole answer *, EXIT, QUIT or SALIR ends every flow at any question, before any
-    // reader, command or the reply ranker. The global exit's flow answers, else the generic reply.
-    if (getCurrentStackLength(engine) > 0 && isGlobalExit(String(sanitizedInput))) {
+    // reader, command or the reply ranker. The global exit's flow answers, else the generic reply. A question that declares a
+    // choice of its own for an exit word (its key or a phrase is *, EXIT, QUIT or SALIR) reads the answer itself.
+    if (getCurrentStackLength(engine) > 0 && isGlobalExit(String(sanitizedInput)) && !declaresExitChoice(getCurrentFlowFrame(engine))) {
       const exitFrame = getCurrentFlowFrame(engine);
       exitStart = globalExitStart(engine);
       terminateForExit(exitFrame, engine);
       logger.info(`Global exit ${JSON.stringify(sanitizedInput)} in '${exitFrame.flowName}': every flow ended; ${exitStart ? `'${exitStart.flow}' answers` : 'the generic reply answers'}`);
       if (!exitStart) return getSystemMessage(engine,'cmd_request_aborted');
       else { /* fall through: the global exit's flow starts below */ }
+    } else if (getCurrentStackLength(engine) > 0 && (exitStart = textSwitchStart(String(sanitizedInput), getCurrentFlowFrame(engine), engine))) {
+      // keypad 9 (see textSwitchStart): every flow ends and switch-to-text starts below
+      const textFrame = getCurrentFlowFrame(engine);
+      endFlowsFor(textFrame, engine, 'text_requested');
+      logger.info(`Keypad 9 in '${textFrame.flowName}': every flow ended; '${exitStart.flow}' answers`);
     } else {
-      // not an exit, or no flow is active
+      // not an exit or a text switch, or no flow is active
     }
 
     // Check if we're already in a flow (using new stack-of-stacks)
@@ -7606,9 +7651,6 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         if (abortReply !== null) {
           logger.info(`Flow response (request withdrawn): ${abortReply}`);
           return abortReply;
-        } else if (exitStart) {
-          // The caller withdrew: every flow ended, and the global exit's flow starts below.
-          logger.info(`Request withdrawn: '${exitStart.flow}' answers`);
         } else if (engine.pendingDispatchFrom === null) {
           logger.info(`Flow response: ${response}`);
           return response;
