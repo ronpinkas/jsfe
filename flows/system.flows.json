@@ -10019,7 +10019,8 @@
             "profile": {
               "kind": "digits",
               "min": 5,
-              "max": 5
+              "max": 5,
+              "refuse_amount_shape": true
             },
             "digits": {
               "min": 5,
@@ -11621,11 +11622,18 @@
             "profile": {
               "kind": "digits",
               "min": 5,
-              "max": 5
+              "max": 5,
+              "refuse_amount_shape": true
             },
             "digits": {
               "min": 5,
               "max": 5
+            },
+            "confirm_out_of_order": {
+              "word": "ZIP",
+              "word_es": "CÓDIGO POSTAL",
+              "message": "If {value} is the billing ZIP code of the card, add the word {word}.",
+              "message_es": "Si {value} es el código postal de facturación de la tarjeta, agregue las palabras {word}."
             },
             "question": "What is the billing ZIP code for the card?",
             "question_es": "¿Cuál es el código postal de facturación de la tarjeta?",
@@ -11919,7 +11927,8 @@
             "profile": {
               "kind": "digits",
               "min": 5,
-              "max": 5
+              "max": 5,
+              "refuse_amount_shape": true
             },
             "digits": {
               "min": 5,
@@ -12279,11 +12288,18 @@
             "profile": {
               "kind": "digits",
               "min": 5,
-              "max": 5
+              "max": 5,
+              "refuse_amount_shape": true
             },
             "digits": {
               "min": 5,
               "max": 5
+            },
+            "confirm_out_of_order": {
+              "word": "ZIP",
+              "word_es": "CÓDIGO POSTAL",
+              "message": "If {value} is the billing ZIP code of the card, add the word {word}.",
+              "message_es": "Si {value} es el código postal de facturación de la tarjeta, agregue las palabras {word}."
             },
             "question": "What is the billing ZIP code for the card?",
             "question_es": "¿Cuál es el código postal de facturación de la tarjeta?",
@@ -13428,7 +13444,8 @@
             "profile": {
               "kind": "digits",
               "min": 5,
-              "max": 5
+              "max": 5,
+              "refuse_amount_shape": true
             },
             "digits": {
               "min": 5,
@@ -13609,11 +13626,18 @@
             "profile": {
               "kind": "digits",
               "min": 5,
-              "max": 5
+              "max": 5,
+              "refuse_amount_shape": true
             },
             "digits": {
               "min": 5,
               "max": 5
+            },
+            "confirm_out_of_order": {
+              "word": "ZIP",
+              "word_es": "CÓDIGO POSTAL",
+              "message": "If {value} is the billing ZIP code of the card, add the word {word}.",
+              "message_es": "Si {value} es el código postal de facturación de la tarjeta, agregue las palabras {word}."
             },
             "question": "What is the billing ZIP code for the card?",
             "question_es": "¿Cuál es el código postal de facturación de la tarjeta?"
@@ -16537,7 +16561,8 @@
             "profile": {
               "kind": "digits",
               "min": 5,
-              "max": 5
+              "max": 5,
+              "refuse_amount_shape": true
             },
             "digits": {
               "min": 5,
