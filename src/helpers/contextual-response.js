@@ -24,7 +24,9 @@ export function validateContextualResponseStep(step,flow) {
  if(own(step,'responseStay')&&(typeof step.responseStay!=='string'||!step.responseStay.trim()))fail('responseStay names a variable');
  // responseReasonFor: what the caller does not want; the reply is ranked as the reason for not wanting it (owner 2026-10-31).
  if(own(step,'responseReasonFor')&&(typeof step.responseReasonFor!=='string'||choices))fail('responseReasonFor is a string, on a question without responseChoices');
- try{return structuredClone({parameters:dynamic?[]:step.responseParameters || [],...(dynamic?{parametersFrom:step.responseParameters}:{}),variable:step.responseVariable,...(choices?{choices:step.responseChoices}:{}),...(own(step,'responseReasonFor')?{reasonFor:step.responseReasonFor}:{})});}catch{fail('response parameters must be cloneable declaration data');}
+ // responseConcern: what the process does (a form's user_description); the ranker may read the reply as a concern about it.
+ if(own(step,'responseConcern')&&typeof step.responseConcern!=='string')fail('responseConcern is a string');
+ try{return structuredClone({parameters:dynamic?[]:step.responseParameters || [],...(dynamic?{parametersFrom:step.responseParameters}:{}),variable:step.responseVariable,...(choices?{choices:step.responseChoices}:{}),...(own(step,'responseReasonFor')?{reasonFor:step.responseReasonFor}:{}),...(own(step,'responseConcern')?{concern:step.responseConcern}:{})});}catch{fail('response parameters must be cloneable declaration data');}
 }
 /** The canonical response parameter list: a declared array (a step's own, or the variable it names when ranked). */
 export function validateResponseParameters(list) {

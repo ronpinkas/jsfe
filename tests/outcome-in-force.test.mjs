@@ -34,12 +34,12 @@ await test('a caller that declared nothing reads none after its child ends',asyn
 });
 await test('an outcome on a FLOW call declares it for the caller, and a replace of the same frame keeps it',async()=>{
  const t=fixture([
-  flow('menu',[ask('pick','Pick one.'),call('answer','facts','call'),{id:'again',type:'CASE',branches:{"condition: reply !== 'exit'":call('menu_again','menu','replace'),default:read('exit_read')}}].map((s,i)=>i===1?{...s,outcome:'resolved',reason:'fact_answered'}:s)),
+  flow('menu',[ask('pick','Pick one.'),call('answer','facts','call'),{id:'again',type:'CASE',branches:{"condition: reply !== 'finish'":call('menu_again','menu','replace'),default:read('exit_read')}}].map((s,i)=>i===1?{...s,outcome:'resolved',reason:'fact_answered'}:s)),
   flow('facts',[say('fact','Your balance is $0.')]),
  ]);
  await t.say('start',{flow:'menu'});
  await t.say('balance');
- assert.deepEqual(reads(await t.say('exit')),['resolved:fact_answered:menu']);
+ assert.deepEqual(reads(await t.say('finish')),['resolved:fact_answered:menu']); // 'exit' itself is the global exit (owner 2026-11-11)
 });
 await test('a reboot starts a flow with none; the exiting flow hands the outcome over as a parameter (a path)',async()=>{
  const t=fixture([

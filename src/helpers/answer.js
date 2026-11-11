@@ -253,6 +253,17 @@ export function isExitRequest(input) {
    return b === '*' || new RegExp(`^${word}(?:[ .]+${word})*(?: para cancelar| to cancel)?(?: please| por favor| ahora| now)?$`).test(b);
 }
 
+/**
+ * Whether the WHOLE answer is the global exit (owner 2026-11-11): "*", EXIT, QUIT or SALIR, maybe repeated or with please /
+ * por favor / now. The engine ends every flow on it, at any question, before any reader or the reply ranker. "Cancel" and
+ * "cancelar" are not in it: they can be an answer (a menu's CANCEL choice), so they stay with the question.
+ */
+export function isGlobalExit(input) {
+   const b = normalize(input).replace(/^[.\s!]+|[.\s!]+$/g, '');
+   const word = '(?:exit|quit|salir)';
+   return /^\*(?:\s*\*)*$/.test(b) || new RegExp(`^${word}(?:[ .!]+${word})*(?: please| por favor| ahora| now)?$`).test(b);
+}
+
 /** Whether the WHOLE answer asks for a person ("agent", "I want to talk to a representative", "0") — for free-text prompts. */
 export function isAgentRequest(input) {
    // the period normalize() keeps for emails is not part of the answer at its ends ("Operator." on a call, 2026-10-17)

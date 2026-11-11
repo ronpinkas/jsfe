@@ -373,10 +373,21 @@ when it declares them. A confident `answers` (no `fallback`) is never lost: when
 the field is the reply as said. Unmarked fields (a product, a city) always need a real extraction. After a
 `fallback` answer extraction is the judge, and ReadFormResponse asks the question again when it finds nothing; `abort` is a RETURN: every flow ends and the reply is system message `cmd_request_aborted`
 ("The process has been cancelled at your request - how can I help you?"),
-outcome `user_aborted`, no recovery stamp;
+outcome `user_aborted`, no recovery stamp, unless the set has the global exit flow (below);
+`concern` (jsfe 1.42.0, owner 2026-11-11; offered only when the step declares `responseConcern`, which form readers set from the nearest form
+in the chain declaring `user_description` / `user_description_es`, `{{path}}` read from the form's values, then data, then cargo; never at
+a reason question; cut 0.6, and the top score wins over a cleared choice): the caller objects to or misunderstands what the process does.
+The reader says the description, how to cancel ("To cancel, press the asterisk key or say EXIT." / "To cancel, type EXIT."; Spanish
+SALIR) and the question again; no attempt is counted;
 `irrelevant` (a stray word, an unfinished sentence, speech to someone else; cut 0.7, and 0.8 to outrank a cleared choice) extracts nothing and asks again: no flow moves. `new_request` ends the flows and routes the input through intent detection. Only a new request is routed: after
 `answers` a later ordinary DISPATCH in the same turn hands the host the turn without detection. A host that does not know the task answers the `llm`
 instructions with its text model.
+
+**The global exit (jsfe 1.42.0, owner 2026-11-11):** a whole answer of `*`, EXIT, QUIT or SALIR (repeated, or with please / por
+favor / now / ahora; CANCEL is not one) ends every flow at any question, before any reader, command or the reply ranker
+(`isGlobalExit`), outcome `user_aborted`, reason `exit_requested`. The ranker's `abort` takes the same path. The engine then starts
+the worker `global-exit` (default: a reboot to the set's `contact-support` with `exit_outcome`, the outcome in force before the
+flows ended), or the tenant flow that `wraps: "global-exit"`. A set with neither a wrapper nor `contact-support` keeps the generic reply.
 
 An input with `profile.whole_phrases` (default off; `choice`, or a `pattern` that reads words) keeps its word reader only for a reply wholly made of its phrase, arguments, courtesy, connecting words and its `template_words`; any other reply goes to this ranker.
 

@@ -423,5 +423,10 @@ const failed=worker('verification-failed','VerificationFailed','End a verificati
       {id:'vf_offer_agent',type:'CASE',branches:{'condition: !!vf_agent':{id:'vf_agent_say',type:'SAY',value:'{{vf_agent}}',value_es:'{{vf_agent_es}}'},default:set('vf_agent_skip','noop','true')}},
       end('vf_end')]
 });
-export const FLOWS=[taskGate,resume,service,rawTransport,contact,declined,splitFailed,rejected,auth,code,validateCode,emailToo,retry,email,failed];
+// The global exit (owner 2026-11-11): the engine starts this flow when the whole answer is *, EXIT, QUIT or SALIR, or the reply
+// ranker reads a withdrawal, after every flow has ended. Default: the tenant's support closing with the outcome in force. A tenant
+// gives the global exit its own path with a flow that `wraps` this one; the engine then starts that wrapper.
+const globalExit=worker('global-exit','GlobalExit','Worker (started by the engine): the caller exited or withdrew; give the support closing with the outcome in force.',{scope:'isolated',parameters:[param('exit_outcome','The declared outcome in force when the caller exited (resolved: thanks)')],steps:[
+   call('global_exit_support','contact-support',{exit_outcome:'{{exit_outcome}}'},'reboot')]});
+export const FLOWS=[taskGate,resume,service,rawTransport,contact,declined,splitFailed,rejected,auth,code,validateCode,emailToo,retry,email,failed,globalExit];
 

@@ -2,6 +2,7 @@ import {compileFlowDeclarations, flowSetData} from './forms/declarations.js';
 import {findFlowTraps, formatFlowTrap} from './forms/flow-traps.js';
 import {compileNamedFunctions} from './helpers/named-functions.js';
 import {closeFormInstance} from './helpers/form-state.js';
+import {isGlobalExit} from './helpers/answer.js';
 import {storedSession,restoreStoredSession} from './helpers/stored-session.js';
 import {validateContextualResponseStep,validateResponseParameters} from './helpers/contextual-response.js';
 import {validateFlowRecovery} from './host/flow-recovery.js';
@@ -612,6 +613,7 @@ export interface FlowStep {
   responseVariable?: string; // Declared object variable assigned only when the reply answers.
   responseChoices?: string; // Declared array variable of { key, label }: the ranker may pick one; responseVariable gets { key }.
   responseReasonFor?: string; // What the caller does not want (interpolated): the reply is ranked as the reason for not wanting it.
+  responseConcern?: string; // What the process does (interpolated; a form's user_description): offers the ranker `concern`.
   tool?: string;
   args?: Record<string, unknown>;
   variable?: string;
@@ -3847,9 +3849,9 @@ async function detectFlowInTwoStages(input: string, engine: Engine, flows: FlowD
  * when the host says `answers` is the default because no option cleared its cut (`fallback: true`); an answer
  * without that flag (a text model's pick, or a host that does not send it) is a confident one.
  */
-async function rankReply(input: string, engine: Engine, question: string, choices: ReplyChoice[] = [], reasonFor = ''): Promise<{ option: ReplyOption, confident: boolean, also: string[] }> {
+async function rankReply(input: string, engine: Engine, question: string, choices: ReplyChoice[] = [], reasonFor = '', concern = ''): Promise<{ option: ReplyOption, confident: boolean, also: string[] }> {
   const { input: cleanInput, conversation } = buildDetectFlowRequest(input, engine.lastChatTurn, []);
-  const request = buildReplyRank(cleanInput, conversation, question, choices, { reasonFor });
+  const request = buildReplyRank(cleanInput, conversation, question, choices, { reasonFor, concern });
   const reply = parseStageReply(await fetchAiResponse(request.llm.system, request.llm.user, engine.aiCallback, engine.aiTimeOut, stageSchema('rank_reply', request.llm.schema), request));
   const option = String(reply.option ?? '') as ReplyOption;
   if (!request.options.includes(option)) throw new Error(`rank_reply: "${option.slice(0, 40)}" is not an offered option`);
@@ -5243,6 +5245,34 @@ async function handleDispatchStep(currentFlowFrame: FlowFrame, engine: Engine): 
     return '';
   }
   return terminateForDispatch(currentFlowFrame,engine);
+}
+
+/**
+ * The global exit (owner 2026-11-11). The flow that answers a caller who exits or withdraws, after every flow has ended: the
+ * system set's `global-exit`, or the tenant flow that `wraps` it. It receives the outcome in force before the flows ended, so
+ * a caller who leaves after being served is thanked. Null when the set has neither a wrapper nor `contact-support`: the generic reply answers.
+ */
+export const GLOBAL_EXIT_FLOW = 'global-exit';
+function globalExitStart(engine: Engine): { flow: string; arguments: Record<string, unknown> } | null {
+  const menu = engine.flowsMenu || [];
+  const base = menu.find(f => f.id === GLOBAL_EXIT_FLOW);
+  const wrapper = base ? menu.find(f => f.wraps === base.id || f.wraps === base.name) : undefined;
+  // The default reboots to the set's `contact-support`; a set without one keeps the generic reply (a FLOW to a missing flow is skipped).
+  const flow = wrapper || (base && menu.some(f => f.id === 'contact-support') ? base : undefined);
+  return flow ? { flow: flow.id, arguments: { exit_outcome: outcomeInForce(engine)?.outcome || '' } } : null;
+}
+
+/** The whole answer is the global exit: every flow ends as a withdrawal does, before any reader or the reply ranker sees it. */
+function terminateForExit(currentFlowFrame: FlowFrame, engine: Engine): void {
+  currentFlowFrame.declaredOutcome = { outcome: 'user_aborted', reason: 'exit_requested' };
+  while (engine.flowStacks.length > 0) {
+    const poppedStack = engine.flowStacks.pop();
+    for (const flow of poppedStack || []) {
+      finalizeFlowTransaction(engine, flow, 'return');
+      auditLogger.logFlowExit(flow.flowName, currentFlowFrame.userId, flow.transaction.id, 'exit_requested');
+    }
+  }
+  initializeFlowStacks(engine);
 }
 
 /** A withdrawn request ends as a RETURN does: the DISPATCH step is consumed and every flow finalizes and ends. */
@@ -7359,6 +7389,8 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
     let ranked: ReplyOption | null = null;
     // `abort` is a RETURN: every flow ends and this is the turn's reply.
     let abortReply: string | null = null;
+    // The global exit's flow, started once every flow has ended (a withdrawal, or *, EXIT, QUIT or SALIR).
+    let exitStart: { flow: string; arguments: Record<string, unknown> } | null = null;
     let guardedRoutingFailed = false;
     let preDetected: any = undefined;
     engine.dispatchIfMatched = async (frame,step) => {
@@ -7385,7 +7417,9 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
       let also: string[];
       // A reason question names what the caller does not want; empty (or no attribute) ranks the reply generically.
       const reasonFor = declaration?.reasonFor ? interpolateMessage(declaration.reasonFor,frame.contextStack,frame.variables,engine).trim() : '';
-      try { ({ option, confident, also } = await rankReply(String(sanitizedInput),engine,question,choices,reasonFor)); } catch (error) { guardedRoutingFailed = true; throw error; }
+      // A question whose process is described (a form's user_description) offers `concern`; empty offers nothing more.
+      const concern = declaration?.concern ? interpolateMessage(declaration.concern,frame.contextStack,frame.variables,engine).trim() : '';
+      try { ({ option, confident, also } = await rankReply(String(sanitizedInput),engine,question,choices,reasonFor,concern)); } catch (error) { guardedRoutingFailed = true; throw error; }
       // A declared choice routed as a new request (route: 'new_request') leaves like one.
       const pickedChoice = option.startsWith(CHOICE_PREFIX) ? choices.find(c => CHOICE_PREFIX + c.key === option) : undefined;
       if (pickedChoice?.route === 'new_request') {
@@ -7453,6 +7487,14 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         }
         logger.info(`Contextual DISPATCH in '${frame.flowName}': the reply answers the current question; the flow continues`);
         return false;
+      } else if (option === 'concern') {
+        // The caller objects to or misunderstands what the process does: nothing is extracted and no flow moves; the flow
+        // reads `concern: true`, says what the process does and how to cancel, and asks again.
+        ranked = 'concern';
+        if (declaration) frame.variables[declaration.variable] = declaration.parameters.length ? { concern: true } : { key: '', concern: true };
+        else { /* no typed response: the flow reads the reply itself */ }
+        logger.info(`Contextual DISPATCH in '${frame.flowName}': the reply questions what this process does; the flow continues`);
+        return false;
       } else if (option === 'irrelevant') {
         // The reply means nothing here: nothing is extracted, so the flow asks again, and no flow moves.
         ranked = 'answers';
@@ -7461,8 +7503,10 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         logger.info(`Contextual DISPATCH in '${frame.flowName}': the reply means nothing here; the flow continues`);
         return false;
       } else if (option === 'abort') {
-        // No recovery stamp: the caller chose to stop, so the host has nothing to resume or post-mortem.
-        abortReply = getSystemMessage(engine,'cmd_request_aborted');
+        // No recovery stamp: the caller chose to stop, so the host has nothing to resume or post-mortem. The global exit's
+        // flow answers (read before the flows end: it carries the outcome in force), else the generic reply.
+        exitStart = globalExitStart(engine);
+        abortReply = exitStart ? null : getSystemMessage(engine,'cmd_request_aborted');
         terminateForAbort(frame,engine);
         logger.info(`Contextual DISPATCH in '${frame.flowName}': the caller withdrew the request; every flow ended`);
         return true;
@@ -7490,6 +7534,19 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         return true;
       }
     };
+
+    // The global exit (owner 2026-11-11): the whole answer *, EXIT, QUIT or SALIR ends every flow at any question, before any
+    // reader, command or the reply ranker. The global exit's flow answers, else the generic reply.
+    if (getCurrentStackLength(engine) > 0 && isGlobalExit(String(sanitizedInput))) {
+      const exitFrame = getCurrentFlowFrame(engine);
+      exitStart = globalExitStart(engine);
+      terminateForExit(exitFrame, engine);
+      logger.info(`Global exit ${JSON.stringify(sanitizedInput)} in '${exitFrame.flowName}': every flow ended; ${exitStart ? `'${exitStart.flow}' answers` : 'the generic reply answers'}`);
+      if (!exitStart) return getSystemMessage(engine,'cmd_request_aborted');
+      else { /* fall through: the global exit's flow starts below */ }
+    } else {
+      // not an exit, or no flow is active
+    }
 
     // Check if we're already in a flow (using new stack-of-stacks)
     if (getCurrentStackLength(engine) > 0) {
@@ -7549,6 +7606,9 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         if (abortReply !== null) {
           logger.info(`Flow response (request withdrawn): ${abortReply}`);
           return abortReply;
+        } else if (exitStart) {
+          // The caller withdrew: every flow ended, and the global exit's flow starts below.
+          logger.info(`Request withdrawn: '${exitStart.flow}' answers`);
         } else if (engine.pendingDispatchFrom === null) {
           logger.info(`Flow response: ${response}`);
           return response;
@@ -7579,7 +7639,10 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
     engine.pendingDispatchFrom = null;
 
     try {
-      const activatedFlow = activatedThisTurn || (ranked !== null && ranked !== 'new_request') ? null : await isFlowActivated(String(sanitizedInput), engine, userId, preDetected);
+      // The global exit's flow starts as a host start does: no intent detection.
+      if (exitStart) engine.hostStart = exitStart;
+      else { /* intent detection decides, or no activation this turn */ }
+      const activatedFlow = exitStart ? await isFlowActivated(String(sanitizedInput), engine, userId) : activatedThisTurn || (ranked !== null && ranked !== 'new_request') ? null : await isFlowActivated(String(sanitizedInput), engine, userId, preDetected);
       if (activatedFlow) activatedThisTurn = true;
 
       if (dispatchedFrom !== null) {
@@ -9129,7 +9192,7 @@ export class WorkflowEngine implements Engine {
         try { validateContextualResponseStep(step,flowDef); } catch(error:any) { state.errors.push(`DISPATCH step \"${step.id}\" in flow \"${flowDef.name}\": ${error.message}`); }
         // DISPATCH always routes the turn's own input — no value. It may declare the ending of the
         // flows it ends (`outcome` / `reason`, kept only when no flow matches).
-        const extra = Object.keys(step).filter(k => !['id', 'type', 'outcome', 'reason', 'recovery', 'onResponse', 'responseContext', 'responseParameters', 'responseVariable', 'responseChoices', 'responseReasonFor', 'responseStay', 'onNoIntent'].includes(k));
+        const extra = Object.keys(step).filter(k => !['id', 'type', 'outcome', 'reason', 'recovery', 'onResponse', 'responseContext', 'responseParameters', 'responseVariable', 'responseChoices', 'responseReasonFor', 'responseConcern', 'responseStay', 'onNoIntent'].includes(k));
         if (extra.length > 0) {
           state.errors.push(`DISPATCH step "${step.id}" in flow "${flowDef.name}" has invalid attribute(s) ${extra.map(k => `"${k}"`).join(', ')} - DISPATCH takes only "id", "outcome", "reason", "recovery", "onResponse" "responseContext", "responseParameters", "responseVariable", "responseChoices" and "onNoIntent"`);
         } else if (step.onResponse !== undefined && step.onResponse !== 'continue') {

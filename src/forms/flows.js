@@ -148,7 +148,7 @@ function validateAcceptanceDeclarations(id, inputs) {
 export function confirmationFirmness(performs) {
    return Array.isArray(performs) && performs.some((action) => action?.effect === 'charge') ? 'firm' : 'soft';
 }
-export function formFlow({ id, name, version, description, inputs, after = [], extraVars = {}, parameters = [], confirm = null, confirm_soft = confirmationFirmness([]) === 'soft', before_confirm = [], declined = [], stop = '', close_on_stop = false, on_no = '', resume_on_parent_change = false, before = [], done = true, primary = false, scope = 'isolated', validator = '', confirmation_condition = 'true', prompt = undefined, prompt_es = undefined, incomplete_outcome = null, on_exhausted = null, must_complete = false, first_task = '', first_task_es = '', acknowledge = 'all' }) {
+export function formFlow({ id, name, version, description, inputs, after = [], extraVars = {}, parameters = [], confirm = null, confirm_soft = confirmationFirmness([]) === 'soft', before_confirm = [], declined = [], stop = '', close_on_stop = false, on_no = '', resume_on_parent_change = false, before = [], done = true, primary = false, scope = 'isolated', validator = '', confirmation_condition = 'true', prompt = undefined, prompt_es = undefined, incomplete_outcome = null, on_exhausted = null, must_complete = false, first_task = '', first_task_es = '', user_description = '', user_description_es = '', acknowledge = 'all' }) {
    validateFormExhaustion(on_exhausted);
    if (acknowledge !== 'all' && acknowledge !== 'data') throw new Error(`FORM ${id}: acknowledge must be 'all' or 'data'`);
    if (on_no !== '' && (typeof on_no !== 'string' || !/^[\w-]+$/.test(on_no))) throw new Error(`FORM ${id}: on_no must be a flow id`);
@@ -179,13 +179,13 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
    ] : [];
    return {
       id, name, version, description, scope, metadata:{formProtocol:2}, parameters: [...parameters, { name: 'form_instance', type: 'string', internal: true, description: 'Internal instance to resume' }], ...(primary ? { primary: true } : {}), ...(prompt ? { prompt, prompt_es } : {}),
-      variables: vars({ form_on_exhausted:on_exhausted, form_on_no:on_no, form_must_complete:must_complete, form_incomplete_outcome:incompleteFrom?null:incomplete_outcome, form_instance: '', form_internal_resume: false, form_resume_owner:'', form_arguments:{}, form_exhaustion:null, form_values: {}, form_validation: '', initial_readings: [], inputs: resolveFormInputs(inputs, FIELD_PRESETS), parent_form: '', result_input: '', questions: [], provides: null, exit_context: '', exit_context_es: '', form_confirm_q: '', form_confirm_q_es: '', form_confirm_firmness: '', form_confirmation:confirm || {}, form_should_confirm:false, ...extraVars }),
+      variables: vars({ form_on_exhausted:on_exhausted, form_on_no:on_no, form_must_complete:must_complete, form_incomplete_outcome:incompleteFrom?null:incomplete_outcome, form_instance: '', form_internal_resume: false, form_resume_owner:'', form_arguments:{}, form_exhaustion:null, form_values: {}, form_validation: '', initial_readings: [], inputs: resolveFormInputs(inputs, FIELD_PRESETS), parent_form: '', result_input: '', questions: [], provides: null, exit_context: '', exit_context_es: '', form_confirm_q: '', form_confirm_q_es: '', form_confirm_firmness: '', form_confirmation:confirm || {}, form_should_confirm:false, ...(user_description ? { form_user_description:user_description } : {}), ...(user_description_es ? { form_user_description_es:user_description_es } : {}), ...extraVars }),
       steps: [
          ...contextualResponseRuntimeSteps(id,[],hasFormResponse(inputs)?[CONTEXTUAL_RESPONSES_REQUIREMENT]:[]),
          ...(hasFormResponse(inputs)?[{...SET(`${id}_response_reader_required`,'noop',"typeof validateFormResponse === 'function'"),requireTrue:true}]:[]),
          ...proposalRuntimeSteps(id,[],hasInputProposals(inputs)?[INPUT_PROPOSALS_REQUIREMENT]:[]),
          SET(`${id}_resume_kind`, 'form_internal_resume', '!!form_instance'),
-         SET(`${id}_open`, 'form_instance', `openFormInstance(cargo, ${JSON.stringify(id)}, inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: ${resume_on_parent_change===true}, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[${JSON.stringify(id)}] || '' : ''), providers: provides, questions: questions, incomplete_outcome: ${incompleteExpression}, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete${first_task ? `, first_task: ${JSON.stringify(first_task)}` : ''}${first_task_es ? `, first_task_es: ${JSON.stringify(first_task_es)}` : ''}${acknowledge === 'data' ? ", acknowledge: 'data'" : ''} })`),
+         SET(`${id}_open`, 'form_instance', `openFormInstance(cargo, ${JSON.stringify(id)}, inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: ${resume_on_parent_change===true}, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[${JSON.stringify(id)}] || '' : ''), providers: provides, questions: questions, incomplete_outcome: ${incompleteExpression}, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete${first_task ? `, first_task: ${JSON.stringify(first_task)}` : ''}${first_task_es ? `, first_task_es: ${JSON.stringify(first_task_es)}` : ''}${user_description ? ', user_description: form_user_description' : ''}${user_description_es ? ', user_description_es: form_user_description_es' : ''}${acknowledge === 'data' ? ", acknowledge: 'data'" : ''} })`),
          SIDE(`${id}_task`, `(!parent_form ? (cargo.formTasks = cargo.formTasks || {}, cargo.formTasks[${JSON.stringify(id)}] = form_instance) : true, true)`),
          SIDE(`${id}_provider_reset`, '(delete cargo.forms[form_instance].providerRequests, delete cargo.forms[form_instance].activeGates, delete cargo.forms[form_instance].afterRunning, delete cargo.forms[form_instance].providerGateActive, true)'),
          SIDE(`${id}_pass_reset`, '(cargo.forms[form_instance].replays = 0, form_internal_resume ? true : (cargo.forms[form_instance].attempts = {},cargo.forms[form_instance].misses={},cargo.forms[form_instance].feedback={}), true)'),
@@ -457,15 +457,21 @@ const RANK_LABEL_JS="function(c){var said=(Array.isArray(c.phrases) ? c.phrases 
 // already offered is not offered twice. Each carries its input, so a pick is read as that input's answer.
 const otherChoicesJS=(asked,taken,scope=`i.form===form && i.name!==${asked}`)=>`(function(){var seen=(${taken}).map(function(c){return String(c.key);}).concat(['yes','no']);return (chain || []).filter(function(i){return ${scope} && !i.confirmation && i.profile && i.profile.kind==='choice' && Array.isArray(i.profile.choices);}).reduce(function(all,i){return all.concat(i.profile.choices.filter(function(c){var k=String(c.key);if(c.current_only===true||seen.indexOf(k)>=0)return false;seen.push(k);return true;}).map(function(c){return Object.assign({key:String(c.key),label:(${RANK_LABEL_JS})(c),owner:{form:i.form,name:i.name}},Array.isArray(c.parameters) && c.parameters.length ? {parameters:c.parameters} : {});}));},[]);})()`;
 const escapeRoutes=(id)=>[WHEN(`${id}_agent`,"reply && reply.key === '__agent'",FLOW(`${id}_agent_flow`,'live-agent-requested','reboot'))];
-const rankedDispatch=(id,reason,stay=false,parameters='')=>({...yieldDispatch(id,'form',`'${reason}'`),onResponse:'continue',responseContext:'Current question: {{asked}}',responseChoices:'ranked',responseVariable:'reply',...(parameters?{responseParameters:parameters}:{}),...(stay?{responseStay:'stay'}:{})});
+const rankedDispatch=(id,reason,stay=false,parameters='')=>({...yieldDispatch(id,'form',`'${reason}'`),onResponse:'continue',responseContext:'Current question: {{asked}}',responseChoices:'ranked',responseVariable:'reply',responseConcern:'{{concern}}',...(parameters?{responseParameters:parameters}:{}),...(stay?{responseStay:'stay'}:{})});
+// CONCERN (owner 2026-11-11): the nearest form in the chain that declares user_description says what its process does. The
+// ranker is offered `concern` only then; a concern says the description, how to cancel, and the question again, with no attempt.
+const concernText=(id)=>SET(id,'concern',"formUserDescription(cargo,form,language === 'es')");
+const concernRoute=(id,input)=>[WHEN(id,'reply && reply.concern === true',SIDE(`${id}_line`,`(cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[${input}]='concern',true)`)),WHEN(`${id}_end`,'reply && reply.concern === true',END(`${id}_done`))];
 const readFormReply={
  id:'read-form-reply',name:'ReadFormReply',version:'1.1.0',scope:'isolated',description:'Rank an unreadable answer against its question: a request for a person or for text is taken; an answer is asked again; a withdrawal or a new request leaves with saved form progress.',
  parameters:[{name:'form',type:'string'},{name:'input',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'}],
- variables:vars({question:'',question_es:'',asked:'',ranked:[],reply:null}),
+ variables:vars({question:'',question_es:'',asked:'',ranked:[],reply:null,concern:''}),
  steps:[SET('reply_asked','asked',"language === 'es' && question_es ? question_es : question"),
+  concernText('reply_concern_text'),
   rankedChoices('reply_ranked','[]'),
   rankedDispatch('reply_dispatch','input_not_matched'),
   ...escapeRoutes('reply_escape'),
+  ...concernRoute('reply_concern','input'),
   rankedMiss('reply_miss')]
 };
 // A provider menu's fact named inside a longer sentence (provides.menu.whole_phrases): the phrase does not decide, the ranker
@@ -507,7 +513,7 @@ const RANK_ARGUMENTS_JS=`(function(){
 const readFormChoice={
  id:'read-form-choice',name:'ReadFormChoice',version:'1.4.0',scope:'isolated',description:'Rank an unreadable answer to a choice question and take the offered option it picks, or a request for a person or for text; otherwise ask again. A withdrawal or a new request leaves with saved form progress.',
  parameters:[{name:'form',type:'string'},{name:'input',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'},{name:'choices',type:'array'},{name:'firm',type:'string'}],
- variables:vars({question:'',question_es:'',choices:[],firm:'',asked:'',ranked:[],reply:null,picked:'',chain:null,reading:null,others:[],owner:null,stay:false,params:[],rank_params:[],args:null}),
+ variables:vars({question:'',question_es:'',choices:[],firm:'',asked:'',ranked:[],reply:null,picked:'',chain:null,reading:null,others:[],owner:null,stay:false,params:[],rank_params:[],args:null,concern:''}),
  steps:[SET('choice_asked','asked',"language === 'es' && question_es ? question_es : question"),
   SET('choice_params','params',"(function(){var spec=((cargo.forms[form] || {}).specs || []).filter(function(i){return i.name===input;})[0];return spec && Array.isArray(spec.rank_parameters) ? spec.rank_parameters : [];})()"),
   SET('choice_rank_params','rank_params',"params.map(function(p){return {name:p.name,type:p.type || 'string',description:p.description};})"),
@@ -515,8 +521,10 @@ const readFormChoice={
   SET('choice_stay','stay','formMustComplete(cargo,form,input)'),
   SET('choice_others','others',otherChoicesJS('input','choices || []',"!(i.form===form && i.name===input)")),
   rankedChoices('choice_ranked',`(choices || []).filter(function(c,i,all){return !(firm==='firm' && String(c.key)==='yes') && all.findIndex(function(o){return String(o.key)===String(c.key);})===i;}).map(function(c){return Object.assign({key:String(c.key),label:(${RANK_LABEL_JS})(c)},Array.isArray(c.parameters) && c.parameters.length ? {parameters:c.parameters.map(function(p){return {name:p.name,type:p.type || 'string',description:p.description};})} : {});}).concat(others.map(function(c){return Object.assign({key:c.key,label:c.label},c.parameters ? {parameters:c.parameters.map(function(p){return {name:p.name,type:p.type || 'string',description:p.description};})} : {});}))`),
+  concernText('choice_concern_text'),
   rankedDispatch('choice_dispatch','input_not_matched',true,'rank_params'),
   ...escapeRoutes('choice_escape'),
+  ...concernRoute('choice_concern','input'),
   SET('choice_picked','picked',"(function(){var k=String(reply && reply.key || '');var c=(choices || []).filter(function(c){return String(c.key)===k;})[0] || others.filter(function(c){return c.key===k;})[0];return c ? String(c.key) : '';})()"),
   // A question over any_of asks one name and its choices belong to a member ('selection' asks, 'option' holds PAST DUE): the pick is read as the member's answer.
   SET('choice_owner','owner',"(others.filter(function(c){return c.key===picked && !(choices || []).some(function(own){return String(own.key)===picked;});})[0] || {}).owner || (function(){var asked=(chain || []).filter(function(i){return i.form===form && i.name===input;})[0];if(asked || !picked)return null;var spec=((cargo.forms[form] || {}).specs || []).filter(function(i){return i.name===input;})[0];var names=((spec || {}).any_of || []).map(function(i){return i.name;});var member=(chain || []).filter(function(i){return i.form===form && names.indexOf(i.name)>=0 && i.profile && (i.profile.choices || []).some(function(c){return String(c.key)===picked;});})[0];return member ? {form:member.form,name:member.name} : null;})()"),
@@ -541,12 +549,12 @@ const readFormChoice={
 // A confirmation's unread answer goes to the reply ranker with the confirmation question (owner 2026-10-27), never
 // straight to the host. A firm confirmation authorizes the form's action, so the ranker is offered NO, the form's other
 // choices (a correction) and a person, never YES; a soft one (no exact action) is offered YES too (owner 2026-11-08:
-// prod 11:07 "Sí, para enviar." at a ticket's confirmation). Result: cargo.confirmRanked = 'yes' | 'no' | 'changed' | 'none'
+// prod 11:07 "Sí, para enviar." at a ticket's confirmation). Result: cargo.confirmRanked = 'yes' | 'no' | 'changed' | 'none' | 'concern'
 // (ConfirmForm reads it); `abort` ends every flow; `new_request` goes to intent detection.
 const readConfirmReply={
  id:'read-confirm-reply',name:'ReadConfirmReply',version:'1.4.0',scope:'isolated',description:'Rank an unreadable answer to a confirmation: it declines (NO), picks another of the form\'s choices (a correction, read as that input\'s answer), says a named field read back is wrong (confirm.named_fields: that input is asked again), asks for a person, or is asked again; a withdrawal or a new request leaves with saved form progress. Never confirms.',
  parameters:[{name:'form',type:'string'},{name:'confirmation',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'},{name:'named_fields',type:'boolean'},{name:'reply_context',type:'string'},{name:'rank_parameters',type:'array'},{name:'invites',type:'array'}],
- variables:vars({confirmation:'',question:'',question_es:'',asked:'',ranked:[],reply:null,chain:null,others:[],fields:[],field:null,picked:null,reading:null,named_fields:false,prompt:null,field_arguments:[],corrections:[],reply_context:'',stay:false,rank_parameters:[],invites:[],rank_params:[],args:null}),
+ variables:vars({confirmation:'',question:'',question_es:'',asked:'',ranked:[],reply:null,chain:null,others:[],fields:[],field:null,picked:null,reading:null,named_fields:false,prompt:null,field_arguments:[],corrections:[],reply_context:'',stay:false,rank_parameters:[],invites:[],rank_params:[],args:null,concern:''}),
  steps:[// confirm.reply_context: what the form says a reply may contain, for the ranker and the extraction (never spoken)
   SET('confirm_asked','asked',"(language === 'es' && question_es ? question_es : question)+(reply_context ? ' '+reply_context : '')"),
   SET('confirm_stay','stay',"formMustComplete(cargo,form,'__confirm')"),
@@ -563,8 +571,11 @@ const readConfirmReply={
   rankedChoices('confirm_ranked_choices',"(confirmation==='soft' ? [{key:'yes',label:'yes: agrees to what the question asks to confirm'}] : []).concat([{key:'no',label:'no: declines or refuses what the question asks to confirm'}]).concat(others.map(function(c){return Object.assign({key:c.key,label:c.label},c.parameters ? {parameters:c.parameters.map(function(p){return {name:p.name,type:p.type || 'string',description:p.description};})} : {});})).concat(fields.map(function(c){return {key:c.key,label:c.label,parameters:field_arguments};}))"),
   // confirm.rank_parameters: values extracted when the ranker says the reply answers (owner 2026-11-06), read as RANK_ARGUMENTS_JS says
   SET('confirm_rank_params','rank_params',"(Array.isArray(rank_parameters) ? rank_parameters : []).map(function(p){return {name:p.name,type:p.type || 'string',description:p.description};})"),
+  concernText('confirm_concern_text'),
   rankedDispatch('confirm_dispatch','confirmation_not_matched',true,'rank_params'),
   ...escapeRoutes('confirm_escape'),
+  WHEN('confirm_concern','reply && reply.concern === true',SIDE('confirm_concern_line',"(cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback['__confirm']='concern',cargo.confirmRanked='concern',true)")),
+  WHEN('confirm_concern_end','reply && reply.concern === true',END('confirm_concern_done')),
   // a correction picked by the ranker is read as its input's answer: the form changes and is confirmed again, never confirmed
   SET('confirm_picked','picked',"others.filter(function(c){return reply && c.key===reply.key;})[0] || null"),
   SET('confirm_read','reading',"picked ? enrichFormMatches(readFormAnswer(picked.key, chain, picked.owner, picked.key, []), chain, form, [picked.owner.name], picked.owner.name) : null"),
@@ -727,10 +738,11 @@ const confirmForm = {
          'condition: cf_words > 0': FLOW('cf_elsewhere', 'read-confirm-reply', 'call', { form: '{{form}}', confirmation: '{{confirmation}}', question: '{{cf_prompt}}', question_es: '{{cf_prompt_es}}', named_fields: '{{named_fields}}', reply_context: '{{reply_context}}', rank_parameters: '{{rank_parameters}}', invites: '{{invites}}' }),
          default: SET('cf_unclear', 'cf_result', "'unclear'") } },
       // the ranker's reading of an unread answer: a decline is the NO; an answer that declines nothing is asked again
-      SET('cf_ranked', 'cf_result', "cf_result ? cf_result : cargo.confirmRanked === 'yes' ? 'yes' : cargo.confirmRanked === 'no' ? 'no' : cargo.confirmRanked === 'none' ? 'unclear' : ''"),
+      SET('cf_ranked', 'cf_result', "cf_result ? cf_result : cargo.confirmRanked === 'yes' ? 'yes' : cargo.confirmRanked === 'no' ? 'no' : cargo.confirmRanked === 'none' ? 'unclear' : cargo.confirmRanked === 'concern' ? 'concern' : ''"),
       SET('cf_changed', 'cf_result', "cf_result ? cf_result : 'changed'"),
       // an unclear answer is asked again (the form runs again and reaches this question), at most twice
-      SET('cf_tries_count', 'cf_tries', "cf_result === 'unclear' ? missFormInput(cargo,form,'__confirm') : (clearFormMisses(cargo,form,'__confirm'),0)"),
+      // a concern is answered and asked again: no attempt, and the misses so far stand
+      SET('cf_tries_count', 'cf_tries', "cf_result === 'unclear' ? missFormInput(cargo,form,'__confirm') : cf_result === 'concern' ? 0 : (clearFormMisses(cargo,form,'__confirm'),0)"),
       WHEN('cf_first','cf_must && cf_result === \'unclear\' && cf_words > 0',SIDE('cf_first_line',"(cargo.forms[form].feedback['__confirm']='first',true)")),
       // out of attempts: the give-up worker (a person), never a silent DISPATCH that ends the request unanswered
       optionalIncomplete('cf_optional_exhausted','cf_tries >= 2 && !cf_must','form',"'confirmation_misses_exhausted'"),
@@ -738,7 +750,7 @@ const confirmForm = {
       WHEN('cf_misses_exhausted','cf_tries >= 2 && !cf_must',FLOW('cf_give_up','give-up','reboot',{ context: '{{exit_context}}', context_es: '{{exit_context_es}}' })),
       WHEN('cf_clarified_no_sorry','cf_clarify',SIDE('cf_clarified_feedback',"consumeFormFeedback(cargo,form,'__confirm')")),
       WHEN('cf_bind_revision', "cf_result === 'yes'", SIDE('cf_bind', 'confirmFormRevision(cargo, form)')),
-      SIDE('cf_store', "(cargo.formConfirm[form] = cf_result === 'unclear' || cf_result === 'clarification' ? 'changed' : cf_result, true)"),
+      SIDE('cf_store', "(cargo.formConfirm[form] = cf_result === 'unclear' || cf_result === 'clarification' || cf_result === 'concern' ? 'changed' : cf_result, true)"),
    ],
 };
 

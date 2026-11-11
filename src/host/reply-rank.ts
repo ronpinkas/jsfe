@@ -9,6 +9,8 @@
  *   new_request  the caller clearly asks for something else: a different service, product or action, or an unrelated question
  *   irrelevant   the reply means nothing here (a stray word, an unfinished sentence, speech to someone else): the question
  *                is asked again and no flow moves. A reason question does not offer it.
+ *   concern      the reply objects to or misunderstands what the process does (offered only when a form declares
+ *                user_description, passed as `concern`): the form says what it does and how to cancel, then asks again
  *   choice:<key> the reply picks one of the question's declared choices (only when the step declares them); `answers`
  *                is then a reply that picks none of them
  *
@@ -18,7 +20,9 @@
 
 export const REPLY_OPTIONS = ['answers', 'abort', 'new_request', 'irrelevant'] as const;
 /** The fixed options, or `choice:<key>` for a declared choice. */
-export type ReplyOption = typeof REPLY_OPTIONS[number] | `choice:${string}`;
+export type ReplyOption = typeof REPLY_OPTIONS[number] | 'concern' | `choice:${string}`;
+/** Offered when the question names what its process does (DISPATCH responseConcern, from a form's user_description). */
+export const CONCERN_OPTION = 'concern' as const;
 /** A choice the question offers: its key and the words that describe it to the ranker. */
 // route 'new_request': a pick of this choice is a new request, routed by intent detection (an exit the flow declares).
 // parameters: a pick of this choice also extracts these from the reply (intent stage 2), read as { key, arguments }.
@@ -42,6 +46,9 @@ export const REPLY_CUTS: Partial<Record<ReplyOption, number>> = {
   new_request: 0.6,
   // Measured 2026-11-01 on 444 prod replies: a real request never rated 0.5; a name given at a contact question rated 0.64.
   irrelevant: 0.7,
+  // a concern costs one explanation and the question again. Not yet cut from labelled prod replies (owner 2026-11-11: Jev
+  // decides by score, also over a cleared choice); the live purpose test (prod CA6a93680b…) is its first measurement.
+  concern: 0.6,
 };
 /**
  * `irrelevant` outranks a cleared choice only from here: a false pick can transfer the call. Measured 2026-11-01: "You." and
@@ -67,6 +74,8 @@ export interface ReplyRankRequest {
   choices?: ReplyChoice[];
   /** the question asks why the caller does not want this (a cancellation's reason): the step's responseReasonFor */
   reasonFor?: string;
+  /** what the process does (the step's responseConcern): offers `concern` */
+  concern?: string;
   llm: { system: string; user: string; schema: Record<string, unknown> };
   systemOne: { state: Record<string, unknown>; questions: Record<string, unknown>; index: { id: string; option: ReplyOption }[] };
 }
@@ -118,8 +127,16 @@ const choiceCriteria = (c: ReplyChoice) => ({
   true: `The latest message picks the option "${c.label}", in any words, or says it already chose it.`,
   false: 'It picks another option or none of them, withdraws the request, or asks for something else.',
 });
-const criteriaOf = (option: ReplyOption, choices: ReplyChoice[], reasonFor = '') => {
-  if (option.startsWith(CHOICE_PREFIX)) {
+// The caller objects to or misunderstands what the process does (owner 2026-11-11; prod CA6a93680b…: "It's not a new address.
+// I'm just changing the delivery address." at the read-back of the new delivery address).
+const concernCriteria = (concern: string) => ({
+  true: `The latest message objects to, questions or misunderstands what this process is doing (${concern}): it says the process is not what the caller wants or meant, corrects how the process describes the request, or asks why it is being asked or what it is for, instead of answering the current question.`,
+  false: 'It answers the current question in any words (yes, no, a value, a correction of a value), picks an option, withdraws the request, or asks for a different service.',
+});
+const criteriaOf = (option: ReplyOption, choices: ReplyChoice[], reasonFor = '', concern = '') => {
+  if (option === CONCERN_OPTION) {
+    return concernCriteria(concern);
+  } else if (option.startsWith(CHOICE_PREFIX)) {
     return choiceCriteria(choices.find(c => CHOICE_PREFIX + c.key === option)!);
   } else if (option === 'answers' && choices.length) {
     return ANSWERS_WITHOUT_CHOICE;
@@ -138,11 +155,13 @@ const conversationText = (conversation: ReplyTurn[], input: string) =>
  * Club membership") ranks the reply as an answer to "why don't you want it?": only `answers` or `new_request`, no
  * choices.
  */
-export function buildReplyRank(input: string, conversation: ReplyTurn[], question: string, choices: ReplyChoice[] = [], { reasonFor = '' }: { reasonFor?: string } = {}): ReplyRankRequest {
+export function buildReplyRank(input: string, conversation: ReplyTurn[], question: string, choices: ReplyChoice[] = [], { reasonFor = '', concern = '' }: { reasonFor?: string; concern?: string } = {}): ReplyRankRequest {
   reasonFor = String(reasonFor || '').trim();
+  // A reason question is about the caller's own reason, never the process: it offers no concern.
+  concern = reasonFor ? '' : String(concern || '').trim();
   if (reasonFor && choices.length) throw new Error('rank_reply: a reason question (reasonFor) declares no choices');
   const task = reasonFor ? reasonTask(reasonFor) : TASK;
-  const options: ReplyOption[] = [...choices.map(c => `${CHOICE_PREFIX}${c.key}` as ReplyOption), ...(reasonFor ? REASON_OPTIONS : REPLY_OPTIONS)];
+  const options: ReplyOption[] = [...choices.map(c => `${CHOICE_PREFIX}${c.key}` as ReplyOption), ...(reasonFor ? REASON_OPTIONS : REPLY_OPTIONS), ...(concern ? [CONCERN_OPTION] : [])];
   const schema = {
     type: 'object', additionalProperties: false, required: ['option'],
     properties: { option: { type: 'string', enum: options } },
@@ -154,7 +173,7 @@ export function buildReplyRank(input: string, conversation: ReplyTurn[], questio
     question,
     '</current-question>',
     '',
-    ...options.map(o => `- ${o}: ${criteriaOf(o, choices, reasonFor).true}`),
+    ...options.map(o => `- ${o}: ${criteriaOf(o, choices, reasonFor, concern).true}`),
     `When none clearly applies: ${REPLY_DEFAULT}.`,
     '',
     '<json-schema>',
@@ -172,11 +191,11 @@ export function buildReplyRank(input: string, conversation: ReplyTurn[], questio
   const ownChoices = choices.some(c => !c.key.startsWith('__'));
   options.filter(o => !(o === 'answers' && ownChoices)).forEach((o, i) => {
     const id = `r${i}`;
-    questions[id] = { type: 'noul', criteria: criteriaOf(o, choices, reasonFor), instructions: { option: o, question: `Does the latest message do what \`${o}\` describes?` } };
+    questions[id] = { type: 'noul', criteria: criteriaOf(o, choices, reasonFor, concern), instructions: { option: o, question: `Does the latest message do what \`${o}\` describes?` } };
     index.push({ id, option: o });
   });
   return {
-    task: 'rank_reply', input, conversation, question, options, ...(choices.length ? { choices } : {}), ...(reasonFor ? { reasonFor } : {}),
+    task: 'rank_reply', input, conversation, question, options, ...(choices.length ? { choices } : {}), ...(reasonFor ? { reasonFor } : {}), ...(concern ? { concern } : {}),
     llm: { system, user: conversationText(conversation, input), schema },
     systemOne: {
       state: {

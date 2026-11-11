@@ -3,7 +3,7 @@
 <!-- generated:start -->
 **AddressZipPrompt** · `address-zip-prompt` · version 1.0.0 · worker (called by other flows) · steps · isolated scope
 
-> Render the ZIP retry wording from the owned address instance.
+> Render the ZIP question from the owned address instance, naming the calling form's label.
 
 - **Parameters:** 
   - `form`: form

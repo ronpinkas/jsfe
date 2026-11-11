@@ -82,7 +82,7 @@ flowchart LR
 | [collect-geocoded-address](collect-geocoded-address.md) | form + steps | Collect a mailing address in any order, project geocoder evidence, and read the complete address back for confirmation. |
 | [address-zip-validate](address-zip-validate.md) | steps | Read city and state from geocoder evidence for the proposed ZIP; missing geocoder data requires an explicit city. |
 | [address-street-validate](address-street-validate.md) | steps | Validate a proposed street against its ZIP; retain unverified wording when geocoding is inconclusive. |
-| [address-zip-prompt](address-zip-prompt.md) | steps | Render the ZIP retry wording from the owned address instance. |
+| [address-zip-prompt](address-zip-prompt.md) | steps | Render the ZIP question from the owned address instance, naming the calling form's label. |
 | [address-street-prompt](address-street-prompt.md) | steps | Include the ZIP-derived location when asking for the street. |
 | [collect-geocoded-address-declined](collect-geocoded-address-declined.md) | steps | Ask which part of the declined address is wrong, re-ask only that part, or start a fresh pass. |
 | [resume-identity-caller](resume-identity-caller.md) | steps | Resume the caller of an account recovery with its original FORM instance and gate policy. |
