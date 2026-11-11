@@ -14036,7 +14036,7 @@
         "id": "cf_ranked",
         "type": "SET",
         "variable": "cf_result",
-        "value": "cf_result ? cf_result : cargo.confirmRanked === 'yes' ? 'yes' : cargo.confirmRanked === 'no' ? 'no' : cargo.confirmRanked === 'none' ? 'unclear' : ''"
+        "value": "cf_result ? cf_result : cargo.confirmRanked === 'yes' ? 'yes' : cargo.confirmRanked === 'no' ? 'no' : cargo.confirmRanked === 'none' ? 'unclear' : cargo.confirmRanked === 'concern' ? 'concern' : ''"
       },
       {
         "id": "cf_changed",
@@ -14048,7 +14048,7 @@
         "id": "cf_tries_count",
         "type": "SET",
         "variable": "cf_tries",
-        "value": "cf_result === 'unclear' ? missFormInput(cargo,form,'__confirm') : (clearFormMisses(cargo,form,'__confirm'),0)"
+        "value": "cf_result === 'unclear' ? missFormInput(cargo,form,'__confirm') : cf_result === 'concern' ? 0 : (clearFormMisses(cargo,form,'__confirm'),0)"
       },
       {
         "id": "cf_first",
@@ -14180,7 +14180,7 @@
         "id": "cf_store",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(cargo.formConfirm[form] = cf_result === 'unclear' || cf_result === 'clarification' ? 'changed' : cf_result, true)"
+        "value": "(cargo.formConfirm[form] = cf_result === 'unclear' || cf_result === 'clarification' || cf_result === 'concern' ? 'changed' : cf_result, true)"
       }
     ],
     "safetyRevision": "dispatch-intake-2026-10-22"
@@ -19434,7 +19434,8 @@
         "onResponse": "continue",
         "responseContext": "Current question: {{asked}}",
         "responseChoices": "ranked",
-        "responseVariable": "reply"
+        "responseVariable": "reply",
+        "responseConcernForm": "{{form}}"
       },
       {
         "id": "reply_escape_agent",
@@ -19448,6 +19449,40 @@
           },
           "default": {
             "id": "reply_escape_agent_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "reply_concern",
+        "type": "CASE",
+        "branches": {
+          "condition: reply && reply.concern === true": {
+            "id": "reply_concern_line",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.forms[form].concernText=String(reply.concern_text || ''),cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[input]='concern',true)"
+          },
+          "default": {
+            "id": "reply_concern_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "reply_concern_end",
+        "type": "CASE",
+        "branches": {
+          "condition: reply && reply.concern === true": {
+            "id": "reply_concern_done",
+            "type": "END"
+          },
+          "default": {
+            "id": "reply_concern_end_skip",
             "type": "SET",
             "variable": "noop",
             "value": "true"
@@ -19652,6 +19687,7 @@
         "responseContext": "Current question: {{asked}}",
         "responseChoices": "ranked",
         "responseVariable": "reply",
+        "responseConcernForm": "{{form}}",
         "responseParameters": "rank_params",
         "responseStay": "stay"
       },
@@ -19667,6 +19703,40 @@
           },
           "default": {
             "id": "choice_escape_agent_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "choice_concern",
+        "type": "CASE",
+        "branches": {
+          "condition: reply && reply.concern === true": {
+            "id": "choice_concern_line",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.forms[form].concernText=String(reply.concern_text || ''),cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[input]='concern',true)"
+          },
+          "default": {
+            "id": "choice_concern_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "choice_concern_end",
+        "type": "CASE",
+        "branches": {
+          "condition: reply && reply.concern === true": {
+            "id": "choice_concern_done",
+            "type": "END"
+          },
+          "default": {
+            "id": "choice_concern_end_skip",
             "type": "SET",
             "variable": "noop",
             "value": "true"
@@ -20122,6 +20192,7 @@
         "responseContext": "Current question: {{asked}}",
         "responseChoices": "ranked",
         "responseVariable": "reply",
+        "responseConcernForm": "{{form}}",
         "responseParameters": "rank_params",
         "responseStay": "stay"
       },
@@ -20137,6 +20208,40 @@
           },
           "default": {
             "id": "confirm_escape_agent_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "confirm_concern",
+        "type": "CASE",
+        "branches": {
+          "condition: reply && reply.concern === true": {
+            "id": "confirm_concern_line",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "(cargo.forms[form].concernText=String(reply.concern_text || ''),cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback['__confirm']='concern',cargo.confirmRanked='concern',true)"
+          },
+          "default": {
+            "id": "confirm_concern_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "confirm_concern_end",
+        "type": "CASE",
+        "branches": {
+          "condition: reply && reply.concern === true": {
+            "id": "confirm_concern_done",
+            "type": "END"
+          },
+          "default": {
+            "id": "confirm_concern_end_skip",
             "type": "SET",
             "variable": "noop",
             "value": "true"
@@ -20878,6 +20983,70 @@
         }
       }
     ],
+    "safetyRevision": "dispatch-intake-2026-10-22"
+  },
+  {
+    "scope": "isolated",
+    "version": "1.0.0",
+    "id": "global-exit",
+    "name": "GlobalExit",
+    "description": "Worker (started by the engine): the caller exited; give the support closing with the outcome in force.",
+    "parameters": [
+      {
+        "name": "exit_outcome",
+        "type": "string",
+        "description": "The declared outcome in force when the caller exited (resolved: thanks)"
+      },
+      {
+        "name": "support_context",
+        "type": "string",
+        "description": "What the caller needed help with (the question's exit_context), English"
+      },
+      {
+        "name": "support_context_es",
+        "type": "string",
+        "description": "The same in Spanish"
+      }
+    ],
+    "steps": [
+      {
+        "id": "global-exit_continuation_safety_protocol",
+        "type": "SET",
+        "variable": "noop",
+        "value": "continuationSafetyProtocol() === 1",
+        "requireTrue": true
+      },
+      {
+        "id": "global_exit_support",
+        "type": "FLOW",
+        "value": "contact-support",
+        "callType": "reboot",
+        "parameters": {
+          "exit_outcome": "{{exit_outcome}}",
+          "support_context": "{{support_context}}",
+          "support_context_es": "{{support_context_es}}"
+        }
+      }
+    ],
+    "variables": {
+      "noop": {
+        "type": "boolean",
+        "scope": "flow",
+        "value": false
+      },
+      "contract": {
+        "type": "object",
+        "value": {
+          "version": 1,
+          "role": "worker",
+          "summary": "Worker (started by the engine): the caller exited; give the support closing with the outcome in force.",
+          "parametersFrom": "parameters",
+          "requires": [
+            "jsfe:continuation-safety:v1"
+          ]
+        }
+      }
+    },
     "safetyRevision": "dispatch-intake-2026-10-22"
   }
 ]
