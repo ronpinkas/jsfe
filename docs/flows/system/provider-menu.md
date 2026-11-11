@@ -1,7 +1,7 @@
 # ProviderMenu
 
 <!-- generated:start -->
-**ProviderMenu** · `provider-menu` · version 1.1.0 · worker (called by other flows) · steps · isolated scope
+**ProviderMenu** · `provider-menu` · version 1.2.0 · worker (called by other flows) · steps · isolated scope
 
 > Worker: after a provider answered, offer its menu (provides.menu: question(_voice)(_es) with {verb} / {name}; choices [{ key, phrases, flow, exact, set }]; done { phrases, say(_es) }). A fact or set named by its words is answered and the menu comes back (menu.whole_phrases: only when the phrase is the whole reply; a phrase inside a sentence goes to the reply ranker, whose no-pick is the host's); an action runs its flow (replace) after setting its `set` cargo fields; done says goodbye. Other phrases: DISPATCH. No phrases: asked once more, then 'anything else?'. Params: provides, retry.
 

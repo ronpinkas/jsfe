@@ -1,7 +1,7 @@
 # ProvideData
 
 <!-- generated:start -->
-**ProvideData** · `provide-data` · version 1.0.0 · worker (called by other flows) · steps · isolated scope
+**ProvideData** · `provide-data` · version 1.1.0 · worker (called by other flows) · steps · isolated scope
 
 > Worker: answer a question about a provider catalog. Resolves `asked` (a fact or set key; empty = ask which), passes the catalog's gate for non-public facts (gate.flow, called with gate_params; then every path in gate.verified must be truthy), loads the source (load-source), says the facts (answer-facts). Params: provides, asked.
 

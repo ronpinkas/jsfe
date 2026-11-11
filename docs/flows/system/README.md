@@ -66,7 +66,7 @@ flowchart LR
 | [provide-data](provide-data.md) | steps | Worker: answer a question about a provider catalog. Resolves `asked` (a fact or set key; empty = ask which), passes the catalog's gate for … |
 | [load-source](load-source.md) | steps | Worker: load a provider's data when missing or stale (refresh: per_session / per_turn / max_age_ms) through the tenant's loader flow (sourc… |
 | [answer-facts](answer-facts.md) | steps | Worker: say the facts `keys` of a provider catalog in one message, each from its path in the source result through its sentence template (s… |
-| [confirm-form](confirm-form.md) | steps | Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm when an action it authorizes is exact; otherwise soft: YES is read as a sof… |
+| [confirm-form](confirm-form.md) | steps | Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm only when an action it authorizes is a payment; otherwise soft: YES is read… |
 | [provider-menu](provider-menu.md) | steps | Worker: after a provider answered, offer its menu (provides.menu: question(_voice)(_es) with {verb} / {name}; choices [{ key, phrases, flow… |
 | [validate-input-batch](validate-input-batch.md) | steps | Worker: validate dependency-ordered candidates; return accepted, rejected and pending readings before a single commit. |
 | [input-accepted-effects](input-accepted-effects.md) | steps | Worker: acknowledge accepted or rejected candidates and run their callbacks after the batch commit. |
@@ -153,7 +153,6 @@ Each flow page has a generated part (facts and charts, rewritten from `flows/sys
 | `cargo.agentUnavailableMessage` | live-agent-requested | the phone number's own "no agent available" wording (a voice setting); empty = the flow's default |
 | `cargo.contact_info` | contact-support, live-agent-requested | the support contact text (one value for both languages) |
 | `cargo.support_context` / `_es` | contact-support | topic phrase, e.g. set to `orders` / `pedidos` by `shopify-track-order`, or written by contact-support from its `support_context` / `support_context_es` parameters |
-| `cargo.sessionResolved` | contact-support | truthy when something was resolved earlier in the session; contact-support then thanks instead of apologizing. The reference host sets it when a flow declares outcome `resolved` |
 | `cargo.displayName` / `cargo.callerNamed` | get-and-validate-otp-code, Keypad9; cleared by authenticate-user (ANOTHER ACCOUNT) | the name the conversation addresses the customer by (set by the host or by `set-user-name`), and whether the tenant took it from the caller ID's account |
 | `cargo.otpVerified` | authenticate-user, validate-otp-code, generic-retry-with-options | written by the `validate-otp` tool on success |
 | `cargo.authOptions` | written by authenticate-user; read by authenticate-user when `retrying` | `{ retry_flow, cancel_flow, email_validator, cell_validator, code_validator, answer_handler, retry_returns }` of the authentication in progress, written at its start. A retry from the menu (`retrying: true`) restores all seven from it. validate-otp-code reads `code_validator` and `answer_handler` from it; a `code_validator` answering `answer_key: 'code_notice'` has said why the answer is not taken: the code question is asked again and it counts as a format miss |

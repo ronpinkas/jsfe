@@ -1,7 +1,7 @@
 # ContactSupport
 
 <!-- generated:start -->
-**ContactSupport** · `contact-support` · version 1.2.3 · worker (called by other flows) · steps
+**ContactSupport** · `contact-support` · version 1.3.0 · worker (called by other flows) · steps
 
 > Worker: give the tenant's customer-service contact information. Params: support_context(_es), closing_prompt(_es).
 
