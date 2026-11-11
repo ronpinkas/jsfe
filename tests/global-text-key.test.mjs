@@ -12,7 +12,7 @@ const menu=(choices,extra={})=>({id:'menu',name:'Menu',primary:true,description:
  {id:'m_ask',type:'FLOW',value:'ask-choice',callType:'call',parameters:{question:'Pick one.',question_es:'Elija.',choices,...extra}},
  {id:'m_said',type:'SAY',value:'picked {{cargo.choice}}',value_es:'elegido {{cargo.choice}}'}]});
 function fixture({flows=[form],start='pay',voice=true,callerId='+18184515475',withText=true}={}){
- const ai=async(system,user,schema,r)=>{if(r && r.task==='rank_reply')return JSON.stringify({option:'answers'});if(/voice input cleaner/.test(system))return String(user);return '{"flowName":"None"}';};
+ const ai=async(system,user,schema,r)=>{if(r && r.task==='rank_reply')return JSON.stringify({option:'answers'});if(/voice input cleaner/.test(system))return (String(user).match(/voice response: "([\s\S]*)"\n/)||[,String(user)])[1];return '{"flowName":"None"}';};
  const engine=new WorkflowEngine({info(){},debug(){},warn(){},error(){}},ai,linkFormSchemas([...FLOWS,...flows,...(withText?[toText]:[])]),[],STANDARD_FUNCTIONS,{},false,'en');engine.disableCommands();
  let session=engine.initSession('synthetic',crypto.randomUUID(),'en');Object.assign(session.cargo,{voice,callerId,twilioNumber:'+12135101971'});
  return {get session(){return session;},async say(content,go){session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(go?{start:{flow:start,arguments:{}}}:{})},session)));return String(session.response||'');}};
@@ -26,8 +26,8 @@ await test('"9." on a call at a confirmation-style choice question too',async()=
  assert.match(await t.say('9.'),/Texting you now\./);
 });
 await test('a question that declares a choice for 9 keeps it',async()=>{
- const t=fixture({flows:[menu([{key:'1',phrases:['one']},{key:'9',phrases:['nine']}])],start:'menu'});await t.say('go',true);
- assert.match(await t.say('9'),/^picked /);
+ const t=fixture({flows:[menu([{key:'1',phrases:['1','one']},{key:'9',phrases:['9','nine']}])],start:'menu'});await t.say('go',true);
+ assert.match(await t.say('9'),/picked 9/);
 });
 await test('an amount question keeps it',async()=>{
  const t=fixture({flows:[menu([{key:'full',phrases:['full']}],{amount:true,accept_other:true})],start:'menu'});await t.say('go',true);

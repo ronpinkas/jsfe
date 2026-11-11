@@ -16,7 +16,7 @@ const support={id:'contact-support',name:'ContactSupport',description:'Support c
 const form=defineForm({id:'pay',name:'Pay',primary:true,description:'Make a payment',contract:{summary:'Make a payment'},inputs:[{name:'zip',label:'ZIP code',profile:{kind:'digits',min:5,max:5},question:'How much?',question_es:'¿Cuánto?'}]});
 function fixture({extra=[],option='answers',language='en'}={}){
  const calls=[];
- const ai=async(system,user,schema,r)=>{calls.push(r && r.task);if(r && r.task==='rank_reply')return JSON.stringify({option});if(/voice input cleaner/.test(system))return String(user);return '{"flowName":"None"}';};
+ const ai=async(system,user,schema,r)=>{calls.push(r && r.task);if(r && r.task==='rank_reply')return JSON.stringify({option});if(/voice input cleaner/.test(system))return (String(user).match(/voice response: "([\s\S]*)"\n/)||[,String(user)])[1];return '{"flowName":"None"}';};
  const engine=new WorkflowEngine({info(){},debug(){},warn(){},error(){}},ai,linkFormSchemas([...FLOWS,form,support,...extra]),[],STANDARD_FUNCTIONS,{},false,language);engine.disableCommands();
  let session=engine.initSession('synthetic',crypto.randomUUID(),language);session.cargo.voice=true;
  return {calls,get session(){return session;},async say(content,start){session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start:{flow:'pay',arguments:{}}}:{})},session)));return String(session.response||'');},async sayStart(flow){session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content:'go',start:{flow,arguments:{}}},session)));return String(session.response||'');}};

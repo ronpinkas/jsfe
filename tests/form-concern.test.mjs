@@ -19,7 +19,7 @@ function fixture({describe=true,option='concern',language='en',voice=false,confi
   after:[{id:'done',type:'SET',variable:'noop',value:'(cargo.changed=true,true)'}]});
  const giveUp={id:'give-up',name:'GiveUp',description:'A person takes over',parameters:[{name:'context',type:'string'},{name:'context_es',type:'string'}],steps:[{id:'gave-up',type:'SET',variable:'noop',value:'(cargo.gaveUp=true,true)'}]};
  const ranks=[];
- const ai=async(system,user,schema,r)=>{if(r && r.task==='rank_reply'){ranks.push(r);return JSON.stringify({option:r.options.includes(option)?option:'answers'});}if(/voice input cleaner/.test(system))return String(user);return JSON.stringify({flowName:'None'});};
+ const ai=async(system,user,schema,r)=>{if(r && r.task==='rank_reply'){ranks.push(r);return JSON.stringify({option:r.options.includes(option)?option:'answers'});}if(/voice input cleaner/.test(system))return (String(user).match(/voice response: "([\s\S]*)"\n/)||[,String(user)])[1];return JSON.stringify({flowName:'None'});};
  const engine=new WorkflowEngine({info(){},debug(){},warn(){},error(){}},ai,linkFormSchemas([...FLOWS,...forms,main,giveUp]),[],STANDARD_FUNCTIONS,{},false,language);engine.disableCommands();
  let session=engine.initSession('synthetic',crypto.randomUUID(),language);session.cargo.voice=voice;
  return {ranks,get session(){return session;},async say(content,start){session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start:{flow:'change',arguments:{}}}:{})},session)));return String(session.response||'');}};
