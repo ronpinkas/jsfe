@@ -185,6 +185,7 @@ Field options:
 | `response` | `{description}` on a readable leaf; use existing contextual DISPATCH extraction before accepting an open-ended answer. |
 | `proposal` | Optional approval of an inferred field candidate, independent of final action consent. |
 | `max_misses`, `max_attempts`, `on_exhausted` | Bounds for unreadable responses, validator rejections and deliberate branch recovery. |
+| `declinable` | `true` on a readable leaf (not a choice, a confirmation or a proposal): the field may be answered "there is none". The whole answer saying so, in English or Spanish (`none`, `no`, `n/a`, `I don't have one`, `no tengo…`, `no hay…`, `ninguno`; never with a digit), stores an explicit `null`: answered, with no value, so the form moves on, while an absent key stays unanswered. The reply ranker is offered `none` at its question, and a read-back with `named_fields` offers it for correction. On a card the field may be left blank. A field that is never asked uses `required_when` instead. |
 
 Profiles:
 

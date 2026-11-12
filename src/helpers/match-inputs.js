@@ -287,6 +287,21 @@ export function confirmOutOfOrderLine(spec, value, language, voice) {
    return line.replace('{value}', String(value ?? '').split('').join(voice ? ' ' : '')).replace('{word}', word);
 }
 
+// A declinable input's "there is none" (docs/copilot-reference.md: declinable): the whole answer says the caller has no
+// value for the field asked, in English or Spanish. An answer with a digit is never one ("no, 4B" names a unit), and
+// neither is a longer sentence: those reach the field's reader, then the reply ranker, which is offered "none".
+const NO_VALUE = new RegExp('^(?:' + [
+   'no', 'nope', 'none', 'nothing', 'n/?a', 'not applicable', 'does ?n[o\u2019\']?t apply', 'not any', 'there is none', 'there are none', 'i have none',
+   "there (?:is|are|'s|is not|isn't|are not|aren't) (?:no|not? (?:one|any))(?: \\p{L}+){0,3}",
+   "(?:i|we) (?:do not|don't|dont|do ?n\u2019t) have(?: (?:one|any|it))?(?: (?:a|an|any|the))?(?: \\p{L}+){0,3}",
+   "no (?:\\p{L}+)(?: \\p{L}+)?",
+   'ningun[oa]?', 'nada', 'no aplica', 'sin (?:\\p{L}+)(?: \\p{L}+)?', 'no (?:tengo|hay|tiene|tenemos)(?: (?:ninguno|ninguna|uno|una))?(?: \\p{L}+){0,3}',
+].join('|') + ')$', 'iu');
+export function saysNoValue(answer) {
+   const text = String(answer ?? '').trim().toLowerCase().replace(/[.!¡¿?,;:]+/g, ' ').replace(/\s+/g, ' ').trim();
+   return !!text && !/\d/.test(text) && NO_VALUE.test(text);
+}
+
 export function readFormAnswer(answer,candidates,current,choiceKey,questions=[]) {
    const raw=unescape(answer),parts=raw.split(/([?;\n]|\b(?:and|y)\b)/i),asked=[];
    let consumed=false;
@@ -310,6 +325,8 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    const isCur = (c) => (Array.isArray(cur.names) ? cur.names.indexOf(c.name) > -1 : c.name === cur.name) && (cur.form === undefined || c.form === cur.form);
    const narrativeCurrent=list.some(field=>isCur(field) && ['text','choice'].includes(field.profile.kind) && field.profile.narrative===true);
    const own = Array.isArray(cur.names) ? undefined : list.filter(isCur)[0];   // a group has no single own choice list
+   // The asked input is declinable and the whole answer says there is none: answered, with no value (an explicit null).
+   if (own && own.declinable === true && saysNoValue(raw)) return { hits: [{ form: own.form, name: own.name, value: null, declined: true, known: Object.prototype.hasOwnProperty.call(own, 'value') && own.value === null }], ambiguous: [] };
    // A form's scope level: 0 for the current input's form, then each further form in the order the chain lists them.
    const forms = [];
    if (own) {

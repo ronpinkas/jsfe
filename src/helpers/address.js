@@ -33,7 +33,7 @@ export function streetLocation(result,said,zip) {
    return {street:exact?part('street_number')+' '+part('route'):String(said).trim(),said:String(said).trim(),verified:!!exact,city};
 }
 export function resolvedAddress(values,data) {
-   const unit=/^(none|no|ninguno|ninguna|sin|no hay)$/i.test(String(values.unit || ''))?'':String(values.unit || '').replace(/^(apt\.?|unit|#)\s*/i,'');
+   const unit=String(values.unit ?? '').replace(/^(apt\.?|unit|#)\s*/i,'');
    const street=data.street?.street || values.street || '',city=values.city && data.location?.state ? values.city+', '+data.location.state : data.location?.line || values.city_state || '';
    return {street,unit,city,zip:String(values.zip || ''),line:street+(unit?' Apt '+unit:'')+', '+city+' '+values.zip,verified:data.street?.verified===true,said:data.street?.said || values.street || ''};
 }

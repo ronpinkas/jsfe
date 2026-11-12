@@ -155,6 +155,7 @@ export function decideFormProposal(cargo,owner,input,childId,decision){
 export function commitFormProposals(cargo,accepted=[]){
    const changes=[],readings=[];
    for(const hit of accepted){
+      if(hit.declined===true)continue;   // a declinable input's "none" carries no proposal (rejected at definition time)
       const {state}=candidate(cargo,hit);readings.push({state,hit});
       const record=recordFor(cargo,state,hit.name);if(!record){if(own(hit,'proposalResume')||own(hit,'proposalApproval'))fail('approval has no live record');continue;}
       const tagged=own(hit,'proposalResume')||own(hit,'proposalApproval');

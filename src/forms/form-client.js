@@ -104,6 +104,11 @@ export function projectForm(session, flows) {
           field.control = control;
           field.place = {types: input.form_client.types, ...(input.form_client.regions ? {regions: input.form_client.regions.map(region => region.toLowerCase())} : {})};
         } else { /* the profile's own box */ }
+        // A declinable field may be left blank: the submission names it in `declined` (answered, no value).
+        if (input.declinable === true) {
+          field.declinable = true;
+          if (field.filled && state.values[input.name] === null) field.declined = true;
+        }
         if (!field.sensitive && ['string','number','boolean'].includes(typeof state.values?.[input.name])) field.value = state.values[input.name];
         // A worded refusal is shown with its field; the bare 'invalid' flag (a refusal with no message, or a whole-form
         // validator asking for this field) is not caller text: the reply above says what is needed and `current` points here.
@@ -148,10 +153,11 @@ export function parseFormSubmission(prompt, view) {
   let envelope;
   try { envelope = JSON.parse(prompt.slice(FORM_SUBMISSION_PREFIX.length)); }
   catch { throw new Error('Invalid form submission JSON.'); }
-  if (!object(envelope) || Object.keys(envelope).some(key => !['form','values'].includes(key)) || !object(envelope.values)) throw new Error('Expected form and values.');
+  if (!object(envelope) || Object.keys(envelope).some(key => !['form','values','declined'].includes(key)) || !object(envelope.values)) throw new Error('Expected form and values.');
+  if (envelope.declined !== undefined && (!Array.isArray(envelope.declined) || envelope.declined.some(path => typeof path !== 'string') || new Set(envelope.declined).size !== envelope.declined.length)) throw new Error('Declined must list field paths.');
   if (!view || view.version !== 1 || envelope.form !== view.form) throw new Error('This form is no longer the current input request.');
-  const allowed = new Set();
-  const collect = fields => { for (const field of fields) field.fields ? collect(field.fields) : allowed.add(field.path); };
+  const allowed = new Set(), declinable = new Set();
+  const collect = fields => { for (const field of fields) field.fields ? collect(field.fields) : (allowed.add(field.path), field.declinable && declinable.add(field.path)); };
   collect(view.fields);
   let count = 0;
   const walk = (values, prefix = '', depth = 0) => {
@@ -170,8 +176,19 @@ export function parseFormSubmission(prompt, view) {
     }
   };
   walk(envelope.values);
+  // A declined field is answered with no value: a null at its path (a declinable field left blank, never one with text).
+  const values = structuredClone(envelope.values);
+  for (const path of envelope.declined || []) {
+    if (!declinable.has(path)) throw new Error('This field cannot be left without a value.');
+    const names = path.split('.'), leaf = names.pop();
+    let node = values;
+    for (const name of names) node = object(node[name]) ? node[name] : (node[name] = {});
+    if (typeof node[leaf] === 'string' && node[leaf].trim()) throw new Error('A declined field has a value.');
+    node[leaf] = null;
+    count++;
+  }
   if (!count) throw new Error('Enter at least one field value.');
-  return {prompt, form: envelope.form, values: envelope.values};
+  return {prompt, form: envelope.form, values};
 }
 
 /** Install these two overrides for one preflighted submission turn only; restore the host's functions afterwards.
@@ -184,6 +201,7 @@ export function formSubmissionReaders(submission, getSession) {
       const cargo = getSession().cargo, state = cargo.forms[submission.form];
       if (!state) throw new Error('Submitted form no longer exists.');
       const hits = formInitialReadings(state, submission.values, cargo).map(hit => {
+        if (hit.declined === true) return {...hit, origin: 'form_submission', current: false, utterance: ''};
         // Prepared enums carry their current choices in the existing candidate chain.
         const profile = candidates.find(candidate => candidate.form === hit.form && candidate.name === hit.name)?.profile || hit.profile;
         const raw = hit.raw;

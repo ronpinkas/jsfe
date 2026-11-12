@@ -13,6 +13,9 @@ export function formValuesEqual(a,b) {
    return ak.length===bk.length&&ak.every(k=>own(b,k)&&formValuesEqual(a[k],b[k]));
 }
 export const hasFormValue = v => v !== undefined && v !== null && v !== '';
+/** A `declinable` input answered "there is none" holds an explicit null: answered, with no value (never the same as
+ * unanswered, which has no key at all). Only a declinable input can hold it. */
+export const formDeclined = (input, values) => input?.declinable === true && own(values, input.name) && values[input.name] === null;
 export function formPath(root, path) {
    return String(path || '').split('.').reduce((o, k) => forbidden.has(k) || o === undefined || o === null || !own(o, k) ? undefined : o[k], root);
 }
@@ -29,6 +32,7 @@ export function resolveFormInputs(inputs, presets = {}) {
       const input = { ...(raw.field ? presets[raw.field] : {}), ...raw };
       if(input.profile?.money!==undefined){if(input.profile.kind!=='amount')throw new Error('FORM money options require amount profile');validateMoneyOptions(input.profile.money);}
       validateFormExhaustion(input.on_exhausted);
+      if(input.declinable!==undefined&&(input.declinable!==true||!input.profile||input.form||input.any_of||input.bind||input.confirmation||input.profile.kind==='choice'||input.proposal!==undefined))throw new Error(`FORM declinable ${input.name} must be true on a readable leaf input that is not a choice, a confirmation or a proposal`);
       if(input.meaning!==undefined)throw new Error('FORM meaning is retired; use a contextual response description');
       if(input.response!==undefined){if(!input.profile || input.form || input.any_of || input.bind)throw new Error('FORM response requires a readable leaf input');validateFormResponse(input.response);}
       if(input.proposal!==undefined){
@@ -87,7 +91,7 @@ function formCondition(input, values = {}, cargo = {}, state = {}) {
       const list = [].concat(wanted).map(String);
       const yes = list.filter(v => !v.startsWith('!'));
       const matches=(!yes.length || yes.includes(have)) && list.filter(v => v.startsWith('!')).every(v => have !== v.slice(1));
-      return matches ? true : !hasFormValue(value(key)) ? null : false;
+      return matches ? true : !hasFormValue(value(key)) && !(own(values,key) && values[key] === null) ? null : false;
    });
    return conditions.includes(false)?false:conditions.includes(null)?null:true;
 }
@@ -106,7 +110,7 @@ export function formInputFilled(input, state, cargo = {}, checking = new Set()) 
       const v = formPath({ cargo }, input.bind);
       return hasFormValue(v) && v !== false;
    }
-   const filled = name => !(state.inputProposals?.[name]&&!state.inputProposals[name].committed&&['pending','confirmed'].includes(state.inputProposals[name].status)) && !state.errors?.[name] && !state.pending?.[name] && hasFormValue(state.values[name]);
+   const filled = name => !(state.inputProposals?.[name]&&!state.inputProposals[name].committed&&['pending','confirmed'].includes(state.inputProposals[name].status)) && !state.errors?.[name] && !state.pending?.[name] && (hasFormValue(state.values[name]) || formDeclined(state.specs.flatMap(s=>s.any_of || [s]).find(s=>s.name===name),state.values));
    return input.any_of ? input.any_of.some(i => formInputApplies(i,state.values,cargo,state)&&formInputFilled(i,state,cargo,checking)) : filled(input.name);
 }
 export function nextFormInput(state, cargo = {}) {
@@ -170,7 +174,7 @@ export function enrichFormMatches(matches,chain,form,names=[],asked='') {
    const enrich=h=>{
       const spec=chain.find(c=>c.form===h.form&&c.name===h.name)||{};
       return {...h,label:h.option_label||spec.label||h.name,label_es:h.option_label_es||spec.label_es||spec.label||h.name,...(h.option_label?{option:true}:{}),
-         validator:spec.validator||'',...((matches.decisions||[]).some(d=>d.form===h.form&&d.name===h.name&&(d.rule==='out_of_order'||d.rule==='compound'))?{out_of_order:true}:{}),...(!(h.form===form&&names.includes(h.name))&&spec.profile&&!['choice','amount','text'].includes(spec.profile.kind)&&/\d/.test(String(h.value))?{out_of_order_number:true}:{}),...(spec.response?{response:spec.response}:{}),after:spec.after||'',validate_always:spec.validate_always===true,...(spec.activation?{activation:spec.activation}:{}),...(spec.silent===true?{silent:true}:{}),pii:spec.pii===true,current:h.form===form&&names.includes(h.name),asked};
+         validator:h.declined===true?'':spec.validator||'',...((matches.decisions||[]).some(d=>d.form===h.form&&d.name===h.name&&(d.rule==='out_of_order'||d.rule==='compound'))?{out_of_order:true}:{}),...(!(h.form===form&&names.includes(h.name))&&spec.profile&&!['choice','amount','text'].includes(spec.profile.kind)&&/\d/.test(String(h.value))?{out_of_order_number:true}:{}),...(spec.response?{response:spec.response}:{}),after:spec.after||'',validate_always:spec.validate_always===true,...(spec.activation?{activation:spec.activation}:{}),...(spec.silent===true?{silent:true}:{}),pii:spec.pii===true,current:h.form===form&&names.includes(h.name),asked};
    };
    return {...matches,hits:matches.hits.map(enrich),ambiguous:matches.ambiguous.map(enrich),remaining:(matches.remaining||[]).map(group=>group.map(enrich))};
 }
@@ -325,6 +329,10 @@ export function formInitialReadings(state, supplied = {},cargo={}) {
    // Named initial fields have no ambiguity to resolve. Conditions are evaluated against validated
    // predecessors by the common batch, so a new controller is never hidden by its old committed value.
    for (const group of state.specs || []) for (const input of group.any_of || [group]) {
+      if(own(supplied,input.name)&&supplied[input.name]===null&&input.declinable===true){
+         hits.push({...input,label:input.label||input.name,label_es:input.label_es||input.label||input.name,form:state.id,value:null,declined:true,invalid:false,known:formDeclined(input,state.values),current:true,origin:'activation',raw:'',utterance:String(supplied.userInput||'')});
+         continue;
+      }
       if (!own(supplied,input.name)||!hasFormValue(supplied[input.name])||!input.profile)continue;
       const value=supplied[input.name];
       const reading=typeof value==='object'?null:input.profile.kind==='choice'&&(input.profile.choices||[]).some(c=>c.key===String(value))
@@ -606,7 +614,7 @@ export function acceptFormReadings(cargo, hits, additionalCandidates=[]) {
       const state = cargo.forms?.[hit.form];
       if (!state || hit.ok !== true) throw new Error('FORM acceptance requires an existing instance and a validated value');
       const input = state.specs.flatMap(s => s.any_of || [s]).find(s => s.name === hit.name);
-      if (!input || !hasFormValue(hit.value)) throw new Error('FORM acceptance names an unknown input or empty value');
+      if (!input || !(hasFormValue(hit.value) || hit.declined === true && hit.value === null && input.declinable === true)) throw new Error('FORM acceptance names an unknown input or empty value');
       if (!groups.has(hit.form)) groups.set(hit.form, []);
       groups.get(hit.form).push(hit);
    }
@@ -622,7 +630,7 @@ export function acceptFormReadings(cargo, hits, additionalCandidates=[]) {
          }}
       }
       const changed = [...cleared,...readings.filter(h => !formValuesEqual(state.values[h.name],h.value)).map(h => h.name)];
-      const invalidating=changed.filter(name=>cleared.includes(name)||hasFormValue(state.values[name]));
+      const invalidating=changed.filter(name=>cleared.includes(name)||hasFormValue(state.values[name])||own(state.values,name)&&state.values[name]===null);
       invalidateFormInputs(cargo, id, invalidating, readings.map(h => h.name),preservedNodes());
       if(changed.length&&!invalidating.length){state.revision++;state.confirmation=null;}
       for (const hit of readings) {
