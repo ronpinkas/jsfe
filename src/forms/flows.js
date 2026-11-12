@@ -151,9 +151,10 @@ function validateAcceptanceDeclarations(id, inputs) {
  * regions?}. A date's min and max are whole days from today in `timezone` (required with either); range_from names the
  * start of a range, a date input of this form that is not itself an end. A number's min and max bound its value. A
  * place suggests what the caller types from the host's place service: types 'cities' or 'address', regions up to 15
- * ISO 3166-1 alpha-2 country codes. Checked at definition time; malformed fails.
+ * ISO 3166-1 alpha-2 country codes, context up to 5 other inputs of this form whose values narrow the lookup (a ZIP code
+ * for a street). Checked at definition time; malformed fails.
  */
-const FORM_CLIENT_KEYS = { date: ['control', 'range_from', 'min', 'max', 'timezone'], number: ['control', 'min', 'max'], place: ['control', 'types', 'regions'] };
+const FORM_CLIENT_KEYS = { date: ['control', 'range_from', 'min', 'max', 'timezone'], number: ['control', 'min', 'max'], place: ['control', 'types', 'regions', 'context'] };
 const FORM_CLIENT_KINDS = ['pattern', 'text', 'digits', 'amount', 'identifier'];
 const FORM_PLACE_KINDS = ['pattern', 'text'];
 const FORM_PLACE_TYPES = ['cities', 'address'];
@@ -189,6 +190,15 @@ function validateFormClientControls(id, inputs) {
          if (declared.regions !== undefined && (!Array.isArray(declared.regions) || !declared.regions.length || declared.regions.length > 15 ||
             !declared.regions.every((region) => typeof region === 'string' && /^[a-z]{2}$/i.test(region)))) fail(input, 'regions must be 1 to 15 two-letter country codes');
          else { /* any region, or a valid list */ }
+         if (declared.context !== undefined) {
+            if (!Array.isArray(declared.context) || !declared.context.length || declared.context.length > 5) fail(input, 'context must list 1 to 5 inputs of this form');
+            for (const name of declared.context) {
+               const other = all.find((candidate) => candidate.name === name);
+               if (!other || other === input) fail(input, `context ${JSON.stringify(name)} must name another input of this form`);
+               else if (other.pii === true) fail(input, `context ${name} is a sensitive input`);
+               else { /* a field whose value narrows the lookup */ }
+            }
+         } else { /* no context */ }
       } else { /* a number */ }
    }
 }
