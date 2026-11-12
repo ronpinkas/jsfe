@@ -12,7 +12,9 @@ export function addressDraft(raw) {
 export function zipLocation(result) {
    const components=result?.components || result?.results?.[0]?.address_components || [];
    const part=(kind,short=false)=>{const row=components.find(c=>(c.types || []).includes(kind));return row ? String(short?row.short_name || row.long_name:row.long_name || row.short_name) : '';};
-   const city=part('locality')||part('postal_town')||part('sublocality'),state=part('administrative_area_level_1',true);
+   // The place name its mail carries: the locality, else (inside a city Google splits into named areas, such as Los Angeles's
+   // Canoga Park and West Hills, where it returns no locality) the sublocality or neighborhood.
+   const city=part('locality')||part('postal_town')||part('sublocality')||part('sublocality_level_1')||part('neighborhood'),state=part('administrative_area_level_1',true);
    // A ZIP code can belong to several places (90023: Commerce, East Los Angeles, Los Angeles, Vernon); each is a name its
    // mail may carry, so the caller picks one. Google lists them as postcode_localities; at most 7 (8 is a reserved key).
    const listed=[].concat(result?.localities || result?.results?.[0]?.postcode_localities || []).map(String).filter(Boolean);
@@ -29,7 +31,7 @@ export function streetLocation(result,said,zip) {
    const exact=result?.status==='OK'&&row.partial_match!==true&&types.includes('street_address')&&locationType==='ROOFTOP'&&part('street_number')&&part('route')&&(!part('postal_code')||part('postal_code')===zip);
    // An exact street match names the place its mail carries; it corrects a city read from the ZIP code alone (90805 is
    // Lakewood to the ZIP lookup, while its streets are Long Beach and Lakewood)
-   const city=exact?part('locality')||part('postal_town')||part('sublocality'):'';
+   const city=exact?part('locality')||part('postal_town')||part('sublocality')||part('sublocality_level_1')||part('neighborhood'):'';
    return {street:exact?part('street_number')+' '+part('route'):String(said).trim(),said:String(said).trim(),verified:!!exact,city};
 }
 export function resolvedAddress(values,data) {
