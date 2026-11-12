@@ -29,7 +29,7 @@ const broken = (change, pattern) => {
   const inputs = tripInputs(); change(inputs);
   assert.throws(() => load(trip(inputs)), pattern, `rejects: ${pattern}`);
 };
-broken(inputs => { inputs[2].form_client = {control: 'slider'}; }, /control must be "date", "number" or "place"/);
+broken(inputs => { inputs[2].form_client = {control: 'slider'}; }, /control must be "date", "number", "place", "postal" or "combobox"/);
 broken(inputs => { inputs[2].form_client = true; }, /must be false or \{control/);
 broken(inputs => { inputs[2].form_client = {control: 'number', step: 2}; }, /number cannot declare step/);
 broken(inputs => { inputs[2].form_client = {control: 'number', min: 1.5}; }, /min must be a whole number/);
@@ -130,7 +130,7 @@ console.log('form-client-controls: inputs without a control are unchanged');
 // The system address form's street suggests US addresses.
 {
   const addressInputs = FLOWS.find(flow => flow.id === 'collect-geocoded-address');
-  const street = JSON.stringify(addressInputs || {}).includes('"form_client":{"control":"place","types":"address","regions":["us"]}');
+  const street = JSON.stringify(addressInputs || {}).includes('"form_client":{"control":"place","types":"address","regions":["us"],"fills":{"zip":"postal_code","city":"locality"},"autofill":"address-line1"}');
   assert(street, 'collect-geocoded-address declares a place control');
   console.log('form-client-controls: the system address form street is a place control');
 }

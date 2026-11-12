@@ -88,7 +88,9 @@ export function projectForm(session, flows) {
           if (!isCurrent && field.filled && !allowedChoices.has(acceptedKey) &&
               choices.some(choice => choice.current_only && String(choice.key) === acceptedKey)) continue;
           field.choices = [...allowedChoices.values()];
-          if (!field.choices.length || profile.accept_other) continue;
+          // A choice that also takes other text is drawn only as a combobox (a text box offering its choices, which may
+          // be none yet); a select could not hold the other text.
+          if (profile.accept_other ? input.form_client?.control !== 'combobox' : !field.choices.length) continue;
         }
         field.constraints = Object.fromEntries(['min','max'].filter(key => typeof profile[key] === 'number').map(key => [key, profile[key]]));
         // The control the input declares (validated at definition time). Its bounds replace the profile's, which for
@@ -99,11 +101,18 @@ export function projectForm(session, flows) {
           field.constraints = Object.fromEntries(['min','max'].filter(key => Number.isInteger(input.form_client[key]))
             .map(key => [key, control === 'date' ? daysFromToday(input.form_client[key], input.form_client.timezone) : input.form_client[key]]));
           if (control === 'date' && input.form_client.range_from) field.range_from = prefix + input.form_client.range_from;
-        } else if (control === 'place') {
-          // Suggestions come from the host's place service; the profile's bounds still apply to the typed text.
+        } else if (control === 'place' || control === 'postal') {
+          // Suggestions and lookups come from the host's place service; the profile's bounds still apply to the typed text.
+          // fills names the card's fields (by path) that a pick or a looked-up code fills, with the part each takes.
+          const {types, regions, fills} = input.form_client;
           field.control = control;
-          field.place = {types: input.form_client.types, ...(input.form_client.regions ? {regions: input.form_client.regions.map(region => region.toLowerCase())} : {})};
+          field[control] = {...(types ? {types} : {}), ...(regions ? {regions: regions.map(region => region.toLowerCase())} : {}),
+            ...(fills ? {fills: Object.fromEntries(Object.entries(fills).map(([name, part]) => [prefix + name, part]))} : {})};
+        } else if (control === 'combobox') {
+          field.control = control;
         } else { /* the profile's own box */ }
+        // The browser may fill the box from its saved data (an address, a name).
+        if (input.form_client?.autofill && !field.sensitive) field.autofill = input.form_client.autofill;
         // A declinable field may be left blank: the submission names it in `declined` (answered, no value).
         if (input.declinable === true) {
           field.declinable = true;
@@ -127,6 +136,41 @@ export function projectForm(session, flows) {
   const asked = context.names?.length || context.current;
   if (asked && !askedShown) return null;
   return projected.length ? {version: 1, form: root.id, language, fields: projected} : null;
+}
+
+const STANDARD_LABELS = {yes: {en: 'Yes', es: 'Sí'}, no: {en: 'No', es: 'No'}};
+const MAX_CHOICE_OPTIONS = 12;
+const said = text => String(text ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+
+/**
+ * The options of the question asked now, when it has a closed, labelled set, for a client that draws them as buttons or a list:
+ * {version: 1, language, options: [{key, label, say}]}, else null. Only a question asked by ask-choice qualifies (a
+ * confirmation, a menu, a choice asked in chat), and only when every option it offers has a label in the session's
+ * language (yes and no have standard ones). An option keyed 'event:' is an interrupt word, never offered. A tap sends `say`
+ * as the caller's own message: the label when the option reads it, else the option's first word or key that is not a
+ * number, else its first key; so the answer is read by the question's own reader. A host offers this only when no form
+ * card is drawn (projectForm is null).
+ */
+export function projectChoices(session) {
+  if (!session || session.continuationSafetyHold) return null;
+  const frame = (session.flowStacks || []).flat().at(-1);
+  if (!frame?.pendingVariable || frame.flowId !== 'ask-choice') return null;
+  const language = session.language === 'es' ? 'es' : 'en';
+  const choices = Array.isArray(frame.variables?.choices) ? frame.variables.choices.filter(choice => !String(choice?.key ?? '').startsWith('event:')) : [];
+  if (choices.length < 2 || choices.length > MAX_CHOICE_OPTIONS) return null;
+  const options = [], seen = new Set();
+  for (const choice of choices) {
+    const key = String(choice.key ?? '');
+    const label = String((language === 'es' ? choice.label_es || choice.label : choice.label) || STANDARD_LABELS[key]?.[language] || '').trim();
+    if (!key || !label || seen.has(key)) return null;
+    seen.add(key);
+    const words = [].concat(choice.phrases ?? choice.words ?? []).map(String);
+    const reads = words.some(word => said(word) === said(label)) || (STANDARD_LABELS[key] && label === STANDARD_LABELS[key][language]);
+    const say = reads ? label : words.find(word => !/^\d+$/.test(word.trim())) || words[0] || '';
+    if (!say) return null;
+    options.push({key, label, say});
+  }
+  return {version: 1, language, options};
 }
 
 /** Host preflight: call before updateActivity. Unknown paths and malformed envelopes never enter execution. */
@@ -206,7 +250,9 @@ export function formSubmissionReaders(submission, getSession) {
         const profile = candidates.find(candidate => candidate.form === hit.form && candidate.name === hit.name)?.profile || hit.profile;
         const raw = hit.raw;
         const read = profile.kind === 'choice'
-          ? (profile.choices || []).some(choice => String(choice.key) === raw && (!choice.current_only || hit.form === current.form && (hit.name === current.name || current.names?.includes(hit.name)))) ? {value: raw} : null
+          ? (profile.choices || []).some(choice => String(choice.key) === raw && (!choice.current_only || hit.form === current.form && (hit.name === current.name || current.names?.includes(hit.name)))) ? {value: raw}
+            // A combobox's own text: a choice that takes other text keeps it (with a letter when the profile asks for one).
+            : profile.accept_other === true && raw.trim() && (!profile.other_needs_letter || /\p{L}/u.test(raw)) ? {value: raw.trim()} : null
           : readInputProfile({...profile, marked: false}, raw, true);
         const valid = read && Object.hasOwn(read, 'value') && read.value !== '' && read.refused !== true && !read.incompleteMoney;
         return {...hit, value: valid ? read.value : raw, invalid: !valid, origin: 'form_submission', current: false, utterance: ''};

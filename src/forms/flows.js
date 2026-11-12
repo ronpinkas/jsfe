@@ -142,34 +142,54 @@ function validateAcceptanceDeclarations(id, inputs) {
 }
 
 /**
- * input.form_client: false (never on a form card) or the control a form card draws for it (docs/form-client.md):
- * {control: 'date', range_from?, min?, max?, timezone?}, {control: 'number', min?, max?} or {control: 'place', types,
- * regions?}. A date's min and max are whole days from today in `timezone` (required with either); range_from names the
- * start of a range, a date input of this form that is not itself an end. A number's min and max bound its value. A
- * place suggests what the caller types from the host's place service: types 'cities' or 'address', regions up to 15
- * ISO 3166-1 alpha-2 country codes. Checked at definition time; malformed fails.
+ * input.form_client: false (never on a form card) or how a form card draws it (docs/form-client.md). Every key is optional
+ * except a control's own requirements:
+ * - control 'date' {range_from?, min?, max?, timezone?}: a date's min and max are whole days from today in `timezone`
+ *   (required with either); range_from names the start of a range, a date input of this form that is not itself an end.
+ * - control 'number' {min?, max?}: bounds on the value.
+ * - control 'place' {types, regions?, fills?}: suggests what the caller types from the host's place service: types
+ *   'cities' or 'address', regions up to 15 ISO 3166-1 alpha-2 country codes; fills {input: part} names inputs of this
+ *   form a pick fills with a part of the picked place (postal_code, locality, admin_area, country).
+ * - control 'postal' {regions?, fills}: a postal code the host looks up as it is completed; the card shows the place it
+ *   names, and fills {input: part} fills inputs of this form with its locality (and, for a combobox, the code's other
+ *   localities as its options) or admin_area.
+ * - control 'combobox': a choice that also takes other text (accept_other), drawn as a text box offering its choices.
+ * - autofill: the HTML autocomplete token the browser may fill the box from (a saved address, name, email or phone).
+ * Checked at definition time; malformed fails.
  */
-const FORM_CLIENT_KEYS = { date: ['control', 'range_from', 'min', 'max', 'timezone'], number: ['control', 'min', 'max'], place: ['control', 'types', 'regions'] };
+const FORM_CLIENT_KEYS = { date: ['control', 'range_from', 'min', 'max', 'timezone', 'autofill'], number: ['control', 'min', 'max', 'autofill'],
+   place: ['control', 'types', 'regions', 'fills', 'autofill'], postal: ['control', 'regions', 'fills', 'autofill'], combobox: ['control', 'autofill'], none: ['autofill'] };
 const FORM_CLIENT_KINDS = ['pattern', 'text', 'digits', 'amount', 'identifier'];
-const FORM_PLACE_KINDS = ['pattern', 'text'];
+const FORM_CONTROL_KINDS = { place: ['pattern', 'text'], postal: ['digits', 'pattern', 'text', 'identifier'], combobox: ['choice'],
+   none: ['pattern', 'text', 'digits', 'amount', 'identifier', 'email', 'phone', 'choice'] };
 const FORM_PLACE_TYPES = ['cities', 'address'];
+const FORM_FILL_PARTS = { place: ['postal_code', 'locality', 'admin_area', 'country'], postal: ['locality', 'admin_area'] };
+// Positive whitelist: what a browser may fill from its own saved data. No payment card or one-time-code token: those are
+// sensitive, and a sensitive input never takes a form_client control.
+export const FORM_AUTOFILL_TOKENS = ['name', 'given-name', 'additional-name', 'family-name', 'honorific-prefix', 'honorific-suffix', 'nickname',
+   'organization', 'organization-title', 'email', 'tel', 'tel-national', 'street-address', 'address-line1', 'address-line2', 'address-line3',
+   'address-level1', 'address-level2', 'address-level3', 'postal-code', 'country', 'country-name', 'bday', 'sex', 'language', 'url'];
 function validateFormClientControls(id, inputs) {
    const all = (inputs || []).flatMap((input) => input.any_of || [input]);
    const fail = (input, message) => { throw new Error(`FORM ${id}: ${input.name} form_client ${message}`); };
    for (const input of all) {
       const declared = input.form_client;
       if (declared === undefined || declared === false) continue;
-      else if (!declared || typeof declared !== 'object' || Array.isArray(declared)) fail(input, 'must be false or {control, ...}');
-      else if (!Object.hasOwn(FORM_CLIENT_KEYS, declared.control)) fail(input, 'control must be "date", "number" or "place"');
-      else { /* a control object, checked below */ }
-      const extra = Object.keys(declared).filter((key) => !FORM_CLIENT_KEYS[declared.control].includes(key));
-      if (extra.length) fail(input, `${declared.control} cannot declare ${extra.join(', ')}`);
-      const kinds = declared.control === 'place' ? FORM_PLACE_KINDS : FORM_CLIENT_KINDS;
-      if (!kinds.includes(input.profile?.kind)) fail(input, `${declared.control} control needs a profile of kind ${kinds.join(', ')}`);
+      else if (!declared || typeof declared !== 'object' || Array.isArray(declared)) fail(input, 'must be false or {control?, autofill?, ...}');
+      else if (declared.control !== undefined && (declared.control === 'none' || !Object.hasOwn(FORM_CLIENT_KEYS, declared.control))) fail(input, 'control must be "date", "number", "place", "postal" or "combobox"');
+      else { /* a control object, or autofill alone; checked below */ }
+      const control = declared.control ?? 'none';
+      const extra = Object.keys(declared).filter((key) => !FORM_CLIENT_KEYS[control].includes(key));
+      if (extra.length) fail(input, control === 'none' ? `without a control declares only autofill, not ${extra.join(', ')}` : `${control} cannot declare ${extra.join(', ')}`);
+      const kinds = FORM_CONTROL_KINDS[control] || FORM_CLIENT_KINDS;
+      const kind = (input.profile || FIELD_PRESETS[input.field]?.profile)?.kind;
+      if (!kinds.includes(kind)) fail(input, `${control === 'none' ? 'autofill' : control + ' control'} needs a profile of kind ${kinds.join(', ')}`);
       if (input.pii === true) fail(input, 'control cannot draw a sensitive input');
+      if (declared.autofill !== undefined && !FORM_AUTOFILL_TOKENS.includes(declared.autofill)) fail(input, `autofill ${JSON.stringify(declared.autofill)} is not one of ${FORM_AUTOFILL_TOKENS.join(', ')}`);
+      if (control === 'combobox' && (input.profile || {}).accept_other !== true) fail(input, 'combobox needs a choice that accepts other text (accept_other)');
       for (const key of ['min', 'max']) if (declared[key] !== undefined && !Number.isInteger(declared[key])) fail(input, `${key} must be a whole number`);
       if (Number.isInteger(declared.min) && Number.isInteger(declared.max) && declared.min > declared.max) fail(input, 'min is above max');
-      if (declared.control === 'date') {
+      if (control === 'date') {
          if ((declared.min !== undefined || declared.max !== undefined) && declared.timezone === undefined) fail(input, 'min and max are days from today: declare the timezone they count in');
          if (declared.timezone !== undefined) {
             try { new Intl.DateTimeFormat('en-CA', { timeZone: declared.timezone }); } catch { fail(input, `timezone ${JSON.stringify(declared.timezone)} is not an IANA time zone`); }
@@ -180,12 +200,24 @@ function validateFormClientControls(id, inputs) {
             else if (start.form_client?.control !== 'date' || start.form_client.range_from !== undefined) fail(input, `range_from ${start.name} must be a date control that is not itself a range end`);
             else { /* a valid range start */ }
          } else { /* a single date or a range start */ }
-      } else if (declared.control === 'place') {
-         if (!FORM_PLACE_TYPES.includes(declared.types)) fail(input, `types must be ${FORM_PLACE_TYPES.map((type) => `"${type}"`).join(' or ')}`);
+      } else if (control === 'place' || control === 'postal') {
+         if (control === 'place' && !FORM_PLACE_TYPES.includes(declared.types)) fail(input, `types must be ${FORM_PLACE_TYPES.map((type) => `"${type}"`).join(' or ')}`);
          if (declared.regions !== undefined && (!Array.isArray(declared.regions) || !declared.regions.length || declared.regions.length > 15 ||
             !declared.regions.every((region) => typeof region === 'string' && /^[a-z]{2}$/i.test(region)))) fail(input, 'regions must be 1 to 15 two-letter country codes');
          else { /* any region, or a valid list */ }
-      } else { /* a number */ }
+         const fills = declared.fills;
+         if (fills === undefined && control === 'postal') fail(input, 'postal needs fills: the inputs its place fills');
+         else if (fills !== undefined) {
+            if (!fills || typeof fills !== 'object' || Array.isArray(fills) || !Object.keys(fills).length || Object.keys(fills).length > 8) fail(input, 'fills must map 1 to 8 inputs to a part');
+            for (const [name, part] of Object.entries(fills)) {
+               const target = all.find((other) => other.name === name);
+               if (!target || target === input) fail(input, `fills ${name} must name another input of this form`);
+               else if (target.pii === true || target.form_client === false) fail(input, `fills ${name} must be an input a card can draw`);
+               else if (!FORM_FILL_PARTS[control].includes(part)) fail(input, `fills ${name}: part must be ${FORM_FILL_PARTS[control].join(', ')}`);
+               else { /* a valid fill */ }
+            }
+         } else { /* a place that fills nothing else */ }
+      } else { /* a number, a combobox or autofill alone */ }
    }
 }
 
