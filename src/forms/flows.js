@@ -10,8 +10,8 @@ import {CONTEXTUAL_RESPONSES_REQUIREMENT,hasFormResponse,contextualResponseRunti
  *
  * Collection:  run-form (the reentrant loop, shared scope), collect-input (ask one input, read the answer against the
  *              form chain), collect-input-accept (validate + store, one reading at a time), disambiguate-input,
- *              form-done (hand the result to the parent, clear the form), the field collectors (collect-phone…) and
- *              the sub-forms collect-address and collect-credit-card, validate-card-number / validate-card-expiration.
+ *              form-done (hand the result to the parent, clear the form), the sub-forms collect-address and
+ *              collect-credit-card, validate-card-number / validate-card-expiration.
  * Retrieval:   provide-data (gate → load → answer), load-source, answer-facts.
  *
  * State lives in cargo.forms[<form id>] = { values, attempts, replays, parent, result_input, specs }: cargo is the only
@@ -104,10 +104,6 @@ export const FIELD_PRESETS = {
       question: 'What is the billing ZIP code for the card?', question_es: '¿Cuál es el código postal de facturación de la tarjeta?' },
 };
 
-// Field collectors: one-input forms over a preset, callable directly (result in cargo.formResults[<id>]).
-const FIELD_COLLECTORS = { 'collect-phone': 'phone', 'collect-email': 'email', 'collect-zip': 'zip', 'collect-street-address': 'street_address',
-   'collect-city': 'city', 'collect-card-number': 'card_number', 'collect-card-expiration': 'card_expiration', 'collect-card-cvv': 'card_cvv',
-   'collect-card-zip': 'card_zip' };
 
 // ── a form flow (the shape every form follows; tenant forms are written the same way) ──────────────────────────────
 /**
@@ -857,12 +853,7 @@ const validators = [
       steps: [SIDE('vcc_check', "(function (v, n) { var d = String(v).replace(/\\D/g, ''); var pan = String(n || '').replace(/\\D/g, ''); var want = pan ? (/^3[47]/.test(pan) ? 4 : 3) : 0; var ok = want ? d.length === want : d.length === 3 || d.length === 4; cargo.inputCheck = ok ? { ok: true, value: d } : want === 4 ? { ok: false, message: \"That security code doesn't look right. It is the 4 digits on the front of the card.\", message_es: 'Ese código de seguridad no parece correcto. Son los 4 dígitos al frente de la tarjeta.' } : { ok: false, message: \"That security code doesn't look right. It is the 3 digits on the back of the card.\", message_es: 'Ese código de seguridad no parece correcto. Son los 3 dígitos al reverso de la tarjeta.' }; return true; })(value, typeof values !== 'undefined' && values ? values.card_number : '')")] },
 ];
 
-// ── field collectors and sub-forms ──────────────────────────────────────────────────────────────────────────────────
-const fieldCollectors = Object.entries(FIELD_COLLECTORS).map(([id, field]) => formFlow({
-   id, name: id.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(''), version: '1.0.0',
-   description: `Field collector: the ${FIELD_PRESETS[field].label} (preset '${field}'). Result: cargo.formResults['${id}'].${field}.`,
-   inputs: [{ name: field, field }],
-}));
+// ── sub-forms ──────────────────────────────────────────────────────────────────────────────────
 const subForms = [
    formFlow({ id: 'collect-address', name: 'CollectAddress', version: '1.0.0',
       description: "Sub-form: street address, city, state, ZIP, in any order. Result: the parent's result input (or cargo.formResults['collect-address']).",
@@ -1117,7 +1108,7 @@ const resumeForm={id:'resume-form',name:'ResumeForm',version:'1.0.0',scope:'isol
       SET('resume_definition','target','cargo.forms[form].definition'),SET('resume_parent','parent',"cargo.forms[form].parent || ''"),SET('resume_slot','slot',"cargo.forms[form].result_input || ''"),
       FLOW('resume_owned_form','{{target}}','replace',{form_instance:'{{form}}',parent_form:'{{parent}}',result_input:'{{slot}}'})
    ]};
-const LIBRARY_FLOWS = [providerUnanswered, readProviderReply, readFormChoice, readConfirmReply, confirmInputProposal,proposalDeclined,resumeForm,performAction, sendTextAction, prepareInput, runForm, collectInput, validateBatch, requestCancelled, readFormResponse, collectContextualAnswer, accept, acceptedEffects, disambiguate, confirmForm, formDone, providerMenu, ...validators, ...fieldCollectors, ...subForms, provideData, provideQueuedData, loadSource, answerFacts];
+const LIBRARY_FLOWS = [providerUnanswered, readProviderReply, readFormChoice, readConfirmReply, confirmInputProposal,proposalDeclined,resumeForm,performAction, sendTextAction, prepareInput, runForm, collectInput, validateBatch, requestCancelled, readFormResponse, collectContextualAnswer, accept, acceptedEffects, disambiguate, confirmForm, formDone, providerMenu, ...validators, ...subForms, provideData, provideQueuedData, loadSource, answerFacts];
 const LIBRARY_CONTRACTS={
    'confirm-input-proposal':{role:'collector',requires:[INPUT_PROPOSALS_REQUIREMENT]},'confirm-input-proposal-declined':{role:'worker',requires:[INPUT_PROPOSALS_REQUIREMENT]},
    'resume-form':{role:'worker'},
@@ -1136,9 +1127,6 @@ const LIBRARY_CONTRACTS={
    'validate-card-number':{role:'worker',result:{path:'cargo.inputCheck',type:'object'}},
    'validate-card-expiration':{role:'worker',result:{path:'cargo.inputCheck',type:'object'}},
    'validate-card-cvv':{role:'worker',result:{path:'cargo.inputCheck',type:'object'}},
-   'collect-phone':{role:'collector'},'collect-email':{role:'collector'},'collect-zip':{role:'collector'},
-   'collect-street-address':{role:'collector'},'collect-city':{role:'collector'},'collect-card-number':{role:'collector'},
-   'collect-card-expiration':{role:'collector'},'collect-card-cvv':{role:'collector'},'collect-card-zip':{role:'collector'},
    'collect-address':{role:'collector'},'collect-credit-card':{role:'collector'}
 };
 export const FLOWS=LIBRARY_FLOWS.map(flow=>{
