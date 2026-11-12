@@ -89,15 +89,20 @@ flowchart TD
    c13 -- "else" --> c15
    b16["CASE"]
    c15 -- "form_should_confirm === true" --> b16
-   n17["set noop"]
-   b16 --> n17
-   c15 -- "else" --> n17
-   n18[["call form-done"]]
-   class n18 flowstep
-   n17 --> n18
+   c17{"case"}
+   b16 --> c17
+   c15 -- "else" --> c17
+   b18["CASE"]
+   c17 -- "form_should_confirm === true" --> b18
+   n19["set noop"]
+   b18 --> n19
+   c17 -- "else" --> n19
+   n20[["call form-done"]]
+   class n20 flowstep
+   n19 --> n20
    DONE(["end (back to caller)"])
    class DONE endstep
-   n18 --> DONE
+   n20 --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

@@ -22,7 +22,7 @@
   - `contact_options`: Contact field protocol declaration
 - **Calls:** [authenticate-user](authenticate-user.md) (value), [contact-support](contact-support.md) (value, by name), [collect-service-answer](collect-service-answer.md) (call), {{retry_flow}} (replace, reboot), [validate-otp-code](validate-otp-code.md) (call), [generic-retry-with-options](generic-retry-with-options.md) (replace), [switch-to-text](switch-to-text.md) (reboot), [live-agent-requested](live-agent-requested.md) (reboot), {{cancel_flow}} (reboot)
 - **Tools:** none
-- **Called by:** [authenticate-user](authenticate-user.md), [get-cell-or-email](get-cell-or-email.md), [validate-otp-code](validate-otp-code.md), [generic-retry-with-options](generic-retry-with-options.md), [otp-send-failed](otp-send-failed.md), [contact-not-on-file](contact-not-on-file.md)
+- **Called by:** [authenticate-user](authenticate-user.md), [validate-otp-code](validate-otp-code.md), [generic-retry-with-options](generic-retry-with-options.md), [otp-send-failed](otp-send-failed.md), [contact-not-on-file](contact-not-on-file.md), [contact-misread](contact-misread.md)
 
 ### Steps
 
@@ -104,7 +104,7 @@ flowchart TD
    b28(["reboot → #123;#123;cancel_flow#125;#125;"])
    class b28 endstep
    c22 -- "retry_picked === 'exit' #124;#124; !user_choice.trim() #124;#124; /^\d$/.test(user_ch…" --> b28
-   b29(["dispatch: intent detection"])
+   b29(["reboot → #123;#123;cancel_flow#125;#125;"])
    class b29 endstep
    c22 -- "else" --> b29
    classDef endstep fill:#eef,stroke:#669

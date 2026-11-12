@@ -818,7 +818,7 @@
             "id": "auth_join_context",
             "type": "SET",
             "variable": "noop",
-            "value": "(cargo.authOptions=Object.assign({},auth_previous_options || cargo.authOptions,{parent_form:parent_form || auth_previous_options && auth_previous_options.parent_form || ''}),cargo.authCancelFlow=cargo.authOptions.cancel_flow || cancel_flow,true)"
+            "value": "(cargo.authOptions=Object.assign({},auth_previous_options || cargo.authOptions,{parent_form:parent_form || (auth_previous_options && auth_previous_options.parent_form && cargo.forms && cargo.forms[auth_previous_options.parent_form] ? auth_previous_options.parent_form : '')}),cargo.authCancelFlow=cargo.authOptions.cancel_flow || cancel_flow,true)"
           },
           "default": {
             "id": "auth_join_options_skip",
@@ -1116,6 +1116,11 @@
         "name": "gce_rejected",
         "type": "boolean",
         "description": "Internal rejected contact continuation"
+      },
+      {
+        "name": "gce_missed",
+        "type": "boolean",
+        "description": "Internal misread contact continuation"
       }
     ],
     "variables": {
@@ -1201,6 +1206,10 @@
         "value": false
       },
       "gce_rejected": {
+        "type": "boolean",
+        "value": false
+      },
+      "gce_missed": {
         "type": "boolean",
         "value": false
       },
@@ -1365,6 +1374,12 @@
         "value": "contact_options || (retrying && cargo.contactOptions ? Object.assign({},cargo.contactOptions,{fromMenu:true,intro:'',intro_es:''}) : {retry_flow:retry_flow || 'authenticate-user',cancel_flow:cancel_flow || 'contact-support',account_pattern:account_pattern,account_name:account_name,account_name_es:account_name_es,account_shape:account_shape,intro:intro,intro_es:intro_es,caller_on_file:caller_on_file,retry_call_type:retry_call_type || 'reboot',validate_flow:validate_flow,merge_partials:merge_partials === true || merge_partials === 'true',parent_form:parent_form})"
       },
       {
+        "id": "identity_contact_live_parent",
+        "type": "SET",
+        "variable": "contact_options",
+        "value": "contact_options.parent_form && !(cargo.forms && cargo.forms[contact_options.parent_form]) ? Object.assign({},contact_options,{parent_form:''}) : contact_options"
+      },
+      {
         "id": "identity_contact_remember",
         "type": "SET",
         "variable": "noop",
@@ -1382,6 +1397,24 @@
           },
           "default": {
             "id": "identity_contact_new_rejection_series_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "identity_contact_new_miss_series",
+        "type": "CASE",
+        "branches": {
+          "condition: !gce_missed": {
+            "id": "identity_contact_misses_reset",
+            "type": "SET",
+            "variable": "noop",
+            "value": "(cargo.gceMisses=0,true)"
+          },
+          "default": {
+            "id": "identity_contact_new_miss_series_skip",
             "type": "SET",
             "variable": "noop",
             "value": "true"
@@ -1663,36 +1696,24 @@
           "condition: contact_kind === 'international'": {
             "id": "identity_contact_international",
             "type": "FLOW",
-            "value": "generic-retry-with-options",
+            "value": "contact-misread",
             "callType": "replace",
             "parameters": {
-              "error_message": "{{contact_error}}",
-              "error_message_es": "{{contact_error_es}}",
-              "retry_flow": "{{contact_options.retry_flow}}",
-              "cancel_flow": "{{contact_options.cancel_flow}}",
-              "capture_patterns": "{{cargo.authCapture}}",
-              "retry_call_type": "{{contact_options.retry_call_type}}",
-              "parent_form": "{{contact_options.parent_form}}",
               "contact_options": "{{contact_options}}",
-              "gce_menu": true
+              "error_message": "{{contact_error}}",
+              "error_message_es": "{{contact_error_es}}"
             },
             "initializeDefaults": true
           },
           "condition: contact_kind === 'invalid_phone'": {
             "id": "identity_contact_invalid_phone",
             "type": "FLOW",
-            "value": "generic-retry-with-options",
+            "value": "contact-misread",
             "callType": "replace",
             "parameters": {
-              "error_message": "{{contact_error}}",
-              "error_message_es": "{{contact_error_es}}",
-              "retry_flow": "{{contact_options.retry_flow}}",
-              "cancel_flow": "{{contact_options.cancel_flow}}",
-              "capture_patterns": "{{cargo.authCapture}}",
-              "retry_call_type": "{{contact_options.retry_call_type}}",
-              "parent_form": "{{contact_options.parent_form}}",
               "contact_options": "{{contact_options}}",
-              "gce_menu": true
+              "error_message": "{{contact_error}}",
+              "error_message_es": "{{contact_error_es}}"
             },
             "initializeDefaults": true
           },
@@ -1707,18 +1728,12 @@
           "condition: contact_kind === 'invalid'": {
             "id": "identity_contact_missing",
             "type": "FLOW",
-            "value": "generic-retry-with-options",
+            "value": "contact-misread",
             "callType": "replace",
             "parameters": {
-              "error_message": "{{contact_error}}",
-              "error_message_es": "{{contact_error_es}}",
-              "retry_flow": "{{contact_options.retry_flow}}",
-              "cancel_flow": "{{contact_options.cancel_flow}}",
-              "capture_patterns": "{{cargo.authCapture}}",
-              "retry_call_type": "{{contact_options.retry_call_type}}",
-              "parent_form": "{{contact_options.parent_form}}",
               "contact_options": "{{contact_options}}",
-              "gce_menu": true
+              "error_message": "{{contact_error}}",
+              "error_message_es": "{{contact_error_es}}"
             },
             "initializeDefaults": true
           },
@@ -1737,18 +1752,12 @@
           "condition: contact_kind === 'unmapped'": {
             "id": "identity_contact_unmapped",
             "type": "FLOW",
-            "value": "generic-retry-with-options",
+            "value": "contact-misread",
             "callType": "replace",
             "parameters": {
-              "error_message": "{{contact_error}}",
-              "error_message_es": "{{contact_error_es}}",
-              "retry_flow": "{{contact_options.retry_flow}}",
-              "cancel_flow": "{{contact_options.cancel_flow}}",
-              "capture_patterns": "{{cargo.authCapture}}",
-              "retry_call_type": "{{contact_options.retry_call_type}}",
-              "parent_form": "{{contact_options.parent_form}}",
               "contact_options": "{{contact_options}}",
-              "gce_menu": true
+              "error_message": "{{contact_error}}",
+              "error_message_es": "{{contact_error_es}}"
             },
             "initializeDefaults": true
           },
@@ -3476,7 +3485,7 @@
         "id": "retry_parent",
         "type": "SET",
         "variable": "parent_form",
-        "value": "parent_form || cargo.authOptions && cargo.authOptions.parent_form || cargo.contactOptions && cargo.contactOptions.parent_form || ''"
+        "value": "[parent_form,cargo.authOptions && cargo.authOptions.parent_form,cargo.contactOptions && cargo.contactOptions.parent_form].filter(function (p) {return !!p && !!(cargo.forms && cargo.forms[p]);})[0] || ''"
       },
       {
         "id": "retry_profiles",
@@ -3796,8 +3805,10 @@
             "callType": "reboot"
           },
           "default": {
-            "id": "retry_dispatch",
-            "type": "DISPATCH",
+            "id": "retry_give_up",
+            "type": "FLOW",
+            "value": "{{cancel_flow}}",
+            "callType": "reboot",
             "outcome": "{{caller_outcome}}",
             "reason": "{{caller_reason}}"
           }
@@ -17076,6 +17087,34 @@
         "type": "CASE",
         "branches": {
           "condition: form_should_confirm === true": {
+            "id": "collect-geocoded-address_closed_at_confirm",
+            "type": "CASE",
+            "branches": {
+              "condition: !cargo.forms[form_instance]": {
+                "id": "collect-geocoded-address_closed_at_confirm_end",
+                "type": "END"
+              },
+              "default": {
+                "id": "collect-geocoded-address_closed_at_confirm_skip",
+                "type": "SET",
+                "variable": "noop",
+                "value": "true"
+              }
+            }
+          },
+          "default": {
+            "id": "collect-geocoded-address_confirmation_guard_4_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "collect-geocoded-address_confirmation_guard_5",
+        "type": "CASE",
+        "branches": {
+          "condition: form_should_confirm === true": {
             "id": "collect-geocoded-address_confirmed",
             "type": "CASE",
             "branches": {
@@ -17110,7 +17149,7 @@
             }
           },
           "default": {
-            "id": "collect-geocoded-address_confirmation_guard_4_skip",
+            "id": "collect-geocoded-address_confirmation_guard_5_skip",
             "type": "SET",
             "variable": "noop",
             "value": "true"
@@ -18501,6 +18540,34 @@
         "type": "CASE",
         "branches": {
           "condition: form_should_confirm === true": {
+            "id": "confirm-input-proposal_closed_at_confirm",
+            "type": "CASE",
+            "branches": {
+              "condition: !cargo.forms[form_instance]": {
+                "id": "confirm-input-proposal_closed_at_confirm_end",
+                "type": "END"
+              },
+              "default": {
+                "id": "confirm-input-proposal_closed_at_confirm_skip",
+                "type": "SET",
+                "variable": "noop",
+                "value": "true"
+              }
+            }
+          },
+          "default": {
+            "id": "confirm-input-proposal_confirmation_guard_4_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "confirm-input-proposal_confirmation_guard_5",
+        "type": "CASE",
+        "branches": {
+          "condition: form_should_confirm === true": {
             "id": "confirm-input-proposal_confirmed",
             "type": "CASE",
             "branches": {
@@ -18535,7 +18602,7 @@
             }
           },
           "default": {
-            "id": "confirm-input-proposal_confirmation_guard_4_skip",
+            "id": "confirm-input-proposal_confirmation_guard_5_skip",
             "type": "SET",
             "variable": "noop",
             "value": "true"
@@ -21065,6 +21132,133 @@
           "version": 1,
           "role": "worker",
           "summary": "Worker (started by the engine): the caller exited; give the support closing with the outcome in force.",
+          "parametersFrom": "parameters",
+          "requires": [
+            "jsfe:continuation-safety:v1"
+          ]
+        }
+      }
+    },
+    "safetyRevision": "dispatch-intake-2026-10-22"
+  },
+  {
+    "scope": "shared",
+    "version": "1.0.0",
+    "id": "contact-misread",
+    "name": "ContactMisread",
+    "description": "Ask the contact question again after an answer that is no contact, then offer the common retry menu at the third miss in a row.",
+    "parameters": [
+      {
+        "name": "contact_options",
+        "type": "object",
+        "description": "Current contact service options"
+      },
+      {
+        "name": "error_message",
+        "type": "string",
+        "description": "Why the answer was not used"
+      },
+      {
+        "name": "error_message_es",
+        "type": "string",
+        "description": "Spanish: why the answer was not used"
+      }
+    ],
+    "steps": [
+      {
+        "id": "contact-misread_continuation_safety_protocol",
+        "type": "SET",
+        "variable": "noop",
+        "value": "continuationSafetyProtocol() === 1",
+        "requireTrue": true
+      },
+      {
+        "id": "contact_miss_count",
+        "type": "SET",
+        "variable": "noop",
+        "value": "(cargo.gceMisses=Number(cargo.gceMisses || 0)+1,true)"
+      },
+      {
+        "id": "contact_missed_options",
+        "type": "SET",
+        "variable": "contact_options",
+        "value": "Object.assign({},contact_options,{fromMenu:false,intro:error_message,intro_es:error_message_es})"
+      },
+      {
+        "id": "contact_missed_again",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.gceMisses <= 2": {
+            "id": "contact_missed_collect",
+            "type": "FLOW",
+            "value": "get-cell-or-email",
+            "callType": "replace",
+            "parameters": {
+              "contact_options": "{{contact_options}}",
+              "cell_number": "",
+              "email": "",
+              "acct_number": "",
+              "gce_missed": true
+            },
+            "initializeDefaults": true
+          },
+          "default": {
+            "id": "contact_missed_again_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "contact_misses_done",
+        "type": "SET",
+        "variable": "noop",
+        "value": "(cargo.gceMisses=0,true)"
+      },
+      {
+        "id": "contact_missed_error",
+        "type": "SET",
+        "variable": "contact_error",
+        "value": "error_message"
+      },
+      {
+        "id": "contact_missed_error_es",
+        "type": "SET",
+        "variable": "contact_error_es",
+        "value": "error_message_es"
+      },
+      {
+        "id": "contact_missed_menu",
+        "type": "FLOW",
+        "value": "generic-retry-with-options",
+        "callType": "replace",
+        "parameters": {
+          "error_message": "{{contact_error}}",
+          "error_message_es": "{{contact_error_es}}",
+          "retry_flow": "{{contact_options.retry_flow}}",
+          "cancel_flow": "{{contact_options.cancel_flow}}",
+          "capture_patterns": "{{cargo.authCapture}}",
+          "retry_call_type": "{{contact_options.retry_call_type}}",
+          "parent_form": "{{contact_options.parent_form}}",
+          "contact_options": "{{contact_options}}",
+          "gce_menu": true
+        },
+        "initializeDefaults": true
+      }
+    ],
+    "variables": {
+      "noop": {
+        "type": "boolean",
+        "scope": "flow",
+        "value": false
+      },
+      "contract": {
+        "type": "object",
+        "value": {
+          "version": 1,
+          "role": "worker",
+          "summary": "Ask the contact question again after an answer that is no contact, then offer the common retry menu at the third miss in a row.",
           "parametersFrom": "parameters",
           "requires": [
             "jsfe:continuation-safety:v1"
