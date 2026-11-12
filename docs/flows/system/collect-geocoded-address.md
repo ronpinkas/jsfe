@@ -1,7 +1,7 @@
 # CollectGeocodedAddress
 
 <!-- generated:start -->
-**CollectGeocodedAddress** · `collect-geocoded-address` · version 1.0.0 · worker (called by other flows) · form + steps · isolated scope
+**CollectGeocodedAddress** · `collect-geocoded-address` · version 1.1.0 · worker (called by other flows) · form + steps · isolated scope
 
 > Collect a mailing address in any order, project geocoder evidence, and read the complete address back for confirmation.
 

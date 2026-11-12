@@ -13125,7 +13125,7 @@
   {
     "id": "collect-geocoded-address",
     "name": "CollectGeocodedAddress",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Collect a mailing address in any order, project geocoder evidence, and read the complete address back for confirmation.",
     "scope": "isolated",
     "metadata": {
@@ -13232,7 +13232,17 @@
             ],
             "validator": "address-zip-validate",
             "prepare": "address-zip-prompt",
-            "question_from": "zip_question"
+            "question_from": "zip_question",
+            "form_client": {
+              "control": "postal",
+              "regions": [
+                "us"
+              ],
+              "fills": {
+                "city": "locality"
+              },
+              "autofill": "postal-code"
+            }
           },
           {
             "name": "city",
@@ -13262,7 +13272,11 @@
             "prepare": "address-city-prompt",
             "question_from": "city_question",
             "question": "Which city is it?",
-            "question_es": "¿Qué ciudad es?"
+            "question_es": "¿Qué ciudad es?",
+            "form_client": {
+              "control": "combobox",
+              "autofill": "address-level2"
+            }
           },
           {
             "name": "city_state",
@@ -13314,7 +13328,12 @@
               "types": "address",
               "regions": [
                 "us"
-              ]
+              ],
+              "fills": {
+                "zip": "postal_code",
+                "city": "locality"
+              },
+              "autofill": "address-line1"
             }
           },
           {
@@ -13343,7 +13362,10 @@
             },
             "question_from": "unit_question",
             "question": "Is there an apartment or unit number? Type the number, or NONE.",
-            "question_es": "¿Hay un número de apartamento o unidad? Escriba el número, o NINGUNO."
+            "question_es": "¿Hay un número de apartamento o unidad? Escriba el número, o NINGUNO.",
+            "form_client": {
+              "autofill": "address-line2"
+            }
           }
         ]
       },
@@ -13907,7 +13929,7 @@
         "id": "address_zip_location",
         "type": "SET",
         "variable": "location",
-        "value": "(function zipLocation(result) {\n   const components=result?.components || result?.results?.[0]?.address_components || [];\n   const part=(kind,short=false)=>{const row=components.find(c=>(c.types || []).includes(kind));return row ? String(short?row.short_name || row.long_name:row.long_name || row.short_name) : '';};\n   const city=part('locality')||part('postal_town')||part('sublocality'),state=part('administrative_area_level_1',true);\n   // A ZIP code can belong to several places (90023: Commerce, East Los Angeles, Los Angeles, Vernon); each is a name its\n   // mail may carry, so the caller picks one. Google lists them as postcode_localities; at most 7 (8 is a reserved key).\n   const listed=[].concat(result?.localities || result?.results?.[0]?.postcode_localities || []).map(String).filter(Boolean);\n   const cities=listed.length>1?[...new Set(listed)].slice(0,7):[];\n   return result?.status==='OK'&&city&&state?{city,state,line:city+', '+state,cities}:null;\n})(result)"
+        "value": "(function zipLocation(result) {\n   const components=result?.components || result?.results?.[0]?.address_components || [];\n   const part=(kind,short=false)=>{const row=components.find(c=>(c.types || []).includes(kind));return row ? String(short?row.short_name || row.long_name:row.long_name || row.short_name) : '';};\n   // The place name its mail carries: the locality, else (inside a city Google splits into named areas, such as Los Angeles's\n   // Canoga Park and West Hills, where it returns no locality) the sublocality or neighborhood.\n   const city=part('locality')||part('postal_town')||part('sublocality')||part('sublocality_level_1')||part('neighborhood'),state=part('administrative_area_level_1',true);\n   // A ZIP code can belong to several places (90023: Commerce, East Los Angeles, Los Angeles, Vernon); each is a name its\n   // mail may carry, so the caller picks one. Google lists them as postcode_localities; at most 7 (8 is a reserved key).\n   const listed=[].concat(result?.localities || result?.results?.[0]?.postcode_localities || []).map(String).filter(Boolean);\n   const cities=listed.length>1?[...new Set(listed)].slice(0,7):[];\n   return result?.status==='OK'&&city&&state?{city,state,line:city+', '+state,cities}:null;\n})(result)"
       },
       {
         "id": "address_zip_result",
@@ -14053,7 +14075,7 @@
         "id": "address_street_projection",
         "type": "SET",
         "variable": "location",
-        "value": "(function streetLocation(result,said,zip) {\n   const row=result?.results?.[0] || result || {},components=row.components || row.address_components || [];\n   const part=kind=>components.find(c=>(c.types || []).includes(kind))?.long_name || '';\n   const types=row.types || [],locationType=row.location_type || row.geometry?.location_type || '';\n   const exact=result?.status==='OK'&&row.partial_match!==true&&types.includes('street_address')&&locationType==='ROOFTOP'&&part('street_number')&&part('route')&&(!part('postal_code')||part('postal_code')===zip);\n   // An exact street match names the place its mail carries; it corrects a city read from the ZIP code alone (90805 is\n   // Lakewood to the ZIP lookup, while its streets are Long Beach and Lakewood)\n   const city=exact?part('locality')||part('postal_town')||part('sublocality'):'';\n   return {street:exact?part('street_number')+' '+part('route'):String(said).trim(),said:String(said).trim(),verified:!!exact,city};\n})(result,value,values.zip)"
+        "value": "(function streetLocation(result,said,zip) {\n   const row=result?.results?.[0] || result || {},components=row.components || row.address_components || [];\n   const part=kind=>components.find(c=>(c.types || []).includes(kind))?.long_name || '';\n   const types=row.types || [],locationType=row.location_type || row.geometry?.location_type || '';\n   const exact=result?.status==='OK'&&row.partial_match!==true&&types.includes('street_address')&&locationType==='ROOFTOP'&&part('street_number')&&part('route')&&(!part('postal_code')||part('postal_code')===zip);\n   // An exact street match names the place its mail carries; it corrects a city read from the ZIP code alone (90805 is\n   // Lakewood to the ZIP lookup, while its streets are Long Beach and Lakewood)\n   const city=exact?part('locality')||part('postal_town')||part('sublocality')||part('sublocality_level_1')||part('neighborhood'):'';\n   return {street:exact?part('street_number')+' '+part('route'):String(said).trim(),said:String(said).trim(),verified:!!exact,city};\n})(result,value,values.zip)"
       },
       {
         "id": "address_street_result",
@@ -14206,6 +14228,8 @@
         "value": [
           {
             "key": "zip",
+            "label": "ZIP code",
+            "label_es": "Código postal",
             "phrases": [
               "1",
               "zip",
@@ -14217,6 +14241,8 @@
           },
           {
             "key": "city",
+            "label": "City",
+            "label_es": "Ciudad",
             "phrases": [
               "2",
               "city",
@@ -14225,6 +14251,8 @@
           },
           {
             "key": "street",
+            "label": "Street",
+            "label_es": "Calle",
             "phrases": [
               "3",
               "street",
@@ -14233,6 +14261,8 @@
           },
           {
             "key": "unit",
+            "label": "Apartment",
+            "label_es": "Apartamento",
             "phrases": [
               "4",
               "apartment",
@@ -14245,6 +14275,8 @@
           },
           {
             "key": "all",
+            "label": "Everything",
+            "label_es": "Todo",
             "phrases": [
               "5",
               "all",
