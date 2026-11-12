@@ -4472,6 +4472,19 @@ async function handleToolStep(currentFlowFrame: FlowFrame, engine: Engine): Prom
     return await handleValidationFailure(step, validationResult, currentFlowFrame, engine);
   }
 
+  const outageWindow = openOutageWindow(engine.scheduledOutage);
+  if (outageWindow) {
+    const tool = engine.toolsRegistry.find((t: ToolDefinition) => t.id === step.tool || t.name === step.tool);
+    if (engine.scheduledOutage!.tools.includes(String(tool?.id ?? step.tool))) {
+      logger.warn(`Scheduled outage until ${outageWindow.end}: tool ${tool?.id ?? step.tool} in '${currentFlowFrame.flowName}' is not called; every flow ends`);
+      throw new JSFEScheduledOutage(outageMessage(engine, outageWindow), String(tool?.id ?? step.tool));
+    } else {
+      // a tool the outage does not name runs
+    }
+  } else {
+    // no outage window is open
+  }
+
   try {
     logger.info(`Executing tool ${step.tool} (attempt ${step.retryCount + 1})`);
 
@@ -5338,6 +5351,63 @@ function declaresChoiceFor(frame: FlowFrame | undefined, test: (p: string) => bo
 /** Whether the question waiting in this frame declares its own choice for an exit word: that choice takes the answer. */
 function declaresExitChoice(frame: FlowFrame | undefined): boolean {
   return declaresChoiceFor(frame, p => isGlobalExit(p));
+}
+
+/**
+ * A scheduled outage (engine.scheduledOutage): while a window is open, a flow it names never starts and a tool it names is
+ * never called; the turn ends every flow and answers the window's message (message_es in a Spanish session). Windows are
+ * absolute ISO times with their offset, so an outage switches itself on and off; outside every window nothing changes.
+ */
+export interface ScheduledOutageWindow { start: string; end: string; message: string; message_es?: string }
+export interface ScheduledOutage { windows: ScheduledOutageWindow[]; flows: string[]; tools: string[] }
+
+/** The outage as given, validated: a malformed one throws, so a typo is never a window that silently never opens. */
+export function validateScheduledOutage(value: any): ScheduledOutage {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('scheduledOutage must be an object {windows, flows, tools}');
+  if (!Array.isArray(value.windows) || !value.windows.length) throw new Error('scheduledOutage.windows must be a non-empty list');
+  const stamped = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
+  const windows = value.windows.map((w: any, i: number) => {
+    if (!w || typeof w !== 'object') throw new Error(`scheduledOutage.windows[${i}] must be an object`);
+    for (const k of ['start', 'end']) {
+      if (typeof w[k] !== 'string' || !stamped.test(w[k]) || Number.isNaN(Date.parse(w[k]))) throw new Error(`scheduledOutage.windows[${i}].${k} must be an ISO time with its offset (e.g. 2026-11-11T22:30:00-08:00)`);
+    }
+    if (Date.parse(w.end) <= Date.parse(w.start)) throw new Error(`scheduledOutage.windows[${i}] ends before it starts`);
+    if (typeof w.message !== 'string' || !w.message.trim()) throw new Error(`scheduledOutage.windows[${i}].message must be a non-empty string`);
+    if (w.message_es !== undefined && (typeof w.message_es !== 'string' || !w.message_es.trim())) throw new Error(`scheduledOutage.windows[${i}].message_es must be a non-empty string when given`);
+    return Object.freeze({ start: w.start, end: w.end, message: w.message.trim(), ...(w.message_es !== undefined ? { message_es: w.message_es.trim() } : {}) });
+  });
+  for (const k of ['flows', 'tools']) {
+    if (!Array.isArray(value[k]) || value[k].some((x: any) => typeof x !== 'string' || !x)) throw new Error(`scheduledOutage.${k} must be a list of ids`);
+  }
+  return Object.freeze({ windows: Object.freeze(windows), flows: Object.freeze([...value.flows]), tools: Object.freeze([...value.tools]) }) as ScheduledOutage;
+}
+
+/** The window open at `now`, or null. */
+export function openOutageWindow(outage: ScheduledOutage | null, now: number = Date.now()): ScheduledOutageWindow | null {
+  if (!outage) return null;
+  else return outage.windows.find(w => Date.parse(w.start) <= now && now < Date.parse(w.end)) || null;
+}
+
+/** The open window's message in the session's language. */
+function outageMessage(engine: Engine, window: ScheduledOutageWindow): string {
+  const es = String(engine.getSessionLanguage() || engine.language || 'en').toLowerCase().startsWith('es');
+  return es && window.message_es ? window.message_es : window.message;
+}
+
+/** Thrown by a tool step the open window names; processActivity ends every flow and answers the message. */
+class JSFEScheduledOutage extends Error {
+  constructor(public readonly reply: string, tool: string) { super(`Scheduled outage: tool ${tool} is not called`); this.name = 'JSFEScheduledOutage'; }
+}
+
+/** Every flow ends for the outage, each transaction failed (nothing it started can finish now). */
+function endFlowsForOutage(engine: Engine, userId: string): void {
+  while (engine.flowStacks.length > 0) {
+    for (const flow of engine.flowStacks.pop() || []) {
+      TransactionManager.fail(flow.transaction, 'scheduled_outage');
+      auditLogger.logFlowExit(flow.flowName, userId, flow.transaction.id, 'scheduled_outage');
+    }
+  }
+  initializeFlowStacks(engine);
 }
 
 /** Every flow ends (finalized, audited with `reason`), with no outcome declared: the flow started next declares its own. */
@@ -7731,9 +7801,16 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
           logger.info(`DISPATCH from '${engine.pendingDispatchFrom}': routing ${JSON.stringify(sanitizedInput)} through intent detection`);
         }
       } catch (error: any) {
-        logger.error(`Flow execution error: ${error.message}`);
+        if (!(error instanceof JSFEScheduledOutage)) logger.error(`Flow execution error: ${error.message}`);
+        else { /* logged at warn where the tool was refused */ }
         logger.info(`Stack trace: ${error.stack}`);
 
+        if (error instanceof JSFEScheduledOutage) {
+          endFlowsForOutage(engine, userId);
+          return error.reply;
+        } else {
+          // any other failure is reported below
+        }
         if (error?.name === 'JSFEStepExpressionFailed') {
           // A step whose expression threw (owner 2026-11-11): the host tells the caller, so every flow ends here, each
           // transaction failed — a frame left below the failed one would resume mid-task on the caller's next words.
@@ -7784,6 +7861,15 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         // ordinary turn with no active flow — nothing to record
       }
 
+      const activationOutage = activatedFlow ? openOutageWindow(engine.scheduledOutage) : null;
+      if (activatedFlow && activationOutage && engine.scheduledOutage!.flows.includes(activatedFlow.id)) {
+        logger.warn(`Scheduled outage until ${activationOutage.end}: '${activatedFlow.name}' does not start; the outage message answers`);
+        endFlowsForOutage(engine, userId);
+        return outageMessage(engine, activationOutage);
+      } else {
+        // no outage, or a flow it does not name
+      }
+
       if (activatedFlow) {
         logger.info(`Flow activated: ${activatedFlow.name}`);
 
@@ -7811,6 +7897,12 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         }
       }
     } catch (error: any) {
+      if (error instanceof JSFEScheduledOutage) {
+        endFlowsForOutage(engine, userId);
+        return error.reply;
+      } else {
+        // reported by the host
+      }
       // Debug: re-thrown, and the host reports it (README, Host Responsibilities). At error here, with
       // processActivity's and updateActivity's lines, one AI timeout was four ERROR lines.
       logger.debug(`Flow activation error: ${error.message}`);
@@ -8081,6 +8173,10 @@ export class WorkflowEngine implements Engine {
    * non-zero `error`), with the tool and its message, digit runs masked. Diagnostic only.
    */
   public logToolFailures: boolean = false;
+  private _scheduledOutage: ScheduledOutage | null = null;
+  /** A scheduled outage (validateScheduledOutage); null is none. Assigning a malformed one throws. */
+  public get scheduledOutage(): ScheduledOutage | null { return this._scheduledOutage; }
+  public set scheduledOutage(value: ScheduledOutage | null) { this._scheduledOutage = value == null ? null : validateScheduledOutage(value); }
   /**
    * Set by a DISPATCH step to the name of the flow that dispatched; processActivity consumes it
    * within the same call and routes the turn's input to intent detection. Never persisted.

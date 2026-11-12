@@ -699,6 +699,13 @@ a failure (`success: false`, or a non-zero `error`): `Tool <id> answered a failu
 runs of four or more masked. Such a result is not an exception, so nothing else reports it, notably an HTTP
 tool whose `acceptStatus` turns a 4xx into an answer. The result is delivered unchanged.
 
+A scheduled outage (since 1.46.0), `engine.scheduledOutage = { windows: [{ start, end, message, message_es? }], flows: [ids],
+tools: [ids] }` (default `null`): while a window is open, a flow in `flows` does not start and a tool in `tools` is not
+called (a flow already running reaches it and stops there); every flow ends, each transaction failed, and the turn's reply
+is the window's `message` (`message_es` in a Spanish session). `start` and `end` are ISO times with their offset
+(`2026-11-11T22:30:00-08:00`), so the outage switches itself on and off; outside every window nothing changes. Assigning
+a malformed outage throws. The host names the flows and tools that depend on the unavailable backend.
+
 #### 3. **Approved Functions Registry** - Secure Local Functions
 
 ```javascript
