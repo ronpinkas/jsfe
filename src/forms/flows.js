@@ -147,12 +147,16 @@ function validateAcceptanceDeclarations(id, inputs) {
 
 /**
  * input.form_client: false (never on a form card) or the control a form card draws for it (docs/form-client.md):
- * {control: 'date', range_from?, min?, max?, timezone?} or {control: 'number', min?, max?}. A date's min and max are whole
- * days from today in `timezone` (required with either); range_from names the start of a range, a date input of this
- * form that is not itself an end. A number's min and max bound its value. Checked at definition time; malformed fails.
+ * {control: 'date', range_from?, min?, max?, timezone?}, {control: 'number', min?, max?} or {control: 'place', types,
+ * regions?}. A date's min and max are whole days from today in `timezone` (required with either); range_from names the
+ * start of a range, a date input of this form that is not itself an end. A number's min and max bound its value. A
+ * place suggests what the caller types from the host's place service: types 'cities' or 'address', regions up to 15
+ * ISO 3166-1 alpha-2 country codes. Checked at definition time; malformed fails.
  */
-const FORM_CLIENT_KEYS = { date: ['control', 'range_from', 'min', 'max', 'timezone'], number: ['control', 'min', 'max'] };
+const FORM_CLIENT_KEYS = { date: ['control', 'range_from', 'min', 'max', 'timezone'], number: ['control', 'min', 'max'], place: ['control', 'types', 'regions'] };
 const FORM_CLIENT_KINDS = ['pattern', 'text', 'digits', 'amount', 'identifier'];
+const FORM_PLACE_KINDS = ['pattern', 'text'];
+const FORM_PLACE_TYPES = ['cities', 'address'];
 function validateFormClientControls(id, inputs) {
    const all = (inputs || []).flatMap((input) => input.any_of || [input]);
    const fail = (input, message) => { throw new Error(`FORM ${id}: ${input.name} form_client ${message}`); };
@@ -160,11 +164,12 @@ function validateFormClientControls(id, inputs) {
       const declared = input.form_client;
       if (declared === undefined || declared === false) continue;
       else if (!declared || typeof declared !== 'object' || Array.isArray(declared)) fail(input, 'must be false or {control, ...}');
-      else if (!Object.hasOwn(FORM_CLIENT_KEYS, declared.control)) fail(input, 'control must be "date" or "number"');
+      else if (!Object.hasOwn(FORM_CLIENT_KEYS, declared.control)) fail(input, 'control must be "date", "number" or "place"');
       else { /* a control object, checked below */ }
       const extra = Object.keys(declared).filter((key) => !FORM_CLIENT_KEYS[declared.control].includes(key));
       if (extra.length) fail(input, `${declared.control} cannot declare ${extra.join(', ')}`);
-      if (!FORM_CLIENT_KINDS.includes(input.profile?.kind)) fail(input, `control needs a profile of kind ${FORM_CLIENT_KINDS.join(', ')}`);
+      const kinds = declared.control === 'place' ? FORM_PLACE_KINDS : FORM_CLIENT_KINDS;
+      if (!kinds.includes(input.profile?.kind)) fail(input, `${declared.control} control needs a profile of kind ${kinds.join(', ')}`);
       if (input.pii === true) fail(input, 'control cannot draw a sensitive input');
       for (const key of ['min', 'max']) if (declared[key] !== undefined && !Number.isInteger(declared[key])) fail(input, `${key} must be a whole number`);
       if (Number.isInteger(declared.min) && Number.isInteger(declared.max) && declared.min > declared.max) fail(input, 'min is above max');
@@ -179,6 +184,11 @@ function validateFormClientControls(id, inputs) {
             else if (start.form_client?.control !== 'date' || start.form_client.range_from !== undefined) fail(input, `range_from ${start.name} must be a date control that is not itself a range end`);
             else { /* a valid range start */ }
          } else { /* a single date or a range start */ }
+      } else if (declared.control === 'place') {
+         if (!FORM_PLACE_TYPES.includes(declared.types)) fail(input, `types must be ${FORM_PLACE_TYPES.map((type) => `"${type}"`).join(' or ')}`);
+         if (declared.regions !== undefined && (!Array.isArray(declared.regions) || !declared.regions.length || declared.regions.length > 15 ||
+            !declared.regions.every((region) => typeof region === 'string' && /^[a-z]{2}$/i.test(region)))) fail(input, 'regions must be 1 to 15 two-letter country codes');
+         else { /* any region, or a valid list */ }
       } else { /* a number */ }
    }
 }

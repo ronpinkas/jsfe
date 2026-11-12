@@ -99,6 +99,10 @@ export function projectForm(session, flows) {
           field.constraints = Object.fromEntries(['min','max'].filter(key => Number.isInteger(input.form_client[key]))
             .map(key => [key, control === 'date' ? daysFromToday(input.form_client[key], input.form_client.timezone) : input.form_client[key]]));
           if (control === 'date' && input.form_client.range_from) field.range_from = prefix + input.form_client.range_from;
+        } else if (control === 'place') {
+          // Suggestions come from the host's place service; the profile's bounds still apply to the typed text.
+          field.control = control;
+          field.place = {types: input.form_client.types, ...(input.form_client.regions ? {regions: input.form_client.regions.map(region => region.toLowerCase())} : {})};
         } else { /* the profile's own box */ }
         if (!field.sensitive && ['string','number','boolean'].includes(typeof state.values?.[input.name])) field.value = state.values[input.name];
         // A worded refusal is shown with its field; the bare 'invalid' flag (a refusal with no message, or a whole-form
@@ -121,6 +125,21 @@ export function projectForm(session, flows) {
 }
 
 /** Host preflight: call before updateActivity. Unknown paths and malformed envelopes never enter execution. */
+/** The place a view's field suggests, or null: the host's suggestion endpoint answers only for a place field of the
+ * form that is open now (`form` is the view's instance, `path` the field's), so it is never a general place service. */
+export function formPlaceField(view, form, path) {
+  if (!view || view.form !== form || typeof path !== 'string') return null;
+  const walk = fields => {
+    for (const field of fields || []) {
+      if (field.fields) { const found = walk(field.fields); if (found) return found; }
+      else if (field.path === path && field.control === 'place') return field.place;
+      else { /* another field */ }
+    }
+    return null;
+  };
+  return walk(view.fields);
+}
+
 export function parseFormSubmission(prompt, view) {
   if (typeof prompt !== 'string' || !prompt.trim().startsWith('JSFE_FORM_')) return null;
   prompt = prompt.trim();

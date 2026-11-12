@@ -2,7 +2,7 @@
 // and a card's submission read by the unchanged profiles.
 import assert from 'node:assert/strict';
 import {WorkflowEngine} from '../dist/index.js';
-import {FLOWS, projectForm, parseFormSubmission, formSubmissionReaders} from '../dist/forms/index.js';
+import {FLOWS, projectForm, parseFormSubmission, formSubmissionReaders, formPlaceField} from '../dist/forms/index.js';
 import {STANDARD_FUNCTIONS} from '../dist/helpers/index.js';
 
 const quiet = {info(){}, warn(){}, debug(){}, error(){}};
@@ -29,7 +29,7 @@ const broken = (change, pattern) => {
   const inputs = tripInputs(); change(inputs);
   assert.throws(() => load(trip(inputs)), pattern, `rejects: ${pattern}`);
 };
-broken(inputs => { inputs[2].form_client = {control: 'slider'}; }, /control must be "date" or "number"/);
+broken(inputs => { inputs[2].form_client = {control: 'slider'}; }, /control must be "date", "number" or "place"/);
 broken(inputs => { inputs[2].form_client = true; }, /must be false or \{control/);
 broken(inputs => { inputs[2].form_client = {control: 'number', step: 2}; }, /number cannot declare step/);
 broken(inputs => { inputs[2].form_client = {control: 'number', min: 1.5}; }, /min must be a whole number/);
@@ -87,3 +87,42 @@ console.log('form-client-controls: a submitted range and number are read by the 
   assert.deepEqual(fields.find(field => field.name === 'adults').constraints, {min: 1, max: 1}, 'the profile bounds stay without a control');
 }
 console.log('form-client-controls: inputs without a control are unchanged');
+
+// A place control: definition-time checks, the projected place, and formPlaceField answering only for the open form's
+// place field.
+{
+  const PLACE = {kind: 'text'};
+  const placeInputs = () => [
+    {name: 'city', label: 'city', question: 'Which city?', profile: PLACE, form_client: {control: 'place', types: 'cities', regions: ['US', 'mx']}},
+    {name: 'street', label: 'street address', question: 'What is the street address?', profile: PLACE, form_client: {control: 'place', types: 'address'}},
+    {name: 'adults', label: 'adults', question: 'How many adults?', profile: {kind: 'digits', min: 1, max: 1}, form_client: {control: 'number', min: 1, max: 9}},
+  ];
+  const placeFlow = (inputs = placeInputs()) => ({declarationVersion: 2, id: 'where', primary: true, description: 'Ask where', form: {inputs, after: [{id: 'keep', type: 'SET', variable: 'noop', value: 'true'}]}});
+  const refuses = (change, pattern) => { const inputs = placeInputs(); change(inputs); assert.throws(() => load(placeFlow(inputs)), pattern, `rejects: ${pattern}`); };
+  refuses(inputs => { inputs[0].form_client = {control: 'place'}; }, /types must be "cities" or "address"/);
+  refuses(inputs => { inputs[0].form_client = {control: 'place', types: 'airports'}; }, /types must be "cities" or "address"/);
+  refuses(inputs => { inputs[0].form_client = {control: 'place', types: 'cities', regions: []}; }, /regions must be 1 to 15 two-letter country codes/);
+  refuses(inputs => { inputs[0].form_client = {control: 'place', types: 'cities', regions: ['USA']}; }, /regions must be 1 to 15/);
+  refuses(inputs => { inputs[0].form_client = {control: 'place', types: 'cities', regions: Array(16).fill('us')}; }, /regions must be 1 to 15/);
+  refuses(inputs => { inputs[0].form_client = {control: 'place', types: 'cities', min: 1}; }, /place cannot declare min/);
+  refuses(inputs => { inputs[0].profile = {kind: 'digits'}; }, /place control needs a profile of kind pattern, text/);
+  refuses(inputs => { inputs[1].pii = true; }, /cannot draw a sensitive input/);
+  console.log('form-client-controls: malformed place controls fail at definition time');
+
+  const placeEngine = load(placeFlow()); placeEngine.disableCommands();
+  let s = placeEngine.initSession('test', 'where', 'en'); s.cargo.voice = false;
+  s = await placeEngine.updateActivity({role: 'user', content: 'ask where', start: {flow: 'where'}}, s);
+  const placeView = projectForm(s);
+  const field = name => placeView.fields.find(f => f.name === name);
+  assert.equal(field('city').control, 'place');
+  assert.deepEqual(field('city').place, {types: 'cities', regions: ['us', 'mx']}, 'regions are projected lower case');
+  assert.deepEqual(field('street').place, {types: 'address'}, 'no regions: none projected');
+  assert.deepEqual(formPlaceField(placeView, placeView.form, field('city').path), {types: 'cities', regions: ['us', 'mx']});
+  assert.equal(formPlaceField(placeView, 'another-form', field('city').path), null, 'another form instance');
+  assert.equal(formPlaceField(placeView, placeView.form, field('adults').path), null, 'a field that is not a place');
+  assert.equal(formPlaceField(placeView, placeView.form, 'nowhere'), null, 'an unknown path');
+  assert.equal(formPlaceField(null, placeView.form, field('city').path), null, 'no open form');
+  const sent = parseFormSubmission('JSFE_FORM_V1:' + JSON.stringify({form: placeView.form, values: {city: 'Orlando, FL, USA'}}), placeView);
+  assert(sent && !sent.error, 'a picked place submits as text');
+  console.log('form-client-controls: place projection and formPlaceField passed');
+}
