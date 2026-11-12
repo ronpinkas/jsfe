@@ -5010,13 +5010,26 @@ function handleSetStep(currentFlowFrame: FlowFrame, engine: Engine): string {
 
   // Support interpolation in SET values
   // Use JavaScript evaluation context for security - strings will be properly quoted
-  const interpolatedValue = typeof step.value === 'string'
-    ? evaluateExpression(step.value, currentFlowFrame?.variables || {}, [], {
-      securityLevel: 'basic',
-      context: 'javascript-evaluation', // Force JavaScript context for SET values
-      returnType: 'auto'
-    }, engine)
-    : step.value;
+  let interpolatedValue: unknown;
+  try {
+    interpolatedValue = typeof step.value === 'string'
+      ? evaluateExpression(step.value, currentFlowFrame?.variables || {}, [], {
+        securityLevel: 'basic',
+        context: 'javascript-evaluation', // Force JavaScript context for SET values
+        returnType: 'auto',
+        throwOnError: true
+      }, engine)
+      : step.value;
+  } catch (error: any) {
+    if (step.requireTrue === true) {
+      interpolatedValue = undefined; // a required step that threw is reported as the required step it is (below)
+    } else if (error instanceof Error && error.name === 'JSFEStepExpressionFailed') {
+      error.message = `SET step ${step.id || ''} in ${currentFlowFrame?.flowName || ''}: ${error.message}`; // names the failing step for the host's log
+      throw error;
+    } else {
+      throw error;
+    }
+  }
 
   if (step.requireTrue === true && interpolatedValue !== true) {
     const error = new Error(`Required SET step ${step.id || ''} did not complete successfully`);
@@ -6575,6 +6588,10 @@ interface ExpressionOptions {
   allowTernary?: boolean;
   context?: string; // For logging/debugging
   returnType?: 'string' | 'boolean' | 'auto';
+  // A SET value that throws is a failed step, never a value (owner 2026-11-11: never a silent failure). It is thrown as
+  // JSFEStepExpressionFailed and reaches the host as a JSFEExecutionError, which tells the caller; before, the step stored
+  // '[error: …]' and the flow ran on, ending the turn with nothing said.
+  throwOnError?: boolean;
 }
 
 /**
@@ -6726,7 +6743,8 @@ function evaluateExpression(
     allowTernary: true,
     context: 'template',
     returnType: 'auto',
-    ...options
+    ...options,
+    throwOnError: options.throwOnError === true
   };
 
   try {
@@ -6769,7 +6787,13 @@ function evaluateExpression(
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         logger.warn(`Single expression evaluation failed: ${singleExpressionMatch} - ${errorMessage}`);
-        return opts.returnType === 'boolean' ? false : `[error: ${expression}]`;
+        if (opts.throwOnError) {
+          const failed = new Error(`Step expression failed: ${errorMessage}`);
+          failed.name = 'JSFEStepExpressionFailed';
+          throw failed;
+        } else {
+          return opts.returnType === 'boolean' ? false : `[error: ${expression}]`;
+        }
       }
     }
 
@@ -6793,8 +6817,18 @@ function evaluateExpression(
 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    logger.warn(`Simplified evaluation error: ${errorMessage}`);
-    return opts.returnType === 'boolean' ? false : `[error: ${expression}]`;
+    if (error instanceof Error && error.name === 'JSFEStepExpressionFailed') {
+      throw error; // already logged where it failed; the step fails (handleSetStep's caller tells the caller)
+    } else {
+      logger.warn(`Simplified evaluation error: ${errorMessage}`);
+      if (opts.throwOnError) {
+        const failed = new Error(`Step expression failed: ${errorMessage}`);
+        failed.name = 'JSFEStepExpressionFailed';
+        throw failed;
+      } else {
+        return opts.returnType === 'boolean' ? false : `[error: ${expression}]`;
+      }
+    }
   }
 }
 
@@ -7700,10 +7734,22 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         logger.error(`Flow execution error: ${error.message}`);
         logger.info(`Stack trace: ${error.stack}`);
 
-        // Clean up failed flow
-        if (!guardedRoutingFailed && getCurrentStackLength(engine) > 0) {
+        if (error?.name === 'JSFEStepExpressionFailed') {
+          // A step whose expression threw (owner 2026-11-11): the host tells the caller, so every flow ends here, each
+          // transaction failed — a frame left below the failed one would resume mid-task on the caller's next words.
+          while (engine.flowStacks.length > 0) {
+            for (const flow of engine.flowStacks.pop() || []) {
+              TransactionManager.fail(flow.transaction, error.message);
+              auditLogger.logFlowExit(flow.flowName, currentFlowFrame.userId, flow.transaction.id, 'flow_step_failed');
+            }
+          }
+          initializeFlowStacks(engine);
+        } else if (!guardedRoutingFailed && getCurrentStackLength(engine) > 0) {
+          // Clean up failed flow
           const failedFrame = popFromCurrentStack(engine)!;
           TransactionManager.fail(failedFrame.transaction, error.message);
+        } else {
+          // no frame to clean up
         }
 
         throw new JSFEExecutionError(error.message, error);

@@ -213,6 +213,8 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
       SET(`${id}_confirm_q_es`, 'form_confirm_q_es', textValue(confirm.question_es || confirm.question)),
       SET(`${id}_confirm_firmness`, 'form_confirm_firmness', textValue(confirmFirmness)),
       FLOW(`${id}_confirm`, 'confirm-form', 'call', { form: '{{form_instance}}', confirmation: '{{form_confirm_firmness}}', question: '{{form_confirm_q}}', question_es: '{{form_confirm_q_es}}', phrases:'{{form_confirmation.phrases}}', words:'{{form_confirmation.words}}', clarifications:'{{form_confirmation.clarifications}}', no_keys:'{{form_confirmation.no_keys}}', interrupts:'{{form_confirmation.interrupts}}', invites:'{{form_confirmation.invites}}', named_fields:'{{form_confirmation.named_fields}}', reply_context:'{{form_confirmation.reply_context}}', rank_parameters:'{{form_confirmation.rank_parameters}}', exit_context: '{{exit_context}}', exit_context_es: '{{exit_context_es}}' }),
+      // a change read at the confirmation can close this instance (an ancestor's input changed): the owner continues with it
+      WHEN(`${id}_closed_at_confirm`, '!cargo.forms[form_instance]', END(`${id}_closed_at_confirm_end`)),
       { id: `${id}_confirmed`, type: 'CASE', branches: {
          [`condition: (cargo.formConfirm || {})[form_instance] === 'changed'`]: FLOW(`${id}_again`, id, 'replace', { parent_form: '{{parent_form}}', result_input: '{{result_input}}', form_instance: '{{form_instance}}' }),
          // NO: the declined flow takes the form's place, so the action below never runs
@@ -243,6 +245,7 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
             SET(`${id}_values`, 'form_values', 'cargo.forms[form_instance].values'),
             SIDE(`${id}_validation_reset`, '(cargo.formCheck = null, true)'),
             FLOW(`${id}_validate`, validator, 'call', { form: '{{form_instance}}', values: '{{form_values}}' }),
+            WHEN(`${id}_closed_at_validation`, '!cargo.forms[form_instance]', END(`${id}_closed_at_validation_end`)),
             SET(`${id}_validation`, 'form_validation', 'applyFormValidation(cargo, form_instance, cargo.formCheck)'),
             WHEN(`${id}_resolve_validation_exhausted`,"form_validation === 'failed'",SET(`${id}_validation_exhaustion`,'form_exhaustion',"exhaustFormInput(cargo,form_instance,((cargo.formCheck || {}).invalid || [])[0] ? cargo.formCheck.invalid[0].name : '')")),
             WHEN(`${id}_recover_validation_exhausted`,'form_exhaustion',FLOW(`${id}_validation_recovery`,'{{form_exhaustion.flow}}','reboot',{form:'{{form_exhaustion.form}}',failed_form:'{{form_exhaustion.failed_form}}',input:'{{form_exhaustion.input}}',failed_input:'{{form_exhaustion.failed_input}}',reason:'{{form_exhaustion.reason}}'})),

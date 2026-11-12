@@ -1,4 +1,4 @@
-/** Engine expression errors are printable results unless a safety step requires literal success. */
+/** A SET expression that throws fails its step (owner 2026-11-11); a safety step that requires literal success reports as itself. No effect runs either way. */
 import assert from 'node:assert/strict';
 import {WorkflowEngine} from '../dist/index.js';
 import {FLOWS,defineForm,defineWorker,linkFormSchemas} from '../dist/forms/index.js';
@@ -16,10 +16,10 @@ function fixture({override={},missing=false,staticQuestion=false}={}){
  return {effects,get session(){return session;},async say(content,start=false){session=await engine.updateActivity({role:'user',content,...(start?{start:{flow:'owner',arguments:{kind:'lost'}}}:{})},clone(session));return session;}};
 }
 for(const staticQuestion of [false,true]){
- const t=fixture({missing:true,staticQuestion});await assert.rejects(t.say('lost',true),/Required SET step vb_proposal_gate_valid/);assert.deepEqual(t.effects,[]);checks++;
+ const t=fixture({missing:true,staticQuestion});await assert.rejects(t.say('lost',true),/SET step vb_proposal_gate in ValidateInputBatch: Step expression failed: .*FORM proposal prepare must explicitly return a descriptor or null/);assert.deepEqual(t.effects,[]);checks++;
 }
 for(const helper of ['formProposalPolicy','stageFormProposal','settleFormProposalValidation','bindFormProposal']){
- const t=fixture({override:{[helper]:()=>{throw new Error('injected contract failure');}}});await assert.rejects(t.say('lost',true),/Required SET step/);assert.deepEqual(t.effects,[]);checks++;
+ const t=fixture({override:{[helper]:()=>{throw new Error('injected contract failure');}}});await assert.rejects(t.say('lost',true),/Required SET step \w+ did not complete|SET step \w+ in \w+: Step expression failed: Expression evaluation failed: injected contract failure/);assert.deepEqual(t.effects,[]);checks++;
 }
 {
  let fail=false;const t=fixture({override:{commitFormProposals:(...args)=>{if(fail)throw new Error('stale approval');return STANDARD_FUNCTIONS.commitFormProposals(...args);}}});await t.say('lost',true);fail=true;await assert.rejects(t.say('yes'),/Required SET step ca_proposal_commit/);assert.deepEqual(t.effects,[]);checks++;

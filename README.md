@@ -577,6 +577,12 @@ and does not initialize target defaults unless it declares `initializeDefaults:t
 only undefined defaults before explicit parameters. Isolated replacement initializes its own scope.
 `SET` steps may declare `requireTrue:true` to throw `JSFERequiredSetFailed` unless their result is literal
 true; absent or false keeps ordinary SET behavior.
+A `SET` value whose expression throws (an undefined variable, a helper that refuses its arguments) fails its step
+(since 1.45.0): the turn rejects with `JSFEExecutionError` (cause `JSFEStepExpressionFailed`, its message naming the
+step and flow), so the host tells the caller. Before 1.45.0 the step stored the string `[error: <expression>]` and
+the flow ran on, often ending the turn with nothing said. A `requireTrue` step that throws still reports as
+`JSFERequiredSetFailed`. A value that may legitimately be absent says so: `typeof x !== 'undefined' ? x : ''`.
+Templates (`SAY`, `{{…}}` parameters) and CASE conditions are unchanged.
 
 ##### Primary vs. Sub-Flow Architecture
 

@@ -95,7 +95,8 @@ await test('expressions read shared data at runtime as $data: one frozen copy, n
    assert.ok(!JSON.stringify(s).includes('Member Benefits'),'the shared data is not saved in the session');
    const mutate=make([data,reader([{id:'m',type:'SET',variable:'x',value:"($data.services.club.name='changed', true)"},{id:'say',type:'SAY',value:'{{$data.services.club.name}}'}])]);
    let m=mutate.initSession('user',crypto.randomUUID(),'en');
-   m=JSON.parse(JSON.stringify(await mutate.updateActivity({role:'user',content:'go',start:{flow:'read-it'}},m)));
+   // the write throws on the frozen copy, and a step that throws fails the turn (never a silent failure, owner 2026-11-11)
+   await assert.rejects(mutate.updateActivity({role:'user',content:'go',start:{flow:'read-it'}},m),/read only property/);
    assert.equal(mutate.sharedData.services.club.name,'Gold Club','a flow cannot change the shared data');
    assert.throws(()=>make([data,reader([{id:'say',type:'SAY',value:'{{$data.nope.name}}'}])]),/read-it reads unknown shared data \$data\.nope/);
    assert.throws(()=>make([reader([{id:'say',type:'SAY',value:'{{$data.services}}'}])]),/reads unknown shared data \$data\.services/);
