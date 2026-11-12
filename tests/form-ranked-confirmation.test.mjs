@@ -1,6 +1,6 @@
 /** A confirmation's unread answer goes to the reply ranker with the confirmation question, never straight to the host:
  * it is offered NO and the escapes, never YES (only the exact YES confirms). A decline is the NO; an answer that declines
- * nothing is asked again, and after two the give-up worker takes over; abort ends every flow; a new request goes to
+ * nothing is asked again, and after four the give-up worker takes over; abort ends every flow; a new request goes to
  * intent detection. */
 import assert from 'node:assert/strict';
 import {WorkflowEngine} from '../dist/index.js';
@@ -36,9 +36,16 @@ await test('the ranker never confirms: a key other than no is asked again',async
  assert.equal(t.session.cargo.paid,undefined);assert.match(r,/Charge it now/);assert.equal(t.session.lastTurnDispatch,undefined);
  assert.equal(await t.say('yes').then(()=>t.session.cargo.paid),true,'the exact YES still confirms');
 });
-await test('two unread answers that decline nothing go to the give-up worker, never a silent DISPATCH',async()=>{
- const t=fixture({key:null});await atConfirm(t);await t.say('I am not sure what you mean by that');await t.say('I mean what I said before');
+await test('four unread answers that decline nothing go to the give-up worker, never a silent DISPATCH; three are asked again',async()=>{
+ const t=fixture({key:null});await atConfirm(t);
+ for(const said of ['I am not sure what you mean by that','I mean what I said before','hold on it is calling me']){const r=await t.say(said);assert.match(r,/Charge it now/,said);assert.equal(t.session.cargo.gaveUp,undefined,said);}
+ await t.say('let me press it for you okay');
  assert.equal(t.session.cargo.paid,undefined);assert.equal(t.session.cargo.gaveUp,true);assert.equal(t.session.lastTurnDispatch,undefined);
+});
+await test('a YES after three unread answers still pays',async()=>{
+ const t=fixture({key:null});await atConfirm(t);
+ for(const said of ['I am not sure what you mean by that','I mean what I said before','hold on it is calling me'])await t.say(said);
+ await t.say('yes');assert.equal(t.session.cargo.paid,true);assert.equal(t.session.cargo.gaveUp,undefined);
 });
 await test('abort ends every flow',async()=>{
  const t=fixture({option:'abort'});await atConfirm(t);const r=await t.say('forget it I do not want this');

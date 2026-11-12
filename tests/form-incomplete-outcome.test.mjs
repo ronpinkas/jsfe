@@ -38,8 +38,8 @@ await test('input retry exhaustion preserves only a declared fallback',async()=>
 await test('confirmation unmatched and retry exhaustion honor the optional outcome policy',async()=>{
  for(const optional of [false,true])for(const unmatched of [false,true]) {
   const t=fixture({inputs:[],confirm:{question:'Proceed? YES or NO.'},...(optional?{incomplete_outcome:RESULT}:{})});await t.say('start',{flow:'follow-up'});
-  let s;if(unmatched)s=await t.say('I need different assistance');else for(let i=0;i<2;i++)s=await t.say('%%');
-  // exhausted attempts go to the give-up worker, as an input's do; an unmatched request yields resumable
+  let s;if(unmatched)s=await t.say('I need different assistance');else for(let i=0;i<4;i++)s=await t.say('%%');
+  // four exhausted attempts go to the give-up worker, as an input's do; an unmatched request yields resumable
   if(optional)assert.deepEqual(outcome(s),RESULT);else if(unmatched){assert.equal(s.lastFlowOutcome.outcome,'pending');assert.equal(s.lastFlowOutcome.reason,'confirmation_not_matched');assert.equal(s.lastFlowRecovery.mode,'resume');}else assert.deepEqual(outcome(s),{outcome:'unresolved',reason:'fixture_give_up'});
  }
 });

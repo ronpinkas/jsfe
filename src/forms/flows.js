@@ -767,7 +767,7 @@ const disambiguate = {
 // ── confirm-form: the exact confirmation of a finished form; a correction is matched against the form chain ───────
 const confirmForm = {
    id: 'confirm-form', name: 'ConfirmForm', version: '1.0.0', scope: 'isolated',
-   description: "Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm only when an action it authorizes is a payment; otherwise soft: YES is read as a soft confirmation's and offered to the reply ranker). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
+   description: "Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm only when an action it authorizes is a payment; otherwise soft: YES is read as a soft confirmation's and offered to the reply ranker). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after four the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
    parameters: ['form', 'confirmation', 'question', 'question_es', 'exit_context', 'exit_context_es','phrases','words','interrupts','no_keys','clarifications','invites','rank_parameters'].map((n) => ({ name: n, type: ['phrases','words','interrupts','no_keys','clarifications','invites','rank_parameters'].includes(n)?'array':'string', description: n })).concat([{ name: 'named_fields', type: 'boolean', description: "true: an answer that names one of the form's inputs (its names) without a value re-asks only that input" }]),
    variables: vars({ confirmation: '', cf_clarify:null, named_fields: false, reply_context: '', rank_parameters: [], cf_must: false, cf_presets: FIELD_PRESETS, cf_chain: [], cf_m: null, cf_current:null, cf_result: '',cf_prompt:'',cf_prompt_es:'', cf_words: 0, cf_tries: 0, phrases:null, words:[], clarifications:[], no_keys:['2'], interrupts:[], invites:[], cf_choices:[], cf_event:'', cf_amount:false, cf_questions:[],cf_provides:null,cf_skip_gate:'' }),
    steps: [
@@ -813,14 +813,14 @@ const confirmForm = {
       // the ranker's reading of an unread answer: a decline is the NO; an answer that declines nothing is asked again
       SET('cf_ranked', 'cf_result', "cf_result ? cf_result : cargo.confirmRanked === 'yes' ? 'yes' : cargo.confirmRanked === 'no' ? 'no' : cargo.confirmRanked === 'none' ? 'unclear' : cargo.confirmRanked === 'concern' ? 'concern' : ''"),
       SET('cf_changed', 'cf_result', "cf_result ? cf_result : 'changed'"),
-      // an unclear answer is asked again (the form runs again and reaches this question), at most twice
+      // an unclear answer is asked again (the form runs again and reaches this question); the fourth miss gives up (owner 2026-11-12: two lost a payment)
       // a concern is answered and asked again: no attempt, and the misses so far stand
       SET('cf_tries_count', 'cf_tries', "cf_result === 'unclear' ? missFormInput(cargo,form,'__confirm') : cf_result === 'concern' ? 0 : (clearFormMisses(cargo,form,'__confirm'),0)"),
       WHEN('cf_first','cf_must && cf_result === \'unclear\' && cf_words > 0',SIDE('cf_first_line',"(cargo.forms[form].feedback['__confirm']='first',true)")),
       // out of attempts: the give-up worker (a person), never a silent DISPATCH that ends the request unanswered
-      optionalIncomplete('cf_optional_exhausted','cf_tries >= 2 && !cf_must','form',"'confirmation_misses_exhausted'"),
-      WHEN('cf_misses_stamp','cf_tries >= 2 && !cf_must',recoveryStamp('cf_failure_stamp','form',"'confirmation_misses_exhausted'")),
-      WHEN('cf_misses_exhausted','cf_tries >= 2 && !cf_must',FLOW('cf_give_up','give-up','reboot',{ context: '{{exit_context}}', context_es: '{{exit_context_es}}' })),
+      optionalIncomplete('cf_optional_exhausted','cf_tries >= 4 && !cf_must','form',"'confirmation_misses_exhausted'"),
+      WHEN('cf_misses_stamp','cf_tries >= 4 && !cf_must',recoveryStamp('cf_failure_stamp','form',"'confirmation_misses_exhausted'")),
+      WHEN('cf_misses_exhausted','cf_tries >= 4 && !cf_must',FLOW('cf_give_up','give-up','reboot',{ context: '{{exit_context}}', context_es: '{{exit_context_es}}' })),
       WHEN('cf_clarified_no_sorry','cf_clarify',SIDE('cf_clarified_feedback',"consumeFormFeedback(cargo,form,'__confirm')")),
       WHEN('cf_bind_revision', "cf_result === 'yes'", SIDE('cf_bind', 'confirmFormRevision(cargo, form)')),
       SIDE('cf_store', "(cargo.formConfirm[form] = cf_result === 'unclear' || cf_result === 'clarification' || cf_result === 'concern' ? 'changed' : cf_result, true)"),

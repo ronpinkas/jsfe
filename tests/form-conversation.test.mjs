@@ -76,7 +76,8 @@ const addressDraft=formFlow({id:'address-draft',name:'AddressDraft',version:'1',
 const giveUp=W('give-up',[S('gave_up','(cargo.gaveUp=true,true)')],[{name:'context',type:'string'},{name:'context_es',type:'string'}]);
 for(const language of ['en','es'])await test(`${language} nonfinancial confirmation misses go to the give-up worker without accepting consent and reentry asks the proposal again`,async()=>{
  const t=fixture([addressDraft,giveUp],{language});await t.say('begin','address-draft');await t.say('90001');let response=await t.say('%%');assert.ok(response.includes(acknowledgment(language)),response);assert.equal(t.session.cargo.requests,undefined);
- await t.say('&&');assert.equal(t.session.cargo.gaveUp,true);assert.equal(t.session.lastTurnDispatch,undefined);assert.equal(t.session.cargo.requests,undefined);assert.deepEqual(t.calls,[]);
+ for(const miss of ['&&','##']){await t.say(miss);assert.equal(t.session.cargo.gaveUp,undefined,miss);}
+ await t.say('@@');assert.equal(t.session.cargo.gaveUp,true);assert.equal(t.session.lastTurnDispatch,undefined);assert.equal(t.session.cargo.requests,undefined);assert.deepEqual(t.calls,[]);
  response=await t.say('resume','address-draft');assert.match(response,language==='es'?/DIRECCIÓN 90001/:/ADDRESS 90001/);assert.equal(t.session.cargo.requests,undefined);assert.ok(!response.includes(acknowledgment(language)),response);
  await t.say(language==='es'?'sí':'yes');assert.deepEqual(t.session.cargo.requests,[{zip:'90001'}]);
 });
