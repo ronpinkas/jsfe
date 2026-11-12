@@ -8,7 +8,7 @@
 - **Parameters:** none
 - **Calls:** no other flow
 - **Tools:** `get-live-connect-link`
-- **Called by:** intent detection, [get-cell-or-email](get-cell-or-email.md), [validate-otp-code](validate-otp-code.md), [generic-retry-with-options](generic-retry-with-options.md), [otp-text-undeliverable](otp-text-undeliverable.md), [give-up](give-up.md), [ask-choice](ask-choice.md), [ask-email](ask-email.md), [0](0.md), [read-form-reply](read-form-reply.md), [read-form-choice](read-form-choice.md), [read-confirm-reply](read-confirm-reply.md), [read-provider-reply](read-provider-reply.md), [shopify-ql-order-desk](../shopify/shopify-ql-order-desk.md) (shopify)
+- **Called by:** intent detection, [get-cell-or-email](get-cell-or-email.md), [validate-otp-code](validate-otp-code.md), [generic-retry-with-options](generic-retry-with-options.md), [otp-text-undeliverable](otp-text-undeliverable.md), [give-up](give-up.md), [ask-choice](ask-choice.md), [ask-email](ask-email.md), [0](0.md), [read-form-choice](read-form-choice.md), [read-confirm-reply](read-confirm-reply.md), [read-provider-reply](read-provider-reply.md), [shopify-ql-order-desk](../shopify/shopify-ql-order-desk.md) (shopify)
 
 ### Steps
 

@@ -1,7 +1,7 @@
 # System flows
 
 <!-- generated:start -->
-86 flows (2 entry points), 12 tools. The graph shows each entry point and the flows it reaches directly; a dotted arrow is a flow named rather than called (a hook, a prepare or present step, a default target). Each flow page charts its declarations: a provider (gate, source, facts, menu), a form (inputs in order, then its after steps), a performer (prepare, present, action) and any step list.
+73 flows (2 entry points), 12 tools. The graph shows each entry point and the flows it reaches directly; a dotted arrow is a flow named rather than called (a hook, a prepare or present step, a default target). Each flow page charts its declarations: a provider (gate, source, facts, menu), a form (inputs in order, then its after steps), a performer (prepare, present, action) and any step list.
 
 ```mermaid
 flowchart LR
@@ -22,7 +22,6 @@ flowchart LR
 | flow | kind | what it is |
 |---|---|---|
 | [no-action-needed](no-action-needed.md) | steps | Handle case where no action is needed like when user is already authenticated |
-| [cancel-process](cancel-process.md) | steps | Handle flow cancellation by user |
 | [contact-support](contact-support.md) | steps | Worker: give the tenant's customer-service contact information. Params: support_context(_es), closing_prompt(_es). |
 | [authenticate-user](authenticate-user.md) | steps | Authenticate a contact using shared FORM collection and one-time-code services. |
 | [get-cell-or-email](get-cell-or-email.md) | steps | Identify a supplied contact or account number; collect missing data through a FORM, with caller-ID eligibility and bounded contact validati… |
@@ -39,9 +38,7 @@ flowchart LR
 | [ask-choice](ask-choice.md) | steps | Worker: ask one question and return cargo.choice plus the original cargo.choiceText. Declared choices, precheck keys and typed answer-valid… |
 | [late-code-reask](late-code-reask.md) | steps | Worker (ask-choice, at the first question after a code was accepted): says the code was already verified and asks the question again, for a… |
 | [ask-email](ask-email.md) | steps | Collect an email through shared FORM matching, retaining field-specific spelling and readback behavior. |
-| [ask-address](ask-address.md) | steps | Worker: a new mailing address (zip, street, unit; Google-checked; read back for YES / NO). The address is step data (owner decision 2026-10… |
 | [ask-field](ask-field.md) | steps | Worker: one card field, kind 'card' / 'exp' / 'cvv' / 'zip'. Sets cargo.field and cargo.fieldOutcome ('ok' / 'link' / 'failed'); the answer… |
-| [card-entry](card-entry.md) | steps | Worker: a new card's number, expiration, security code and billing zip (each through ask-field), and whether to save it. Every field the ca… |
 | [9](9.md) | steps | Worker: the keypad key 9 when no question took it (no flow running, or a question passed it on with DISPATCH): matched by id, with no AI. O… |
 | [0](0.md) | steps | Worker: the keypad key 0 when no question took it (no flow running, or a question passed it on with DISPATCH): matched by id, with no AI. A… |
 | [send-email-message](send-email-message.md) | steps | Worker: emails `message` with `subject` to `to`, with an optional copy to `cc` (e.g. the account's email on file when the caller chose anot… |
@@ -52,15 +49,6 @@ flowchart LR
 | [form-done](form-done.md) | steps | Worker: a finished form hands its values to its parent's result input (a sub-form) and to cargo.formResults[form], without pii values unles… |
 | [validate-card-number](validate-card-number.md) | steps | Validator: a card number passes the Luhn check (validateCardNumber). Params: input, value. |
 | [validate-card-expiration](validate-card-expiration.md) | steps | Validator: month (a number or its English or Spanish name) and year, a real month, not expired (validateExpiration). Normalizes to MMYY. Pa… |
-| [collect-phone](collect-phone.md) | form + steps | Field collector: the phone number (preset 'phone'). Result: cargo.formResults['collect-phone'].phone. |
-| [collect-email](collect-email.md) | form + steps | Field collector: the email address (preset 'email'). Result: cargo.formResults['collect-email'].email. |
-| [collect-zip](collect-zip.md) | form + steps | Field collector: the ZIP code (preset 'zip'). Result: cargo.formResults['collect-zip'].zip. |
-| [collect-street-address](collect-street-address.md) | form + steps | Field collector: the street address (preset 'street_address'). Result: cargo.formResults['collect-street-address'].street_address. |
-| [collect-city](collect-city.md) | form + steps | Field collector: the city (preset 'city'). Result: cargo.formResults['collect-city'].city. |
-| [collect-card-number](collect-card-number.md) | form + steps | Field collector: the card number (preset 'card_number'). Result: cargo.formResults['collect-card-number'].card_number. |
-| [collect-card-expiration](collect-card-expiration.md) | form + steps | Field collector: the expiration date (preset 'card_expiration'). Result: cargo.formResults['collect-card-expiration'].card_expiration. |
-| [collect-card-cvv](collect-card-cvv.md) | form + steps | Field collector: the security code (preset 'card_cvv'). Result: cargo.formResults['collect-card-cvv'].card_cvv. |
-| [collect-card-zip](collect-card-zip.md) | form + steps | Field collector: the billing ZIP code (preset 'card_zip'). Result: cargo.formResults['collect-card-zip'].card_zip. |
 | [collect-address](collect-address.md) | form + steps | Sub-form: street address, city, state, ZIP, in any order. Result: the parent's result input (or cargo.formResults['collect-address']). |
 | [collect-credit-card](collect-credit-card.md) | form + steps | Sub-form: card number, expiration, security code, billing ZIP, in any order. Result (with keep_pii for the charge step): the parent's resul… |
 | [provide-data](provide-data.md) | steps | Worker: answer a question about a provider catalog. Resolves `asked` (a fact or set key; empty = ask which), passes the catalog's gate for … |
@@ -95,7 +83,6 @@ flowchart LR
 | [read-form-response](read-form-response.md) | steps | Read the requested field with contextual DISPATCH: an answer continues, an answer with nothing usable is asked again, a withdrawal or a new… |
 | [collect-contextual-answer](collect-contextual-answer.md) | form + steps | Collect one open-ended answer using contextual DISPATCH and preserve the caller wording. |
 | [address-city-prompt](address-city-prompt.md) | steps | Ask which of the ZIP code's place names the address carries. |
-| [read-form-reply](read-form-reply.md) | steps | Rank an unreadable answer against its question: a request for a person or for text is taken; an answer is asked again; a withdrawal or a ne… |
 | [read-form-choice](read-form-choice.md) | steps | Rank an unreadable answer to a choice question and take the offered option it picks, or a request for a person or for text; otherwise ask a… |
 | [read-confirm-reply](read-confirm-reply.md) | steps | Rank an unreadable answer to a confirmation: it declines (NO), picks another of the form's choices (a correction, read as that input's answ… |
 | [validate-card-cvv](validate-card-cvv.md) | steps | Validator: the security code has the length of its card brand, 4 digits for American Express (34, 37) and 3 for every other brand; with no … |
@@ -103,7 +90,7 @@ flowchart LR
 | [verification-failed](verification-failed.md) | steps | End a verification that ran out of attempts: retire the owning task, set cargo.verificationFailed, report it unresolved (verification_faile… |
 | [read-provider-reply](read-provider-reply.md) | steps | Rank a menu reply its phrases do not settle: a fact or action it picks, the other facts it also asks for, or a request for a person; a with… |
 | [provider-unanswered](provider-unanswered.md) | steps | Worker: a question the provider has no fact for, sent back to it from its own menu: says provides.menu.unanswered.question(_es) and offers … |
-| [global-exit](global-exit.md) | steps | Worker (started by the engine): the caller exited; give the support closing with the outcome in force. |
+| [global-exit](global-exit.md) | steps | Worker (started by the engine): the caller exited; say the process was cancelled at their request (thanks when the outcome in force is reso… |
 | [contact-misread](contact-misread.md) | steps | Ask the contact question again after an answer that is no contact, then offer the common retry menu at the third miss in a row. |
 <!-- generated:end -->
 

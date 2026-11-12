@@ -10,7 +10,7 @@
   - `value`: the reading
 - **Calls:** no other flow
 - **Tools:** none
-- **Called by:** [collect-card-number](collect-card-number.md) (validator), [collect-credit-card](collect-credit-card.md) (validator), [confirm-form](confirm-form.md) (validator)
+- **Called by:** [collect-credit-card](collect-credit-card.md) (validator), [confirm-form](confirm-form.md) (validator)
 
 ### Steps
 

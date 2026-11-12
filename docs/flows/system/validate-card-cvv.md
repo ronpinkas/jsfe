@@ -11,7 +11,7 @@
   - `values`: the form's values, for the card number
 - **Calls:** no other flow
 - **Tools:** none
-- **Called by:** [collect-card-cvv](collect-card-cvv.md) (validator), [collect-credit-card](collect-credit-card.md) (validator), [confirm-form](confirm-form.md) (validator)
+- **Called by:** [collect-credit-card](collect-credit-card.md) (validator), [confirm-form](confirm-form.md) (validator)
 
 ### Steps
 

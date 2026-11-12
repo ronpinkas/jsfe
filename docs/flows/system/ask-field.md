@@ -15,7 +15,7 @@
   - `show_error`: 'no': the previous answer had no digits (words such as "tarjeta nueva"), so the question is asked again without the error line. Absent: the error is shown, as before.
 - **Calls:** [ask-choice](ask-choice.md) (call), [ask-field](ask-field.md) (replace)
 - **Tools:** none
-- **Called by:** [ask-field](ask-field.md), [card-entry](card-entry.md)
+- **Called by:** [ask-field](ask-field.md)
 
 ### Steps
 
