@@ -102,8 +102,7 @@ export function projectForm(session, flows) {
         } else if (control === 'place') {
           // Suggestions come from the host's place service; the profile's bounds still apply to the typed text.
           field.control = control;
-          field.place = {types: input.form_client.types, ...(input.form_client.regions ? {regions: input.form_client.regions.map(region => region.toLowerCase())} : {}),
-            ...(input.form_client.context ? {context: input.form_client.context.map(name => prefix + name)} : {})};
+          field.place = {types: input.form_client.types, ...(input.form_client.regions ? {regions: input.form_client.regions.map(region => region.toLowerCase())} : {})};
         } else { /* the profile's own box */ }
         if (!field.sensitive && ['string','number','boolean'].includes(typeof state.values?.[input.name])) field.value = state.values[input.name];
         // A worded refusal is shown with its field; the bare 'invalid' flag (a refusal with no message, or a whole-form

@@ -94,7 +94,7 @@ console.log('form-client-controls: inputs without a control are unchanged');
   const PLACE = {kind: 'text'};
   const placeInputs = () => [
     {name: 'city', label: 'city', question: 'Which city?', profile: PLACE, form_client: {control: 'place', types: 'cities', regions: ['US', 'mx']}},
-    {name: 'street', label: 'street address', question: 'What is the street address?', profile: PLACE, form_client: {control: 'place', types: 'address', context: ['city']}},
+    {name: 'street', label: 'street address', question: 'What is the street address?', profile: PLACE, form_client: {control: 'place', types: 'address'}},
     {name: 'adults', label: 'adults', question: 'How many adults?', profile: {kind: 'digits', min: 1, max: 1}, form_client: {control: 'number', min: 1, max: 9}},
   ];
   const placeFlow = (inputs = placeInputs()) => ({declarationVersion: 2, id: 'where', primary: true, description: 'Ask where', form: {inputs, after: [{id: 'keep', type: 'SET', variable: 'noop', value: 'true'}]}});
@@ -107,10 +107,6 @@ console.log('form-client-controls: inputs without a control are unchanged');
   refuses(inputs => { inputs[0].form_client = {control: 'place', types: 'cities', min: 1}; }, /place cannot declare min/);
   refuses(inputs => { inputs[0].profile = {kind: 'digits'}; }, /place control needs a profile of kind pattern, text/);
   refuses(inputs => { inputs[1].pii = true; }, /cannot draw a sensitive input/);
-  refuses(inputs => { inputs[1].form_client = {control: 'place', types: 'address', context: []}; }, /context must list 1 to 5 inputs/);
-  refuses(inputs => { inputs[1].form_client = {control: 'place', types: 'address', context: ['nowhere']}; }, /context "nowhere" must name another input/);
-  refuses(inputs => { inputs[1].form_client = {control: 'place', types: 'address', context: ['street']}; }, /context "street" must name another input/);
-  refuses(inputs => { inputs[2].pii = true; delete inputs[2].form_client; inputs[1].form_client = {control: 'place', types: 'address', context: ['adults']}; }, /context adults is a sensitive input/);
   console.log('form-client-controls: malformed place controls fail at definition time');
 
   const placeEngine = load(placeFlow()); placeEngine.disableCommands();
@@ -120,7 +116,7 @@ console.log('form-client-controls: inputs without a control are unchanged');
   const field = name => placeView.fields.find(f => f.name === name);
   assert.equal(field('city').control, 'place');
   assert.deepEqual(field('city').place, {types: 'cities', regions: ['us', 'mx']}, 'regions are projected lower case');
-  assert.deepEqual(field('street').place, {types: 'address', context: [field('city').path]}, 'no regions: none projected; context as paths');
+  assert.deepEqual(field('street').place, {types: 'address'}, 'no regions: none projected');
   assert.deepEqual(formPlaceField(placeView, placeView.form, field('city').path), {types: 'cities', regions: ['us', 'mx']});
   assert.equal(formPlaceField(placeView, 'another-form', field('city').path), null, 'another form instance');
   assert.equal(formPlaceField(placeView, placeView.form, field('adults').path), null, 'a field that is not a place');
@@ -131,10 +127,10 @@ console.log('form-client-controls: inputs without a control are unchanged');
   console.log('form-client-controls: place projection and formPlaceField passed');
 }
 
-// The system address form's street suggests US addresses narrowed by the form's ZIP code.
+// The system address form's street suggests US addresses.
 {
   const addressInputs = FLOWS.find(flow => flow.id === 'collect-geocoded-address');
-  const street = JSON.stringify(addressInputs || {}).includes('"form_client":{"control":"place","types":"address","regions":["us"],"context":["zip"]}');
+  const street = JSON.stringify(addressInputs || {}).includes('"form_client":{"control":"place","types":"address","regions":["us"]}');
   assert(street, 'collect-geocoded-address declares a place control');
   console.log('form-client-controls: the system address form street is a place control');
 }
