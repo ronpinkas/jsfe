@@ -527,17 +527,6 @@ const rankedDispatch=(id,reason,stay=false,parameters='')=>({...yieldDispatch(id
 // (DISPATCH responseConcernForm: the engine renders it). The ranker is offered `concern` only then; a concern says the rendered
 // description, how to cancel, and the question again, with no attempt.
 const concernRoute=(id,input)=>[WHEN(id,'reply && reply.concern === true',SIDE(`${id}_line`,`(cargo.forms[form].concernText=String(reply.concern_text || ''),cargo.forms[form].feedback=cargo.forms[form].feedback || {},cargo.forms[form].feedback[${input}]='concern',true)`)),WHEN(`${id}_end`,'reply && reply.concern === true',END(`${id}_done`))];
-const readFormReply={
- id:'read-form-reply',name:'ReadFormReply',version:'1.1.0',scope:'isolated',description:'Rank an unreadable answer against its question: a request for a person or for text is taken; an answer is asked again; a withdrawal or a new request leaves with saved form progress.',
- parameters:[{name:'form',type:'string'},{name:'input',type:'string'},{name:'question',type:'string'},{name:'question_es',type:'string'}],
- variables:vars({question:'',question_es:'',asked:'',ranked:[],reply:null}),
- steps:[SET('reply_asked','asked',"language === 'es' && question_es ? question_es : question"),
-  rankedChoices('reply_ranked','[]'),
-  rankedDispatch('reply_dispatch','input_not_matched'),
-  ...escapeRoutes('reply_escape'),
-  ...concernRoute('reply_concern','input'),
-  rankedMiss('reply_miss')]
-};
 // A provider menu's fact named inside a longer sentence (provides.menu.whole_phrases): the phrase does not decide, the ranker
 // does. It is offered every choice the menu's reader accepts. The result is cargo.providerReply: { key, also? }, key '' when no
 // choice was picked (the menu then hands the turn to the host, which holds the account in its user context).
@@ -1128,7 +1117,7 @@ const resumeForm={id:'resume-form',name:'ResumeForm',version:'1.0.0',scope:'isol
       SET('resume_definition','target','cargo.forms[form].definition'),SET('resume_parent','parent',"cargo.forms[form].parent || ''"),SET('resume_slot','slot',"cargo.forms[form].result_input || ''"),
       FLOW('resume_owned_form','{{target}}','replace',{form_instance:'{{form}}',parent_form:'{{parent}}',result_input:'{{slot}}'})
    ]};
-const LIBRARY_FLOWS = [providerUnanswered, readProviderReply, readFormReply, readFormChoice, readConfirmReply, confirmInputProposal,proposalDeclined,resumeForm,performAction, sendTextAction, prepareInput, runForm, collectInput, validateBatch, requestCancelled, readFormResponse, collectContextualAnswer, accept, acceptedEffects, disambiguate, confirmForm, formDone, providerMenu, ...validators, ...fieldCollectors, ...subForms, provideData, provideQueuedData, loadSource, answerFacts];
+const LIBRARY_FLOWS = [providerUnanswered, readProviderReply, readFormChoice, readConfirmReply, confirmInputProposal,proposalDeclined,resumeForm,performAction, sendTextAction, prepareInput, runForm, collectInput, validateBatch, requestCancelled, readFormResponse, collectContextualAnswer, accept, acceptedEffects, disambiguate, confirmForm, formDone, providerMenu, ...validators, ...fieldCollectors, ...subForms, provideData, provideQueuedData, loadSource, answerFacts];
 const LIBRARY_CONTRACTS={
    'confirm-input-proposal':{role:'collector',requires:[INPUT_PROPOSALS_REQUIREMENT]},'confirm-input-proposal-declined':{role:'worker',requires:[INPUT_PROPOSALS_REQUIREMENT]},
    'resume-form':{role:'worker'},
@@ -1137,7 +1126,7 @@ const LIBRARY_CONTRACTS={
    'prepare-input':{role:'worker'},'run-form':{role:'worker'},'collect-input':{role:'worker'},
    'request-cancelled':{role:'worker'},
    'read-form-response':{role:'worker',requires:[CONTEXTUAL_RESPONSES_REQUIREMENT]},
-   'read-form-reply':{role:'worker'},'read-form-choice':{role:'worker',requires:[CONTEXTUAL_RESPONSES_REQUIREMENT]},'read-provider-reply':{role:'worker',requires:[CONTEXTUAL_RESPONSES_REQUIREMENT]},'read-confirm-reply':{role:'worker',requires:[CONTEXTUAL_RESPONSES_REQUIREMENT]},
+   'read-form-choice':{role:'worker',requires:[CONTEXTUAL_RESPONSES_REQUIREMENT]},'read-provider-reply':{role:'worker',requires:[CONTEXTUAL_RESPONSES_REQUIREMENT]},'read-confirm-reply':{role:'worker',requires:[CONTEXTUAL_RESPONSES_REQUIREMENT]},
    'collect-contextual-answer':{role:'collector',requires:[CONTEXTUAL_RESPONSES_REQUIREMENT]},
    'validate-input-batch':{role:'worker',result:{path:'cargo.inputBatch',type:'object'}},
    'collect-input-accept':{role:'worker'},'input-accepted-effects':{role:'worker'},
