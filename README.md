@@ -387,10 +387,11 @@ instructions with its text model.
 favor / now / ahora; CANCEL is not one) ends every flow at any question, before any reader, command or the reply ranker
 (`isGlobalExit`), outcome `user_aborted`, reason `exit_requested`, unless the question declares a choice of its own for that
 word (its key or a phrase is `*`, EXIT, QUIT or SALIR): that choice takes the answer. The engine then starts
-the worker `global-exit` (default: a reboot to the set's `contact-support` with `exit_outcome`, the outcome in force before the
-flows ended, and the waiting question's `exit_context` as `support_context`), or the tenant flow that `wraps: "global-exit"`. A waiting stack
+the worker `global-exit` with `exit_outcome`, the outcome in force before the flows ended (default since 1.52.0: "The process has
+been cancelled at your request. Is there anything else I can help you with?", or thanks with the same offer when that outcome is
+`resolved`; no contact list), or the tenant flow that `wraps: "global-exit"`. A waiting stack
 that declares its own exit destination (`cancel_flow` other than `contact-support`, e.g. the retry menu's) starts that flow instead,
-as its local exit did. A set with neither a wrapper nor `contact-support` keeps the generic reply.
+as its local exit did. A set with neither a wrapper nor `global-exit` keeps the generic reply.
 
 **Keypad 9 (jsfe 1.42.0, owner 2026-10-31):** on a call, a whole answer of `9` at any question ends every flow and starts
 `switch-to-text`, when the caller's number can take texts (`callerTextNumber`) and the set has that flow. A question that declares a

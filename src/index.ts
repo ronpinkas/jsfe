@@ -5279,7 +5279,7 @@ async function handleDispatchStep(currentFlowFrame: FlowFrame, engine: Engine): 
 /**
  * The global exit (owner 2026-11-11). The flow that answers a caller who exits, after every flow has ended: the
  * system set's `global-exit`, or the tenant flow that `wraps` it. It receives the outcome in force before the flows ended, so
- * a caller who leaves after being served is thanked. Null when the set has neither a wrapper nor `contact-support`: the generic reply answers.
+ * a caller who leaves after being served is thanked. Null when the set has neither a wrapper nor `global-exit`: the generic reply answers.
  */
 export const GLOBAL_EXIT_FLOW = 'global-exit';
 function globalExitStart(engine: Engine): { flow: string; arguments: Record<string, unknown> } | null {
@@ -5297,8 +5297,8 @@ function globalExitStart(engine: Engine): { flow: string; arguments: Record<stri
   }
   const base = menu.find(f => f.id === GLOBAL_EXIT_FLOW);
   const wrapper = base ? menu.find(f => f.wraps === base.id || f.wraps === base.name) : undefined;
-  // The default reboots to the set's `contact-support`; a set without one keeps the generic reply (a FLOW to a missing flow is skipped).
-  const flow = wrapper || (base && menu.some(f => f.id === 'contact-support') ? base : undefined);
+  // The default answers on its own (1.52.0); a set without `global-exit` keeps the generic reply.
+  const flow = wrapper || base;
   const context = declared('exit_context'), contextEs = declared('exit_context_es');
   return flow ? { flow: flow.id, arguments: { exit_outcome: outcomeInForce(engine)?.outcome || '', ...(context ? { support_context: context, support_context_es: contextEs || context } : {}) } } : null;
 }

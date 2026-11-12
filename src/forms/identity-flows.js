@@ -435,9 +435,11 @@ const failed=worker('verification-failed','VerificationFailed','End a verificati
       end('vf_end')]
 });
 // The global exit (owner 2026-11-11): the engine starts this flow when the whole answer is *, EXIT, QUIT or SALIR (and the
-// question declares no choice of its own for it), after every flow has ended. Default: the tenant's support closing with the outcome in force. A tenant
+// question declares no choice of its own for it), after every flow has ended. Default (1.52.0, owner 2026-11-11): the process cancelled at the
+// caller's request, or thanks when the outcome in force is resolved, each ending with an offer of more help; no contact list (the caller chose
+// to leave, they are not stuck). A tenant
 // gives the global exit its own path with a flow that `wraps` this one; the engine then starts that wrapper.
-const globalExit=worker('global-exit','GlobalExit','Worker (started by the engine): the caller exited; give the support closing with the outcome in force.',{scope:'isolated',parameters:[param('exit_outcome','The declared outcome in force when the caller exited (resolved: thanks)'),param('support_context','What the caller needed help with (the question\'s exit_context), English'),param('support_context_es','The same in Spanish')],steps:[
-   call('global_exit_support','contact-support',{exit_outcome:'{{exit_outcome}}',support_context:'{{support_context}}',support_context_es:'{{support_context_es}}'},'reboot')]});
+const globalExit=worker('global-exit','GlobalExit','Worker (started by the engine): the caller exited; say the process was cancelled at their request (thanks when the outcome in force is resolved) and offer more help.',{scope:'isolated',version:'1.1.0',parameters:[param('exit_outcome','The declared outcome in force when the caller exited (resolved: thanks)'),param('support_context','What the caller needed help with (the question\'s exit_context), English; not spoken since 1.52.0'),param('support_context_es','The same in Spanish')],steps:[
+   {id:'global_exit_say',type:'SAY',value:"{{exit_outcome === 'resolved' ? 'Thank you for contacting us! Is there anything else I can help you with?' : 'The process has been cancelled at your request. Is there anything else I can help you with?'}}",value_es:"{{exit_outcome === 'resolved' ? '¡Gracias por comunicarse con nosotros! ¿Hay algo más en lo que pueda ayudarle?' : 'El proceso fue cancelado a petición suya. ¿Hay algo más en lo que pueda ayudarle?'}}",outcome:"{{exit_outcome === 'resolved' ? 'resolved' : 'user_aborted'}}",reason:"{{exit_outcome === 'resolved' ? 'left_after_resolved' : 'exit_requested'}}"}]});
 export const FLOWS=[taskGate,resume,service,rawTransport,contact,misread,declined,splitFailed,rejected,auth,code,validateCode,emailToo,retry,email,failed,globalExit];
 

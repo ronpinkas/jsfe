@@ -15,6 +15,6 @@ await begin('card');assert.match(await say('1234'),/PAN/);let state=session.carg
 await say('4111111111111111');assert.equal(session.cargo.collected.pan,'4111111111111111');assert.equal(session.cargo.collected.cvv,'1234');checks++;
 await begin('card');await say('4111111111111111');await say('1234');assert.equal(session.cargo.collected.cvv,'1234');checks++;
 await begin('menu');const stale=await say('1234');assert.match(stale,/YES or NO/);assert.notEqual(session.cargo.choice,'1234');checks++;
-for(const command of ['agent','exit']){await begin('card');const response=await say(command);assert.match(response,command==='agent'?/live-agent-requested/:/contact-support/);assert.equal(Object.values(session.cargo.forms).some(s=>s.values.cvv===command||s.values.pan===command),false);assert.equal(session.flowStacks.flat().some(f=>f.flowId==='card'),false);checks++;}
+for(const command of ['agent','exit']){await begin('card');const response=await say(command);assert.match(response,command==='agent'?/live-agent-requested/:/cancelled at your request/);assert.equal(Object.values(session.cargo.forms).some(s=>s.values.cvv===command||s.values.pan===command),false);assert.equal(session.flowStacks.flat().some(f=>f.flowId==='card'),false);checks++;}
 assert.equal(warnings.some(s=>/not defined|expression.*fail|Sub-flow not found/i.test(s)),false);checks++;
 console.log(`FORM late code precedence: all ${checks} checks passed`);

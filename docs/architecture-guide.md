@@ -254,10 +254,10 @@ flowchart TD
 Before any reader, a waiting question checks two whole answers that work everywhere (jsfe 1.42.0):
 
 - **The global exit.** `*`, EXIT, QUIT or SALIR (repeated, or with please / por favor / now / ahora; CANCEL is not one) ends
-  every flow, outcome `user_aborted`, reason `exit_requested`. The engine then starts `global-exit`: by default a reboot to the
-  set's `contact-support` with the question's `exit_context`, which thanks a caller whose request was already resolved. A tenant
+  every flow, outcome `user_aborted`, reason `exit_requested`. The engine then starts `global-exit`: by default (1.52.0) it says the
+  process was cancelled at the caller's request, or thanks a caller whose request was already resolved, and offers more help. A tenant
   gives the exit its own path with a flow that `wraps: "global-exit"`; a flow that declares its own exit destination (`cancel_flow`)
-  keeps it. A set with neither a wrapper nor `contact-support` keeps the generic cancel reply.
+  keeps it. A set with neither a wrapper nor `global-exit` keeps the generic cancel reply.
 - **Keypad 9 switches a call to text,** when the caller's number can take texts and the set has `switch-to-text`. Keypad 8
   (language) and 0 (a person) are the host's, before the engine.
 - **A declared choice wins.** A question that offers its own choice for the word (its key or a phrase is `*`, EXIT, QUIT,

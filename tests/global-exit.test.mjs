@@ -22,10 +22,10 @@ function fixture({extra=[],option='answers',language='en'}={}){
  return {calls,get session(){return session;},async say(content,start){session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start:{flow:'pay',arguments:{}}}:{})},session)));return String(session.response||'');},async sayStart(flow){session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content:'go',start:{flow,arguments:{}}},session)));return String(session.response||'');}};
 }
 const active=s=>(s.flowStacks||[]).flat().length;
-for(const said of ['*','exit','Salir.','quit please'])await test(`"${said}" ends every flow and reaches the support closing`,async()=>{
+for(const said of ['*','exit','Salir.','quit please'])await test(`"${said}" ends every flow: cancelled at the caller's request, more help offered, no contact list`,async()=>{
  const t=fixture();assert.match(await t.say('start',true),/How much\?/);t.calls.length=0;
- assert.match(await t.say(said),/Closing\./);
- assert.equal(active(t.session),0);assert.equal(t.session.cargo.supportOutcome,'');
+ const r=await t.say(said);assert.match(r,/cancelled at your request\. Is there anything else I can help you with\?/);assert.doesNotMatch(r,/Closing/);
+ assert.equal(active(t.session),0);assert.equal(t.session.cargo.supportOutcome,undefined);
  assert.ok(!t.calls.includes('rank_reply'),'the ranker never sees it');
 });
 await test('"cancel" is not the global exit: the ranker reads it',async()=>{
@@ -53,16 +53,16 @@ await test('a tenant flow that wraps global-exit is started instead',async()=>{
  assert.match(await t.say('*'),/Goodbye from the tenant\./);assert.equal(t.session.cargo.supportOutcome,undefined);
 });
 await test('Spanish SALIR in a Spanish session',async()=>{
- const t=fixture({language:'es'});assert.match(await t.say('empezar',true),/¿Cuánto\?/);assert.match(await t.say('SALIR'),/Cierre\./);
+ const t=fixture({language:'es'});assert.match(await t.say('empezar',true),/¿Cuánto\?/);const r=await t.say('SALIR');assert.match(r,/El proceso fue cancelado a petición suya\. ¿Hay algo más en lo que pueda ayudarle\?/);assert.doesNotMatch(r,/Cierre/);
 });
-await test("the question's exit context reaches contact-support; a declared cancel_flow is the flow's own exit",async()=>{
+await test("the global exit answers on its own (the exit context is not spoken); a declared cancel_flow is the flow's own exit",async()=>{
  const supportCtx={...support,parameters:[{name:'support_context',type:'string'},{name:'support_context_es',type:'string'}],steps:[{id:'cs_say',type:'SAY',value:"Closing for {{support_context || 'nothing'}}.",value_es:'Cierre.'}]};
  const ask={id:'ask',name:'Ask',primary:true,description:'Ask',steps:[{id:'a',type:'FLOW',value:'ask-choice',callType:'call',parameters:{question:'Pick one.',question_es:'Elija.',choices:[{key:'1',phrases:['1','one']}],exit_context:'your payment',exit_context_es:'su pago'}}]};
  const t1=(()=>{const e=new WorkflowEngine({info(){},debug(){},warn(){},error(){}},async(s,u)=>/voice input cleaner/.test(s)?(String(u).match(/voice response: "([\s\S]*)"\n/)||[,String(u)])[1]:'{"flowName":"None"}',linkFormSchemas([...FLOWS,ask,supportCtx]),[],STANDARD_FUNCTIONS,{},false,'en');e.disableCommands();return e;})();
  let s1=t1.initSession('x',crypto.randomUUID(),'en');s1.cargo.voice=true;
  s1=JSON.parse(JSON.stringify(await t1.updateActivity({role:'user',content:'go',start:{flow:'ask',arguments:{}}},s1)));
  s1=JSON.parse(JSON.stringify(await t1.updateActivity({role:'user',content:'*'},s1)));
- assert.match(String(s1.response),/Closing for your payment\./);
+ assert.match(String(s1.response),/cancelled at your request/);assert.doesNotMatch(String(s1.response),/Closing/);
  const own={id:'cancel-process',name:'CancelProcess',description:'Own exit',steps:[{id:'c',type:'SAY',value:'Cancelled here.',value_es:'Cancelado.'}]};
  const menu={id:'m2',name:'M2',primary:true,description:'M2',variables:{cancel_flow:{type:'string',value:'cancel-process'}},steps:[{id:'q',type:'SAY-GET',variable:'x',value:'Say something.'},{id:'d',type:'SAY',value:'done'}]};
  const t2=new WorkflowEngine({info(){},debug(){},warn(){},error(){}},async(s,u)=>/voice input cleaner/.test(s)?(String(u).match(/voice response: "([\s\S]*)"\n/)||[,String(u)])[1]:'{"flowName":"None"}',linkFormSchemas([...FLOWS,menu,own,supportCtx]),[],STANDARD_FUNCTIONS,{},false,'en');t2.disableCommands();
@@ -70,5 +70,14 @@ await test("the question's exit context reaches contact-support; a declared canc
  s2=JSON.parse(JSON.stringify(await t2.updateActivity({role:'user',content:'go',start:{flow:'m2',arguments:{}}},s2)));
  s2=JSON.parse(JSON.stringify(await t2.updateActivity({role:'user',content:'exit'},s2)));
  assert.match(String(s2.response),/Cancelled here\./);
+});
+await test('a resolved outcome is thanked, with the same offer and no contact list',async()=>{
+ const t=fixture();
+ for(const [language,thanks] of [['en',/^Thank you for contacting us! Is there anything else I can help you with\?$/],['es',/^¡Gracias por comunicarse con nosotros! ¿Hay algo más en lo que pueda ayudarle\?$/]]){
+  const e=new WorkflowEngine({info(){},debug(){},warn(){},error(){}},async()=>'{"flowName":"None"}',linkFormSchemas([...FLOWS]),[],STANDARD_FUNCTIONS,{},false,language);e.disableCommands();
+  let s=e.initSession('r',crypto.randomUUID(),language);
+  s=JSON.parse(JSON.stringify(await e.updateActivity({role:'user',content:'go',start:{flow:'global-exit',arguments:{exit_outcome:'resolved'}}},s)));
+  assert.match(String(s.response).trim(),thanks,language);
+ }
 });
 console.log(`Global exit: all ${checks} checks passed`);
