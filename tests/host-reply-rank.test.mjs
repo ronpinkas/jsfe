@@ -69,4 +69,14 @@ test('a cleared new_request outranks irrelevant, on an open question and never o
  assert.equal(decodeReplyRankSystemOne(n({'choice:1':.7,irrelevant:.86,new_request:.7}),c).option,'irrelevant','a stray word is still not a pick');
 });
 test('a reason question offers no irrelevant: a reason is never thrown away',()=>{assert.ok(!buildReplyRank('x',conversation,'Why?',[],{reasonFor:'the club'}).options.includes('irrelevant'));});
+test('a refusal that names another offered choice is that choice; a plain NO stays the NO',()=>{
+ const k=buildReplyRank('no era membresía, es monitor',conversation,'Current question: Cancel your Club membership? YES or NO.',[{key:'yes',label:'YES'},{key:'no',label:'NO'},{key:'mcm',label:'Credit Monitor'},{key:'__agent',label:'a person'}]);
+ const idx=Object.fromEntries(k.systemOne.index.map(q=>[q.option,q.id]));
+ const jev=(sc)=>decodeReplyRankSystemOne(Object.fromEntries(k.systemOne.index.map(q=>[q.id,{noul:sc[q.option] ?? .05}])),k);
+ assert.equal(jev({'choice:no':.94,'choice:mcm':.57,new_request:.39}).option,'choice:mcm','the named service, not the NO (prod CAc00caf)');
+ assert.equal(jev({'choice:no':.94,'choice:mcm':.3}).option,'choice:no','a service below its cut leaves the NO');
+ assert.equal(jev({'choice:no':.94,'choice:__agent':.7}).option,'choice:no','an escape never takes the NO');
+ assert.equal(jev({'choice:no':.7,'choice:yes':.55}).option,'choice:no','YES never takes the NO');
+ assert.ok(idx['choice:mcm']);
+});
 console.log(`Reply rank: all checks passed (${checks})`);

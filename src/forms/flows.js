@@ -885,7 +885,7 @@ const subForms = [
       description: "Sub-form: street address, city, state, ZIP, in any order. Result: the parent's result input (or cargo.formResults['collect-address']).",
       inputs: [{ name: 'street_address', field: 'street_address' }, { name: 'city', field: 'city', confirm_against:['state'] }, { name: 'state', field: 'state' }, { name: 'zip', field: 'zip' }],
       extraVars: { exit_context: 'your address', exit_context_es: 'su dirección' } }),
-   formFlow({ id: 'collect-credit-card', name: 'CollectCreditCard', version: '1.0.0', first_task: 'record your new card', first_task_es: 'registrar su tarjeta nueva',
+   formFlow({ id: 'collect-credit-card', name: 'CollectCreditCard', version: '1.0.0', first_task: 'enter your new card details', first_task_es: 'ingresar los datos de su tarjeta nueva',
       description: "Sub-form: card number, expiration, security code, billing ZIP, in any order. Result (with keep_pii for the charge step): the parent's result input.",
       inputs: [{ name: 'card_number', field: 'card_number' }, { name: 'card_expiration', field: 'card_expiration' }, { name: 'card_cvv', field: 'card_cvv' }, { name: 'card_zip', field: 'card_zip' }],
       extraVars: { exit_context: 'your payment', exit_context_es: 'su pago' } }),

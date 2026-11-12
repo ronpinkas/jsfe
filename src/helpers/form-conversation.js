@@ -28,7 +28,7 @@ export function formMustComplete(cargo,id,input) {
    return false;
 }
 /** A must_complete question's reply that picks nothing the ranker was offered is acknowledged, then the question again (owner
- * 2026-11-02): "I understand, first let's record your new card." The task is the nearest enclosing form's first_task. */
+ * 2026-11-02): "I understand, first let's enter your new card details." The task is the nearest enclosing form's first_task. */
 export function formFirstLine(cargo,id,input,es) {
    const seen=new Set();let task='';
    while(id&&cargo.forms?.[id]&&!seen.has(id)&&!task){seen.add(id);const state=cargo.forms[id];task=(es?state.first_task_es||state.first_task:state.first_task)||'';id=state.parent;}

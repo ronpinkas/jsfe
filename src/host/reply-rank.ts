@@ -237,9 +237,14 @@ export function decodeReplyRankSystemOne(
   const cleared = request.systemOne.index.map(q => q.option).filter(o => scores[o] >= (cuts[o] ?? threshold)).sort((a, b) => scores[b] - scores[a]);
   // A cleared choice is taken over `answers` and `new_request` (owner 2026-10-28: a request that names an offered option
   // is that option, "Representative." is the agent); only `abort` keeps its rank.
-  const choice = cleared.find(o => o.startsWith(CHOICE_PREFIX));
+  // A refusal that names another offered choice is that choice (owner 2026-11-12; prod CAc00caf: "no era membresía… es
+  // monitor" at the Club cancellation scored no .94, mcm .57, and the correction was lost): a cleared choice other than
+  // NO, YES and an escape (`__agent`) is taken over the NO.
+  const firstChoice = cleared.find(o => o.startsWith(CHOICE_PREFIX));
+  const named = firstChoice === `${CHOICE_PREFIX}no` ? cleared.find(o => o.startsWith(CHOICE_PREFIX) && ![`${CHOICE_PREFIX}no`, `${CHOICE_PREFIX}yes`].includes(o) && !o.startsWith(`${CHOICE_PREFIX}__`)) : undefined;
+  const choice = named ?? firstChoice;
   // `irrelevant` takes a choice's place only from its own higher cut (REPLY_IRRELEVANT_OVER_CHOICE).
-  const yieldsToChoice = cleared[0] === 'answers' || cleared[0] === 'new_request' || (cleared[0] === 'irrelevant' && scores.irrelevant < REPLY_IRRELEVANT_OVER_CHOICE);
+  const yieldsToChoice = (named !== undefined && cleared[0] === `${CHOICE_PREFIX}no`) || cleared[0] === 'answers' || cleared[0] === 'new_request' || (cleared[0] === 'irrelevant' && scores.irrelevant < REPLY_IRRELEVANT_OVER_CHOICE);
   // A clear ask outranks noise (owner 2026-11-02, prod "¿Quién habla?" irrelevant .85, new_request .72): with both cleared the reply is a request.
   const best = choice && yieldsToChoice ? choice : cleared[0] === 'irrelevant' && !choice && cleared.includes('new_request') ? 'new_request' : cleared[0];
   if (best) {

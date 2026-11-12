@@ -62,12 +62,12 @@ await test('a JSON declaration carries must_complete',async()=>{
 });
 
 // Owner 2026-11-02: every verdict that picks nothing stays and is acknowledged, in the form's own words; a pick is taken.
-const carded=(extra={})=>formFlow({id:'pay',name:'Pay',version:'1',must_complete:true,first_task:'record your new card',first_task_es:'registrar su tarjeta nueva',inputs:[{name:'zip',field:'zip',question:'ZIP?',question_es:'¿CÓDIGO?'}],after:[commit],...extra});
+const carded=(extra={})=>formFlow({id:'pay',name:'Pay',version:'1',must_complete:true,first_task:'enter your new card details',first_task_es:'ingresar los datos de su tarjeta nueva',inputs:[{name:'zip',field:'zip',question:'ZIP?',question_es:'¿CÓDIGO?'}],after:[commit],...extra});
 for(const language of ['en','es'])for(const option of ['answers','irrelevant','new_request']){
  await test(`${language} ${option} under must_complete stays, with the form's first_task`,async()=>{
   const t=fixture([carded()],{language});t.rank(option);await t.say('begin','pay');
   const response=await t.say('porque me dices eso');
-  assert.ok(response.startsWith(language==='es'?'Entiendo, primero vamos a registrar su tarjeta nueva. ':"I understand, first let's record your new card. "),response);
+  assert.ok(response.startsWith(language==='es'?'Entiendo, primero vamos a ingresar los datos de su tarjeta nueva. ':"I understand, first let's enter your new card details. "),response);
   assert.ok(/ZIP|código postal/i.test(response),response);assert.equal(t.calls.length,0);
   await t.say('90001');assert.deepEqual(t.session.cargo.done.length,1);
  });
