@@ -300,7 +300,19 @@ export function formSubmissionReaders(submission, getSession) {
         const valid = read && Object.hasOwn(read, 'value') && read.value !== '' && read.refused !== true && !read.incompleteMoney;
         return {...hit, value: valid ? read.value : raw, invalid: !valid, origin: 'form_submission', current: false, utterance: ''};
       });
-      return {hits, ambiguous: [], remaining: [], questions: [], refused: [], decisions: hits.map(hit => ({form: hit.form, name: hit.name, rule: 'form_submission'}))};
+      // A card re-sends every field it shows. A field sent back with the value the form already holds is not an answer:
+      // it is neither acknowledged nor checked again (prod 2026-11-12: "Thank you, I already have your product number"
+      // on every store-card submission). A changed value is a correction, as before. When nothing at all changed, the
+      // readings stand, so the turn is never read as empty.
+      const unchanged = hit => {
+        const held = cargo.forms[hit.form]?.values;
+        if (!held || !Object.hasOwn(held, hit.name)) return false;
+        return hit.declined === true ? held[hit.name] === null : !hit.invalid && held[hit.name] !== null && held[hit.name] !== undefined
+          && typeof held[hit.name] !== 'object' && String(held[hit.name]) === String(hit.value);
+      };
+      const changed = hits.filter(hit => !unchanged(hit));
+      const read = changed.length ? changed : hits;
+      return {hits: read, ambiguous: [], remaining: [], questions: [], refused: [], decisions: read.map(hit => ({form: hit.form, name: hit.name, rule: 'form_submission'}))};
     },
     enrichFormMatches(matches, chain, form, names = [], asked = '') {
       const result = enrichFormMatches(matches, chain, form, names, asked);

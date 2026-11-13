@@ -24,7 +24,7 @@ flowchart TD
    n0 --> c1
    b2(["dispatch: intent detection"])
    class b2 endstep
-   c1 -- "!reading #124;#124; reading.origin!=='activation'" --> b2
+   c1 -- "!reading #124;#124; (reading.origin!=='activation' && reading.origin!=='form_…" --> b2
    n3["set noop"]
    c1 -- "else" --> n3
    DONE(["end (back to caller)"])
