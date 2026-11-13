@@ -5,7 +5,7 @@ import {formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadin
 import {formProposalProtocol,validateFormProposalPolicy,validateFormProposalDescriptor,formProposalDescriptor} from './proposal-contract.js';
 import {cancelFormTask,clearFormMisses,formNoOwner,missFormInput,formMustComplete,formInputPrompt,formUserDescriptionSource,formConcernLine,formAcknowledges,consumeFormFeedback,formConversationOutcome} from './form-conversation.js';
 import { takeChoiceOffer } from './choice-offer.js';
-import { registerSendable, sendables, chatTranscript } from './sendables.js';
+import { registerSendable, sendables, chatTranscript, conversationCopy, CONVERSATION_KEY } from './sendables.js';
 import { consumeActionReceipt, authorizeFormActionRetry, formSignature, selectFormAction, confirmFormRevision, prepareFormAction, actionConfirmationValid, beginFormAction, finishFormAction, actionGateVerified } from './form-actions.js';
 /**
  * jsfe/helpers — the functions JSFE's system flows call from expressions, in ONE place for every host: reading an
@@ -46,7 +46,7 @@ export {
    pickChoice, withoutPromptEcho, readEmail, readPhone, readInternationalPhone, readIdentifier, last4, maskEmail, callerTextNumber, textDestination,
    callerIsInternational, normalizeAndFindCapture, anythingElse, goodbye, sayName, sorryNotCaught, dateToWords, amountToSpeech, validateCardNumber,
    validateExpiration, consumeActionReceipt, authorizeFormActionRetry, formSignature, selectFormAction, confirmFormRevision, prepareFormAction, actionConfirmationValid, beginFormAction, finishFormAction, actionGateVerified, sourceNeedsLoad, beginSourceRefresh, completeSourceRefresh, pickProviderQuestion, matchInputs, readFormAnswer, readInputProfile, formAcceptanceTrace, resolveFormInputs, formInputApplies, formInputFilled, nextFormInput, formInputChain, openFormInstance, validateFormIncompleteOutcome, formIncompleteOutcome, validateFormExhaustion, exhaustFormInput, formInitialReadings, orderFormReadings, proposedFormValues, applyFormValidation, formReadingDependencies, exclusiveFormReadings, enrichFormMatches, expandFormActivations, settleFormActivations, rememberFormArguments, resetFormInputs, hasFormValue, formPath, formValuesEqual, formReadingReady, formReadingRelevant, formPreparation, queueFormReadings, pendingFormReadings, formWorkLimit,answerResetsFormReplays, rejectFormReadings, invalidateFormInputs, acceptFormReadings, formInstanceApplies, formParentResume, closeFormInstance, checkOtp, clearOtp, maskDestination, validateOTP, OTP_EXPIRY_MS, validateDigits, validatePhone, validateEmail,
-   urlToSpeech, textWithUrlToSpeech, joinSpokenDigits, spokenDigitsText, wholeSpokenNumber, registerSendable, sendables, chatTranscript,
+   urlToSpeech, textWithUrlToSpeech, joinSpokenDigits, spokenDigitsText, wholeSpokenNumber, registerSendable, sendables, chatTranscript, conversationCopy, CONVERSATION_KEY,
 };
 
 /** The functions flows call by name, ready to spread into a host's approved functions. */
@@ -58,5 +58,5 @@ export const STANDARD_FUNCTIONS = {
    readEmail, readPhone, readInternationalPhone, readIdentifier, last4, maskEmail, callerTextNumber, textDestination, callerIsInternational,
    normalizeAndFindCapture, anythingElse, goodbye, sayName, sorryNotCaught, dateToWords, amountToSpeech, validateCardNumber, validateExpiration, consumeActionReceipt, authorizeFormActionRetry, formSignature, selectFormAction, confirmFormRevision, prepareFormAction, actionConfirmationValid, beginFormAction, finishFormAction, actionGateVerified, sourceNeedsLoad, beginSourceRefresh, completeSourceRefresh, pickProviderQuestion, matchInputs, readFormAnswer, readInputProfile, formAcceptanceTrace, resolveFormInputs, formInputApplies, formInputFilled, nextFormInput, formInputChain, openFormInstance, validateFormIncompleteOutcome, formIncompleteOutcome, validateFormExhaustion, exhaustFormInput, formInitialReadings, orderFormReadings, proposedFormValues, applyFormValidation, formReadingDependencies, exclusiveFormReadings, enrichFormMatches, expandFormActivations, settleFormActivations, rememberFormArguments, resetFormInputs, hasFormValue, formPath, formValuesEqual, formReadingReady, formReadingRelevant, formPreparation, queueFormReadings, pendingFormReadings, formWorkLimit,answerResetsFormReplays, rejectFormReadings, invalidateFormInputs, acceptFormReadings, formInstanceApplies, formParentResume, closeFormInstance,
    validateOTP, validateDigits, validatePhone, validateEmail, urlToSpeech, textWithUrlToSpeech, joinSpokenDigits, wholeSpokenNumber,
-   registerSendable, sendables, chatTranscript,
+   registerSendable, sendables, chatTranscript, conversationCopy,
 };

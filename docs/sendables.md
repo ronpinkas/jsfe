@@ -21,7 +21,7 @@ registerSendable(cargo, {key:'statement', label:'Latest statement', label_es:'Ú
 ```
 
 `label` is what the ranker reads; `label_es` is optional. A malformed entry throws where it is registered. Keys
-starting with `reply-` are reserved. A document a caller may ask for before seeing it (the statement) is registered
+starting with `reply-`, and `conversation`, are reserved. A document a caller may ask for before seeing it (the statement) is registered
 at session start. Returns `true`, so it can stand in a SET.
 
 ## Always sendable: a flow's `sendable` declaration
@@ -37,13 +37,20 @@ args:{}, declared:true}`), so it is offered from the first turn. A run-time regi
 carries args). The declaring flow is the sender: it receives `{medium, destination, args}` (destination is only what the
 caller gave; the sender collects the rest), sets `cargo.copyHandled = true` as it takes over, and tells the caller every
 outcome. `media` (default text and email) is what it can send by: asked for text, an email-only sender is emailed, and
-the caller is told. `sendable` takes only `key`, `label`, `label_es` and `media`; `reply-` keys are reserved.
+the caller is told. `sendable` takes only `key`, `label`, `label_es` and `media`; `reply-` keys and `conversation` are reserved.
 
 ## sendables(cargo)
 
-The registered documents, then the last six non-empty assistant turns of `cargo.chatTurns` (the host's masked
-conversation: `[{n, role, text, source?}]`), as `{key:'reply-<n>', label:'Reply <n>: <first 120 characters>',
+The registered documents; once the assistant has replied, the whole conversation, `{key:'conversation', label:'The
+whole conversation', label_es:'Toda nuestra conversación', kind:'conversation', media:['email']}` (no content: the
+sender makes it with `conversationCopy`); then the last six non-empty assistant turns of `cargo.chatTurns` (the host's
+masked conversation: `[{n, role, text, source?}]`), as `{key:'reply-<n>', label:'Reply <n>: <first 120 characters>',
 kind:'reply', content}`. Returns copies.
+
+## conversationCopy(turns, language)
+
+The copy a caller receives of the whole conversation: `You: …` / `Assistant: …` (`Usted` / `Asistente` in Spanish), one
+paragraph per non-empty caller or assistant turn, in order. The turns are the ones before the current request.
 
 ## chatTranscript(turns)
 
@@ -63,7 +70,8 @@ out and the flow asks. `enum_from` replaces `enum` (never both) and names a jsfe
 `send-copy` (src/forms/send-copy-flow.js, built into the system set) is the primary that uses all of the above. Its
 parameters are `item` (enum_from sendables), `medium` (text | email) and `destination` (a number or address the caller
 gave). With no item it offers the latest one ("Should I send you my last answer: …?"); with no medium it uses the
-destination's shape, else asks; an item with one medium (a line with no text sender, an email-only sender) uses it. Content
+destination's shape, else asks; an item with one medium (a line with no text sender, an email-only sender) uses it. The whole
+conversation is emailed as `conversationCopy(cargo.chatTurns, language)` (subject "Your copy of our conversation"). Content
 goes through the system workers (`text-destination` + `send-text`, `ask-email` + `send-email-message`) as is. A **sender
 flow** is called with `{medium, destination, args}` before any destination is asked, sets `cargo.copyHandled = true` and
 tells the caller every outcome; without that (no such flow), SendCopy says it could not send. There is no authentication gate in SendCopy: a sender flow gates its own document.

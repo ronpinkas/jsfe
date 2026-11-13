@@ -50,7 +50,7 @@ async function turn(input, { replies = [], cargo = {}, flows = [statement, send]
 {
   const cargo = { sendables: [{ key: 'old', label: 'Old', kind: 'document', sender: 'gone', args: {}, declared: true }], chatTurns: [{ n: 2, role: 'assistant', text: 'Hi.' }] };
   const { s } = await turn('hello', { cargo });
-  eq(sendables(s.cargo).map(i => i.key), ['statement', 'reply-2'], 'stale declaration replaced; declared documents, then replies');
+  eq(sendables(s.cargo).map(i => i.key), ['statement', 'conversation', 'reply-2'], 'stale declaration replaced; declared documents, the conversation, then replies');
   const none = await turn('hello', { flows: [send] });
   ok(none.s.cargo.sendables === undefined, 'no declaration: cargo is untouched');
 }
@@ -60,6 +60,7 @@ async function turn(input, { replies = [], cargo = {}, flows = [statement, send]
   const errorsOf = (sendable) => new WorkflowEngine(quiet, null, [{ ...statement, sendable }], [], {}, {}, false, 'en', 3000).validateFlow('SendStatement').errors.join(' | ');
   eq(errorsOf(statement.sendable), '', 'a valid declaration');
   ok(/sendable.key must be/.test(errorsOf({ key: 'reply-1', label: 'x' })), 'reply- keys are reserved');
+  ok(/sendable.key must be/.test(errorsOf({ key: 'conversation', label: 'x' })), 'the conversation key is reserved');
   ok(/sendable.label must be/.test(errorsOf({ key: 'k' })), 'a label is required');
   ok(/media must be/.test(errorsOf({ key: 'k', label: 'x', media: ['fax'] })), 'media are text and email only');
   eq(errorsOf({ key: 'k', label: 'x', media: ['email'] }), '', 'email-only is valid');

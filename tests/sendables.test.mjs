@@ -4,13 +4,14 @@
 import assert from 'node:assert/strict';
 import {WorkflowEngine} from '../dist/index.js';
 import {FLOWS} from '../dist/forms/index.js';
-import {STANDARD_FUNCTIONS, registerSendable, sendables, chatTranscript} from '../dist/helpers/index.js';
+import {STANDARD_FUNCTIONS, registerSendable, sendables, chatTranscript, conversationCopy, CONVERSATION_KEY} from '../dist/helpers/index.js';
+import {enumSourceOptions} from '../dist/helpers/enum-sources.js';
 
 let checks = 0;
 const check = (name, fn) => { fn(); checks++; console.log('PASS', name); };
 
 check('the helpers are flow functions', () => {
-   for (const name of ['registerSendable', 'sendables', 'chatTranscript']) assert.equal(typeof STANDARD_FUNCTIONS[name], 'function', name);
+   for (const name of ['registerSendable', 'sendables', 'chatTranscript', 'conversationCopy']) assert.equal(typeof STANDARD_FUNCTIONS[name], 'function', name);
 });
 
 check('a content document and a sender document register, newest replacing by key', () => {
@@ -28,6 +29,7 @@ check('a malformed entry fails where it is registered', () => {
    const bad = [
       [{label: 'x', content: 'y'}, /key/],
       [{key: 'reply-3', label: 'x', content: 'y'}, /reply-/],
+      [{key: 'conversation', label: 'x', content: 'y'}, /conversation/],
       [{key: 'k', content: 'y'}, /label/],
       [{key: 'k', label: 'x'}, /exactly one/],
       [{key: 'k', label: 'x', content: 'y', sender: 'f'}, /exactly one/],
@@ -50,17 +52,35 @@ check('replies come from cargo.chatTurns after the documents; empty replies are 
    const cargo = {chatTurns: turns};
    registerSendable(cargo, {key: 'statement', label: 'Latest statement', sender: 'send-statement'});
    const list = sendables(cargo);
-   assert.deepEqual(list.map((item) => item.key), ['statement', 'reply-2']);
-   assert.deepEqual(list[1], {key: 'reply-2', label: 'Reply 2: Su saldo es $1.92.', kind: 'reply', content: 'Su saldo es $1.92.'});
+   assert.deepEqual(list.map((item) => item.key), ['statement', 'conversation', 'reply-2']);
+   assert.deepEqual(list[2], {key: 'reply-2', label: 'Reply 2: Su saldo es $1.92.', kind: 'reply', content: 'Su saldo es $1.92.'});
 });
 
 check('only the last six replies are offered, and a long reply has a short label and its whole text', () => {
    const long = 'x'.repeat(200);
    const many = Array.from({length: 8}, (_, i) => ({n: 2 * i + 2, role: 'assistant', text: i === 7 ? long : `reply ${i}`}));
    const list = sendables({chatTurns: many});
-   assert.deepEqual(list.map((item) => item.key), ['reply-6', 'reply-8', 'reply-10', 'reply-12', 'reply-14', 'reply-16']);
-   assert.equal(list[5].label, `Reply 16: ${'x'.repeat(120)}…`);
-   assert.equal(list[5].content, long);
+   assert.deepEqual(list.map((item) => item.key), ['conversation', 'reply-6', 'reply-8', 'reply-10', 'reply-12', 'reply-14', 'reply-16']);
+   assert.equal(list[6].label, `Reply 16: ${'x'.repeat(120)}…`);
+   assert.equal(list[6].content, long);
+});
+
+check('once the assistant has replied, the whole conversation is offered: email only, no content of its own', () => {
+   assert.equal(CONVERSATION_KEY, 'conversation');
+   assert.deepEqual(sendables({chatTurns: turns}).find((item) => item.key === 'conversation'),
+      {key: 'conversation', label: 'The whole conversation', label_es: 'Toda nuestra conversación', kind: 'conversation', media: ['email']});
+   assert.deepEqual(sendables({chatTurns: [{n: 1, role: 'user', text: 'hola'}]}), [], 'a caller turn alone: nothing said yet');
+   assert.deepEqual(sendables({chatTurns: [{n: 1, role: 'user', text: 'hola'}, {n: 2, role: 'assistant', text: ' '}]}), [], 'an empty reply is not a conversation');
+   assert.deepEqual(enumSourceOptions('sendables', {chatTurns: turns}).map((o) => o.label), ['The whole conversation', 'Reply 2: Su saldo es $1.92.'], 'stage 2 sees it by its label');
+});
+
+check('conversationCopy: You/Assistant (Usted/Asistente), one paragraph per non-empty turn, in order', () => {
+   assert.equal(conversationCopy(turns), 'You: ¿Cuál es mi saldo?\n\nAssistant: Su saldo es $1.92.\n\nYou: Mándamelo por texto');
+   assert.equal(conversationCopy(turns, 'es'), 'Usted: ¿Cuál es mi saldo?\n\nAsistente: Su saldo es $1.92.\n\nUsted: Mándamelo por texto');
+   assert.equal(conversationCopy(turns, 'fr'), conversationCopy(turns, 'en'), 'another language reads in English');
+   assert.equal(conversationCopy([{n: 1, role: 'system', text: 'x'}, {n: 2, role: 'assistant', text: '  Hi  '}]), 'Assistant: Hi', 'only caller and assistant turns, trimmed');
+   assert.equal(conversationCopy(undefined), '');
+   assert.equal(conversationCopy([]), '');
 });
 
 check('nothing registered and no history: nothing to send', () => {
@@ -95,7 +115,7 @@ session.cargo.chatTurns = turns;
 session = await engine.updateActivity({role: 'user', content: 'receipt', start: {flow: 'make-receipt', arguments: {}}}, session);
 check('a flow step registers a document and the next step offers it with the replies', () => {
    assert.deepEqual(session.cargo.sendables.map((item) => item.key), ['receipt-9']);
-   assert.match(String(session.response), /Offered: receipt-9,reply-2/);
+   assert.match(String(session.response), /Offered: receipt-9,conversation,reply-2/);
 });
 
 console.log(`sendables: ${checks} checks passed`);

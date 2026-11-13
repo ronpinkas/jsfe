@@ -4,6 +4,8 @@
  *
  * Intent detection picks the item, the medium and any destination in one stage-2 request: `item` is enum_from
  * 'sendables' (jsfe 1.60.0), so its values are this session's sendables(cargo) keys with their labels.
+ * - The whole conversation (once the assistant has replied) goes by email only, as conversationCopy(cargo.chatTurns,
+ *   language): the turns before this request, in the caller's language.
  * - A content item (a reply, a text document) is sent as is: text through text-destination's number (or the one the
  *   caller gave) and send-text; email to the address given, else ask-email, and send-email-message.
  * - A sender item runs its flow with {medium, destination, args} (destination: only what the caller gave): the sender
@@ -29,22 +31,22 @@ const TEXT_WORDS = ['1', 'text', 'texto', 'sms', 'message', 'text message', 'men
 const EMAIL_WORDS = ['2', 'email', 'e-mail', 'mail', 'correo', 'correo electrónico', 'correo electronico', 'email address'];
 
 const sendCopy = defineWorker({
-   contract: { role: 'router', summary: 'Sends a reply or registered document the caller picks, by text or email, through the system send workers or the document\'s sender flow' },
+   contract: { role: 'router', summary: 'Sends a reply, registered document or the whole conversation the caller picks, by text or email, through the system send workers or the document\'s sender flow' },
    id: 'send-copy',
    name: 'SendCopy',
-   version: '1.0.0',
+   version: '1.1.0',
    primary: true,
    prompt: 'Send a copy',
    prompt_es: 'Enviar una copia',
-   description: "Asks to be sent, by text or email, something the assistant said in this conversation ('text me that', 'send me that by email', 'mándame eso por mensaje', 'envíeme esa información al correo'). Not: continuing the whole conversation by text (SwitchToText); a person (LiveAgentRequested).",
+   description: "Asks to be sent, by text or email, something the assistant said in this conversation, or a copy of the whole conversation ('text me that', 'send me that by email', 'email me a copy of this chat', 'mándame eso por mensaje', 'envíeme toda la conversación al correo'). Not: continuing the conversation by text (SwitchToText); a person (LiveAgentRequested).",
    parameters: [
-      { name: 'item', type: 'string', enum_from: 'sendables', description: "What the user asks to have sent: the reply or document they name or point to. 'That', 'it', 'this', 'eso' or 'lo que me dijo' is the latest reply." },
+      { name: 'item', type: 'string', enum_from: 'sendables', description: "What the user asks to have sent: the reply or document they name or point to. 'That', 'it', 'this', 'eso' or 'lo que me dijo' is the latest reply; the whole chat, conversation or transcript ('toda la conversación') is the whole conversation." },
       { name: 'medium', type: 'string', enum: ['text', 'email'], description: "How the user asks to have it sent: text for a text message or SMS ('mensaje', 'texto'), email for an email ('correo')." },
       { name: 'destination', type: 'string', description: 'The phone number or email address the user gave to send it to, as given.' },
    ],
    variables: vars({
       noop: false, sc_items: [], sc_key: '', sc_item: null, sc_last: null, sc_last_head: '', sc_doc_list: '', sc_email: '', sc_phone: '',
-      sc_medium: '', sc_medium_q: '', sc_medium_q_es: '', sc_given: '', sc_media: [], sc_forced: '', sc_to: '', sc_subject: '', sc_sent: false,
+      sc_medium: '', sc_medium_q: '', sc_medium_q_es: '', sc_given: '', sc_media: [], sc_forced: '', sc_to: '', sc_subject: '', sc_content: '', sc_sent: false,
    }),
    steps: [
       set('sc_items', 'sc_items', 'sendables(cargo)'),
@@ -127,9 +129,10 @@ const sendCopy = defineWorker({
       when('sc_email_none_end', "sc_medium === 'email' && !sc_to", end('sc_email_none_done')),
 
       // send: a sender item runs its flow (it tells the caller); content goes as is
-      set('sc_subject', 'sc_subject', "language === 'es' ? 'Su copia de nuestra conversación' : 'Your copy from our conversation'"),
-      when('sc_send_text', "sc_medium === 'text'", call('sc_send_text_call', 'send-text', { message: '{{sc_item.content}}' })),
-      when('sc_send_email', "sc_medium === 'email'", call('sc_send_email_call', 'send-email-message', { to: '{{sc_to}}', subject: '{{sc_subject}}', message: '{{sc_item.content}}', cc: '' })),
+      set('sc_subject', 'sc_subject', "language === 'es' ? 'Su copia de nuestra conversación' : sc_item.kind === 'conversation' ? 'Your copy of our conversation' : 'Your copy from our conversation'"),
+      set('sc_content', 'sc_content', "sc_item.kind === 'conversation' ? conversationCopy(cargo.chatTurns, language) : sc_item.content"),
+      when('sc_send_text', "sc_medium === 'text'", call('sc_send_text_call', 'send-text', { message: '{{sc_content}}' })),
+      when('sc_send_email', "sc_medium === 'email'", call('sc_send_email_call', 'send-email-message', { to: '{{sc_to}}', subject: '{{sc_subject}}', message: '{{sc_content}}', cc: '' })),
       set('sc_sent', 'sc_sent', "sc_medium === 'text' ? cargo.textSent === true : cargo.emailSent === true"),
       when('sc_done_text', "sc_sent && sc_medium === 'text'", say('sc_done_text_say', 'Done. I texted it to the number ending in {{cargo.textTo4}}.' + ANYTHING_ELSE, 'Listo. Se lo envié por mensaje de texto al número que termina en {{cargo.textTo4}}.' + ANYTHING_ELSE_ES)),
       when('sc_done_email', "sc_sent && sc_medium === 'email'", say('sc_done_email_say', 'Done. I emailed it to {{sc_to}}.' + ANYTHING_ELSE, 'Listo. Se lo envié por correo a {{sc_to}}.' + ANYTHING_ELSE_ES)),

@@ -48,12 +48,12 @@ async function run(replies, input, chatTurns, flows = [send, pay]) {
 {
   const { calls, frame } = await run([{ flowName: 'SendCopy' }, { parameters: { item: 'reply-4', medium: 'text' } }], 'text me that', turns);
   const [system2, , schema2, req2] = calls[1];
-  eq(req2.flow.parameters[0].enum, ['reply-2', 'reply-4'], 'item takes the session\'s reply keys');
+  eq(req2.flow.parameters[0].enum, ['conversation', 'reply-2', 'reply-4'], 'item takes the session\'s keys: the conversation, then the replies');
   ok(system2.includes('reply-4 = "Reply 4: Your next payment is due on December 5."'), 'the LLM reads each value with its label');
-  eq(JSON.parse(schema2).json_schema.schema.properties.item.enum, ['reply-2', 'reply-4', null], 'the schema allows only those keys');
+  eq(JSON.parse(schema2).json_schema.schema.properties.item.enum, ['conversation', 'reply-2', 'reply-4', null], 'the schema allows only those keys');
   const q = Object.values(req2.systemOne.questions).find(x => x.instructions.candidate_value === 'reply-4');
   ok(q.instructions.candidate_label === 'Reply 4: Your next payment is due on December 5.' && q.criteria.true.includes('(Reply 4:'), 'Jev reads the label too');
-  eq(req2.systemOne.index.filter(x => x.param === 'item').length, 2, 'one Jev question per sendable');
+  eq(req2.systemOne.index.filter(x => x.param === 'item').length, 3, 'one Jev question per sendable');
   eq({ item: frame.variables.item, medium: frame.variables.medium }, { item: 'reply-4', medium: 'text' }, 'the pick reaches the flow');
   ok(!('enumLabels' in req2.flow.parameters[1]), 'a static enum carries no labels');
 }
@@ -76,7 +76,7 @@ async function run(replies, input, chatTurns, flows = [send, pay]) {
 {
   const cargo = { chatTurns: turns, sendables: [{ key: 'statement', label: 'Your latest statement', kind: 'document', sender: 'send-statement', args: {} }] };
   const resolved = resolveEnumSources(send, cargo);
-  eq(resolved.parameters[0].enum, ['statement', 'reply-2', 'reply-4'], 'documents first, then replies');
+  eq(resolved.parameters[0].enum, ['statement', 'conversation', 'reply-2', 'reply-4'], 'documents first, the conversation, then replies');
   ok(!('enum_from' in resolved.parameters[0]) && send.parameters[0].enum_from === 'sendables', 'the flow definition is not changed');
   ok(resolveEnumSources(pay, cargo) === pay, 'a flow without enum_from is returned as is');
   const s2 = buildParameterStage('send my statement', [], resolved);
