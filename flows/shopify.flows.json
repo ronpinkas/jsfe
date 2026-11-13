@@ -2023,7 +2023,7 @@
         "id": "product_query_needs_classification",
         "type": "CASE",
         "branches": {
-          "condition: !reading || reading.origin!=='activation'": {
+          "condition: !reading || (reading.origin!=='activation' && reading.origin!=='form_submission')": {
             "id": "product_query_route",
             "type": "DISPATCH",
             "onResponse": "continue",
@@ -2049,7 +2049,7 @@
         "id": "product_query_valid",
         "type": "SET",
         "variable": "noop",
-        "value": "(cargo.inputCheck={ok:!!(reading && reading.origin==='activation' ? typeof value==='string' && value.trim() : response && typeof response.search_query==='string' && response.search_query.trim()),value:String(value || '').trim()},true)"
+        "value": "(cargo.inputCheck={ok:!!(reading && (reading.origin==='activation' || reading.origin==='form_submission') ? typeof value==='string' && value.trim() : response && typeof response.search_query==='string' && response.search_query.trim()),value:String(value || '').trim()},true)"
       }
     ]
   },
@@ -2239,7 +2239,7 @@
             "variable": "noop",
             "value": "true"
           },
-          "condition: !reading || reading.origin!=='activation'": {
+          "condition: !reading || (reading.origin!=='activation' && reading.origin!=='form_submission')": {
             "id": "product_city_dispatch",
             "type": "DISPATCH",
             "onResponse": "continue",
@@ -2265,7 +2265,7 @@
         "id": "product_city_valid",
         "type": "SET",
         "variable": "noop",
-        "value": "(cargo.inputCheck=(function(zip){return /^\\d{5}(?:\\d{4})?$/.test(zip)?{ok:true,value:zip}:{ok:!!(reading && reading.origin==='activation' ? typeof value==='string' && value.trim() : response && typeof response.user_city==='string' && response.user_city.trim()),value:String(value || '').trim()};})(wholeSpokenNumber(String(value || '').trim())),true)"
+        "value": "(cargo.inputCheck=(function(zip){return /^\\d{5}(?:\\d{4})?$/.test(zip)?{ok:true,value:zip}:{ok:!!(reading && (reading.origin==='activation' || reading.origin==='form_submission') ? typeof value==='string' && value.trim() : response && typeof response.user_city==='string' && response.user_city.trim()),value:String(value || '').trim()};})(wholeSpokenNumber(String(value || '').trim())),true)"
       }
     ]
   },
