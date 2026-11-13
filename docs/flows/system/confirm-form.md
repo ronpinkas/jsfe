@@ -3,7 +3,7 @@
 <!-- generated:start -->
 **ConfirmForm** · `confirm-form` · version 1.0.0 · worker (called by other flows) · steps · isolated scope
 
-> Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm only when an action it authorizes is a payment; otherwise soft: YES is read as a soft confirmation's and offered to the reply ranker). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).
+> Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm only when an action it authorizes is a payment; otherwise soft: YES is read as a soft confirmation's and offered to the reply ranker). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after four the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).
 
 - **Parameters:** 
   - `form`: form
@@ -104,15 +104,15 @@ flowchart TD
    c24 -- "else" --> c26
    b27(["dispatch: intent detection"])
    class b27 endstep
-   c26 -- "(cf_tries #gt;= 2 && !cf_must) && !!formIncompleteOutcome(cargo,form,#123;ou…" --> b27
+   c26 -- "(cf_tries #gt;= 4 && !cf_must) && !!formIncompleteOutcome(cargo,form,#123;ou…" --> b27
    c28{"case"}
    c26 -- "else" --> c28
    c29{"case"}
-   c28 -- "cf_tries #gt;= 2 && !cf_must" --> c29
+   c28 -- "cf_tries #gt;= 4 && !cf_must" --> c29
    c28 -- "else" --> c29
    b30(["reboot → give-up"])
    class b30 endstep
-   c29 -- "cf_tries #gt;= 2 && !cf_must" --> b30
+   c29 -- "cf_tries #gt;= 4 && !cf_must" --> b30
    c31{"case"}
    c29 -- "else" --> c31
    b32["set assignment_side_effect"]

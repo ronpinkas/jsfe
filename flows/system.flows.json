@@ -9032,7 +9032,7 @@
         "id": "collect-credit-card_open",
         "type": "SET",
         "variable": "form_instance",
-        "value": "openFormInstance(cargo, \"collect-credit-card\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-credit-card\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete, first_task: \"record your new card\", first_task_es: \"registrar su tarjeta nueva\" })"
+        "value": "openFormInstance(cargo, \"collect-credit-card\", inputs, { parent: parent_form || null, input: result_input || '', context:!!parent_form && !result_input, resume_on_parent_change: false, resume: form_instance || (!parent_form ? (cargo.formTasks || {})[\"collect-credit-card\"] || '' : ''), providers: provides, questions: questions, incomplete_outcome: form_incomplete_outcome, on_exhausted: form_on_exhausted, on_no: form_on_no, must_complete: form_must_complete, first_task: \"enter your new card details\", first_task_es: \"ingresar los datos de su tarjeta nueva\" })"
       },
       {
         "id": "collect-credit-card_task",
@@ -9950,7 +9950,7 @@
     "name": "ConfirmForm",
     "version": "1.0.0",
     "scope": "isolated",
-    "description": "Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm only when an action it authorizes is a payment; otherwise soft: YES is read as a soft confirmation's and offered to the reply ranker). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
+    "description": "Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm only when an action it authorizes is a payment; otherwise soft: YES is read as a soft confirmation's and offered to the reply ranker). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after four the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
     "parameters": [
       {
         "name": "form",
@@ -10376,7 +10376,7 @@
         "type": "object",
         "value": {
           "version": 1,
-          "summary": "Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm only when an action it authorizes is a payment; otherwise soft: YES is read as a soft confirmation's and offered to the reply ranker). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after two the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
+          "summary": "Worker: ask a form's confirmation (YES / NO, keys 1 and 2; firm only when an action it authorizes is a payment; otherwise soft: YES is read as a soft confirmation's and offered to the reply ranker). A correction instead ('no, make it $40') is read against the form chain and stored, and the result is 'changed' so the form runs again; an answer with words it cannot read goes to the reply ranker (read-confirm-reply); an unclear one is asked again, and after four the give-up worker takes over. Result: cargo.formConfirm[form] = 'yes' | 'no' | 'changed'. Params: form, question(_es), exit_context(_es).",
           "parametersFrom": "parameters",
           "role": "worker",
           "requires": [
@@ -10742,7 +10742,7 @@
         "id": "cf_optional_exhausted",
         "type": "CASE",
         "branches": {
-          "condition: (cf_tries >= 2 && !cf_must) && !!formIncompleteOutcome(cargo,form,{outcome:'unresolved',reason:'confirmation_misses_exhausted'}).owner": {
+          "condition: (cf_tries >= 4 && !cf_must) && !!formIncompleteOutcome(cargo,form,{outcome:'unresolved',reason:'confirmation_misses_exhausted'}).owner": {
             "id": "cf_optional_exhausted_dispatch",
             "type": "DISPATCH",
             "outcome": "{{formConversationOutcome(cargo,form,'confirmation_misses_exhausted',true,\"none\").outcome}}",
@@ -10767,7 +10767,7 @@
         "id": "cf_misses_stamp",
         "type": "CASE",
         "branches": {
-          "condition: cf_tries >= 2 && !cf_must": {
+          "condition: cf_tries >= 4 && !cf_must": {
             "id": "cf_failure_stamp",
             "type": "SET",
             "variable": "noop",
@@ -10792,7 +10792,7 @@
         "id": "cf_misses_exhausted",
         "type": "CASE",
         "branches": {
-          "condition: cf_tries >= 2 && !cf_must": {
+          "condition: cf_tries >= 4 && !cf_must": {
             "id": "cf_give_up",
             "type": "FLOW",
             "value": "give-up",
