@@ -24,6 +24,21 @@ registerSendable(cargo, {key:'statement', label:'Latest statement', label_es:'Ú
 starting with `reply-` are reserved. A document a caller may ask for before seeing it (the statement) is registered
 at session start. Returns `true`, so it can stand in a SET.
 
+## Always sendable: a flow's `sendable` declaration
+
+A document the caller may ask for before anything produced it (the statement) is declared on the flow that sends it:
+
+```
+{ id:'send-statement', …, sendable:{key:'statement', label:'Your latest statement', label_es:'Su último estado de cuenta', media:['email']} }
+```
+
+Each turn the engine brings `cargo.sendables` in line with the declarations (`{kind:'document', sender:<that flow>,
+args:{}, declared:true}`), so it is offered from the first turn. A run-time registration with the same key wins (it
+carries args). The declaring flow is the sender: it receives `{medium, destination, args}` (destination is only what the
+caller gave; the sender collects the rest), sets `cargo.copyHandled = true` as it takes over, and tells the caller every
+outcome. `media` (default text and email) is what it can send by: asked for text, an email-only sender is emailed, and
+the caller is told. `sendable` takes only `key`, `label`, `label_es` and `media`; `reply-` keys are reserved.
+
 ## sendables(cargo)
 
 The registered documents, then the last six non-empty assistant turns of `cargo.chatTurns` (the host's masked
@@ -48,7 +63,7 @@ out and the flow asks. `enum_from` replaces `enum` (never both) and names a jsfe
 `send-copy` (src/forms/send-copy-flow.js, built into the system set) is the primary that uses all of the above. Its
 parameters are `item` (enum_from sendables), `medium` (text | email) and `destination` (a number or address the caller
 gave). With no item it offers the latest one ("Should I send you my last answer: …?"); with no medium it uses the
-destination's shape, else asks; a line with no text sender emails instead. Content goes through the system workers
-(`text-destination` + `send-text`, `ask-email` + `send-email-message`) as is. A **sender flow** is called with
-`{medium, destination, args}`, sends, tells the caller, and sets `cargo.copySent = true`; without that, SendCopy says it
-could not send. There is no authentication gate in SendCopy: a sender flow gates its own document.
+destination's shape, else asks; an item with one medium (a line with no text sender, an email-only sender) uses it. Content
+goes through the system workers (`text-destination` + `send-text`, `ask-email` + `send-email-message`) as is. A **sender
+flow** is called with `{medium, destination, args}` before any destination is asked, sets `cargo.copyHandled = true` and
+tells the caller every outcome; without that (no such flow), SendCopy says it could not send. There is no authentication gate in SendCopy: a sender flow gates its own document.

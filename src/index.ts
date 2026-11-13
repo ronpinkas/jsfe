@@ -9,6 +9,7 @@ import {storedSession,restoreStoredSession} from './helpers/stored-session.js';
 import {validateContextualResponseStep,validateResponseParameters} from './helpers/contextual-response.js';
 import {validateFlowRecovery} from './host/flow-recovery.js';
 import {ENUM_SOURCES,resolveEnumSources} from './helpers/enum-sources.js';
+import {syncDeclaredSendables,sendableDeclarationError} from './helpers/sendables.js';
 import type {FlowRecovery} from './host/flow-recovery.js';
 export type {FlowRecovery} from './host/flow-recovery.js';
 import {ACTION_TOOLS} from './forms/action-tools.js';
@@ -859,6 +860,7 @@ export interface FlowDefinition {
   safetyRevision?: string; // Changes retire saved continuations before input/steps; not a hot reload.
   safetyRevisionCompat?: string; // The earlier fingerprint revision of an unchanged declaration, accepted from a saved session.
   primary?: boolean; // Whether this flow is a primary entry point for users (default: false)
+  sendable?: { key: string; label: string; label_es?: string; media?: ('text' | 'email')[] }; // Always sendable (SendCopy); this flow is its sender, called with {medium, destination, args}
   replaceTarget?: boolean; // A REPLACE step with toParent may return to this flow's waiting frame instead of adding another (default: false)
   loopBound?: string; // This flow is on a loop that a runtime limit ends: names the limit, for the flow-trap check (a test must drive it)
   // A tenant's thin entry point over a shared flow (by id or name): when present, the wrapped flow is no longer primary
@@ -8404,6 +8406,8 @@ export class WorkflowEngine implements Engine {
       }
       if (this.actionJournal || this.actionPersistence === 'session-only') engineSessionContext.actionPersistence = this.actionPersistence;
       this.cargo = engineSessionContext.cargo || {};
+      // Declared sendables are offered from the first turn, before their flow has run (SendCopy).
+      syncDeclaredSendables(engineSessionContext.cargo, this.flowsMenu);
       // Batch and validator scratch data can carry raw form inputs under generic value/raw keys.
       logger.info(`Received Cargo: ${JSON.stringify(this.cargo, (k, v) => {
         if (k === 'inputBatch' || k === 'inputCheck') return undefined;
@@ -8533,6 +8537,7 @@ export class WorkflowEngine implements Engine {
             restoreActionSession(engineSessionContext,recovery,contextEntry,recoveryIdentity);
           }
           this.cargo = engineSessionContext.cargo;
+          syncDeclaredSendables(engineSessionContext.cargo, this.flowsMenu);
           this.reconstructVariableReferences();
           engineSessionContext.lastTurnToolCalls = [];
           delete engineSessionContext.lastFlowOutcome;
@@ -9285,6 +9290,10 @@ export class WorkflowEngine implements Engine {
     }
 
     this._validateFlowParameters(flowDef, state);
+    if (flowDef.sendable !== undefined) {
+      const problem = sendableDeclarationError(flowDef.sendable);
+      if (problem) state.errors.push(`Flow "${flowDef.name}": ${problem}`);
+    }
   }
 
   /**

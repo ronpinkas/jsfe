@@ -13,6 +13,10 @@ const REPLY_COUNT = 6;
 const REPLY_LABEL_CHARS = 120;
 
 const isText = (value) => typeof value === 'string' && value.trim() !== '';
+const MEDIA = ['text', 'email'];
+/** media, when given: a nonempty list of distinct 'text' / 'email' (what the sender can send by). */
+const mediaError = (media) => (media === undefined || (Array.isArray(media) && media.length && media.every((m) => MEDIA.includes(m)) && new Set(media).size === media.length)
+   ? '' : `media must be a nonempty list of distinct ${MEDIA.join(' / ')}`);
 
 /**
  * Register (or replace, by key) a document the caller may ask to be sent. Throws on a malformed entry: a flow that
@@ -36,8 +40,10 @@ export function registerSendable(cargo, entry) {
       throw new Error(`registerSendable(${entry.key}): args, when given, must be an object`);
    } else if (entry.args !== undefined && !isText(entry.sender)) {
       throw new Error(`registerSendable(${entry.key}): args belong to a sender entry`);
+   } else if (mediaError(entry.media)) {
+      throw new Error(`registerSendable(${entry.key}): ${mediaError(entry.media)}`);
    } else {
-      const stored = {key: entry.key, label: entry.label, kind: 'document'};
+      const stored = {key: entry.key, label: entry.label, kind: 'document', ...(entry.media ? {media: [...entry.media]} : {})};
       if (entry.label_es !== undefined) {
          stored.label_es = entry.label_es;
       } else {
@@ -81,5 +87,55 @@ export function chatTranscript(turns) {
       return turns.filter((turn) => turn && typeof turn.role === 'string').map((turn) => `${turn.role}: ${turn.text ?? ''}`).join('\n');
    } else {
       return '';
+   }
+}
+
+/**
+ * A flow's declared sendable: `sendable: {key, label, label_es?, media?}` on its definition means the caller may ask for it at
+ * any time (a statement nobody has produced yet), and that flow is its sender. → the problem with it, or '' when valid.
+ */
+export function sendableDeclarationError(sendable) {
+   if (!sendable || typeof sendable !== 'object' || Array.isArray(sendable)) {
+      return 'sendable must be an object {key, label, label_es?}';
+   } else if (!isText(sendable.key) || sendable.key.startsWith('reply-')) {
+      return 'sendable.key must be a nonempty string not starting with "reply-"';
+   } else if (!isText(sendable.label)) {
+      return 'sendable.label must be a nonempty string';
+   } else if (sendable.label_es !== undefined && !isText(sendable.label_es)) {
+      return 'sendable.label_es, when given, must be a nonempty string';
+   } else if (mediaError(sendable.media)) {
+      return `sendable.${mediaError(sendable.media)}`;
+   } else {
+      const extra = Object.keys(sendable).filter((k) => !['key', 'label', 'label_es', 'media'].includes(k));
+      return extra.length ? `sendable takes only key, label, label_es and media (not ${extra.join(', ')})` : '';
+   }
+}
+
+/**
+ * Bring cargo.sendables in line with the flows' declarations (the engine calls it each turn): declared entries are
+ * replaced by the current ones ({kind:'document', sender:<flow id>, args:{}, declared:true}); an entry a flow
+ * registered at run time (registerSendable) keeps its key. An invalid declaration is skipped (validation reports it).
+ */
+export function syncDeclaredSendables(cargo, flows) {
+   if (!cargo || typeof cargo !== 'object') {
+      return;
+   } else {
+      const registered = (Array.isArray(cargo.sendables) ? cargo.sendables : []).filter((item) => item && item.declared !== true);
+      const keys = new Set(registered.map((item) => item.key));
+      const declared = [];
+      for (const flow of Array.isArray(flows) ? flows : []) {
+         const s = flow?.sendable;
+         if (s === undefined || sendableDeclarationError(s) || keys.has(s.key)) {
+            continue; // none, invalid, or a run-time entry already holds the key
+         } else {
+            keys.add(s.key);
+            declared.push({key: s.key, label: s.label, ...(s.label_es ? {label_es: s.label_es} : {}), kind: 'document', sender: flow.id, args: {}, ...(s.media ? {media: [...s.media]} : {}), declared: true});
+         }
+      }
+      if (declared.length || registered.length !== (cargo.sendables || []).length) {
+         cargo.sendables = [...declared, ...registered];
+      } else {
+         // nothing declared and nothing to remove: cargo is left as it was
+      }
    }
 }

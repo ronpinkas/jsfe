@@ -209,7 +209,7 @@ export function compileFlowDeclarations(flows,{tools,externalFlows=[],validate=t
   // The form protocol's own variables (parent_form, result_input, …) are JSFE's to pass, never an author's.
   if(declarationVersion===2&&form)protocolVariables.set(source.id,Object.keys(flow.variables||{}).filter(name=>!Object.hasOwn(rest.variables||{},name)));
   const parameterNames=new Set();
-  flow={...flow,parameters:(flow.parameters||[]).filter(parameter=>{if(parameterNames.has(parameter.name))return false;parameterNames.add(parameter.name);return true;}),...(rest.parameterInstructions!==undefined?{parameterInstructions:rest.parameterInstructions}:{}),...(functions?{functions}:{}),metadata:{...flow.metadata,declaration:{version:declarationVersion,source:source.id}}};
+  flow={...flow,parameters:(flow.parameters||[]).filter(parameter=>{if(parameterNames.has(parameter.name))return false;parameterNames.add(parameter.name);return true;}),...(rest.parameterInstructions!==undefined?{parameterInstructions:rest.parameterInstructions}:{}),...(rest.sendable!==undefined?{sendable:structuredClone(rest.sendable)}:{}),...(functions?{functions}:{}),metadata:{...flow.metadata,declaration:{version:declarationVersion,source:source.id}}};
   // Revisions are engine bookkeeping; a stale authored token cannot override source change detection.
   const {safetyRevision:ignoredRevision,...revisionSource}=source;
   const revised=withSafetyRevision(flow,majorRevision(declarationVersion,original,libraries));

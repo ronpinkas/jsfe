@@ -6,8 +6,9 @@
  * 'sendables' (jsfe 1.60.0), so its values are this session's sendables(cargo) keys with their labels.
  * - A content item (a reply, a text document) is sent as is: text through text-destination's number (or the one the
  *   caller gave) and send-text; email to the address given, else ask-email, and send-email-message.
- * - A sender item runs its declared flow with {medium, destination, args}; the sender sends, tells the caller and sets
- *   cargo.copySent = true. Without it (a failed or missing sender) SendCopy says it could not send.
+ * - A sender item runs its flow with {medium, destination, args} (destination: only what the caller gave): the sender
+ *   collects the rest, sets cargo.copyHandled = true as it takes over and tells the caller every outcome. Without it (a
+ *   missing sender) SendCopy says it could not send. A sender's declared media limit the medium (statement: email).
  * No authentication gate here (owner rule: an authenticated caller's chat and documents are theirs to send anywhere;
  * before authentication no reply holds account data). A sender flow gates its own document.
  */
@@ -42,8 +43,8 @@ const sendCopy = defineWorker({
       { name: 'destination', type: 'string', description: 'The phone number or email address the user gave to send it to, as given.' },
    ],
    variables: vars({
-      noop: false, sc_items: [], sc_key: '', sc_item: null, sc_last: null, sc_last_head: '', sc_email: '', sc_phone: '',
-      sc_medium: '', sc_medium_q: '', sc_medium_q_es: '', sc_destination: '', sc_asked_text: false, sc_to: '', sc_subject: '', sc_sent: false,
+      noop: false, sc_items: [], sc_key: '', sc_item: null, sc_last: null, sc_last_head: '', sc_doc_list: '', sc_email: '', sc_phone: '',
+      sc_medium: '', sc_medium_q: '', sc_medium_q_es: '', sc_given: '', sc_media: [], sc_forced: '', sc_to: '', sc_subject: '', sc_sent: false,
    }),
    steps: [
       set('sc_items', 'sc_items', 'sendables(cargo)'),
@@ -53,8 +54,12 @@ const sendCopy = defineWorker({
       // the item: the one detection picked, else the latest, offered
       set('sc_key', 'sc_key', "typeof item === 'string' ? item : ''"),
       set('sc_item', 'sc_item', 'sc_items.find(function (i) { return i.key === sc_key; }) || null'),
-      set('sc_last', 'sc_last', 'sc_items[sc_items.length - 1]'),
-      set('sc_last_head', 'sc_last_head', "sc_last.kind === 'reply' ? (sc_last.content.length > 120 ? sc_last.content.slice(0, 120) + '…' : sc_last.content) : ((language === 'es' && sc_last.label_es) || sc_last.label)"),
+      // the latest reply is what "that" offers; with none, the documents are named and the caller says which
+      set('sc_last', 'sc_last', "sc_items.filter(function (i) { return i.kind === 'reply'; }).pop() || null"),
+      set('sc_last_head', 'sc_last_head', "sc_last ? (sc_last.content.length > 120 ? sc_last.content.slice(0, 120) + '…' : sc_last.content) : ''"),
+      set('sc_doc_list', 'sc_doc_list', "sc_items.map(function (i) { return (language === 'es' && i.label_es) || i.label; }).join(language === 'es' ? '; ' : '; ')"),
+      when('sc_documents', '!sc_item && !sc_last', say('sc_documents_say', 'I can send you: {{sc_doc_list}}. Tell me which one, and whether by text or email.', 'Puedo enviarle: {{sc_doc_list}}. Dígame cuál, y si por mensaje de texto o por correo.')),
+      when('sc_documents_end', '!sc_item && !sc_last', end('sc_documents_done')),
       when('sc_offer', '!sc_item', call('sc_offer_ask', 'ask-choice', {
          question: 'Should I send you my last answer: "{{sc_last_head}}"? Please say yes or no.',
          question_es: '¿Le envío mi última respuesta: "{{sc_last_head}}"? Por favor diga sí o no.',
@@ -69,9 +74,12 @@ const sendCopy = defineWorker({
       set('sc_email', 'sc_email', "(String(typeof destination === 'string' ? destination : '').match(/[^\\s@]+@[^\\s@]+\\.[^\\s@]+/) || [''])[0].replace(/[.,;:]+$/, '')"),
       set('sc_phone', 'sc_phone', "readPhone(typeof destination === 'string' ? destination : '')"),
       set('sc_medium', 'sc_medium', "typeof medium === 'string' && (medium === 'text' || medium === 'email') ? medium : sc_email ? 'email' : sc_phone ? 'text' : ''"),
-      set('sc_asked_text', 'sc_asked_text', "sc_medium === 'text'"),
-      when('sc_no_sender', "!cargo.twilioNumber", set('sc_email_only', 'sc_medium', "'email'")),
-      when('sc_no_sender_say', '!cargo.twilioNumber && sc_asked_text', say('sc_no_sender_note', "I can't send text messages here, so I'll email it.", 'No puedo enviar mensajes de texto desde aquí, así que se lo enviaré por correo.')),
+      // the media this item can go by: a sender's declared media; content by text only where the line has a sender
+      set('sc_media', 'sc_media', "Array.isArray(sc_item.media) && sc_item.media.length ? sc_item.media : (sc_item.sender || cargo.twilioNumber ? ['text', 'email'] : ['email'])"),
+      set('sc_forced', 'sc_forced', "sc_media.length === 1 && !!sc_medium && sc_medium !== sc_media[0] ? sc_media[0] : ''"),
+      when('sc_forced_email', "sc_forced === 'email'", say('sc_forced_email_say', "I can only send that by email, so I'll email it.", 'Solo puedo enviarlo por correo, así que se lo enviaré por correo.')),
+      when('sc_forced_text', "sc_forced === 'text'", say('sc_forced_text_say', "I can only send that by text, so I'll text it.", 'Solo puedo enviarlo por mensaje de texto, así que se lo enviaré por mensaje.')),
+      set('sc_medium_one', 'sc_medium', "sc_media.length === 1 ? sc_media[0] : sc_medium"),
       // FLOW parameters are paths only: the wording is chosen here
       set('sc_medium_q', 'sc_medium_q', 'cargo.voice ? "Should I send it by text or by email? Press 1 or say TEXT, press 2 or say EMAIL." : "Should I send it by text or by email?"'),
       set('sc_medium_q_es', 'sc_medium_q_es', 'cargo.voice ? "¿Se lo envío por mensaje de texto o por correo? Presione 1 o diga TEXTO, presione 2 o diga CORREO." : "¿Se lo envío por mensaje de texto o por correo?"'),
@@ -83,6 +91,14 @@ const sendCopy = defineWorker({
       })),
       when('sc_ask_medium_read', '!sc_medium', set('sc_medium_pick', 'sc_medium', "cargo.choice === 'text' || cargo.choice === 'email' ? cargo.choice : ''")),
       when('sc_no_medium_end', '!sc_medium', end('sc_no_medium_done')),
+
+      // a sender item: its flow collects what it needs (destination, identity) and tells the caller every outcome
+      set('sc_given', 'sc_given', "sc_medium === 'email' ? sc_email : sc_phone"),
+      when('sc_sender_reset', '!!sc_item.sender', effect('sc_sender_reset_set', 'cargo.copyHandled = false')),
+      when('sc_sender', '!!sc_item.sender', call('sc_sender_call', '{{sc_item.sender}}', { medium: '{{sc_medium}}', destination: '{{sc_given}}', args: '{{sc_item.args}}' })),
+      when('sc_sender_failed', '!!sc_item.sender && cargo.copyHandled !== true', say('sc_sender_failed_say', "Sorry, I couldn't send it." + ANYTHING_ELSE, 'Lo siento, no pude enviarlo.' + ANYTHING_ELSE_ES)),
+      when('sc_sender_failed_end', '!!sc_item.sender && cargo.copyHandled !== true', end('sc_sender_failed_done', { outcome: 'unresolved', reason: 'send_failed' })),
+      when('sc_sender_end', '!!sc_item.sender', end('sc_sender_done')),
 
       // text: the number given, else the verified cell or the caller's phone, else asked
       when('sc_text_to', "sc_medium === 'text'", effect('sc_text_to_set', 'cargo.textTo = sc_phone || textDestination(cargo)')),
@@ -111,13 +127,6 @@ const sendCopy = defineWorker({
       when('sc_email_none_end', "sc_medium === 'email' && !sc_to", end('sc_email_none_done')),
 
       // send: a sender item runs its flow (it tells the caller); content goes as is
-      set('sc_destination', 'sc_destination', "sc_medium === 'text' ? cargo.textTo : sc_to"),
-      when('sc_sender_reset', '!!sc_item.sender', effect('sc_sender_reset_set', 'cargo.copySent = false')),
-      when('sc_sender', '!!sc_item.sender', call('sc_sender_call', '{{sc_item.sender}}', { medium: '{{sc_medium}}', destination: '{{sc_destination}}', args: '{{sc_item.args}}' })),
-      // a sender sets cargo.copySent once it has sent and told the caller; a missing or failed sender is said here
-      when('sc_sender_failed', '!!sc_item.sender && cargo.copySent !== true', say('sc_sender_failed_say', "Sorry, I couldn't send it." + ANYTHING_ELSE, 'Lo siento, no pude enviarlo.' + ANYTHING_ELSE_ES)),
-      when('sc_sender_failed_end', '!!sc_item.sender && cargo.copySent !== true', end('sc_sender_failed_done', { outcome: 'unresolved', reason: 'send_failed' })),
-      when('sc_sender_end', '!!sc_item.sender', end('sc_sender_done')),
       set('sc_subject', 'sc_subject', "language === 'es' ? 'Su copia de nuestra conversación' : 'Your copy from our conversation'"),
       when('sc_send_text', "sc_medium === 'text'", call('sc_send_text_call', 'send-text', { message: '{{sc_item.content}}' })),
       when('sc_send_email', "sc_medium === 'email'", call('sc_send_email_call', 'send-email-message', { to: '{{sc_to}}', subject: '{{sc_subject}}', message: '{{sc_item.content}}', cc: '' })),
