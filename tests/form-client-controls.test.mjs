@@ -29,7 +29,7 @@ const broken = (change, pattern) => {
   const inputs = tripInputs(); change(inputs);
   assert.throws(() => load(trip(inputs)), pattern, `rejects: ${pattern}`);
 };
-broken(inputs => { inputs[2].form_client = {control: 'slider'}; }, /control must be "date", "number", "place", "postal" or "combobox"/);
+broken(inputs => { inputs[2].form_client = {control: 'slider'}; }, /control must be "date", "number", "place", "postal", "combobox" or "options"/);
 broken(inputs => { inputs[2].form_client = true; }, /must be false or \{control/);
 broken(inputs => { inputs[2].form_client = {control: 'number', step: 2}; }, /number cannot declare step/);
 broken(inputs => { inputs[2].form_client = {control: 'number', min: 1.5}; }, /min must be a whole number/);
@@ -133,4 +133,32 @@ console.log('form-client-controls: inputs without a control are unchanged');
   const street = JSON.stringify(addressInputs || {}).includes('"form_client":{"control":"place","types":"address","regions":["us"],"fills":{"zip":"postal_code","city":"locality"},"autofill":"address-line1"}');
   assert(street, 'collect-geocoded-address declares a place control');
   console.log('form-client-controls: the system address form street is a place control');
+}
+
+// The options control: ready replies beside a text box, read from form data; a pick submits its key as typed text.
+{
+  const REPLY = {kind: 'pattern', regex: '^[\\s\\S]{1,200}$'};
+  const pickInputs = () => [{name: 'response', label: 'product question or selection', question: 'Ask about a product, or pick one.', profile: REPLY, form_client: {control: 'options', options_from: 'replies'}}];
+  const pick = (inputs = pickInputs()) => ({declarationVersion: 2, id: 'pick', primary: true, description: 'Pick a product', form: {inputs}});
+  const loadPick = flow => new WorkflowEngine(quiet, async () => '{"option":"new_request","flowName":"None"}', [...FLOWS, flow], [], STANDARD_FUNCTIONS, {}, false, 'en');
+  const bad = (change, pattern) => { const inputs = pickInputs(); change(inputs); assert.throws(() => loadPick(pick(inputs)), pattern, `rejects: ${pattern}`); };
+  bad(inputs => { delete inputs[0].form_client.options_from; }, /options needs options_from/);
+  bad(inputs => { inputs[0].form_client.options_from = 'no spaces'; }, /options needs options_from/);
+  bad(inputs => { inputs[0].form_client.max = 3; }, /options cannot declare max/);
+  bad(inputs => { inputs[0].profile = {kind: 'digits', min: 1, max: 1}; }, /options control needs a profile of kind pattern, text/);
+  const pickEngine = loadPick(pick());
+  pickEngine.disableCommands();
+  let s = pickEngine.initSession('test', 'pick', 'en'); s.cargo.voice = false;
+  s = await pickEngine.updateActivity({role: 'user', content: 'pick a product', start: {flow: 'pick'}}, s);
+  const empty = projectForm(s).fields.find(field => field.name === 'response');
+  assert.equal(empty.control, 'options');
+  assert.deepEqual(empty.options, [], 'no replies offered yet: the box alone');
+  const state = Object.values(s.cargo.forms).find(form => form.specs?.some(spec => spec.name === 'response'));
+  state.data = {...state.data, replies: [{key: 1, label: 'LG 65" TV, $399.99'}, {key: '2', label: 'Hisense 65" TV', label_es: 'Televisor Hisense'}, {key: '2', label: 'duplicate'}, {label: 'no key'}, {key: 'done', label: 'Done'}]};
+  const offered = projectForm(s);
+  assert.deepEqual(offered.fields.find(field => field.name === 'response').options,
+    [{key: '1', label: 'LG 65" TV, $399.99'}, {key: '2', label: 'Hisense 65" TV'}, {key: 'done', label: 'Done'}], 'keys as strings, first of a key wins, keyless dropped');
+  const sent = parseFormSubmission('JSFE_FORM_V1:' + JSON.stringify({form: offered.form, values: {response: '2'}}), offered);
+  assert(sent && !sent.error, 'a picked reply submits as the typed text would');
+  console.log('form-client-controls: the options control passed');
 }

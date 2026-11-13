@@ -154,13 +154,17 @@ function validateAcceptanceDeclarations(id, inputs) {
  *   names, and fills {input: part} fills inputs of this form with its locality (and, for a combobox, the code's other
  *   localities as its options) or admin_area.
  * - control 'combobox': a choice that also takes other text (accept_other), drawn as a text box offering its choices.
+ * - control 'options' {options_from}: a text box with ready replies the card offers beside it (buttons, or a list when there
+ *   are many). options_from names the form data holding them, [{key, label, label_es?}]; a pick submits its key as the
+ *   typed reply would be, so the profile reads it unchanged and no channel without a card is affected.
  * - autofill: the HTML autocomplete token the browser may fill the box from (a saved address, name, email or phone).
  * Checked at definition time; malformed fails.
  */
 const FORM_CLIENT_KEYS = { date: ['control', 'range_from', 'min', 'max', 'timezone', 'autofill'], number: ['control', 'min', 'max', 'autofill'],
-   place: ['control', 'types', 'regions', 'fills', 'autofill'], postal: ['control', 'regions', 'fills', 'autofill'], combobox: ['control', 'autofill'], none: ['autofill'] };
+   place: ['control', 'types', 'regions', 'fills', 'autofill'], postal: ['control', 'regions', 'fills', 'autofill'], combobox: ['control', 'autofill'],
+   options: ['control', 'options_from', 'autofill'], none: ['autofill'] };
 const FORM_CLIENT_KINDS = ['pattern', 'text', 'digits', 'amount', 'identifier'];
-const FORM_CONTROL_KINDS = { place: ['pattern', 'text'], postal: ['digits', 'pattern', 'text', 'identifier'], combobox: ['choice'],
+const FORM_CONTROL_KINDS = { place: ['pattern', 'text'], postal: ['digits', 'pattern', 'text', 'identifier'], combobox: ['choice'], options: ['pattern', 'text'],
    none: ['pattern', 'text', 'digits', 'amount', 'identifier', 'email', 'phone', 'choice'] };
 const FORM_PLACE_TYPES = ['cities', 'address'];
 const FORM_FILL_PARTS = { place: ['postal_code', 'locality', 'admin_area', 'country'], postal: ['locality', 'admin_area'] };
@@ -176,7 +180,7 @@ function validateFormClientControls(id, inputs) {
       const declared = input.form_client;
       if (declared === undefined || declared === false) continue;
       else if (!declared || typeof declared !== 'object' || Array.isArray(declared)) fail(input, 'must be false or {control?, autofill?, ...}');
-      else if (declared.control !== undefined && (declared.control === 'none' || !Object.hasOwn(FORM_CLIENT_KEYS, declared.control))) fail(input, 'control must be "date", "number", "place", "postal" or "combobox"');
+      else if (declared.control !== undefined && (declared.control === 'none' || !Object.hasOwn(FORM_CLIENT_KEYS, declared.control))) fail(input, 'control must be "date", "number", "place", "postal", "combobox" or "options"');
       else { /* a control object, or autofill alone; checked below */ }
       const control = declared.control ?? 'none';
       const extra = Object.keys(declared).filter((key) => !FORM_CLIENT_KEYS[control].includes(key));
@@ -187,6 +191,7 @@ function validateFormClientControls(id, inputs) {
       if (input.pii === true) fail(input, 'control cannot draw a sensitive input');
       if (declared.autofill !== undefined && !FORM_AUTOFILL_TOKENS.includes(declared.autofill)) fail(input, `autofill ${JSON.stringify(declared.autofill)} is not one of ${FORM_AUTOFILL_TOKENS.join(', ')}`);
       if (control === 'combobox' && (input.profile || {}).accept_other !== true) fail(input, 'combobox needs a choice that accepts other text (accept_other)');
+      if (control === 'options' && (typeof declared.options_from !== 'string' || !/^[A-Za-z_]\w{0,63}$/.test(declared.options_from))) fail(input, 'options needs options_from: the name of the form data holding the replies');
       for (const key of ['min', 'max']) if (declared[key] !== undefined && !Number.isInteger(declared[key])) fail(input, `${key} must be a whole number`);
       if (Number.isInteger(declared.min) && Number.isInteger(declared.max) && declared.min > declared.max) fail(input, 'min is above max');
       if (control === 'date') {

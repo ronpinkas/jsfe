@@ -110,6 +110,18 @@ export function projectForm(session, flows) {
             ...(fills ? {fills: Object.fromEntries(Object.entries(fills).map(([name, part]) => [prefix + name, part]))} : {})};
         } else if (control === 'combobox') {
           field.control = control;
+        } else if (control === 'options') {
+          // Ready replies beside the box: a pick is submitted as its key, read by the profile like typed text.
+          field.control = control;
+          const offered = state.data?.[input.form_client.options_from];
+          const options = new Map();
+          for (const option of Array.isArray(offered) ? offered : []) {
+            const key = option && (typeof option.key === 'string' || typeof option.key === 'number') ? String(option.key) : '';
+            const optionLabel = option ? (language === 'es' ? option.label_es || option.label : option.label) : '';
+            if (key && !options.has(key)) options.set(key, {key, label: typeof optionLabel === 'string' && optionLabel ? optionLabel : key});
+            else { /* no key, or a key already offered */ }
+          }
+          field.options = [...options.values()];
         } else { /* the profile's own box */ }
         // The browser may fill the box from its saved data (an address, a name).
         if (input.form_client?.autofill && !field.sensitive) field.autofill = input.form_client.autofill;
