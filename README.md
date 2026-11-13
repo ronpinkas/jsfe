@@ -349,7 +349,10 @@ const body = buildAiRequest(
 Stage 1 picks which PRIMARY flow, if any, the message starts, reading only each primary's `description`.
 Stage 2 extracts the selected flow's parameters, reading each parameter's name, type, `enum` and `description`,
 plus the flow's optional `parameterInstructions` (rules that span its parameters). A parameter marked
-`internal: true` is the flow's own and is never asked. Each stage is ONE aiCallback call: the positional
+`internal: true` is the flow's own and is never asked. A parameter with `enum_from: 'sendables'` (a string
+parameter, instead of `enum`) takes its values from the session when its flow is selected: stage 2 offers that
+source's keys, each with its label for both executors, and an empty source leaves the parameter for the flow to ask.
+No other flow's request changes. Each stage is ONE aiCallback call: the positional
 arguments are the LLM instructions, and the 4th argument (`task: 'detect_flow'` with `stage: 1`, or
 `task: 'extract_parameters'` with `stage: 2`) carries both executors' instructions, `llm` and `systemOne`.
 The host runs either, or both as a hedge, and replies with the canonical JSON: `{ "flowName": … }` for

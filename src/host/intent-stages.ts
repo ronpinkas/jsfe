@@ -31,7 +31,7 @@ export const SPLIT_ROUTE_SHARE = 0.7;
 
 export interface StageTurn { role: 'user' | 'assistant'; content: string }
 export interface StageFlow { id: string; name: string; description: string }
-export interface StageParameter { name: string; type?: string; enum?: string[]; description?: string; internal?: boolean; jsonSchema?: Record<string, unknown> }
+export interface StageParameter { name: string; type?: string; enum?: string[]; enumLabels?: Record<string, string>; description?: string; internal?: boolean; jsonSchema?: Record<string, unknown> }
 export interface StageLlm { system: string; user: string; schema: Record<string, unknown> }
 export interface StageSystemOne<I> { state: Record<string, unknown>; questions: Record<string, unknown>; index: I[] }
 /** Stage 1, System One: `route` is the choice among the flows, `any` whether the message starts one at all. */
@@ -79,6 +79,7 @@ const PARAMETER_RULES = [
   'A value the user did not give is null.',
 ];
 const ENUM_TRUE = (value: string) => `The parameter's rule makes \`${value}\` its value for what the user said.`;
+const LABELLED_TRUE = (value: string, label: string) => `The parameter's rule makes \`${value}\` (${label}) its value for what the user said.`;
 const ENUM_FALSE = 'Another value, or none, is its value; or the user has not said enough to tell.';
 const BOOLEAN_TRUE = "The parameter's rule makes it true for what the user said.";
 const BOOLEAN_FALSE = 'The rule does not make it true, or the user has not said enough to tell.';
@@ -210,13 +211,14 @@ export function buildParameterStage(
   flow: { id: string; name: string; parameterInstructions?: string; parameters?: (StageParameter | FlowParameterDefinition)[] }
 ): ParameterStageRequest {
   const params: StageParameter[] = (flow.parameters || []).filter(p => p && p.name && !isInternalParameter(p))
-    .map(p => ({ name: p.name, ...(p.type ? { type: p.type } : {}), ...(Array.isArray(p.enum) ? { enum: [...p.enum] } : {}), description: String(p.description ?? ''), ...(p.jsonSchema ? {jsonSchema:structuredClone(p.jsonSchema)} : {}) }));
+    .map(p => ({ name: p.name, ...(p.type ? { type: p.type } : {}), ...(Array.isArray(p.enum) ? { enum: [...p.enum] } : {}), ...((p as StageParameter).enumLabels ? { enumLabels: { ...(p as StageParameter).enumLabels } } : {}), description: String(p.description ?? ''), ...(p.jsonSchema ? {jsonSchema:structuredClone(p.jsonSchema)} : {}) }));
   const typeOf = (p: StageParameter) => (p.type === 'boolean' ? 'boolean' : p.type === 'number' || p.type === 'integer' ? 'number' : 'string');
   const schema = {
     type: 'object', additionalProperties: false, required: params.map(p => p.name),
     properties: Object.fromEntries(params.map(p => [p.name, p.jsonSchema ? {anyOf:[p.jsonSchema,{type:'null'}]} : isEnum(p) ? { type: ['string', 'null'], enum: [...(p.enum as string[]), null] } : { type: [typeOf(p), 'null'] }])),
   };
-  const line = (p: StageParameter) => `- ${p.name} (${isEnum(p) ? `one of: ${(p.enum as string[]).join(' | ')}` : p.jsonSchema ? p.type || 'object' : typeOf(p)}): ${p.description}`;
+  const valueText = (p: StageParameter, v: string) => (p.enumLabels?.[v] ? `${v} = ${JSON.stringify(p.enumLabels[v])}` : v);
+  const line = (p: StageParameter) => `- ${p.name} (${isEnum(p) ? `one of: ${(p.enum as string[]).map(v => valueText(p, v)).join(' | ')}` : p.jsonSchema ? p.type || 'object' : typeOf(p)}): ${p.description}`;
   const instructions = String(flow.parameterInstructions ?? '').trim();
   const rules = [
     `The workflow ${flow.name} was chosen. Extract the values the user gave for its parameters.`,
@@ -234,7 +236,10 @@ export function buildParameterStage(
       if (isEnum(p)) {
         (p.enum as string[]).forEach((value, v) => {
           const id = `p${k}v${v}`;
-          questions[id] = { type: 'noul', criteria: { true: ENUM_TRUE(value), false: ENUM_FALSE }, instructions: { parameter: { name: p.name }, candidate_value: value, question: `Is \`${value}\` the value of \`${p.name}\`?` } };
+          const label = p.enumLabels?.[value];
+          questions[id] = label
+            ? { type: 'noul', criteria: { true: LABELLED_TRUE(value, label), false: ENUM_FALSE }, instructions: { parameter: { name: p.name }, candidate_value: value, candidate_label: label, question: `Is \`${value}\` (${label}) the value of \`${p.name}\`?` } }
+            : { type: 'noul', criteria: { true: ENUM_TRUE(value), false: ENUM_FALSE }, instructions: { parameter: { name: p.name }, candidate_value: value, question: `Is \`${value}\` the value of \`${p.name}\`?` } };
           index.push({ id, kind: 'enum', param: p.name, value });
         });
       } else {

@@ -34,3 +34,11 @@ kind:'reply', content}`. Returns copies.
 
 `cargo.chatTurns` as `role: text` lines, one per turn: the text the host's flat chat history has always carried, so a
 note built from it (the live-agent handoff) reads as before.
+
+## Picking from them at intent detection: `enum_from`
+
+A flow parameter `{name:'item', description:'…', enum_from:'sendables'}` (two-stage detection only) is offered
+`sendables(cargo)` when its flow is selected: stage 2's enum is their keys, and both executors read each key with its
+label (`reply-4 = "Reply 4: Your next payment is due…"`), so one request picks the item and, beside it, any other
+closed value (`medium: text | email`). A key not in the list is dropped; with nothing to send the parameter is left
+out and the flow asks. `enum_from` replaces `enum` (never both) and names a jsfe source only.

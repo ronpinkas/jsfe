@@ -8,6 +8,7 @@ import {formUserDescriptionSource} from './helpers/form-conversation.js';
 import {storedSession,restoreStoredSession} from './helpers/stored-session.js';
 import {validateContextualResponseStep,validateResponseParameters} from './helpers/contextual-response.js';
 import {validateFlowRecovery} from './host/flow-recovery.js';
+import {ENUM_SOURCES,resolveEnumSources} from './helpers/enum-sources.js';
 import type {FlowRecovery} from './host/flow-recovery.js';
 export type {FlowRecovery} from './host/flow-recovery.js';
 import {ACTION_TOOLS} from './forms/action-tools.js';
@@ -491,6 +492,8 @@ export interface FlowParameterDefinition {
   enum?: string[]; // Allowed values (string parameters only). Any other value is dropped, so the flow asks.
   jsonSchema?: Record<string, unknown>; // Opt-in structured extraction; FORM validates individual leaves.
   internal?: boolean; // The flow's own (set by its callers), never asked of the user; two-stage detection leaves it out.
+  enum_from?: string; // Two-stage only: the enum is read from the session when the flow is selected (a jsfe source, e.g. 'sendables').
+  enumLabels?: Record<string, string>; // Set by enum_from for stage 2: each value's label. Never declared by a flow.
 }
 
 /** Structured form of the intent-detection call; see AiCallbackFunction. */
@@ -3833,10 +3836,13 @@ async function detectFlowInTwoStages(input: string, engine: Engine, flows: FlowD
     return { flow, parameters: {} };
   } else {
     try {
-      const stage2 = buildParameterStage(cleanInput, conversation, flow);
+      // enum_from parameters take this session's values now; the flow itself is unchanged.
+      const asked: FlowDefinition = resolveEnumSources(flow, engine.cargo);
+      if (!hasStageParameters(asked.parameters)) return { flow, parameters: {} };
+      const stage2 = buildParameterStage(cleanInput, conversation, asked);
       const reply2 = parseStageReply(await fetchAiResponse(stage2.llm.system, stage2.llm.user, engine.aiCallback, engine.aiTimeOut, stageSchema('extract_parameters', stage2.llm.schema), stage2));
       const given = reply2.parameters && typeof reply2.parameters === 'object' ? reply2.parameters as Record<string, any> : {};
-      return { flow, parameters: enforceParameterEnums(flow, enforceParameterTypes(flow, ownParametersOnly(flow, given))) };
+      return { flow, parameters: enforceParameterEnums(asked, enforceParameterTypes(asked, ownParametersOnly(asked, given))) };
     } catch (error: any) {
       logger.warn(`detectFlowWithParameters: stage 2 failed for "${flow.name}" (${error.message}) - the flow starts without its parameters`);
       return { flow, parameters: {} };
@@ -9304,6 +9310,22 @@ export class WorkflowEngine implements Engine {
         state.errors.push(`Flow "${flowDef.name}" declares parameter "${p.name}" more than once`);
       } else {
         seen.add(p.name);
+      }
+      if (p.enumLabels !== undefined) {
+        state.errors.push(`Flow "${flowDef.name}" parameter "${p.name}": enumLabels is set by enum_from, never declared`);
+      }
+      if (p.enum_from !== undefined) {
+        const where = `Flow "${flowDef.name}" parameter "${p.name}"`;
+        if (typeof p.enum_from !== 'string' || !Object.prototype.hasOwnProperty.call(ENUM_SOURCES, p.enum_from)) {
+          state.errors.push(`${where}: enum_from ${JSON.stringify(p.enum_from)} is not one of ${Object.keys(ENUM_SOURCES).join(', ')}`);
+        }
+        if (p.enum !== undefined) {
+          state.errors.push(`${where}: declare enum or enum_from, not both`);
+        }
+        if (p.type !== undefined && p.type !== 'string') {
+          state.errors.push(`${where}: enum_from is allowed only on a string parameter, not type "${p.type}"`);
+        }
+        continue;
       }
       if (p.enum === undefined) {
         continue;
