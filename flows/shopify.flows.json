@@ -807,7 +807,11 @@
               "flags": "iu"
             },
             "question": "You can ask about stock, prices, or the cheapest shown product. To check nearby stores, say the product number. Or say DONE.",
-            "question_es": "Puede preguntar por disponibilidad, precios o el producto más barato. Para consultar tiendas cercanas, diga el número del producto. O diga LISTO."
+            "question_es": "Puede preguntar por disponibilidad, precios o el producto más barato. Para consultar tiendas cercanas, diga el número del producto. O diga LISTO.",
+            "form_client": {
+              "control": "options",
+              "options_from": "product_options"
+            }
           }
         ]
       },
@@ -1962,7 +1966,7 @@
         "id": "product_dialog_prompt",
         "type": "SET",
         "variable": "noop",
-        "value": "(function(){var s=cargo.forms[form].specs.find(function(s){return s.name==='response';});var stores=typeof global_store_locations!=='undefined' && Array.isArray(global_store_locations) && global_store_locations.length>0;s.question='You can ask about stock, prices, or the cheapest shown product.'+(stores?' To check nearby stores, say the product number.':'')+(cargo.voice && cargo.textTo?' Say TEXT for the links.':'')+' Or say DONE.';s.question_es='Puede preguntar por disponibilidad, precios o el producto más barato.'+(stores?' Para consultar tiendas cercanas, diga el número del producto.':'')+(cargo.voice && cargo.textTo?' Diga TEXTO para recibir los enlaces.':'')+' O diga LISTO.';return true;})()"
+        "value": "(function(){var s=cargo.forms[form].specs.find(function(s){return s.name==='response';});var stores=typeof global_store_locations!=='undefined' && Array.isArray(global_store_locations) && global_store_locations.length>0;s.question='You can ask about stock, prices, or the cheapest shown product.'+(stores?' To check nearby stores, say the product number.':'')+(cargo.voice && cargo.textTo?' Say TEXT for the links.':'')+' Or say DONE.';s.question_es='Puede preguntar por disponibilidad, precios o el producto más barato.'+(stores?' Para consultar tiendas cercanas, diga el número del producto.':'')+(cargo.voice && cargo.textTo?' Diga TEXTO para recibir los enlaces.':'')+' O diga LISTO.';var f=cargo.forms[form];var shown=cargo.shopifyProducts&&Array.isArray(cargo.shopifyProducts.products)?cargo.shopifyProducts.products.slice(0,5):[];f.data=f.data||{};f.data.product_options=shown.length?shown.map(function(p,i){var t=String(p&&p.title||'').trim();return {key:String(i+1),label:(i+1)+'. '+(t.length>80?t.slice(0,79)+'…':t)};}).concat([{key:'done',label:'Done',label_es:'Listo'}]):[];return true;})()"
       }
     ]
   },
