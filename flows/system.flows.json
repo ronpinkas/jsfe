@@ -6839,7 +6839,7 @@
       },
       "ci_miss_limit": {
         "type": "number",
-        "value": 2
+        "value": 4
       },
       "ci_must": {
         "type": "boolean",
@@ -6969,7 +6969,7 @@
         "id": "ci_context_limit",
         "type": "SET",
         "variable": "ci_miss_limit",
-        "value": "Number(ci_spec.max_misses || 2)"
+        "value": "Number(ci_spec.max_misses || 4)"
       },
       {
         "id": "ci_must_complete",
