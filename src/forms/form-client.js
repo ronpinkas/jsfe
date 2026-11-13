@@ -173,6 +173,37 @@ export function projectChoices(session) {
   return {version: 1, language, options};
 }
 
+/** The words the question asked now offers as its answers (each choice's phrases and labels), or [] when none is
+ * pending. Read-only. A host that answers some messages itself before the engine (a request to hear the last reply
+ * again, "again" / "otra vez") checks a message against these first, so an offered answer always reaches the flow:
+ * prod 2026-11-11, a payment-link failure menu offered AGAIN and the host replayed the menu instead. Covers an
+ * ask-choice question and a form's current choice input (its runtime choices, choices_from included). */
+export function offeredReplies(session) {
+  if (!session || session.continuationSafetyHold) return [];
+  const frame = (session.flowStacks || []).flat().at(-1);
+  if (!frame?.pendingVariable) return [];
+  const out = new Set();
+  const take = choices => {
+    for (const choice of Array.isArray(choices) ? choices : []) {
+      if (!choice || String(choice.key ?? '').startsWith('event:')) continue;
+      for (const word of [].concat(choice.phrases ?? choice.words ?? [], choice.label ?? [], choice.label_es ?? [])) {
+        if (typeof word === 'string' && word.trim()) out.add(word.trim());
+      }
+    }
+  };
+  if (frame.flowId === 'ask-choice') {
+    take(frame.variables?.choices);
+  } else {
+    const context = frame.variables?.form_context;
+    const state = context?.form && context.current !== '__confirm' ? session.cargo?.forms?.[context.form] : null;
+    const names = new Set([].concat(context?.names || [], context?.current || []));
+    for (const input of state?.specs || []) {
+      if (!names.has(input.name) || input.profile?.kind !== 'choice') continue;
+      take(input.choices_from ? state.data?.[input.choices_from] : input.profile.choices);
+    }
+  }
+  return [...out];
+}
 /** Host preflight: call before updateActivity. Unknown paths and malformed envelopes never enter execution. */
 /** The place a view's field suggests, or null: the host's suggestion endpoint answers only for a place field of the
  * form that is open now (`form` is the view's instance, `path` the field's), so it is never a general place service. */
