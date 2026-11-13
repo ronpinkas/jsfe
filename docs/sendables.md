@@ -42,3 +42,13 @@ A flow parameter `{name:'item', description:'…', enum_from:'sendables'}` (two-
 label (`reply-4 = "Reply 4: Your next payment is due…"`), so one request picks the item and, beside it, any other
 closed value (`medium: text | email`). A key not in the list is dropped; with nothing to send the parameter is left
 out and the flow asks. `enum_from` replaces `enum` (never both) and names a jsfe source only.
+
+## SendCopy: the system flow that sends them
+
+`send-copy` (src/forms/send-copy-flow.js, built into the system set) is the primary that uses all of the above. Its
+parameters are `item` (enum_from sendables), `medium` (text | email) and `destination` (a number or address the caller
+gave). With no item it offers the latest one ("Should I send you my last answer: …?"); with no medium it uses the
+destination's shape, else asks; a line with no text sender emails instead. Content goes through the system workers
+(`text-destination` + `send-text`, `ask-email` + `send-email-message`) as is. A **sender flow** is called with
+`{medium, destination, args}`, sends, tells the caller, and sets `cargo.copySent = true`; without that, SendCopy says it
+could not send. There is no authentication gate in SendCopy: a sender flow gates its own document.
