@@ -1,12 +1,12 @@
 # SendCopy
 
 <!-- generated:start -->
-**SendCopy** · `send-copy` · version 1.0.0 · **entry point** (intent detection can start it) · steps · isolated scope
+**SendCopy** · `send-copy` · version 1.1.0 · **entry point** (intent detection can start it) · steps · isolated scope
 
-> Asks to be sent, by text or email, something the assistant said in this conversation ('text me that', 'send me that by email', 'mándame eso por mensaje', 'envíeme esa información al correo'). Not: continuing the whole conversation by text (SwitchToText); a person (LiveAgentRequested).
+> Asks to be sent, by text or email, something the assistant said in this conversation, or a copy of the whole conversation ('text me that', 'send me that by email', 'email me a copy of this chat', 'mándame eso por mensaje', 'envíeme toda la conversación al correo'). Not: continuing the conversation by text (SwitchToText); a person (LiveAgentRequested).
 
 - **Parameters:** 
-  - `item`: What the user asks to have sent: the reply or document they name or point to. 'That', 'it', 'this', 'eso' or 'lo que me dijo' is the latest reply.
+  - `item`: What the user asks to have sent: the reply or document they name or point to. 'That', 'it', 'this', 'eso' or 'lo que me dijo' is the latest reply; the whole chat, conversation or transcript ('toda la conversación') is the whole conversation.
   - `medium` (text / email): How the user asks to have it sent: text for a text message or SMS ('mensaje', 'texto'), email for an email ('correo').
   - `destination`: The phone number or email address the user gave to send it to, as given.
 - **Calls:** [ask-choice](ask-choice.md) (call), {{sc_item.sender}} (call), [ask-email](ask-email.md) (call), [send-text](send-text.md) (call), [send-email-message](send-email-message.md) (call)
@@ -175,7 +175,7 @@ flowchart TD
    b61(["end (back to caller)"])
    class b61 endstep
    c60 -- "sc_medium === 'email' && !sc_to" --> b61
-   n62["set sc_subject"]
+   n62["set sc_subject, sc_content"]
    c60 -- "else" --> n62
    c63{"case"}
    n62 --> c63

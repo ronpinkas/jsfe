@@ -86,7 +86,7 @@
     "version": "1.2.4",
     "prompt": "Switch to text",
     "prompt_es": "Cambiar a texto",
-    "description": "Explicitly asks to continue this conversation by text or SMS ('text me instead', 'seguimos por mensaje de texto'). Not: a person (LiveAgentRequested); having one thing sent, such as something already said (SendCopy).",
+    "description": "Explicitly asks to continue this conversation by text or SMS ('text me instead', 'seguimos por mensaje de texto'). Not: a person (LiveAgentRequested); having something sent, such as something already said or a copy of the whole conversation (SendCopy).",
     "primary": true,
     "variables": {
       "sms_result": {
@@ -17808,19 +17808,19 @@
   },
   {
     "scope": "isolated",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "id": "send-copy",
     "name": "SendCopy",
     "primary": true,
     "prompt": "Send a copy",
     "prompt_es": "Enviar una copia",
-    "description": "Asks to be sent, by text or email, something the assistant said in this conversation ('text me that', 'send me that by email', 'mándame eso por mensaje', 'envíeme esa información al correo'). Not: continuing the whole conversation by text (SwitchToText); a person (LiveAgentRequested).",
+    "description": "Asks to be sent, by text or email, something the assistant said in this conversation, or a copy of the whole conversation ('text me that', 'send me that by email', 'email me a copy of this chat', 'mándame eso por mensaje', 'envíeme toda la conversación al correo'). Not: continuing the conversation by text (SwitchToText); a person (LiveAgentRequested).",
     "parameters": [
       {
         "name": "item",
         "type": "string",
         "enum_from": "sendables",
-        "description": "What the user asks to have sent: the reply or document they name or point to. 'That', 'it', 'this', 'eso' or 'lo que me dijo' is the latest reply."
+        "description": "What the user asks to have sent: the reply or document they name or point to. 'That', 'it', 'this', 'eso' or 'lo que me dijo' is the latest reply; the whole chat, conversation or transcript ('toda la conversación') is the whole conversation."
       },
       {
         "name": "medium",
@@ -17906,6 +17906,10 @@
         "type": "string",
         "value": ""
       },
+      "sc_content": {
+        "type": "string",
+        "value": ""
+      },
       "sc_sent": {
         "type": "boolean",
         "value": false
@@ -17915,7 +17919,7 @@
         "value": {
           "version": 1,
           "role": "router",
-          "summary": "Sends a reply or registered document the caller picks, by text or email, through the system send workers or the document's sender flow",
+          "summary": "Sends a reply, registered document or the whole conversation the caller picks, by text or email, through the system send workers or the document's sender flow",
           "parametersFrom": "parameters",
           "requires": [
             "jsfe:continuation-safety:v1"
@@ -18604,7 +18608,13 @@
         "id": "sc_subject",
         "type": "SET",
         "variable": "sc_subject",
-        "value": "language === 'es' ? 'Su copia de nuestra conversación' : 'Your copy from our conversation'"
+        "value": "language === 'es' ? 'Su copia de nuestra conversación' : sc_item.kind === 'conversation' ? 'Your copy of our conversation' : 'Your copy from our conversation'"
+      },
+      {
+        "id": "sc_content",
+        "type": "SET",
+        "variable": "sc_content",
+        "value": "sc_item.kind === 'conversation' ? conversationCopy(cargo.chatTurns, language) : sc_item.content"
       },
       {
         "id": "sc_send_text",
@@ -18616,7 +18626,7 @@
             "value": "send-text",
             "callType": "call",
             "parameters": {
-              "message": "{{sc_item.content}}"
+              "message": "{{sc_content}}"
             }
           },
           "default": {
@@ -18639,7 +18649,7 @@
             "parameters": {
               "to": "{{sc_to}}",
               "subject": "{{sc_subject}}",
-              "message": "{{sc_item.content}}",
+              "message": "{{sc_content}}",
               "cc": ""
             }
           },
