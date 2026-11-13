@@ -15032,7 +15032,7 @@
         "id": "proposal_missing",
         "type": "CASE",
         "branches": {
-          "condition: !proposal || !['pending','confirmed'].includes(proposal.status) || proposal.committed": {
+          "condition: !proposal || !['pending','confirmed'].includes(proposal.status) || proposal.committed || retireStaleFormProposal(cargo,parent_form,input)": {
             "id": "proposal_missing_close",
             "type": "FLOW",
             "value": "form-done",
