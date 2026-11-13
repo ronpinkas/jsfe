@@ -364,7 +364,7 @@ const collectInput = {
    id: 'collect-input', name: 'CollectInput', version: '1.0.0', scope: 'isolated',
    description: "Worker: ask the form's current input once and file the answer wherever it belongs in the form chain (matchInputs, decided by scope; a declared confirm_against pair is asked). One reading → collect-input-accept; ambiguous → disambiguate-input; a question about the form's data → provide-data; a short miss → counted, the loop re-asks; 3+ words that fit nothing → DISPATCH. Params: form, current, questions, provides, exit_context(_es).",
    parameters: ['form', 'current', 'questions', 'provides', 'exit_context', 'exit_context_es'].map((n) => ({ name: n, type: ['questions'].includes(n) ? 'array' : n === 'provides' ? 'object' : 'string', description: n })),
-   variables: vars({ ci_clarify:null, ci_partial:'', ci_no_owner:'', ci_no_flow:'', ci_no_up:false, ci_reply_reader:'', ci_exhaustion:null, ci_d: {}, ci_pre: '', ci_val: '', ci_routed: '', ci_names: [], ci_chain: [], ci_spec: null, ci_choices: [], ci_q: '', ci_q_es: '', ci_missed: 0, ci_max: 3, ci_misses:0,ci_miss_limit:2,ci_must:false, ci_m: null, ci_qkey: '', ci_skip_gate:'', ci_words: 0, ci_digits: null, ci_amount: false, ci_as_spoken:false, ci_reader:{}, ci_pii: false, ci_ctx: '', ci_ctx_es: '' }),
+   variables: vars({ ci_clarify:null, ci_partial:'', ci_no_owner:'', ci_no_flow:'', ci_no_up:false, ci_reply_reader:'', ci_exhaustion:null, ci_d: {}, ci_pre: '', ci_val: '', ci_routed: '', ci_names: [], ci_chain: [], ci_spec: null, ci_choices: [], ci_q: '', ci_q_es: '', ci_missed: 0, ci_max: 3, ci_misses:0,ci_miss_limit:4,ci_must:false, ci_m: null, ci_qkey: '', ci_skip_gate:'', ci_words: 0, ci_digits: null, ci_amount: false, ci_as_spoken:false, ci_reader:{}, ci_pii: false, ci_ctx: '', ci_ctx_es: '' }),
    steps: [
       SET('ci_find_spec', 'ci_spec', "(function () { var s = ((cargo.forms[form] || {}).specs || []).filter(function (s) { return s.name === current; })[0]; return s ? (Array.isArray(s.any_of) ? Object.assign({}, s, { profile: { kind: 'group' } }) : s) : null; })()"),
       SET('ci_current_names', 'ci_names', "Array.isArray(ci_spec && ci_spec.any_of) ? ci_spec.any_of.map(function (m) { return m.name; }) : [current]"),
@@ -372,7 +372,7 @@ const collectInput = {
       SET('ci_count_missed', 'ci_missed', "Number(((cargo.forms[form] || {}).attempts || {})[current] || 0)"),
       SET('ci_max_attempts', 'ci_max', 'Number(ci_spec.max_attempts || 3)'),
       SET('ci_context_misses','ci_misses','Number(((cargo.forms[form] || {}).misses || {})[current] || 0)'),
-      SET('ci_context_limit','ci_miss_limit','Number(ci_spec.max_misses || 2)'),
+      SET('ci_context_limit','ci_miss_limit','Number(ci_spec.max_misses || 4)'),
       // must_complete (the field's, else the nearest form's): an unreadable answer is never handed away; it is asked again
       SET('ci_must_complete','ci_must','formMustComplete(cargo,form,current)'),
       WHEN('ci_context_yield','ci_misses >= ci_miss_limit && !ci_must',yieldDispatch('ci_misses_dispatch','form',"'input_misses_exhausted'")),

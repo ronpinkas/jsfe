@@ -8,7 +8,8 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 const S=(id,value,variable='noop')=>({id,type:'SET',variable,value});
 const C=(id,value,parameters={},callType='call')=>({id,type:'FLOW',value,parameters,callType});
 const W=(id,steps,parameters=[])=>({id,name:id,version:'1',description:'Hermetic behavioral fixture '+id,scope:'isolated',parameters,steps});
-const choice={name:'color',label:'color',label_es:'color',profile:{kind:'choice',choices:[{key:'red',words:['red','rojo'],exact:true}]},question_from:'menu',refresh:'refresh-menu'};
+// The yield-mechanics tests below declare a two-miss budget so each reaches its yield quickly; the default (four) has its own test.
+const choice={name:'color',label:'color',label_es:'color',max_misses:2,profile:{kind:'choice',choices:[{key:'red',words:['red','rojo'],exact:true}]},question_from:'menu',refresh:'refresh-menu'};
 const refresh=W('refresh-menu',[S('refresh',"(cargo.forms[form].data.sequence=Number(cargo.forms[form].data.sequence||0)+1,cargo.forms[form].data.menu='MENU '+cargo.forms[form].data.sequence+': choose RED.',cargo.forms[form].data.menu_es='MENÚ '+cargo.forms[form].data.sequence+': diga ROJO.',true)")],[{name:'form',type:'string'}]);
 const catalog={source:{flow:'load-fact',result:'cargo.fact',refresh:'per_turn'},facts:[{key:'balance',words:['balance','saldo'],path:'amount',say:'BALANCE {value}',say_es:'SALDO {value}',public:true}]};
 const loader=W('load-fact',[S('load',"(cargo.fact={amount:17},cargo.factLoads=Number(cargo.factLoads||0)+1,true)")]);
@@ -29,9 +30,9 @@ function assertYield(t,root,mode='resume'){
  assert.equal(t.session.lastFlowRecovery?.mode,mode);assert.equal(t.session.lastFlowRecovery?.form,root);assert.equal(t.session.flowStacks.flat().length,0);assert.ok(t.session.cargo.forms[root]);
 }
 for(const language of ['en','es'])for(const voice of [false,true]){
- await test(`${language} ${voice?'voice':'text'} dynamic menu acknowledges once then yields the exact second utterance`,async()=>{
-  const t=fixture([menu(),refresh],{language,voice});let response=await t.say('begin','menu');assert.match(response,language==='es'?/MENÚ 1/:/MENU 1/);const root=t.owner();
-  response=await t.say('%%');assert.ok(response.includes(acknowledgment(language)),response);assert.match(response,language==='es'?/MENÚ 2/:/MENU 2/);assert.equal(response.split(acknowledgment(language)).length-1,1);assert.equal(t.calls.length,0);assert.equal(t.session.cargo.finished,undefined);
+ await test(`${language} ${voice?'voice':'text'} dynamic menu acknowledges each miss then yields the exact fourth utterance (default max_misses)`,async()=>{
+  const t=fixture([menu({inputs:[{...choice,max_misses:undefined}]}),refresh],{language,voice});let response=await t.say('begin','menu');assert.match(response,language==='es'?/MENÚ 1/:/MENU 1/);const root=t.owner();
+  for(const n of [2,3,4]){response=await t.say('%%');assert.ok(response.includes(acknowledgment(language)),response);assert.match(response,language==='es'?new RegExp('MENÚ '+n):new RegExp('MENU '+n));assert.equal(response.split(acknowledgment(language)).length-1,1);assert.equal(t.calls.length,0);}
   await t.say('&&');assert.deepEqual(t.calls,['&&']);assertYield(t,root);assert.equal(t.session.cargo.finished,undefined);assert.equal(t.session.cargo.forms[root].attempts.color,undefined);
   assert.equal(t.lastTransactions[0].state,'yielded');
   await t.say('different');assert.equal(t.session.lastFlowRecovery,undefined);assert.equal(t.session.lastFlowOutcome,undefined);assert.equal(t.session.lastTurnDispatch,undefined);
@@ -60,7 +61,7 @@ await test('long unrelated input yields immediately and is routed unchanged once
  const t=fixture([menu(),refresh],{route:input=>input==='Please explain store hours.'?'None':null});await t.say('begin','menu');const root=t.owner();const utterance='Please explain store hours.';await t.say(utterance);assert.deepEqual(t.calls,[utterance]);assertYield(t,root);assert.equal(t.session.cargo.finished,undefined);
  const handoff=flowHandoffInfo(t.session);assert.equal(handoff.kind,'yield');assert.equal(handoff.recovery.mode,'resume');assert.match(renderFlowRecovery(handoff),/pending and its draft is retained/);
 });
-const nested=formFlow({id:'details',name:'Details',version:'1',inputs:[{name:'zip',field:'zip'}]});
+const nested=formFlow({id:'details',name:'Details',version:'1',inputs:[{name:'zip',field:'zip',max_misses:2}]});
 const draft=formFlow({id:'draft',name:'Draft',version:'1',inputs:[{name:'amount',field:'amount'},{name:'details',form:'details'}],confirm:{question:'QUOTE {{cargo.forms[form_instance].values.amount}} {{cargo.forms[form_instance].values.details.zip}}. YES or NO.',question_es:'COTIZACIÓN {{cargo.forms[form_instance].values.amount}} {{cargo.forms[form_instance].values.details.zip}}. SÍ o NO.'},after:[S('commit',"(cargo.requests=(cargo.requests||[]).concat([{amount:Number(cargo.forms[form_instance].values.amount),zip:cargo.forms[form_instance].values.details.zip}]),true)")]});
 for(const language of ['en','es'])for(const voice of [false,true])await test(`${language} ${voice?'voice':'text'} nested yield retains accepted draft and still requires fresh exact confirmation`,async()=>{
  const t=fixture([draft,nested],{language,voice});await t.say('begin','draft');await t.say('$25');const root=t.owner('draft'),child=t.session.cargo.forms[root].children.details;
@@ -123,7 +124,7 @@ await test('genuine validator rejections retain max_attempts and invoke declared
 function paymentFixture(outcome,completed=false){
  const effects=[];const action={action:'charge',effect:'charge',flow:'charge-effect',subject:'cargo.account',gate:{verified:'cargo.verified'},confirm:{exact:true,question:'Charge $25? YES or NO.'},outcomes:{paid:'resolved',unknown:'unresolved'}};
  const payment=definePerformer({id:'pay',name:'Pay',description:'Confirmed fixture payment',inputs:[],contract:{summary:'Pay once after exact confirmation'},performs:[action],prepare:'prepare-pay',present:'present-pay'});
- const after=formFlow({id:'after-payment',name:'AfterPayment',version:'1',inputs:[{name:'receipt',profile:{kind:'choice',choices:[{key:'receipt',words:['receipt'],exact:true}]},question:'Receipt preference?'}],...(completed?{incomplete_outcome:{outcome:'resolved',reason:'payment_made'}}:{})});
+ const after=formFlow({id:'after-payment',name:'AfterPayment',version:'1',inputs:[{name:'receipt',max_misses:2,profile:{kind:'choice',choices:[{key:'receipt',words:['receipt'],exact:true}]},question:'Receipt preference?'}],...(completed?{incomplete_outcome:{outcome:'resolved',reason:'payment_made'}}:{})});
  const prepare=W('prepare-pay',[S('request',"(cargo.actionRequest={account:cargo.account,amount:25},true)")]);
  const effect=W('charge-effect',[{id:'charge-tool',type:'CALL-TOOL',tool:'charge',variable:'answer',args:{request:'{{request}}'}},S('outcome',"(cargo.actionOutcome=answer,true)")],[{name:'request',type:'object'}]);
  const present=W('present-pay',[{id:'status',type:'SAY',value:'PAYMENT {{result.status}} {{result.reference || ""}}'},C('follow-up','after-payment',{parent_form:'{{form}}'})],[{name:'form',type:'string'},{name:'result',type:'object'}]);
