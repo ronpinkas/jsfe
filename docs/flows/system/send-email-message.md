@@ -12,7 +12,7 @@
   - `cc`: An optional copy address; empty for none
 - **Calls:** no other flow
 - **Tools:** `send-email`
-- **Called by:** nothing (unreachable)
+- **Called by:** [send-copy](send-copy.md)
 
 ### Steps
 

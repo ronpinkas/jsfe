@@ -9,7 +9,7 @@
   - `message`: The text to send
 - **Calls:** no other flow
 - **Tools:** `send-twilio-sms`
-- **Called by:** [send-text-action](send-text-action.md)
+- **Called by:** [send-text-action](send-text-action.md), [send-copy](send-copy.md)
 
 ### Steps
 

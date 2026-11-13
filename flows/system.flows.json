@@ -86,7 +86,7 @@
     "version": "1.2.4",
     "prompt": "Switch to text",
     "prompt_es": "Cambiar a texto",
-    "description": "Explicitly asks to continue this conversation by text or SMS ('text me instead', 'seguimos por mensaje de texto'). Not: a person (LiveAgentRequested); having one thing texted, such as a link, address or statement (None).",
+    "description": "Explicitly asks to continue this conversation by text or SMS ('text me instead', 'seguimos por mensaje de texto'). Not: a person (LiveAgentRequested); having one thing sent, such as something already said (SendCopy).",
     "primary": true,
     "variables": {
       "sms_result": {
@@ -17804,6 +17804,932 @@
         }
       }
     },
+    "safetyRevision": "dispatch-intake-2026-10-22"
+  },
+  {
+    "scope": "isolated",
+    "version": "1.0.0",
+    "id": "send-copy",
+    "name": "SendCopy",
+    "primary": true,
+    "prompt": "Send a copy",
+    "prompt_es": "Enviar una copia",
+    "description": "Asks to be sent, by text or email, something the assistant said in this conversation ('text me that', 'send me that by email', 'mándame eso por mensaje', 'envíeme esa información al correo'). Not: continuing the whole conversation by text (SwitchToText); a person (LiveAgentRequested).",
+    "parameters": [
+      {
+        "name": "item",
+        "type": "string",
+        "enum_from": "sendables",
+        "description": "What the user asks to have sent: the reply or document they name or point to. 'That', 'it', 'this', 'eso' or 'lo que me dijo' is the latest reply."
+      },
+      {
+        "name": "medium",
+        "type": "string",
+        "enum": [
+          "text",
+          "email"
+        ],
+        "description": "How the user asks to have it sent: text for a text message or SMS ('mensaje', 'texto'), email for an email ('correo')."
+      },
+      {
+        "name": "destination",
+        "type": "string",
+        "description": "The phone number or email address the user gave to send it to, as given."
+      }
+    ],
+    "variables": {
+      "noop": {
+        "type": "boolean",
+        "value": false
+      },
+      "sc_items": {
+        "type": "array",
+        "value": []
+      },
+      "sc_key": {
+        "type": "string",
+        "value": ""
+      },
+      "sc_item": {
+        "type": "object",
+        "value": null
+      },
+      "sc_last": {
+        "type": "object",
+        "value": null
+      },
+      "sc_last_head": {
+        "type": "string",
+        "value": ""
+      },
+      "sc_doc_list": {
+        "type": "string",
+        "value": ""
+      },
+      "sc_email": {
+        "type": "string",
+        "value": ""
+      },
+      "sc_phone": {
+        "type": "string",
+        "value": ""
+      },
+      "sc_medium": {
+        "type": "string",
+        "value": ""
+      },
+      "sc_medium_q": {
+        "type": "string",
+        "value": ""
+      },
+      "sc_medium_q_es": {
+        "type": "string",
+        "value": ""
+      },
+      "sc_given": {
+        "type": "string",
+        "value": ""
+      },
+      "sc_media": {
+        "type": "array",
+        "value": []
+      },
+      "sc_forced": {
+        "type": "string",
+        "value": ""
+      },
+      "sc_to": {
+        "type": "string",
+        "value": ""
+      },
+      "sc_subject": {
+        "type": "string",
+        "value": ""
+      },
+      "sc_sent": {
+        "type": "boolean",
+        "value": false
+      },
+      "contract": {
+        "type": "object",
+        "value": {
+          "version": 1,
+          "role": "router",
+          "summary": "Sends a reply or registered document the caller picks, by text or email, through the system send workers or the document's sender flow",
+          "parametersFrom": "parameters",
+          "requires": [
+            "jsfe:continuation-safety:v1"
+          ]
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "send-copy_continuation_safety_protocol",
+        "type": "SET",
+        "variable": "noop",
+        "value": "continuationSafetyProtocol() === 1",
+        "requireTrue": true
+      },
+      {
+        "id": "sc_items",
+        "type": "SET",
+        "variable": "sc_items",
+        "value": "sendables(cargo)"
+      },
+      {
+        "id": "sc_nothing",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_items.length": {
+            "id": "sc_nothing_say",
+            "type": "SAY",
+            "value": "I don't have anything to send yet. Is there anything else I can help you with?",
+            "value_es": "Todavía no tengo nada que enviarle. ¿Hay algo más en lo que le pueda ayudar?"
+          },
+          "default": {
+            "id": "sc_nothing_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_nothing_end",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_items.length": {
+            "id": "sc_nothing_done",
+            "type": "END",
+            "outcome": "unresolved",
+            "reason": "nothing_to_send"
+          },
+          "default": {
+            "id": "sc_nothing_end_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_key",
+        "type": "SET",
+        "variable": "sc_key",
+        "value": "typeof item === 'string' ? item : ''"
+      },
+      {
+        "id": "sc_item",
+        "type": "SET",
+        "variable": "sc_item",
+        "value": "sc_items.find(function (i) { return i.key === sc_key; }) || null"
+      },
+      {
+        "id": "sc_last",
+        "type": "SET",
+        "variable": "sc_last",
+        "value": "sc_items.filter(function (i) { return i.kind === 'reply'; }).pop() || null"
+      },
+      {
+        "id": "sc_last_head",
+        "type": "SET",
+        "variable": "sc_last_head",
+        "value": "sc_last ? (sc_last.content.length > 120 ? sc_last.content.slice(0, 120) + '…' : sc_last.content) : ''"
+      },
+      {
+        "id": "sc_doc_list",
+        "type": "SET",
+        "variable": "sc_doc_list",
+        "value": "sc_items.map(function (i) { return (language === 'es' && i.label_es) || i.label; }).join(language === 'es' ? '; ' : '; ')"
+      },
+      {
+        "id": "sc_documents",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_item && !sc_last": {
+            "id": "sc_documents_say",
+            "type": "SAY",
+            "value": "I can send you: {{sc_doc_list}}. Tell me which one, and whether by text or email.",
+            "value_es": "Puedo enviarle: {{sc_doc_list}}. Dígame cuál, y si por mensaje de texto o por correo."
+          },
+          "default": {
+            "id": "sc_documents_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_documents_end",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_item && !sc_last": {
+            "id": "sc_documents_done",
+            "type": "END"
+          },
+          "default": {
+            "id": "sc_documents_end_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_offer",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_item": {
+            "id": "sc_offer_ask",
+            "type": "FLOW",
+            "value": "ask-choice",
+            "callType": "call",
+            "parameters": {
+              "question": "Should I send you my last answer: \"{{sc_last_head}}\"? Please say yes or no.",
+              "question_es": "¿Le envío mi última respuesta: \"{{sc_last_head}}\"? Por favor diga sí o no.",
+              "choices": [
+                {
+                  "key": "yes",
+                  "phrases": [
+                    "1"
+                  ]
+                },
+                {
+                  "key": "no",
+                  "phrases": [
+                    "2"
+                  ]
+                }
+              ],
+              "digits": {
+                "min": 1,
+                "max": 1
+              }
+            }
+          },
+          "default": {
+            "id": "sc_offer_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_offer_read",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_item": {
+            "id": "sc_offer_pick",
+            "type": "SET",
+            "variable": "sc_item",
+            "value": "cargo.choice === 'yes' ? sc_last : null"
+          },
+          "default": {
+            "id": "sc_offer_read_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_offer_no",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_item": {
+            "id": "sc_offer_no_say",
+            "type": "SAY",
+            "value": "Okay. Tell me what you'd like me to send, for example: text me my balance.",
+            "value_es": "De acuerdo. Dígame qué quiere que le envíe, por ejemplo: envíeme mi saldo por mensaje."
+          },
+          "default": {
+            "id": "sc_offer_no_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_offer_no_end",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_item": {
+            "id": "sc_offer_no_done",
+            "type": "END"
+          },
+          "default": {
+            "id": "sc_offer_no_end_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_email",
+        "type": "SET",
+        "variable": "sc_email",
+        "value": "(String(typeof destination === 'string' ? destination : '').match(/[^\\s@]+@[^\\s@]+\\.[^\\s@]+/) || [''])[0].replace(/[.,;:]+$/, '')"
+      },
+      {
+        "id": "sc_phone",
+        "type": "SET",
+        "variable": "sc_phone",
+        "value": "readPhone(typeof destination === 'string' ? destination : '')"
+      },
+      {
+        "id": "sc_medium",
+        "type": "SET",
+        "variable": "sc_medium",
+        "value": "typeof medium === 'string' && (medium === 'text' || medium === 'email') ? medium : sc_email ? 'email' : sc_phone ? 'text' : ''"
+      },
+      {
+        "id": "sc_media",
+        "type": "SET",
+        "variable": "sc_media",
+        "value": "Array.isArray(sc_item.media) && sc_item.media.length ? sc_item.media : (sc_item.sender || cargo.twilioNumber ? ['text', 'email'] : ['email'])"
+      },
+      {
+        "id": "sc_forced",
+        "type": "SET",
+        "variable": "sc_forced",
+        "value": "sc_media.length === 1 && !!sc_medium && sc_medium !== sc_media[0] ? sc_media[0] : ''"
+      },
+      {
+        "id": "sc_forced_email",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_forced === 'email'": {
+            "id": "sc_forced_email_say",
+            "type": "SAY",
+            "value": "I can only send that by email, so I'll email it.",
+            "value_es": "Solo puedo enviarlo por correo, así que se lo enviaré por correo."
+          },
+          "default": {
+            "id": "sc_forced_email_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_forced_text",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_forced === 'text'": {
+            "id": "sc_forced_text_say",
+            "type": "SAY",
+            "value": "I can only send that by text, so I'll text it.",
+            "value_es": "Solo puedo enviarlo por mensaje de texto, así que se lo enviaré por mensaje."
+          },
+          "default": {
+            "id": "sc_forced_text_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_medium_one",
+        "type": "SET",
+        "variable": "sc_medium",
+        "value": "sc_media.length === 1 ? sc_media[0] : sc_medium"
+      },
+      {
+        "id": "sc_medium_q",
+        "type": "SET",
+        "variable": "sc_medium_q",
+        "value": "cargo.voice ? \"Should I send it by text or by email? Press 1 or say TEXT, press 2 or say EMAIL.\" : \"Should I send it by text or by email?\""
+      },
+      {
+        "id": "sc_medium_q_es",
+        "type": "SET",
+        "variable": "sc_medium_q_es",
+        "value": "cargo.voice ? \"¿Se lo envío por mensaje de texto o por correo? Presione 1 o diga TEXTO, presione 2 o diga CORREO.\" : \"¿Se lo envío por mensaje de texto o por correo?\""
+      },
+      {
+        "id": "sc_ask_medium",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_medium": {
+            "id": "sc_ask_medium_call",
+            "type": "FLOW",
+            "value": "ask-choice",
+            "callType": "call",
+            "parameters": {
+              "question": "{{sc_medium_q}}",
+              "question_es": "{{sc_medium_q_es}}",
+              "choices": [
+                {
+                  "key": "text",
+                  "phrases": [
+                    "1",
+                    "text",
+                    "texto",
+                    "sms",
+                    "message",
+                    "text message",
+                    "mensaje",
+                    "mensaje de texto"
+                  ]
+                },
+                {
+                  "key": "email",
+                  "phrases": [
+                    "2",
+                    "email",
+                    "e-mail",
+                    "mail",
+                    "correo",
+                    "correo electrónico",
+                    "correo electronico",
+                    "email address"
+                  ]
+                }
+              ],
+              "digits": {
+                "min": 1,
+                "max": 1
+              }
+            }
+          },
+          "default": {
+            "id": "sc_ask_medium_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_ask_medium_read",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_medium": {
+            "id": "sc_medium_pick",
+            "type": "SET",
+            "variable": "sc_medium",
+            "value": "cargo.choice === 'text' || cargo.choice === 'email' ? cargo.choice : ''"
+          },
+          "default": {
+            "id": "sc_ask_medium_read_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_no_medium_end",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_medium": {
+            "id": "sc_no_medium_done",
+            "type": "END"
+          },
+          "default": {
+            "id": "sc_no_medium_end_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_given",
+        "type": "SET",
+        "variable": "sc_given",
+        "value": "sc_medium === 'email' ? sc_email : sc_phone"
+      },
+      {
+        "id": "sc_sender_reset",
+        "type": "CASE",
+        "branches": {
+          "condition: !!sc_item.sender": {
+            "id": "sc_sender_reset_set",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "cargo.copyHandled = false"
+          },
+          "default": {
+            "id": "sc_sender_reset_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_sender",
+        "type": "CASE",
+        "branches": {
+          "condition: !!sc_item.sender": {
+            "id": "sc_sender_call",
+            "type": "FLOW",
+            "value": "{{sc_item.sender}}",
+            "callType": "call",
+            "parameters": {
+              "medium": "{{sc_medium}}",
+              "destination": "{{sc_given}}",
+              "args": "{{sc_item.args}}"
+            }
+          },
+          "default": {
+            "id": "sc_sender_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_sender_failed",
+        "type": "CASE",
+        "branches": {
+          "condition: !!sc_item.sender && cargo.copyHandled !== true": {
+            "id": "sc_sender_failed_say",
+            "type": "SAY",
+            "value": "Sorry, I couldn't send it. Is there anything else I can help you with?",
+            "value_es": "Lo siento, no pude enviarlo. ¿Hay algo más en lo que le pueda ayudar?"
+          },
+          "default": {
+            "id": "sc_sender_failed_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_sender_failed_end",
+        "type": "CASE",
+        "branches": {
+          "condition: !!sc_item.sender && cargo.copyHandled !== true": {
+            "id": "sc_sender_failed_done",
+            "type": "END",
+            "outcome": "unresolved",
+            "reason": "send_failed"
+          },
+          "default": {
+            "id": "sc_sender_failed_end_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_sender_end",
+        "type": "CASE",
+        "branches": {
+          "condition: !!sc_item.sender": {
+            "id": "sc_sender_done",
+            "type": "END"
+          },
+          "default": {
+            "id": "sc_sender_end_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_text_to",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_medium === 'text'": {
+            "id": "sc_text_to_set",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "cargo.textTo = sc_phone || textDestination(cargo)"
+          },
+          "default": {
+            "id": "sc_text_to_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_ask_number",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_medium === 'text' && !cargo.textTo": {
+            "id": "sc_ask_number_call",
+            "type": "FLOW",
+            "value": "ask-choice",
+            "callType": "call",
+            "parameters": {
+              "question": "What phone number should I text it to?",
+              "question_es": "¿A qué número de teléfono se lo envío?",
+              "choices": [],
+              "accept_other": true,
+              "expect": "number",
+              "digits": {
+                "min": 10,
+                "max": 11
+              }
+            }
+          },
+          "default": {
+            "id": "sc_ask_number_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_number_read",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_medium === 'text' && !cargo.textTo": {
+            "id": "sc_number_set",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "cargo.textTo = readPhone(cargo.choiceText || '')"
+          },
+          "default": {
+            "id": "sc_number_read_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_number_bad",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_medium === 'text' && !cargo.textTo": {
+            "id": "sc_number_bad_say",
+            "type": "SAY",
+            "value": "Sorry, I couldn't read that phone number. Is there anything else I can help you with?",
+            "value_es": "Lo siento, no pude entender ese número de teléfono. ¿Hay algo más en lo que le pueda ayudar?"
+          },
+          "default": {
+            "id": "sc_number_bad_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_number_bad_end",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_medium === 'text' && !cargo.textTo": {
+            "id": "sc_number_bad_done",
+            "type": "END",
+            "outcome": "unresolved",
+            "reason": "no_phone_number"
+          },
+          "default": {
+            "id": "sc_number_bad_end_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_text_four",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_medium === 'text'": {
+            "id": "sc_text_four_set",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "cargo.textTo4 = last4(cargo.textTo, cargo.voice)"
+          },
+          "default": {
+            "id": "sc_text_four_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_to",
+        "type": "SET",
+        "variable": "sc_to",
+        "value": "sc_medium === 'email' && sc_email && validateEmail(sc_email) ? sc_email : ''"
+      },
+      {
+        "id": "sc_email_clear",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_medium === 'email' && !sc_to": {
+            "id": "sc_email_clear_set",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "cargo.email = ''"
+          },
+          "default": {
+            "id": "sc_email_clear_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_ask_email",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_medium === 'email' && !sc_to": {
+            "id": "sc_ask_email_call",
+            "type": "FLOW",
+            "value": "ask-email",
+            "callType": "call",
+            "parameters": {
+              "question": "What email address should I send it to?",
+              "question_es": "¿A qué correo electrónico se lo envío?",
+              "on_file": "{{cargo.otp_email}}"
+            }
+          },
+          "default": {
+            "id": "sc_ask_email_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_email_read",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_medium === 'email' && !sc_to": {
+            "id": "sc_email_pick",
+            "type": "SET",
+            "variable": "sc_to",
+            "value": "cargo.email && validateEmail(String(cargo.email)) ? String(cargo.email) : ''"
+          },
+          "default": {
+            "id": "sc_email_read_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_email_none_end",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_medium === 'email' && !sc_to": {
+            "id": "sc_email_none_done",
+            "type": "END"
+          },
+          "default": {
+            "id": "sc_email_none_end_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_subject",
+        "type": "SET",
+        "variable": "sc_subject",
+        "value": "language === 'es' ? 'Su copia de nuestra conversación' : 'Your copy from our conversation'"
+      },
+      {
+        "id": "sc_send_text",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_medium === 'text'": {
+            "id": "sc_send_text_call",
+            "type": "FLOW",
+            "value": "send-text",
+            "callType": "call",
+            "parameters": {
+              "message": "{{sc_item.content}}"
+            }
+          },
+          "default": {
+            "id": "sc_send_text_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_send_email",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_medium === 'email'": {
+            "id": "sc_send_email_call",
+            "type": "FLOW",
+            "value": "send-email-message",
+            "callType": "call",
+            "parameters": {
+              "to": "{{sc_to}}",
+              "subject": "{{sc_subject}}",
+              "message": "{{sc_item.content}}",
+              "cc": ""
+            }
+          },
+          "default": {
+            "id": "sc_send_email_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_sent",
+        "type": "SET",
+        "variable": "sc_sent",
+        "value": "sc_medium === 'text' ? cargo.textSent === true : cargo.emailSent === true"
+      },
+      {
+        "id": "sc_done_text",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_sent && sc_medium === 'text'": {
+            "id": "sc_done_text_say",
+            "type": "SAY",
+            "value": "Done. I texted it to the number ending in {{cargo.textTo4}}. Is there anything else I can help you with?",
+            "value_es": "Listo. Se lo envié por mensaje de texto al número que termina en {{cargo.textTo4}}. ¿Hay algo más en lo que le pueda ayudar?"
+          },
+          "default": {
+            "id": "sc_done_text_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_done_email",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_sent && sc_medium === 'email'": {
+            "id": "sc_done_email_say",
+            "type": "SAY",
+            "value": "Done. I emailed it to {{sc_to}}. Is there anything else I can help you with?",
+            "value_es": "Listo. Se lo envié por correo a {{sc_to}}. ¿Hay algo más en lo que le pueda ayudar?"
+          },
+          "default": {
+            "id": "sc_done_email_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_failed",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_sent": {
+            "id": "sc_failed_say",
+            "type": "SAY",
+            "value": "Sorry, I couldn't send it. Is there anything else I can help you with?",
+            "value_es": "Lo siento, no pude enviarlo. ¿Hay algo más en lo que le pueda ayudar?"
+          },
+          "default": {
+            "id": "sc_failed_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_failed_end",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_sent": {
+            "id": "sc_failed_done",
+            "type": "END",
+            "outcome": "unresolved",
+            "reason": "send_failed"
+          },
+          "default": {
+            "id": "sc_failed_end_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      }
+    ],
     "safetyRevision": "dispatch-intake-2026-10-22"
   }
 ]

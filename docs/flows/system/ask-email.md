@@ -16,7 +16,7 @@
   - `email_state`: Internal field protocol state
 - **Calls:** [collect-service-answer](collect-service-answer.md) (call), [live-agent-requested](live-agent-requested.md) (reboot), [contact-support](contact-support.md) (reboot), [ask-email](ask-email.md) (replace)
 - **Tools:** none
-- **Called by:** [ask-email](ask-email.md)
+- **Called by:** [ask-email](ask-email.md), [send-copy](send-copy.md)
 
 ### Steps
 

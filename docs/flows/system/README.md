@@ -1,13 +1,19 @@
 # System flows
 
 <!-- generated:start -->
-73 flows (2 entry points), 12 tools. The graph shows each entry point and the flows it reaches directly; a dotted arrow is a flow named rather than called (a hook, a prepare or present step, a default target). Each flow page charts its declarations: a provider (gate, source, facts, menu), a form (inputs in order, then its after steps), a performer (prepare, present, action) and any step list.
+74 flows (3 entry points), 12 tools. The graph shows each entry point and the flows it reaches directly; a dotted arrow is a flow named rather than called (a hook, a prepare or present step, a default target). Each flow page charts its declarations: a provider (gate, source, facts, menu), a form (inputs in order, then its after steps), a performer (prepare, present, action) and any step list.
 
 ```mermaid
 flowchart LR
    switch_to_text(["SwitchToText · switch-to-text"])
    switch_to_text --> give_up["give-up"]
    live_agent_requested(["LiveAgentRequested · live-agent-requested"])
+   send_copy(["SendCopy · send-copy"])
+   send_copy --> ask_choice["ask-choice"]
+   send_copy --> x__sc_item_sender_[("#123;#123;sc_item.sender#125;#125; (not in this checkout)")]
+   send_copy --> ask_email["ask-email"]
+   send_copy --> send_text["send-text"]
+   send_copy --> send_email_message["send-email-message"]
 ```
 
 ## Entry points
@@ -16,6 +22,7 @@ flowchart LR
 |---|---|---|
 | [switch-to-text](switch-to-text.md) | steps | Explicitly asks to continue this conversation by text or SMS ('text me instead', 'seguimos por mensaje de texto'). Not: a person (LiveAgent… |
 | [live-agent-requested](live-agent-requested.md) | steps | Wants a person, or says just 'agent' / 'AGENT': a live agent, representative, customer service or supervisor ('transfer me', 'agente', 'rep… |
+| [send-copy](send-copy.md) | steps | Asks to be sent, by text or email, something the assistant said in this conversation ('text me that', 'send me that by email', 'mándame eso… |
 
 ## Workers
 
