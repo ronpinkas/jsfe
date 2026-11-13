@@ -1,7 +1,7 @@
 export {compileNamedFunctions} from './named-functions.js';
 import {continuationSafetyProtocol} from '../forms/continuation-safety.js';
 import {contextualResponseProtocol,validateFormResponse,hasFormResponse} from './contextual-response.js';
-import {formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation} from './form-proposals.js';
+import {formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,retireStaleFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation} from './form-proposals.js';
 import {formProposalProtocol,validateFormProposalPolicy,validateFormProposalDescriptor,formProposalDescriptor} from './proposal-contract.js';
 import {cancelFormTask,clearFormMisses,formNoOwner,missFormInput,formMustComplete,formInputPrompt,formUserDescriptionSource,formConcernLine,formAcknowledges,consumeFormFeedback,formConversationOutcome} from './form-conversation.js';
 import { takeChoiceOffer } from './choice-offer.js';
@@ -39,7 +39,7 @@ import { urlToSpeech, textWithUrlToSpeech } from './url-speech.js';
 
 export {
    continuationSafetyProtocol,cancelFormTask, contextualResponseProtocol,validateFormResponse,hasFormResponse,
-   formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation,formProposalProtocol,validateFormProposalPolicy,validateFormProposalDescriptor,formProposalDescriptor,
+   formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,retireStaleFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation,formProposalProtocol,validateFormProposalPolicy,validateFormProposalDescriptor,formProposalDescriptor,
    clearFormMisses,formNoOwner,missFormInput,formMustComplete,formInputPrompt,formUserDescriptionSource,formConcernLine,formAcknowledges,consumeFormFeedback,formConversationOutcome,
    readMoneyAmount, isMoneyAmount, moneyIntentAllows, isPastPaymentStatement, isPartialMoneyAnswer, validateMoneyOptions, takeChoiceOffer, saysConfirmWord, saysNoValue, confirmOutOfOrderLine, matchesChoice, ANSWER_WORDS, CONFIRM_WORDS, isAnswer, isAgentRequest, isExitRequest, isGlobalExit, isOtherRequest, isSpelledFragment, isAmountAnswer, amountInAnswer,
    pickChoice, withoutPromptEcho, readEmail, readPhone, readInternationalPhone, readIdentifier, last4, maskEmail, callerTextNumber, textDestination,
@@ -51,7 +51,7 @@ export {
 /** The functions flows call by name, ready to spread into a host's approved functions. */
 export const STANDARD_FUNCTIONS = {
    continuationSafetyProtocol,cancelFormTask, contextualResponseProtocol,validateFormResponse,hasFormResponse,
-   formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation,formProposalProtocol,validateFormProposalPolicy,validateFormProposalDescriptor,formProposalDescriptor,
+   formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,retireStaleFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation,formProposalProtocol,validateFormProposalPolicy,validateFormProposalDescriptor,formProposalDescriptor,
    clearFormMisses,formNoOwner,missFormInput,formMustComplete,formInputPrompt,formUserDescriptionSource,formConcernLine,formAcknowledges,consumeFormFeedback,formConversationOutcome,
    readMoneyAmount, isMoneyAmount, moneyIntentAllows, isPastPaymentStatement, isPartialMoneyAnswer, validateMoneyOptions, takeChoiceOffer, saysConfirmWord, confirmOutOfOrderLine, matchesChoice, isAnswer, isAgentRequest, isExitRequest, isGlobalExit, isOtherRequest, isSpelledFragment, isAmountAnswer, amountInAnswer, pickChoice, withoutPromptEcho,
    readEmail, readPhone, readInternationalPhone, readIdentifier, last4, maskEmail, callerTextNumber, textDestination, callerIsInternational,

@@ -90,7 +90,8 @@ export function stageFormProposal(cargo,reading,descriptor){
          if(approved(cargo,state,old,reading))return true;
          withdraw(cargo,state,old);old.status='superseded';return false;
       }
-      if(resumed)return false;
+      // a re-check that reads a different value retires the staged one: left pending, it no longer matches the form and can never be confirmed
+      if(resumed){withdraw(cargo,state,old);old.status='superseded';return false;}
       withdraw(cargo,state,old);old.status='superseded';return !own(reading,'proposalApproval');
    }
    const binding=data(decision.binding??null),value=data(reading.value),nextSignature=signature(identity(state),reading.name,value,state.revision,decision);
@@ -131,6 +132,15 @@ export function formProposalReadings(cargo,owner,input='',approve=true){
       out.push(hit);
    }
    return out;
+}
+/** A proposal the form has moved past (its revision changed after the re-check) is retired, and a dependency-deferred one waits
+ * for its batch: neither is put to the caller (prod 2026-11-11 CA6619feed: a stale record failed the bind on every turn). */
+export function retireStaleFormProposal(cargo,owner,input){
+   const {state}=inputOwner(cargo,owner,input),record=recordFor(cargo,state,input);
+   if(!active(record))return false;
+   if(record.deferred)return true;
+   if(current(state,record))return false;
+   withdraw(cargo,state,record);record.status='superseded';return true;
 }
 /** Bind only a real context child; ordinary child slots and unrelated owners cannot collect consent. */
 export function bindFormProposal(cargo,owner,input,childId){

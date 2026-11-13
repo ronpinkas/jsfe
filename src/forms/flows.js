@@ -834,7 +834,7 @@ const confirmInputProposal=formFlow({id:'confirm-input-proposal',name:'ConfirmIn
       SET('proposal_refresh_readings','proposal_readings','formProposalReadings(cargo,parent_form,input,false)'),
       WHEN('proposal_refresh','proposal_readings.length > 0',FLOW('proposal_refresh_batch','collect-input-accept','call',{hits:'{{proposal_readings}}'})),
       SET('proposal_current','proposal','cargo.forms[parent_form] && cargo.forms[parent_form].inputProposals && cargo.forms[parent_form].inputProposals[input] || null'),
-      WHEN('proposal_missing',"!proposal || !['pending','confirmed'].includes(proposal.status) || proposal.committed",FLOW('proposal_missing_close','form-done','replace',{form:'{{form_instance}}'})),
+      WHEN('proposal_missing',"!proposal || !['pending','confirmed'].includes(proposal.status) || proposal.committed || retireStaleFormProposal(cargo,parent_form,input)",FLOW('proposal_missing_close','form-done','replace',{form:'{{form_instance}}'})),
       {...SIDE('proposal_bind','(bindFormProposal(cargo,parent_form,input,form_instance),true)'),requireTrue:true},
       SET('proposal_confirmation','form_confirmation','Object.assign({},proposal.descriptor)'),
    ],

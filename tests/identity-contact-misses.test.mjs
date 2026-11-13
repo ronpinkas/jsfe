@@ -13,9 +13,11 @@ const support={id:'contact-support',name:'ContactSupport',description:'Support c
 const relookup={id:'relookup',name:'Relookup',version:'1',primary:true,description:'Retry a lookup',steps:[{id:'gce',type:'FLOW',value:'get-cell-or-email',callType:'call',parameters:{retrying:true}},{id:'done',type:'SAY',value:'FOUND {{cell_number}}{{email}}'}]};
 const verify={id:'verify',name:'Verify',version:'1',primary:true,description:'Verify a caller',steps:[{id:'auth',type:'FLOW',value:'authenticate-user',callType:'call',parameters:{retry_flow:'verify',cancel_flow:'contact-support',cell_number:'8185551234'}},{id:'done',type:'SAY',value:'VERIFIED'}]};
 const outer={id:'outer',name:'Outer',version:'1',primary:true,description:'Calls boom',steps:[{id:'call_boom',type:'FLOW',value:'boom',callType:'call'},{id:'outer_after',type:'SAY',value:'OUTER NEVER'}]};
+const outerReq={id:'outer-req',name:'OuterReq',version:'1',primary:true,description:'Calls a required step',steps:[{id:'call_req',type:'FLOW',value:'boom-req',callType:'call'},{id:'outer_req_after',type:'SAY',value:'OUTER NEVER'}]};
+const boomReq={id:'boom-req',name:'BoomReq',version:'1',primary:true,description:'A required step that fails',steps:[{id:'ask',type:'SAY-GET',variable:'a',value:'Say something',value_es:'Diga algo'},{id:'must',type:'SET',variable:'v',value:'false',requireTrue:true},{id:'after',type:'SAY',value:'NEVER'}]};
 const boom={id:'boom',name:'Boom',version:'1',primary:true,description:'A step that throws',steps:[{id:'ask',type:'SAY-GET',variable:'a',value:'Say something',value_es:'Diga algo'},{id:'bad',type:'SET',variable:'v',value:'openFormInstance(cargo, "collect-service-answer", [], { parent: "closed-task:1" })'},{id:'after',type:'SAY',value:'NEVER'}]};
 function fixture(cargo={},language='en'){
- const engine=new WorkflowEngine(quiet,async(s,u,schema,r)=>r && r.task==='rank_reply'?JSON.stringify({option:'answers'}):'{"flowName":"None"}',[...FLOWS,lookup,relookup,verify,support,outer,boom],[],STANDARD_FUNCTIONS,{},false,language);engine.disableCommands();
+ const engine=new WorkflowEngine(quiet,async(s,u,schema,r)=>r && r.task==='rank_reply'?JSON.stringify({option:'answers'}):'{"flowName":"None"}',[...FLOWS,lookup,relookup,verify,support,outer,boom,outerReq,boomReq],[],STANDARD_FUNCTIONS,{},false,language);engine.disableCommands();
  let s=engine.initSession('u','misses',language);Object.assign(s.cargo,{voice:false,verb:'type',verb_es:'escriba'},cargo);
  return {get s(){return s;},async start(flow){s=await engine.updateActivity({role:'user',content:'go',start:{flow,arguments:{}}},JSON.parse(JSON.stringify(s)));return String(s.response||'');},
   attempted:null,async say(content){const next=JSON.parse(JSON.stringify(s));this.attempted=next;s=await engine.updateActivity({role:'user',content},next);return s.response;}};
@@ -52,6 +54,11 @@ await test("the retry menu's give-up takes its declared exit, never a silent han
 await test('a step whose expression throws fails the turn to the host (JSFEExecutionError) and ends every flow, never a silent empty turn',async()=>{
  const t=fixture();await t.start('outer');assert.deepEqual(flows(t.s),['Outer','Boom']);
  await assert.rejects(t.say('hello'),e=>e.name==='JSFEExecutionError' && e.cause?.name==='JSFEStepExpressionFailed' && /SET step bad in Boom: .*FORM parent does not exist/.test(e.message));
+ assert.equal(t.attempted.flowStacks.flat().length,0,'no frame is left to resume mid-task');
+});
+await test('a required SET that fails also ends every flow, so the next turn cannot resume the broken frame (prod 2026-11-11 CA6619feed)',async()=>{
+ const t=fixture();await t.start('outer-req');assert.deepEqual(flows(t.s),['OuterReq','BoomReq']);
+ await assert.rejects(t.say('hello'),e=>e.name==='JSFEExecutionError' && e.cause?.name==='JSFERequiredSetFailed');
  assert.equal(t.attempted.flowStacks.flat().length,0,'no frame is left to resume mid-task');
 });
 console.log(`identity contact misses: all ${checks} checks passed`);

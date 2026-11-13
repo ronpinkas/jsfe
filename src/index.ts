@@ -7811,7 +7811,9 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         } else {
           // any other failure is reported below
         }
-        if (error?.name === 'JSFEStepExpressionFailed') {
+        if (error?.name === 'JSFEStepExpressionFailed' || error?.name === 'JSFERequiredSetFailed') {
+          // A required SET that failed is the same (prod 2026-11-11 CA6619feed): popping only its frame left a resumable
+          // stack that failed again on every turn.
           // A step whose expression threw (owner 2026-11-11): the host tells the caller, so every flow ends here, each
           // transaction failed — a frame left below the failed one would resume mid-task on the caller's next words.
           while (engine.flowStacks.length > 0) {

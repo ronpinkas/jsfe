@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import {openFormInstance,acceptFormReadings,closeFormInstance} from '../dist/helpers/form-state.js';
 import {confirmFormRevision,formSignature} from '../dist/helpers/form-actions.js';
-import {formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation} from '../dist/helpers/form-proposals.js';
+import {formProposalPolicy,stageFormProposal,nextFormProposal,formProposalReadings,bindFormProposal,retireStaleFormProposal,decideFormProposal,commitFormProposals,settleFormProposalValidation} from '../dist/helpers/form-proposals.js';
 const clone=value=>JSON.parse(JSON.stringify(value));
 const descriptor=(binding={account:'A'})=>({question:'Use this amount?',question_es:'¿Usar este monto?',binding});
 let checks=0;const test=(name,run)=>{run();checks++;console.log('PASS '+name);};
@@ -126,5 +126,17 @@ test('malformed descriptors, unsafe data and stale ownership fail closed without
  const dangerous=Object.create(null);Object.defineProperty(dangerous,'constructor',{enumerable:true,value:'bad'});assert.throws(()=>stageFormProposal(t.cargo,t.hit(dangerous),descriptor()),/unsafe/);
  let read=false;const getter={get amount(){read=true;return 50;}};assert.throws(()=>stageFormProposal(t.cargo,t.hit(getter),descriptor()),/JSON data properties/);assert.equal(read,false);
  assert.deepEqual(t.state().proposal,{signature:'separate-action',status:'prepared'});
+});
+test('a re-check that reads a different value retires the staged proposal (prod 2026-11-11 CA6619feed)',()=>{
+ const t=setup();stageFormProposal(t.cargo,t.hit('20.00'),descriptor());const staged=t.state().inputProposals.amount;
+ const resumed={...replay(t,false),value:'20.90'};assert.equal(stageFormProposal(t.cargo,resumed,null),false);
+ assert.equal(staged.status,'superseded');assert.equal(nextFormProposal(t.cargo,t.owner),null);assert.equal(t.state().values.amount,undefined);
+});
+test('a proposal the form moved past is retired before the bind, never failing it; a current one is kept',()=>{
+ const t=setup();stageFormProposal(t.cargo,t.hit(),descriptor());assert.equal(retireStaleFormProposal(t.cargo,t.owner,'amount'),false);
+ acceptFormReadings(t.cargo,[{form:t.owner,name:'method',value:'card',ok:true}]);const record=t.state().inputProposals.amount;
+ const child=openFormInstance(t.cargo,'proposal-confirm',[],{parent:t.owner,context:true});assert.throws(()=>bindFormProposal(t.cargo,t.owner,'amount',child),/stale/);
+ assert.equal(retireStaleFormProposal(t.cargo,t.owner,'amount'),true);assert.equal(record.status,'superseded');assert.equal(nextFormProposal(t.cargo,t.owner),null);
+ assert.equal(retireStaleFormProposal(t.cargo,t.owner,'amount'),false);
 });
 console.log(`Form proposal state: all ${checks} checks passed`);
