@@ -5398,7 +5398,8 @@
             "label_es": "respuesta",
             "profile": {
               "kind": "text"
-            }
+            },
+            "form_client": false
           }
         ]
       },
