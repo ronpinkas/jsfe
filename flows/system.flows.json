@@ -11720,10 +11720,28 @@
         "value": "ca_h.outcome === 'rejected' && ca_h.quiet ? '' : ca_h.outcome === 'rejected' ? (ca_h.message_es || ca_h.message || ('No pude usar eso como ' + (ca_h.label_es || ca_h.label || ca_h.name) + '.')) : ca_h.silent === true || ca_h.fromPending || !formAcknowledges(cargo, ca_h) ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Gracias, ya tengo su ' + ca_h.label_es + '.') : ca_h.outcome === 'changed' && ca_h.origin !== 'activation' ? ('Listo, anoté su ' + ca_h.label_es + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Entendido, su ' + ca_h.label_es + '.') : ''"
       },
       {
+        "id": "ie_reject_line",
+        "type": "CASE",
+        "branches": {
+          "condition: ca_h.outcome === 'rejected'": {
+            "id": "ie_reject_keep",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "keepFormLine(cargo,ca_h.form,ca_ack,ca_ack_es)"
+          },
+          "default": {
+            "id": "ie_reject_line_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "ie_say",
         "type": "CASE",
         "branches": {
-          "condition: ca_ack": {
+          "condition: ca_ack && ca_h.outcome !== 'rejected'": {
             "id": "ie_ack",
             "type": "SAY",
             "value": "{{ca_ack}}",

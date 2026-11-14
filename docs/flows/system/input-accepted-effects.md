@@ -34,27 +34,32 @@ flowchart TD
    c4 -- "else" --> n6
    c7{"case"}
    n6 --> c7
-   b8["say: #123;#123;ca_ack#125;#125;"]
-   c7 -- "ca_ack" --> b8
-   n9["set noop"]
-   b8 --> n9
-   c7 -- "else" --> n9
-   c10{"case"}
-   n9 --> c10
-   b11[["call #123;#123;ca_h.after#125;#125;"]]
-   class b11 flowstep
-   c10 -- "ca_h.after && ca_h.outcome !== 'known' && ca_h.outcome !== 'rejected'…" --> b11
-   n12["set noop"]
-   b11 --> n12
-   c10 -- "else" --> n12
-   c13{"case"}
-   n12 --> c13
-   b14(["replace → input-accepted-effects"])
-   class b14 endstep
-   c13 -- "ca_rest.length #gt; 0" --> b14
+   b8["set assignment_side_effect"]
+   c7 -- "ca_h.outcome === 'rejected'" --> b8
+   c9{"case"}
+   b8 --> c9
+   c7 -- "else" --> c9
+   b10["say: #123;#123;ca_ack#125;#125;"]
+   c9 -- "ca_ack && ca_h.outcome !== 'rejected'" --> b10
+   n11["set noop"]
+   b10 --> n11
+   c9 -- "else" --> n11
+   c12{"case"}
+   n11 --> c12
+   b13[["call #123;#123;ca_h.after#125;#125;"]]
+   class b13 flowstep
+   c12 -- "ca_h.after && ca_h.outcome !== 'known' && ca_h.outcome !== 'rejected'…" --> b13
+   n14["set noop"]
+   b13 --> n14
+   c12 -- "else" --> n14
+   c15{"case"}
+   n14 --> c15
+   b16(["replace → input-accepted-effects"])
+   class b16 endstep
+   c15 -- "ca_rest.length #gt; 0" --> b16
    DONE(["end (back to caller)"])
    class DONE endstep
-   c13 -- "else" --> DONE
+   c15 -- "else" --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80
