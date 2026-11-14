@@ -45,7 +45,7 @@ const sendCopy = defineWorker({
       { name: 'destination', type: 'string', description: 'The phone number or email address the user gave to send it to, as given.' },
    ],
    variables: vars({
-      noop: false, sc_items: [], sc_key: '', sc_item: null, sc_last: null, sc_last_head: '', sc_doc_list: '', sc_email: '', sc_phone: '',
+      noop: false, sc_items: [], sc_key: '', sc_item: null, sc_last: null, sc_last_head: '', sc_offer_q: '', sc_offer_q_es: '', sc_doc_list: '', sc_email: '', sc_phone: '',
       sc_medium: '', sc_medium_q: '', sc_medium_q_es: '', sc_given: '', sc_media: [], sc_forced: '', sc_to: '', sc_subject: '', sc_content: '', sc_sent: false,
    }),
    steps: [
@@ -62,9 +62,12 @@ const sendCopy = defineWorker({
       set('sc_doc_list', 'sc_doc_list', "sc_items.map(function (i) { return (language === 'es' && i.label_es) || i.label; }).join(language === 'es' ? '; ' : '; ')"),
       when('sc_documents', '!sc_item && !sc_last', say('sc_documents_say', 'I can send you: {{sc_doc_list}}. Tell me which one, and whether by text or email.', 'Puedo enviarle: {{sc_doc_list}}. Dígame cuál, y si por mensaje de texto o por correo.')),
       when('sc_documents_end', '!sc_item && !sc_last', end('sc_documents_done')),
+      // the question is built here: a FLOW call's parameters interpolate values, never expressions
+      when('sc_offer_q', '!sc_item', set('sc_offer_q_set', 'sc_offer_q', "'Should I send you my last answer: \"' + sc_last_head + '\"? ' + yesNoKeys('en', cargo)")),
+      when('sc_offer_q_es', '!sc_item', set('sc_offer_q_es_set', 'sc_offer_q_es', "'¿Le envío mi última respuesta: \"' + sc_last_head + '\"? ' + yesNoKeys('es', cargo)")),
       when('sc_offer', '!sc_item', call('sc_offer_ask', 'ask-choice', {
-         question: 'Should I send you my last answer: "{{sc_last_head}}"? Please say yes or no.',
-         question_es: '¿Le envío mi última respuesta: "{{sc_last_head}}"? Por favor diga sí o no.',
+         question: '{{sc_offer_q}}',
+         question_es: '{{sc_offer_q_es}}',
          choices: [{ key: 'yes', phrases: ['1'] }, { key: 'no', phrases: ['2'] }],
          digits: { min: 1, max: 1 },
       })),

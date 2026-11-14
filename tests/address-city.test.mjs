@@ -18,17 +18,17 @@ let r=await say('90023');check(r==='¿Qué ciudad es: Commerce, East Los Angeles
 for(const said of ['15','1 5','9','#']){await begin('es',true);await say('90023');r=await say(said);check(/¿Qué ciudad es: Commerce/.test(r)&&!/^Entendido/.test(r),`a number that is no offered choice is not a city (${said}) [${r}]`);check(!JSON.stringify(session.cargo.forms).includes(`"city":"${said}"`),`and fills nothing (${said})`);}
 await begin('es',true);await say('90023');
 r=await say('3');check(/^Entendido, Los Angeles, CA\./.test(r),`its key picks the city [${r}]`);
-await say('100 Main Street');r=await say('2');check(/Apt 2, Los Angeles, CA 90023\. ¿Es correcta\?$/.test(r),`read back with the chosen city [${r}]`);
+await say('100 Main Street');r=await say('2');check(/Apt 2, Los Angeles, CA 90023\. ¿Es correcta\? (?:Escriba|Presione 1 o diga) SÍ, o (?:escriba|presione 2 o diga) NO\.$/.test(r),`read back with the chosen city [${r}]`);
 await say('sí');check(session.cargo.address?.city==='Los Angeles, CA',`stored [${JSON.stringify(session.cargo.address)}]`);
 await begin('en',false);
 r=await say('90023');check(/Type the city or its number, 1 to 4\.$/.test(r),`text wording [${r}]`);
 r=await say('15');check(/Type the city or its number, 1 to 4\.$/.test(r)&&!/^Got it/.test(r),`typed, the same [${r}]`);
 await say('Los Angeles');await say('100 Main Street');await say('none');
 r=await say('the city is wrong');check(/^Which city is it: Commerce, East Los Angeles, Los Angeles or Vernon\?/.test(r),`a part named without a value: only that part is asked [${r}]`);
-r=await say('2');check(/100 Main Street, East Los Angeles, CA 90023\. Is that correct\?$/.test(r),`and read back again, street kept [${r}]`);
+r=await say('2');check(/100 Main Street, East Los Angeles, CA 90023\. Is that correct\? (?:Type|Press 1 or say) YES, or (?:type|press 2 or say) NO\.$/.test(r),`and read back again, street kept [${r}]`);
 await begin('es',false);
 await say('90023');await say('Commerce');await say('10 Main Street');await say('ninguno');
-r=await say('la ciudad es Los Ángeles');check(/10 Main Street, Los Angeles, CA 90023\. ¿Es correcta\?$/.test(r),`a part corrected with its value [${r}]`);
+r=await say('la ciudad es Los Ángeles');check(/10 Main Street, Los Angeles, CA 90023\. ¿Es correcta\? (?:Escriba|Presione 1 o diga) SÍ, o (?:escriba|presione 2 o diga) NO\.$/.test(r),`a part corrected with its value [${r}]`);
 await begin('es',false);
 r=await say('91352');check(/^Entendido, Los Angeles, CA\./.test(r),`one name: not asked [${r}]`);
 await say('10 Main Street');await say('ninguno');
@@ -36,7 +36,7 @@ r=await say('la ciudad no');check(r==='¿Qué ciudad es?',`one name, named wrong
 r=await say('Sun Valley');check(/10 Main Street, Sun Valley, CA 91352\./.test(r),`the caller's own city is taken [${r}]`);
 await begin('en',false);
 await say('90023');await say('1');await say('10 Main Street');await say('none');
-r=await say('no');check(/^Which part is wrong: 1 the zip code, 2 the city, 3 the street, or 4 the apartment\? Or say ALL to start over\.$/.test(r),`NO asks which part [${r}]`);
+r=await say('no');check(/^Which part is wrong: 1 the zip code, 2 the city, 3 the street, or 4 the apartment\? Or (?:say|type) ALL to start over\.$/.test(r),`NO asks which part [${r}]`);
 r=await say('3');check(/^Got it, Commerce, CA\. What is the street address\?$/.test(r),`only the street is asked again [${r}]`);
 await say('20 Oak Street');r=await say('none');check(/20 Oak Street, Commerce, CA 90023/.test(r),`ZIP code and city kept [${r}]`);
 assert.deepEqual(warnings,[]);checks++;

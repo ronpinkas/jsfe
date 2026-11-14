@@ -82,7 +82,7 @@ const submit = async (values, declined) => {
   const city = field(projectForm(session), 'city');
   check(city && city.control === 'combobox' && city.current && !city.filled && city.choices.map(c => c.label).join('|') === 'Commerce|East Los Angeles|Los Angeles|Vernon', `several names: offered as the combobox's options [${JSON.stringify(city)}]`);
   let r = await submit({city: 'Vernon', street: '10 Main Street', unit: ''}, ['unit']);
-  check(/10 Main Street, Vernon, CA 90023\. Is that correct\?$/.test(r), `an offered city is taken from the card [${r}]`);
+  check(/10 Main Street, Vernon, CA 90023\. Is that correct\? Type YES, or type NO\.$/.test(r), `an offered city is taken from the card [${r}]`);
 }
 {
   // A revised ZIP code and the city the card filled from it, submitted together.
@@ -90,7 +90,7 @@ const submit = async (values, declined) => {
   await say('91352');
   check(field(projectForm(session), 'city')?.value === 'Los Angeles', 'the first ZIP code\'s city');
   const r = await submit({zip: '90023', city: 'Vernon', street: '10 Main Street', unit: ''}, ['unit']);
-  check(/10 Main Street, Vernon, CA 90023\. Is that correct\?$/.test(r), `the revised ZIP code and its city are both kept [${r}]`);
+  check(/10 Main Street, Vernon, CA 90023\. Is that correct\? Type YES, or type NO\.$/.test(r), `the revised ZIP code and its city are both kept [${r}]`);
 }
 {
   // Typed text that is no offered option is still a city.

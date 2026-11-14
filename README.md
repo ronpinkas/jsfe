@@ -503,7 +503,10 @@ const engine = new WorkflowEngine(logger, aiCallback, flows, tools,
   `readInternationalPhone`, `readIdentifier`, `normalizeAndFindCapture`, and `matchInputs` (which of a
   form's inputs an answer fills; ties between inputs of the same form are returned for the flow to ask).
 - Saying values: `amountToSpeech`, `dateToWords`, `last4`, `maskEmail`, `urlToSpeech`,
-  `textWithUrlToSpeech`, `anythingElse`, `goodbye`.
+  `textWithUrlToSpeech`, `anythingElse`, `goodbye`, `channelVerb(lang, cargo, capital)` ("say" on a call, "type"
+  elsewhere, or the host's `cargo.verb`), and `yesNoKeys(lang, cargo, yes, no)` ("Press 1 or say YES, or press 2 or say
+  NO." on a call): every yes/no question names 1 for YES and 2 for NO on a call. A FLOW call's parameters interpolate
+  values, not expressions, so build such a question in a SET step and pass the variable.
 - Checks: `validateDigits`, `validatePhone`, `validateEmail`, `validateCardNumber`,
   `validateExpiration`, and `validateOTP(code, container)`, which accepts a code whose SHA-256 matches
   `container.otpHash` within 10 minutes of `container.otpTimestamp`, or a second code emailed beside it

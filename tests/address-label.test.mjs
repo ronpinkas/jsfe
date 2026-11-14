@@ -36,16 +36,16 @@ for(const c of cases)for(const language of ['en','es'])for(const voice of [true,
 const multi={...functions,'geocode-zip':async()=>({status:'OK',results:[{postcode_localities:['Commerce','Los Angeles'],address_components:[component('90015','90015',['postal_code']),component('Los Angeles','Los Angeles',['locality']),component('California','CA',['administrative_area_level_1']),component('United States','US',['country'])]}]})};
 const none={...functions,'geocode-zip':async()=>null};
 const Q={
- labelled:{en:{street:/Got it, Los Angeles, CA\. What is the street of your new delivery address\?$/,unit:/^Is there an apartment or unit number in your new delivery address\? Type the number, or NONE\.$/,city:/^Which city is your new delivery address in: Commerce or Los Angeles\? /,cityState:/^What city and state is your new delivery address in\?$/},
-  es:{street:/Entendido, Los Angeles, CA\. ¿Cuál es la calle de su nueva dirección de entrega\?$/,unit:/^¿Hay un número de apartamento o unidad en su nueva dirección de entrega\? Escriba el número, o NINGUNO\.$/,city:/^¿En qué ciudad está su nueva dirección de entrega: Commerce o Los Angeles\? /,cityState:/^¿En qué ciudad y estado está su nueva dirección de entrega\?$/}},
- plain:{en:{street:/Got it, Los Angeles, CA\. What is the street address\?$/,unit:/^Is there an apartment or unit number\? Type the number, or NONE\.$/,city:/^Which city is it: Commerce or Los Angeles\? /,cityState:/^What city and state is that in\?$/},
-  es:{street:/Entendido, Los Angeles, CA\. ¿Cuál es la dirección\?$/,unit:/^¿Hay un número de apartamento o unidad\? Escriba el número, o NINGUNO\.$/,city:/^¿Qué ciudad es: Commerce o Los Angeles\? /,cityState:/^¿En qué ciudad y estado está\?$/}}
+ labelled:{en:{street:/Got it, Los Angeles, CA\. What is the street of your new delivery address\?$/,unit:/^Is there an apartment or unit number in your new delivery address\? (?:Type|Say) the number, or NONE\.$/,city:/^Which city is your new delivery address in: Commerce or Los Angeles\? /,cityState:/^What city and state is your new delivery address in\?$/},
+  es:{street:/Entendido, Los Angeles, CA\. ¿Cuál es la calle de su nueva dirección de entrega\?$/,unit:/^¿Hay un número de apartamento o unidad en su nueva dirección de entrega\? (?:Escriba|Diga) el número, o NINGUNO\.$/,city:/^¿En qué ciudad está su nueva dirección de entrega: Commerce o Los Angeles\? /,cityState:/^¿En qué ciudad y estado está su nueva dirección de entrega\?$/}},
+ plain:{en:{street:/Got it, Los Angeles, CA\. What is the street address\?$/,unit:/^Is there an apartment or unit number\? (?:Type|Say) the number, or NONE\.$/,city:/^Which city is it: Commerce or Los Angeles\? /,cityState:/^What city and state is that in\?$/},
+  es:{street:/Entendido, Los Angeles, CA\. ¿Cuál es la dirección\?$/,unit:/^¿Hay un número de apartamento o unidad\? (?:Escriba|Diga) el número, o NINGUNO\.$/,city:/^¿Qué ciudad es: Commerce o Los Angeles\? /,cityState:/^¿En qué ciudad y estado está\?$/}}
 };
 for(const [kind,flows,start] of [['labelled',[owner('delivery-owner2',{label:'new delivery address',label_es:'nueva dirección de entrega'})],'delivery-owner2'],['plain',[owner('plain-owner2',{})],'plain-owner2']])for(const language of ['en','es'])for(const voice of [true,false]){
  const q=Q[kind][language];
  let t=setup(flows,start,{language,voice});await t.say('begin',true);
  assert.match(await t.say('90015'),q.street,`${kind} ${language} voice=${voice}: street`);
- assert.match(await t.say('22 Elm St'),q.unit,`${kind} ${language}: unit`);assert.deepEqual(t.warnings,[]);checks++;
+ {const u=await t.say('22 Elm St');assert.match(u,q.unit,`${kind} ${language}: unit`);assert.match(u,voice?/ (?:Say|Diga) el? ?n[uú]mero| Say the number/:/ (?:Type|Escriba) (?:the number|el número)/,`${kind} ${language} voice=${voice}: the channel's verb`);}assert.deepEqual(t.warnings,[]);checks++;
  t=setup(flows,start,{language,voice,fns:multi});await t.say('begin',true);
  assert.match(await t.say('90015'),q.city,`${kind} ${language} voice=${voice}: city choice`);checks++;
  t=setup(flows,start,{language,voice,fns:none});await t.say('begin',true);
