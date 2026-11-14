@@ -188,7 +188,7 @@
           "condition: request.done": {
             "id": "product_done_end",
             "type": "RETURN",
-            "value": "\"\"",
+            "value": "language==='es'?'Perfecto, ¿hay algo más en lo que pueda ayudarle?':'Cool, anything else I can help you with?'",
             "outcome": "resolved"
           },
           "default": {
@@ -667,9 +667,10 @@
         "branches": {
           "condition: !result": {
             "id": "product_fetch_failure",
-            "type": "FLOW",
-            "value": "no-action-needed",
-            "callType": "reboot",
+            "type": "RETURN",
+            "value": "language==='es'?'No puedo buscar en el catálogo de productos en este momento. Intente de nuevo en unos minutos.':'I cannot search the product catalog right now. Please try again in a few minutes.'",
+            "outcome": "unresolved",
+            "reason": "product_source_unavailable",
             "recovery": {
               "version": 1,
               "mode": "none",

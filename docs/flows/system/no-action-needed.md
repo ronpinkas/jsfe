@@ -8,7 +8,7 @@
 - **Parameters:** none
 - **Calls:** no other flow
 - **Tools:** none
-- **Called by:** [shopify-ql-products-fetch](../shopify/shopify-ql-products-fetch.md) (shopify), [shopify-ql-store-policies](../shopify/shopify-ql-store-policies.md) (shopify), [shopify-ql-policies-load](../shopify/shopify-ql-policies-load.md) (shopify)
+- **Called by:** [shopify-ql-store-policies](../shopify/shopify-ql-store-policies.md) (shopify), [shopify-ql-policies-load](../shopify/shopify-ql-policies-load.md) (shopify)
 
 ### Steps
 

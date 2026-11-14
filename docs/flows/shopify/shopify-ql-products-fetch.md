@@ -6,7 +6,7 @@
 > Retrieve a new public catalog result and replace the prior context only with a valid response.
 
 - **Parameters:** none
-- **Calls:** [operation:shopify-search-products](operation:shopify-search-products.md) (call), [no-action-needed](../system/no-action-needed.md) (system) (reboot), [shopify-ql-get-search-query](shopify-ql-get-search-query.md) (by name), [shopify-ql-product-dialog](shopify-ql-product-dialog.md) (by name), [shopify-ql-product-stores](shopify-ql-product-stores.md) (by name), [shopify-ql-product-location-retry](shopify-ql-product-location-retry.md) (by name)
+- **Calls:** [operation:shopify-search-products](operation:shopify-search-products.md) (call), [shopify-ql-get-search-query](shopify-ql-get-search-query.md) (by name), [shopify-ql-product-dialog](shopify-ql-product-dialog.md) (by name), [shopify-ql-product-stores](shopify-ql-product-stores.md) (by name), [shopify-ql-product-location-retry](shopify-ql-product-location-retry.md) (by name)
 - **Tools:** none
 - **Called by:** [shopify-ql-product-search](shopify-ql-product-search.md)
 
@@ -24,7 +24,7 @@ flowchart TD
    n1 --> n2
    c3{"case"}
    n2 --> c3
-   b4(["reboot → no-action-needed"])
+   b4(["return to host / AI"])
    class b4 endstep
    c3 -- "!result" --> b4
    n5["set noop"]
