@@ -60,7 +60,8 @@ export const FIELD_PRESETS = {
       retry_text: 'Please type your 10-digit phone number.', retry_text_es: 'Por favor escriba su número de teléfono de 10 dígitos.' },
    email: { label: 'email address', label_es: 'correo electrónico', profile: { kind: 'email' },
       question: 'What is your email address?', question_es: '¿Cuál es su correo electrónico?',
-      retry: 'Please say your email address, for example juan at gmail dot com.', retry_es: 'Por favor diga su correo electrónico, por ejemplo juan arroba gmail punto com.' },
+      retry: 'Please say your email address, for example juan at gmail dot com.', retry_es: 'Por favor diga su correo electrónico, por ejemplo juan arroba gmail punto com.',
+      retry_text: 'Please type your email address, for example juan@gmail.com.', retry_text_es: 'Por favor escriba su correo electrónico, por ejemplo juan@gmail.com.' },
    zip: { label: 'ZIP code', label_es: 'código postal', profile: { kind: 'digits', min: 5, max: 5, refuse_amount_shape: true }, digits: { min: 5, max: 5 },
       question: 'What is your ZIP code?', question_es: '¿Cuál es su código postal?',
       retry: 'Please say or enter your 5-digit ZIP code.', retry_es: 'Por favor diga o ingrese su código postal de 5 dígitos.',
@@ -1014,12 +1015,16 @@ provideData.steps.splice(provideData.steps.findIndex((s) => s.id === 'pd_menu_q'
 // which re-read the summary): say so, offer the action the catalog names (provides.menu.unanswered), and otherwise return to the menu.
 const providerUnanswered = {
    id: 'provider-unanswered', name: 'ProviderUnanswered', version: '1.0.0', scope: 'isolated',
-   description: "Worker: a question the provider has no fact for, sent back to it from its own menu: says provides.menu.unanswered.question(_es) and offers that menu's choice unanswered.choice. YES runs it, NO returns to the menu, anything else is DISPATCHed. Param: provides.",
+   description: "Worker: a question the provider has no fact for, sent back to it from its own menu: says provides.menu.unanswered.question(_es), followed by yesNoKeys (1 YES, 2 NO on a call; do not word the keys in the question), and offers that menu's choice unanswered.choice. YES runs it, NO returns to the menu, anything else is DISPATCHed. Param: provides.",
    parameters: [{ name: 'provides', type: 'object', description: 'The provider catalog' }],
-   variables: vars({ pu_choice: null, pu_yes: false, pu_no: false, pu_flow: '' }),
+   variables: vars({ pu_choice: null, pu_yes: false, pu_no: false, pu_flow: '', pu_q: '', pu_q_es: '' }),
    steps: [
       SET('pu_find', 'pu_choice', "(provides.menu.choices || []).filter(function (c) { return c.key === provides.menu.unanswered.choice; })[0] || null"),
-      FLOW('pu_ask', 'ask-choice', 'call', { question: '{{provides.menu.unanswered.question}}', question_es: '{{provides.menu.unanswered.question_es}}', choices: [{ key: 'yes', phrases: ['1'] }, { key: 'no', phrases: ['2', 'no', 'no thanks', 'no thank you', 'not now', 'no gracias', 'ahora no'] }], accept_other: true, digits: { min: 1, max: 1 } }),
+      // the offer is a yes/no question: it names 1 for YES and 2 for NO on a call (owner 2026-11-14), built here because a FLOW
+      // call's parameters interpolate values, not expressions
+      SET('pu_question', 'pu_q', "String(provides.menu.unanswered.question || '') + ' ' + yesNoKeys('en', cargo)"),
+      SET('pu_question_es', 'pu_q_es', "String(provides.menu.unanswered.question_es || provides.menu.unanswered.question || '') + ' ' + yesNoKeys('es', cargo)"),
+      FLOW('pu_ask', 'ask-choice', 'call', { question: '{{pu_q}}', question_es: '{{pu_q_es}}', choices: [{ key: 'yes', phrases: ['1'] }, { key: 'no', phrases: ['2', 'no', 'no thanks', 'no thank you', 'not now', 'no gracias', 'ahora no'] }], accept_other: true, digits: { min: 1, max: 1 } }),
       SET('pu_read_yes', 'pu_yes', "String(cargo.choice) === 'yes' || isAnswer(cargo.choiceText, 'yes')"),
       SET('pu_read_no', 'pu_no', "!pu_yes && String(cargo.choice) === 'no'"),
       SET('pu_take', 'pu_flow', "pu_yes && pu_choice ? (function (c) { if (c.set) { Object.keys(c.set).forEach(function (k) { cargo[k] = c.set[k]; }); } else { /* nothing to set */ } return c.flow; })(pu_choice) : ''"),

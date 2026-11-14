@@ -95,7 +95,7 @@ async function back(reply,scores,asked,next){
  if(next){session=structuredClone(await engine.updateActivity({role:'user',content:next},structuredClone(session)));second=session.response||'';}
  return {first,second,session};
 }
-await test('a question the ranker sent back to its own provider: sorry and the offer, not the facts again',async()=>{const t=await back('why did my balance go up',{new_request:.9},'balance');assert.match(t.first,/cannot answer that/);assert.doesNotMatch(t.first,/BALANCE/);});
+await test('a question the ranker sent back to its own provider: sorry and the offer, not the facts again',async()=>{const t=await back('why did my balance go up',{new_request:.9},'balance');assert.match(t.first,/cannot answer that/);assert.match(t.first,/Pay now\? (?:Type YES, or type NO|Press 1 or say YES, or press 2 or say NO)\./,'the offer names its keys (owner 2026-11-14)');assert.doesNotMatch(t.first,/BALANCE/);});
 await test('yes runs the offered action',async()=>{const t=await back('why did my balance go up',{new_request:.9},'balance','yes please');assert.equal(t.session.cargo.paid,true);});
 await test('no returns to the menu',async()=>{const t=await back('why did my balance go up',{new_request:.9},'balance','no');assert.match(t.second,/What next/);assert.equal(t.session.cargo.paid,undefined);});
 await test('no phrase: a catch-all from intent detection is unanswered, a named fact is answered',async()=>{
