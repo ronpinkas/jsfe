@@ -119,7 +119,19 @@ await test('genuine validator rejections retain max_attempts and invoke declared
  const validate=W('reject-code',[S('reject',"(cargo.inputCheck={ok:false,message:'That service code is invalid.',message_es:'Ese código de servicio no es válido.'},true)")],[{name:'value',type:'string'}]);
  const recover=W('recover-code',[S('capture',"(cargo.recoveries=Number(cargo.recoveries||0)+1,cargo.failure={form,failed_form,input,failed_input,reason},true)"),{id:'recovery-message',type:'SAY',value:'SERVICE RECOVERY'}],['form','failed_form','input','failed_input','reason'].map(name=>({name,type:'string'})));
  const t=fixture([formFlow({id:'validate',name:'Validate',version:'1',inputs:[code],after:[S('effect',"(cargo.effect=true,true)")]}),validate,recover]);await t.say('begin','validate');const root=t.owner('validate');await t.say('%%');let response=await t.say('111');assert.match(response,/invalid/);assert.doesNotMatch(response,/Sorry/);assert.equal(t.session.cargo.forms[root].attempts.code,1);assert.equal(t.calls.length,0);
- response=await t.say('222');assert.match(response,/SERVICE RECOVERY/);assert.equal(t.session.cargo.recoveries,1);assert.equal(t.session.cargo.effect,undefined);assert.deepEqual(t.session.cargo.failure,{form:root,failed_form:root,input:'code',failed_input:'code',reason:'attempts_exhausted'});assert.equal(t.session.cargo.forms[root].values.code,undefined);assert.notEqual(t.session.lastFlowOutcome?.outcome,'pending');
+ assert.equal(response,'That service code is invalid.\n\nEnter the three-digit service code.','the rejection leads the question it re-asks');
+ response=await t.say('222');assert.match(response,/SERVICE RECOVERY/);assert.doesNotMatch(response,/invalid/,'no rejection line before the exhaustion recovery: the form does not ask again');assert.equal(t.session.cargo.recoveries,1);assert.equal(t.session.cargo.effect,undefined);assert.deepEqual(t.session.cargo.failure,{form:root,failed_form:root,input:'code',failed_input:'code',reason:'attempts_exhausted'});assert.equal(t.session.cargo.forms[root].values.code,undefined);assert.notEqual(t.session.lastFlowOutcome?.outcome,'pending');
+});
+await test('a form validator message is said with the re-ask only, never before give-up',async()=>{
+ const word=name=>({name,label:name,profile:{kind:'text'},question:'Say the '+name+' word.'});
+ const check=W('pair-check',[S('pair',"(cargo.formCheck=values.a===values.b?{ok:true}:{ok:false,invalid:[{name:'a'},{name:'b'}],message:'THE WORDS DIFFER.',message_es:'LAS PALABRAS DIFIEREN.'},true)")],[{name:'form',type:'string'},{name:'values',type:'object'}]);
+ const t=fixture([formFlow({id:'pair',name:'Pair',version:'1',inputs:[word('a'),word('b')],validator:'pair-check'}),check]);
+ await t.say('begin','pair');await t.say('x');let response=await t.say('y');
+ assert.equal(response,'THE WORDS DIFFER.\n\nSay the a word.','the validator message leads the first re-asked question');
+ response=await t.say('x');assert.doesNotMatch(response,/DIFFER/,'said once, with the first re-asked question');
+ response=await t.say('y');assert.match(response,/THE WORDS DIFFER\.\n\nSay the a word\.$/,'second round');
+ await t.say('r');response=await t.say('s');assert.match(response,/THE WORDS DIFFER\.\n\nSay the a word\.$/,'third round');
+ await t.say('m');response=await t.say('n');assert.doesNotMatch(response,/DIFFER/,'no validator message before give-up: the form does not ask again');
 });
 function paymentFixture(outcome,completed=false){
  const effects=[];const action={action:'charge',effect:'charge',flow:'charge-effect',subject:'cargo.account',gate:{verified:'cargo.verified'},confirm:{exact:true,question:'Charge $25? YES or NO.'},outcomes:{paid:'resolved',unknown:'unresolved'}};

@@ -4,7 +4,7 @@ import {compileNamedFunctions} from './helpers/named-functions.js';
 import {closeFormInstance} from './helpers/form-state.js';
 import {isGlobalExit} from './helpers/answer.js';
 import {callerTextNumber} from './helpers/contact.js';
-import {formUserDescriptionSource} from './helpers/form-conversation.js';
+import {formUserDescriptionSource,clearFormLines} from './helpers/form-conversation.js';
 import {storedSession,restoreStoredSession} from './helpers/stored-session.js';
 import {validateContextualResponseStep,validateResponseParameters} from './helpers/contextual-response.js';
 import {validateFlowRecovery} from './host/flow-recovery.js';
@@ -8556,6 +8556,8 @@ export class WorkflowEngine implements Engine {
 
       // Role-based processing logic
       if (contextEntry.role === 'user') {
+        // A validator line a form kept last turn was said then with its question, or is not to be said (keepFormLine)
+        clearFormLines(engineSessionContext.cargo);
         // A sensitive answer (SAY-GET `pii`) is kept out of every log line of this turn, raw and as its digits
         const said = String(contextEntry.content);
         piiInputs = awaitingPii(this.sessionContext.flowStacks)

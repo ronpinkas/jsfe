@@ -8,6 +8,34 @@ export function clearFormMisses(cargo,id,input) {
    const state=cargo.forms?.[id];if(!state)return true;
    state.misses ||= {};state.feedback ||= {};delete state.misses[input];delete state.feedback[input];return true;
 }
+/**
+ * A validator's line (an input's rejection, the form validator's message) is kept on the form, never queued: the next question
+ * asked by any form of the same task (this form, its parent or a sub-form) says it first (formInputPrompt), so it is said only when the form asks again. Lines
+ * live for one turn: the engine drops any left at the start of the next (clearFormLines), so a form that gave up, yielded or
+ * exited never says one later (owner 2026-11-14).
+ */
+export function keepFormLine(cargo,id,message,message_es) {
+   const state=cargo.forms?.[id],en=String(message||'').trim();
+   if(!state||!en)return true;
+   (state.lines ||= []).push({message:en,message_es:String(message_es||'').trim()||en});
+   return true;
+}
+/** The forms whose lines the question of form `id` says: every open form of its task (the same root form), outermost first. */
+function formRoot(cargo,id) {
+   const seen=new Set();let root=id;
+   for(let f=id;f&&cargo.forms?.[f]&&!seen.has(f);f=cargo.forms[f].parent){seen.add(f);root=f;}
+   return root;
+}
+function lineForms(cargo,id) {
+   if(!cargo.forms?.[id])return [];
+   const root=formRoot(cargo,id),depth=f=>{let n=0;const seen=new Set();for(let x=f;cargo.forms?.[x]?.parent&&!seen.has(x);x=cargo.forms[x].parent){seen.add(x);n++;}return n;};
+   return Object.keys(cargo.forms).filter(f=>cargo.forms[f]&&formRoot(cargo,f)===root).sort((a,b)=>depth(a)-depth(b)).map(f=>cargo.forms[f]);
+}
+/** Start of a turn: lines kept by the last turn are obsolete (said with a question then, or never to be said). */
+export function clearFormLines(cargo) {
+   for(const state of Object.values(cargo?.forms||{}))if(state&&state.lines)delete state.lines;
+   return true;
+}
 export function missFormInput(cargo,id,input) {
    const state=cargo.forms?.[id];if(!state)throw new Error('Cannot record a miss without its owned form');
    state.misses ||= {};state.feedback ||= {};state.misses[input]=Number(state.misses[input]||0)+1;state.feedback[input]='miss';return state.misses[input];
@@ -66,10 +94,13 @@ export function formInputPrompt(cargo,id,input,spec,data={},language='en') {
    const question=spec.question_from&&(es?(data[spec.question_from+'_es']||data[spec.question_from]):data[spec.question_from]) || written('question') || (es?(spec.question_es||spec.question):spec.question) || '';
    const retry=written('retry') || (es?spec.retry_es:spec.retry);
    if(feedback==='partial')return es?'Continúe.':'Go on.';
-   if(feedback==='first')return formFirstLine(cargo,id,input,es)+(retry||question);
-   if(feedback==='concern')return formConcernLine(cargo,id,es)+question;
-   if(feedback&&retry)return retry;
-   return (feedback==='miss'?sorryNotCaught(es?'es':'en',cargo):'')+question;
+   // What a validator said about the last answer this turn (keepFormLine) leads the question.
+   const lead=lineForms(cargo,id).flatMap(state=>state.lines||[]).map(x=>es?x.message_es||x.message:x.message).filter(Boolean).join('\n\n');
+   const body=feedback==='first'?formFirstLine(cargo,id,input,es)+(retry||question)
+      :feedback==='concern'?formConcernLine(cargo,id,es)+question
+      :feedback&&retry?retry
+      :(feedback==='miss'?sorryNotCaught(es?'es':'en',cargo):'')+question;
+   return lead?lead+'\n\n'+body:body;
 }
 /** Whether an accepted input is acknowledged ("Got it, your amount."). A form declaring acknowledge: 'data' (jsfe 1.20.0,
  * owner 2026-10-31), or the nearest enclosing form that declares it, acknowledges only a value the caller supplied (digits,
@@ -84,7 +115,12 @@ export function formAcknowledges(cargo,reading) {
    const spec=group?.any_of?.find(i=>i.name===reading.name)||group,kind=spec?.profile?.kind;
    return DATA_KINDS.has(kind);
 }
-export function consumeFormFeedback(cargo,id,input) {if(cargo.forms?.[id]?.feedback)delete cargo.forms[id].feedback[input];return true;}
+export function consumeFormFeedback(cargo,id,input) {
+   const state=cargo.forms?.[id];if(!state)return true;
+   if(state.feedback)delete state.feedback[input];
+   for(const form of lineForms(cargo,id))delete form.lines;   // said with this question
+   return true;
+}
 
 /** Recovery refers to the actual owning root, and never permits a fresh attempt at an unknown action. */
 export function formConversationOutcome(cargo,id,reason,failure=false,recoveryMode='resume') {

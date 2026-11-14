@@ -295,7 +295,9 @@ export function formFlow({ id, name, version, description, inputs, after = [], e
             optionalIncomplete(`${id}_optional_validation_failed`,"form_validation === 'failed'",'form_instance',"form_instance+'_incomplete'"),
             WHEN(`${id}_validation_failed_recovery`,"form_validation === 'failed'",recoveryStamp(`${id}_validation_stamp`,'form_instance',"'validation_exhausted'",'none')),
             WHEN(`${id}_validation_failed`, "form_validation === 'failed'", FLOW(`${id}_validation_give_up`, 'give-up', 'reboot', { context: '{{exit_context}}', context_es: '{{exit_context_es}}' })),
-            WHEN(`${id}_validation_message`, "form_validation === 'retry' && cargo.formCheck.message", SAY(`${id}_validation_say`, '{{cargo.formCheck.message}}', '{{cargo.formCheck.message_es}}')),
+            // The form validator's message is kept like an input's rejection: said first by the form's next question, never
+            // when the form does not ask again (owner 2026-11-14).
+            WHEN(`${id}_validation_message`, "form_validation === 'retry' && cargo.formCheck.message", SIDE(`${id}_validation_keep`, "keepFormLine(cargo,form_instance,cargo.formCheck.message,cargo.formCheck.message_es)")),
             WHEN(`${id}_validation_retry`, "form_validation === 'retry'", FLOW(`${id}_validate_again`, id, 'replace', { parent_form: '{{parent_form}}', result_input: '{{result_input}}', form_instance: '{{form_instance}}' })),
          ] : []),
          ...before_confirm,
@@ -724,7 +726,10 @@ const acceptedEffects = {
       // feminine and masculine, and some carry their own article; 'Ese ' + label + ' no parece correcto' was wrong for every feminine one
       // (owner 2026-11-07; prod "Ese ciudad o código postal…").
       SET('ie_say_es','ca_ack_es',"ca_h.outcome === 'rejected' && ca_h.quiet ? '' : ca_h.outcome === 'rejected' ? (ca_h.message_es || ca_h.message || ('No pude usar eso como ' + (ca_h.label_es || ca_h.label || ca_h.name) + '.')) : ca_h.silent === true || ca_h.fromPending || !formAcknowledges(cargo, ca_h) ? '' : ca_h.outcome === 'known' && !ca_h.current ? ('Gracias, ya tengo su ' + ca_h.label_es + '.') : ca_h.outcome === 'changed' && ca_h.origin !== 'activation' ? ('Listo, anoté su ' + ca_h.label_es + '.') : (ca_h.outcome === 'taken' || ca_h.outcome === 'pending') && ca_h.origin !== 'activation' ? ('Entendido, su ' + ca_h.label_es + '.') : ''"),
-      WHEN('ie_say','ca_ack',SAY('ie_ack','{{ca_ack}}','{{ca_ack_es}}')),
+      // A rejection is not said now: the form keeps it and its next question says it first (formInputPrompt), so it reaches the
+      // caller only if the form asks again this turn. A form that gives up, yields or exits drops it (owner 2026-11-14).
+      WHEN('ie_reject_line',"ca_h.outcome === 'rejected'",SIDE('ie_reject_keep',"keepFormLine(cargo,ca_h.form,ca_ack,ca_ack_es)")),
+      WHEN('ie_say',"ca_ack && ca_h.outcome !== 'rejected'",SAY('ie_ack','{{ca_ack}}','{{ca_ack_es}}')),
       // While a field's callback runs, a reply cannot fill the form's callback fields, so a question in it cannot run them again (formInputChain).
       SET('ie_after_mark','noop',"(ca_h.after && ca_h.outcome !== 'known' && ca_h.outcome !== 'rejected' && ca_h.outcome !== 'pending' && cargo.forms[ca_h.form] ? (cargo.forms[ca_h.form].afterRunning = true) : true, true)"),
       WHEN('ie_callback',"ca_h.after && ca_h.outcome !== 'known' && ca_h.outcome !== 'rejected' && ca_h.outcome !== 'pending'",FLOW('ie_after','{{ca_h.after}}','call',{form:'{{ca_h.form}}',input:'{{ca_h.name}}',value:'{{ca_h.value}}'})),
