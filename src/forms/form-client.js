@@ -147,7 +147,15 @@ export function projectForm(session, flows) {
   // question is answered in chat, never beside a form that has no place for it.
   const asked = context.names?.length || context.current;
   if (asked && !askedShown) return null;
-  return projected.length ? {version: 1, form: root.id, language, fields: projected} : null;
+  if (!projected.length) return null;
+  // A card holding one plain box adds nothing to the client's own message box, so the question is asked in chat. One field
+  // keeps its card when it has a control (a list, a stepper, a date, a place, ready replies) or is sensitive (masked).
+  const leaves = [];
+  const gather = list => { for (const field of list) field.fields ? gather(field.fields) : leaves.push(field); };
+  gather(projected);
+  const plain = field => field.kind !== 'choice' && !field.control && !field.sensitive;
+  if (leaves.length === 1 && plain(leaves[0])) return null;
+  return {version: 1, form: root.id, language, fields: projected};
 }
 
 const STANDARD_LABELS = {yes: {en: 'Yes', es: 'Sí'}, no: {en: 'No', es: 'No'}};

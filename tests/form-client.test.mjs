@@ -133,8 +133,10 @@ const submit=async values=>{
   try{m=await mail.updateActivity({role:'user',content:request.prompt},m);}finally{Object.assign(mail.APPROVED_FUNCTIONS,old);}
 };
 m=await mail.updateActivity({role:'user',content:'begin',start:{flow:'email-asker'}},m);
-await submit({email_address:'owner@example.com'});
-assert.match(m.response,/I have owner@example\.com/,'the submitted email is read back, not refused as no email');
+// The email question alone is one plain box: no card (the chat box takes it); its free-text fallback is never drawn.
+assert.equal(projectForm(m),null,'a lone email box is asked in chat');
+m=await mail.updateActivity({role:'user',content:'owner@example.com'},m);
+assert.match(m.response,/I have owner@example\.com/,'the typed email is read back');
 await submit({decision:'yes'});
 assert.equal(m.cargo.email,'owner@example.com');
 console.log('form-client: a raw-reading collector reads the submitted value');
