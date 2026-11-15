@@ -502,7 +502,7 @@ export interface FlowParameterDefinition {
 export interface DetectFlowRequest {
   task: 'detect_flow';
   input: string; // The user input, exactly as it appears in <user-input>
-  conversation: { role: 'user' | 'assistant'; content: string }[]; // lastChatTurn, oldest first; empty when none
+  conversation: { role: 'user' | 'assistant'; content: string }[]; // lastChatTurn, oldest first (after a ranked new request, the flow exchange the reply answered); empty when none
   flows: {
     id: string;
     name: string; // The value to return as flowName
@@ -548,6 +548,9 @@ export interface EngineSessionContext {
   flowStacks: FlowFrame[][]; // Now pure data, always serializable!
   globalAccumulatedMessages: string[];
   lastChatTurn: { user?: ContextEntry; assistant?: ContextEntry };
+  // The last turn answered inside a flow: what the caller said and the reply delivered. Intent detection reads it when the
+  // reply ranker sends the next reply on as a new request (lastChatTurn holds no turn said inside a flow).
+  lastFlowTurn?: { user?: ContextEntry; assistant?: ContextEntry };
   globalVariables: Record<string, unknown>;
   response?: string | null; // Latest response from flow processing
   completedTransactions?: TransactionData[]; // Completed transactions for host access
@@ -5460,6 +5463,37 @@ function terminateForAbort(currentFlowFrame: FlowFrame, engine: Engine): void {
   initializeFlowStacks(engine);
 }
 
+/**
+ * The exchange a flow's reply answered, for intent detection when the reply ranker sends the reply on (owner 2026-11-15):
+ * the caller's previous words and what the flow said after them: the engine's record of the last turn answered in a flow,
+ * else the active frames' context, oldest first.
+ * Intent detection otherwise reads lastChatTurn, which holds no turn said inside a flow, so a reply that named something
+ * from the flow's own list ("y un ..., ¿en cuánto está?" at a product list) was judged with no conversation at all.
+ */
+function flowExchangeBefore(engine: Engine, input: string): { user?: ContextEntry; assistant?: ContextEntry } {
+  // The engine records each turn answered inside a flow; the frames that said it may have ended since.
+  const recorded = (engine as any).sessionContext?.lastFlowTurn as { user?: ContextEntry; assistant?: ContextEntry } | undefined;
+  if (recorded?.assistant) return { ...(recorded.user ? { user: { ...recorded.user } } : {}), assistant: { ...recorded.assistant } };
+  else { /* a session from before lastFlowTurn: read the active frames */ }
+  const entries = engine.flowStacks.flat().flatMap(frame => frame.contextStack || [])
+    .filter(e => (e.role === 'user' || e.role === 'assistant') && typeof e.content === 'string' && e.content.trim())
+    .map((e, i) => ({ e, i })).sort((a, b) => (a.e.timestamp - b.e.timestamp) || (a.i - b.i)).map(x => x.e);
+  // this turn's reply is already recorded as the frame's latest user entry
+  if (entries.length && entries[entries.length - 1].role === 'user' && String(entries[entries.length - 1].content) === input) {
+    entries.pop();
+  } else {
+    // not recorded yet
+  }
+  const said: string[] = [];
+  while (entries.length && entries[entries.length - 1].role === 'assistant') said.unshift(String(entries.pop()!.content));
+  const user = entries.length ? entries[entries.length - 1] : undefined;
+  const now = Date.now();
+  return {
+    ...(user ? { user: { role: 'user', content: String(user.content), timestamp: user.timestamp } } : {}),
+    ...(said.length ? { assistant: { role: 'assistant', content: said.join('\n\n'), timestamp: now } } : {})
+  };
+}
+
 function terminateForDispatch(currentFlowFrame: FlowFrame, engine: Engine): string {
   // DISPATCH = forget every flow and treat THIS turn's input as if no flow had been active:
   // processActivity runs intent detection on the input the turn started with (never a flow
@@ -7704,12 +7738,17 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         logger.info(`Contextual DISPATCH in '${frame.flowName}': the caller withdrew the request; every flow ended`);
         return true;
       } else {
+        // Intent detection judges the reply with the exchange it answered, as the ranker did.
+        const chatTurn = engine.lastChatTurn, chatTurnBefore = { ...chatTurn };
+        const setChatTurn = (turn: { user?: ContextEntry; assistant?: ContextEntry }) => { delete chatTurn.user; delete chatTurn.assistant; Object.assign(chatTurn, turn); };
+        setChatTurn(flowExchangeBefore(engine, String(sanitizedInput)));
         if (step.onNoIntent === 'stay') {
           // Only a request a flow serves leaves (onNoIntent: 'stay'): intent detection decides now, and a reply it routes to
           // no flow (noise, a remark) is an answer to this question, so the flow continues. The decision is reused below.
           let detected: any;
-          try { detected = await detectFlowWithParameters(String(sanitizedInput), engine); } catch (error) { guardedRoutingFailed = true; throw error; }
+          try { detected = await detectFlowWithParameters(String(sanitizedInput), engine); } catch (error) { setChatTurn(chatTurnBefore); guardedRoutingFailed = true; throw error; }
           if (!detected || !detected.flow) {
+            setChatTurn(chatTurnBefore);
             ranked = 'answers';
             if (declaration) frame.variables[declaration.variable] = declaration.parameters.length ? {} : { key: '' };
             else { /* no typed response: the flow reads the reply itself */ }
@@ -8623,6 +8662,12 @@ export class WorkflowEngine implements Engine {
         // No copying needed! Session context already contains the latest data
         if (engineSessionContext) {
           engineSessionContext.response = responseOrNull; // Store the response from flow processing
+          if (getCurrentStackLength(this) > 0 && typeof responseOrNull === 'string' && responseOrNull.trim() && typeof contextEntry.content === 'string') {
+            const now = Date.now();
+            engineSessionContext.lastFlowTurn = { user: { role: 'user', content: contextEntry.content, timestamp: now }, assistant: { role: 'assistant', content: responseOrNull, timestamp: now } };
+          } else {
+            delete engineSessionContext.lastFlowTurn; // no flow continues, or nothing was said
+          }
 
           // Extract and store completed transactions for host access
           const newCompletedTransactions: TransactionData[] = [];
