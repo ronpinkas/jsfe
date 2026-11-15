@@ -16,7 +16,7 @@
 ```mermaid
 flowchart TD
    START(("start"))
-   n0["set parent_form, result_input"]
+   n0["set parent_form, result_input, part_question, part_question_es"]
    START --> n0
    n1[["call ask-choice part_question"]]
    class n1 flowstep

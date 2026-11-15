@@ -10083,7 +10083,9 @@
             "question": "What is your email address?",
             "question_es": "¿Cuál es su correo electrónico?",
             "retry": "Please say your email address, for example juan at gmail dot com.",
-            "retry_es": "Por favor diga su correo electrónico, por ejemplo juan arroba gmail punto com."
+            "retry_es": "Por favor diga su correo electrónico, por ejemplo juan arroba gmail punto com.",
+            "retry_text": "Please type your email address, for example juan@gmail.com.",
+            "retry_text_es": "Por favor escriba su correo electrónico, por ejemplo juan@gmail.com."
           },
           "zip": {
             "label": "ZIP code",
@@ -13380,8 +13382,8 @@
               "accept_other": true
             },
             "question_from": "unit_question",
-            "question": "Is there an apartment or unit number? Type the number, or NONE.",
-            "question_es": "¿Hay un número de apartamento o unidad? Escriba el número, o NINGUNO.",
+            "question": "Is there an apartment or unit number? {{channelVerb('en', cargo, true)}} the number, or NONE.",
+            "question_es": "¿Hay un número de apartamento o unidad? {{channelVerb('es', cargo, true)}} el número, o NINGUNO.",
             "form_client": {
               "autofill": "address-line2"
             }
@@ -13439,8 +13441,8 @@
             "no es correcta",
             "incorrecta"
           ],
-          "question": "Your {{address_label}} is {{address_result.line}}. Is that correct?",
-          "question_es": "Su {{address_label_es}} es {{address_result.line}}. ¿Es correcta?"
+          "question": "Your {{address_label}} is {{address_result.line}}. Is that correct? {{yesNoKeys('en', cargo)}}",
+          "question_es": "Su {{address_label_es}} es {{address_result.line}}. ¿Es correcta? {{yesNoKeys('es', cargo)}}"
         }
       },
       "form_should_confirm": {
@@ -13611,7 +13613,7 @@
         "id": "address_label_data",
         "type": "SET",
         "variable": "noop",
-        "value": "(function(d,labelled){d.label=address_label;d.label_es=address_label_es;d.labelled=labelled;d.city_state_question=labelled?'What city and state is your '+address_label+' in?':'What city and state is that in?';d.city_state_question_es=labelled?'¿En qué ciudad y estado está su '+address_label_es+'?':'¿En qué ciudad y estado está?';d.unit_question=labelled?'Is there an apartment or unit number in your '+address_label+'? Type the number, or NONE.':'Is there an apartment or unit number? Type the number, or NONE.';d.unit_question_es=labelled?'¿Hay un número de apartamento o unidad en su '+address_label_es+'? Escriba el número, o NINGUNO.':'¿Hay un número de apartamento o unidad? Escriba el número, o NINGUNO.';return true;})(cargo.forms[form_instance].data,typeof address_spec.label==='string'&&!!address_spec.label.trim())"
+        "value": "(function(d,labelled){d.label=address_label;d.label_es=address_label_es;d.labelled=labelled;d.city_state_question=labelled?'What city and state is your '+address_label+' in?':'What city and state is that in?';d.city_state_question_es=labelled?'¿En qué ciudad y estado está su '+address_label_es+'?':'¿En qué ciudad y estado está?';d.unit_question=labelled?'Is there an apartment or unit number in your '+address_label+'? '+channelVerb('en',cargo,true)+' the number, or NONE.':'Is there an apartment or unit number? '+channelVerb('en',cargo,true)+' the number, or NONE.';d.unit_question_es=labelled?'¿Hay un número de apartamento o unidad en su '+address_label_es+'? '+channelVerb('es',cargo,true)+' el número, o NINGUNO.':'¿Hay un número de apartamento o unidad? '+channelVerb('es',cargo,true)+' el número, o NINGUNO.';return true;})(cargo.forms[form_instance].data,typeof address_spec.label==='string'&&!!address_spec.label.trim())"
       },
       {
         "id": "collect-geocoded-address_initial",
@@ -13685,7 +13687,7 @@
             "id": "collect-geocoded-address_confirm_q",
             "type": "SET",
             "variable": "form_confirm_q",
-            "value": "Your {{address_label}} is {{address_result.line}}. Is that correct?"
+            "value": "Your {{address_label}} is {{address_result.line}}. Is that correct? {{yesNoKeys('en', cargo)}}"
           },
           "default": {
             "id": "collect-geocoded-address_confirmation_guard_0_skip",
@@ -13703,7 +13705,7 @@
             "id": "collect-geocoded-address_confirm_q_es",
             "type": "SET",
             "variable": "form_confirm_q_es",
-            "value": "Su {{address_label_es}} es {{address_result.line}}. ¿Es correcta?"
+            "value": "Su {{address_label_es}} es {{address_result.line}}. ¿Es correcta? {{yesNoKeys('es', cargo)}}"
           },
           "default": {
             "id": "collect-geocoded-address_confirmation_guard_1_skip",
@@ -14309,11 +14311,11 @@
       },
       "part_question": {
         "type": "string",
-        "value": "Which part is wrong: 1 the zip code, 2 the city, 3 the street, or 4 the apartment? Or say ALL to start over."
+        "value": ""
       },
       "part_question_es": {
         "type": "string",
-        "value": "¿Qué parte está mal: 1 el código postal, 2 la ciudad, 3 la calle, o 4 el apartamento? O diga TODO para empezar de nuevo."
+        "value": ""
       },
       "contract": {
         "type": "object",
@@ -14347,6 +14349,18 @@
         "type": "SET",
         "variable": "result_input",
         "value": "cargo.forms[form_instance].result_input"
+      },
+      {
+        "id": "address_retry_part_q",
+        "type": "SET",
+        "variable": "part_question",
+        "value": "'Which part is wrong: 1 the zip code, 2 the city, 3 the street, or 4 the apartment? Or '+channelVerb('en',cargo)+' ALL to start over.'"
+      },
+      {
+        "id": "address_retry_part_q_es",
+        "type": "SET",
+        "variable": "part_question_es",
+        "value": "'¿Qué parte está mal: 1 el código postal, 2 la ciudad, 3 la calle, o 4 el apartamento? O '+channelVerb('es',cargo)+' TODO para empezar de nuevo.'"
       },
       {
         "id": "address_retry_part_ask",
@@ -17497,7 +17511,7 @@
     "name": "ProviderUnanswered",
     "version": "1.0.0",
     "scope": "isolated",
-    "description": "Worker: a question the provider has no fact for, sent back to it from its own menu: says provides.menu.unanswered.question(_es) and offers that menu's choice unanswered.choice. YES runs it, NO returns to the menu, anything else is DISPATCHed. Param: provides.",
+    "description": "Worker: a question the provider has no fact for, sent back to it from its own menu: says provides.menu.unanswered.question(_es), followed by yesNoKeys (1 YES, 2 NO on a call; do not word the keys in the question), and offers that menu's choice unanswered.choice. YES runs it, NO returns to the menu, anything else is DISPATCHed. Param: provides.",
     "parameters": [
       {
         "name": "provides",
@@ -17527,11 +17541,19 @@
         "type": "string",
         "value": ""
       },
+      "pu_q": {
+        "type": "string",
+        "value": ""
+      },
+      "pu_q_es": {
+        "type": "string",
+        "value": ""
+      },
       "contract": {
         "type": "object",
         "value": {
           "version": 1,
-          "summary": "Worker: a question the provider has no fact for, sent back to it from its own menu: says provides.menu.unanswered.question(_es) and offers that menu's choice unanswered.choice. YES runs it, NO returns to the menu, anything else is DISPATCHed. Param: provides.",
+          "summary": "Worker: a question the provider has no fact for, sent back to it from its own menu: says provides.menu.unanswered.question(_es), followed by yesNoKeys (1 YES, 2 NO on a call; do not word the keys in the question), and offers that menu's choice unanswered.choice. YES runs it, NO returns to the menu, anything else is DISPATCHed. Param: provides.",
           "parametersFrom": "parameters",
           "role": "worker",
           "requires": [
@@ -17555,13 +17577,25 @@
         "value": "(provides.menu.choices || []).filter(function (c) { return c.key === provides.menu.unanswered.choice; })[0] || null"
       },
       {
+        "id": "pu_question",
+        "type": "SET",
+        "variable": "pu_q",
+        "value": "String(provides.menu.unanswered.question || '') + ' ' + yesNoKeys('en', cargo)"
+      },
+      {
+        "id": "pu_question_es",
+        "type": "SET",
+        "variable": "pu_q_es",
+        "value": "String(provides.menu.unanswered.question_es || provides.menu.unanswered.question || '') + ' ' + yesNoKeys('es', cargo)"
+      },
+      {
         "id": "pu_ask",
         "type": "FLOW",
         "value": "ask-choice",
         "callType": "call",
         "parameters": {
-          "question": "{{provides.menu.unanswered.question}}",
-          "question_es": "{{provides.menu.unanswered.question_es}}",
+          "question": "{{pu_q}}",
+          "question_es": "{{pu_q_es}}",
           "choices": [
             {
               "key": "yes",
@@ -17881,6 +17915,14 @@
         "type": "string",
         "value": ""
       },
+      "sc_offer_q": {
+        "type": "string",
+        "value": ""
+      },
+      "sc_offer_q_es": {
+        "type": "string",
+        "value": ""
+      },
       "sc_doc_list": {
         "type": "string",
         "value": ""
@@ -18061,6 +18103,42 @@
         }
       },
       {
+        "id": "sc_offer_q",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_item": {
+            "id": "sc_offer_q_set",
+            "type": "SET",
+            "variable": "sc_offer_q",
+            "value": "'Should I send you my last answer: \"' + sc_last_head + '\"? ' + yesNoKeys('en', cargo)"
+          },
+          "default": {
+            "id": "sc_offer_q_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_offer_q_es",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_item": {
+            "id": "sc_offer_q_es_set",
+            "type": "SET",
+            "variable": "sc_offer_q_es",
+            "value": "'¿Le envío mi última respuesta: \"' + sc_last_head + '\"? ' + yesNoKeys('es', cargo)"
+          },
+          "default": {
+            "id": "sc_offer_q_es_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "sc_offer",
         "type": "CASE",
         "branches": {
@@ -18070,8 +18148,8 @@
             "value": "ask-choice",
             "callType": "call",
             "parameters": {
-              "question": "Should I send you my last answer: \"{{sc_last_head}}\"? Please say yes or no.",
-              "question_es": "¿Le envío mi última respuesta: \"{{sc_last_head}}\"? Por favor diga sí o no.",
+              "question": "{{sc_offer_q}}",
+              "question_es": "{{sc_offer_q_es}}",
               "choices": [
                 {
                   "key": "yes",

@@ -3,7 +3,7 @@
 <!-- generated:start -->
 **ProviderUnanswered** · `provider-unanswered` · version 1.0.0 · worker (called by other flows) · steps · isolated scope
 
-> Worker: a question the provider has no fact for, sent back to it from its own menu: says provides.menu.unanswered.question(_es) and offers that menu's choice unanswered.choice. YES runs it, NO returns to the menu, anything else is DISPATCHed. Param: provides.
+> Worker: a question the provider has no fact for, sent back to it from its own menu: says provides.menu.unanswered.question(_es), followed by yesNoKeys (1 YES, 2 NO on a call; do not word the keys in the question), and offers that menu's choice unanswered.choice. YES runs it, NO returns to the menu, anything else is DISPATCHed. Param: provides.
 
 - **Parameters:** 
   - `provides`: The provider catalog
@@ -16,9 +16,9 @@
 ```mermaid
 flowchart TD
    START(("start"))
-   n0["set pu_choice"]
+   n0["set pu_choice, pu_q, pu_q_es"]
    START --> n0
-   n1[["call ask-choice provides.menu.unanswered.question"]]
+   n1[["call ask-choice pu_q"]]
    class n1 flowstep
    n0 --> n1
    n2["set pu_yes, pu_no, pu_flow"]

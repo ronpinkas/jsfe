@@ -96,7 +96,7 @@ flowchart LR
 | [send-otp-email-too](send-otp-email-too.md) | steps | Email a second one-time code to the account's email beside the texted one, and say so. |
 | [verification-failed](verification-failed.md) | steps | End a verification that ran out of attempts: retire the owning task, set cargo.verificationFailed, report it unresolved (verification_faile… |
 | [read-provider-reply](read-provider-reply.md) | steps | Rank a menu reply its phrases do not settle: a fact or action it picks, the other facts it also asks for, or a request for a person; a with… |
-| [provider-unanswered](provider-unanswered.md) | steps | Worker: a question the provider has no fact for, sent back to it from its own menu: says provides.menu.unanswered.question(_es) and offers … |
+| [provider-unanswered](provider-unanswered.md) | steps | Worker: a question the provider has no fact for, sent back to it from its own menu: says provides.menu.unanswered.question(_es), followed b… |
 | [global-exit](global-exit.md) | steps | Worker (started by the engine): the caller exited; say the process was cancelled at their request (thanks when the outcome in force is reso… |
 | [contact-misread](contact-misread.md) | steps | Ask the contact question again after an answer that is no contact, then offer the common retry menu at the third miss in a row. |
 <!-- generated:end -->

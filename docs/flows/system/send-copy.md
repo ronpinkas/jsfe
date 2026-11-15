@@ -44,176 +44,186 @@ flowchart TD
    c8 -- "!sc_item && !sc_last" --> b9
    c10{"case"}
    c8 -- "else" --> c10
-   b11[["call ask-choice Should I send you my last answer: #quot;#123;#123;sc_last_head…"]]
-   class b11 flowstep
+   b11["set sc_offer_q"]
    c10 -- "!sc_item" --> b11
    c12{"case"}
    b11 --> c12
    c10 -- "else" --> c12
-   b13["set sc_item"]
+   b13["set sc_offer_q_es"]
    c12 -- "!sc_item" --> b13
    c14{"case"}
    b13 --> c14
    c12 -- "else" --> c14
-   b15["say: Okay. Tell me what you'd like me to send, for example: text…"]
+   b15[["call ask-choice sc_offer_q"]]
+   class b15 flowstep
    c14 -- "!sc_item" --> b15
    c16{"case"}
    b15 --> c16
    c14 -- "else" --> c16
-   b17(["end (back to caller)"])
-   class b17 endstep
+   b17["set sc_item"]
    c16 -- "!sc_item" --> b17
-   n18["set sc_email, sc_phone, sc_medium, sc_media, sc_forced"]
-   c16 -- "else" --> n18
-   c19{"case"}
-   n18 --> c19
-   b20["say: I can only send that by email, so I'll email it."]
-   c19 -- "sc_forced === 'email'" --> b20
-   c21{"case"}
-   b20 --> c21
-   c19 -- "else" --> c21
-   b22["say: I can only send that by text, so I'll text it."]
-   c21 -- "sc_forced === 'text'" --> b22
-   n23["set sc_medium, sc_medium_q, sc_medium_q_es"]
-   b22 --> n23
-   c21 -- "else" --> n23
-   c24{"case"}
-   n23 --> c24
-   b25[["call ask-choice sc_medium_q"]]
-   class b25 flowstep
-   c24 -- "!sc_medium" --> b25
-   c26{"case"}
-   b25 --> c26
-   c24 -- "else" --> c26
-   b27["set sc_medium"]
-   c26 -- "!sc_medium" --> b27
+   c18{"case"}
+   b17 --> c18
+   c16 -- "else" --> c18
+   b19["say: Okay. Tell me what you'd like me to send, for example: text…"]
+   c18 -- "!sc_item" --> b19
+   c20{"case"}
+   b19 --> c20
+   c18 -- "else" --> c20
+   b21(["end (back to caller)"])
+   class b21 endstep
+   c20 -- "!sc_item" --> b21
+   n22["set sc_email, sc_phone, sc_medium, sc_media, sc_forced"]
+   c20 -- "else" --> n22
+   c23{"case"}
+   n22 --> c23
+   b24["say: I can only send that by email, so I'll email it."]
+   c23 -- "sc_forced === 'email'" --> b24
+   c25{"case"}
+   b24 --> c25
+   c23 -- "else" --> c25
+   b26["say: I can only send that by text, so I'll text it."]
+   c25 -- "sc_forced === 'text'" --> b26
+   n27["set sc_medium, sc_medium_q, sc_medium_q_es"]
+   b26 --> n27
+   c25 -- "else" --> n27
    c28{"case"}
-   b27 --> c28
-   c26 -- "else" --> c28
-   b29(["end (back to caller)"])
-   class b29 endstep
+   n27 --> c28
+   b29[["call ask-choice sc_medium_q"]]
+   class b29 flowstep
    c28 -- "!sc_medium" --> b29
-   n30["set sc_given"]
-   c28 -- "else" --> n30
-   c31{"case"}
-   n30 --> c31
-   b32["set assignment_side_effect"]
-   c31 -- "!!sc_item.sender" --> b32
-   c33{"case"}
-   b32 --> c33
-   c31 -- "else" --> c33
-   b34[["call #123;#123;sc_item.sender#125;#125;"]]
-   class b34 flowstep
-   c33 -- "!!sc_item.sender" --> b34
+   c30{"case"}
+   b29 --> c30
+   c28 -- "else" --> c30
+   b31["set sc_medium"]
+   c30 -- "!sc_medium" --> b31
+   c32{"case"}
+   b31 --> c32
+   c30 -- "else" --> c32
+   b33(["end (back to caller)"])
+   class b33 endstep
+   c32 -- "!sc_medium" --> b33
+   n34["set sc_given"]
+   c32 -- "else" --> n34
    c35{"case"}
-   b34 --> c35
-   c33 -- "else" --> c35
-   b36["say: Sorry, I couldn't send it. Is there anything else I can hel…"]
-   c35 -- "!!sc_item.sender && cargo.copyHandled !== true" --> b36
+   n34 --> c35
+   b36["set assignment_side_effect"]
+   c35 -- "!!sc_item.sender" --> b36
    c37{"case"}
    b36 --> c37
    c35 -- "else" --> c37
-   b38(["end (back to caller)"])
-   class b38 endstep
-   c37 -- "!!sc_item.sender && cargo.copyHandled !== true" --> b38
+   b38[["call #123;#123;sc_item.sender#125;#125;"]]
+   class b38 flowstep
+   c37 -- "!!sc_item.sender" --> b38
    c39{"case"}
+   b38 --> c39
    c37 -- "else" --> c39
-   b40(["end (back to caller)"])
-   class b40 endstep
-   c39 -- "!!sc_item.sender" --> b40
+   b40["say: Sorry, I couldn't send it. Is there anything else I can hel…"]
+   c39 -- "!!sc_item.sender && cargo.copyHandled !== true" --> b40
    c41{"case"}
+   b40 --> c41
    c39 -- "else" --> c41
-   b42["set assignment_side_effect"]
-   c41 -- "sc_medium === 'text'" --> b42
+   b42(["end (back to caller)"])
+   class b42 endstep
+   c41 -- "!!sc_item.sender && cargo.copyHandled !== true" --> b42
    c43{"case"}
-   b42 --> c43
    c41 -- "else" --> c43
-   b44[["call ask-choice What phone number should I text it to?"]]
-   class b44 flowstep
-   c43 -- "sc_medium === 'text' && !cargo.textTo" --> b44
+   b44(["end (back to caller)"])
+   class b44 endstep
+   c43 -- "!!sc_item.sender" --> b44
    c45{"case"}
-   b44 --> c45
    c43 -- "else" --> c45
    b46["set assignment_side_effect"]
-   c45 -- "sc_medium === 'text' && !cargo.textTo" --> b46
+   c45 -- "sc_medium === 'text'" --> b46
    c47{"case"}
    b46 --> c47
    c45 -- "else" --> c47
-   b48["say: Sorry, I couldn't read that phone number. Is there anything…"]
+   b48[["call ask-choice What phone number should I text it to?"]]
+   class b48 flowstep
    c47 -- "sc_medium === 'text' && !cargo.textTo" --> b48
    c49{"case"}
    b48 --> c49
    c47 -- "else" --> c49
-   b50(["end (back to caller)"])
-   class b50 endstep
+   b50["set assignment_side_effect"]
    c49 -- "sc_medium === 'text' && !cargo.textTo" --> b50
    c51{"case"}
+   b50 --> c51
    c49 -- "else" --> c51
-   b52["set assignment_side_effect"]
-   c51 -- "sc_medium === 'text'" --> b52
-   n53["set sc_to"]
-   b52 --> n53
-   c51 -- "else" --> n53
-   c54{"case"}
-   n53 --> c54
-   b55["set assignment_side_effect"]
-   c54 -- "sc_medium === 'email' && !sc_to" --> b55
-   c56{"case"}
-   b55 --> c56
-   c54 -- "else" --> c56
-   b57[["call ask-email"]]
-   class b57 flowstep
-   c56 -- "sc_medium === 'email' && !sc_to" --> b57
+   b52["say: Sorry, I couldn't read that phone number. Is there anything…"]
+   c51 -- "sc_medium === 'text' && !cargo.textTo" --> b52
+   c53{"case"}
+   b52 --> c53
+   c51 -- "else" --> c53
+   b54(["end (back to caller)"])
+   class b54 endstep
+   c53 -- "sc_medium === 'text' && !cargo.textTo" --> b54
+   c55{"case"}
+   c53 -- "else" --> c55
+   b56["set assignment_side_effect"]
+   c55 -- "sc_medium === 'text'" --> b56
+   n57["set sc_to"]
+   b56 --> n57
+   c55 -- "else" --> n57
    c58{"case"}
-   b57 --> c58
-   c56 -- "else" --> c58
-   b59["set sc_to"]
+   n57 --> c58
+   b59["set assignment_side_effect"]
    c58 -- "sc_medium === 'email' && !sc_to" --> b59
    c60{"case"}
    b59 --> c60
    c58 -- "else" --> c60
-   b61(["end (back to caller)"])
-   class b61 endstep
+   b61[["call ask-email"]]
+   class b61 flowstep
    c60 -- "sc_medium === 'email' && !sc_to" --> b61
-   n62["set sc_subject, sc_content"]
-   c60 -- "else" --> n62
-   c63{"case"}
-   n62 --> c63
-   b64[["call send-text"]]
-   class b64 flowstep
-   c63 -- "sc_medium === 'text'" --> b64
-   c65{"case"}
-   b64 --> c65
-   c63 -- "else" --> c65
-   b66[["call send-email-message"]]
-   class b66 flowstep
-   c65 -- "sc_medium === 'email'" --> b66
-   n67["set sc_sent"]
-   b66 --> n67
-   c65 -- "else" --> n67
-   c68{"case"}
-   n67 --> c68
-   b69["say: Done. I texted it to the number ending in #123;#123;cargo.textTo4#125;#125;…"]
-   c68 -- "sc_sent && sc_medium === 'text'" --> b69
-   c70{"case"}
-   b69 --> c70
-   c68 -- "else" --> c70
-   b71["say: Done. I emailed it to #123;#123;sc_to#125;#125;. Is there anything else I c…"]
-   c70 -- "sc_sent && sc_medium === 'email'" --> b71
+   c62{"case"}
+   b61 --> c62
+   c60 -- "else" --> c62
+   b63["set sc_to"]
+   c62 -- "sc_medium === 'email' && !sc_to" --> b63
+   c64{"case"}
+   b63 --> c64
+   c62 -- "else" --> c64
+   b65(["end (back to caller)"])
+   class b65 endstep
+   c64 -- "sc_medium === 'email' && !sc_to" --> b65
+   n66["set sc_subject, sc_content"]
+   c64 -- "else" --> n66
+   c67{"case"}
+   n66 --> c67
+   b68[["call send-text"]]
+   class b68 flowstep
+   c67 -- "sc_medium === 'text'" --> b68
+   c69{"case"}
+   b68 --> c69
+   c67 -- "else" --> c69
+   b70[["call send-email-message"]]
+   class b70 flowstep
+   c69 -- "sc_medium === 'email'" --> b70
+   n71["set sc_sent"]
+   b70 --> n71
+   c69 -- "else" --> n71
    c72{"case"}
-   b71 --> c72
-   c70 -- "else" --> c72
-   b73["say: Sorry, I couldn't send it. Is there anything else I can hel…"]
-   c72 -- "!sc_sent" --> b73
+   n71 --> c72
+   b73["say: Done. I texted it to the number ending in #123;#123;cargo.textTo4#125;#125;…"]
+   c72 -- "sc_sent && sc_medium === 'text'" --> b73
    c74{"case"}
    b73 --> c74
    c72 -- "else" --> c74
-   b75(["end (back to caller)"])
-   class b75 endstep
-   c74 -- "!sc_sent" --> b75
+   b75["say: Done. I emailed it to #123;#123;sc_to#125;#125;. Is there anything else I c…"]
+   c74 -- "sc_sent && sc_medium === 'email'" --> b75
+   c76{"case"}
+   b75 --> c76
+   c74 -- "else" --> c76
+   b77["say: Sorry, I couldn't send it. Is there anything else I can hel…"]
+   c76 -- "!sc_sent" --> b77
+   c78{"case"}
+   b77 --> c78
+   c76 -- "else" --> c78
+   b79(["end (back to caller)"])
+   class b79 endstep
+   c78 -- "!sc_sent" --> b79
    DONE(["end (back to caller)"])
    class DONE endstep
-   c74 -- "else" --> DONE
+   c78 -- "else" --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80
