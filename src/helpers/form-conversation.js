@@ -55,12 +55,17 @@ export function formMustComplete(cargo,id,input) {
    }
    return false;
 }
-/** A must_complete question's reply that picks nothing the ranker was offered is acknowledged, then the question again (owner
- * 2026-11-02): "I understand, first let's enter your new card details." The task is the nearest enclosing form's first_task. */
+/** How to cancel: the global exit (*, EXIT, SALIR), worded for the channel. */
+function cancelLine(cargo,es) {
+   return es?(cargo?.voice?'Para cancelar, presione la tecla de asterisco o diga SALIR.':'Para cancelar, escriba SALIR.'):(cargo?.voice?'To cancel, press the asterisk key or say EXIT.':'To cancel, type EXIT.');
+}
+/** A must_complete question's reply that picks nothing the ranker was offered is acknowledged with how to cancel, then the
+ * question again (owner 2026-11-02; the exit named, owner 2026-11-15): "I understand, first let's enter your new card details.
+ * To cancel, press the asterisk key or say EXIT." The task is the nearest enclosing form's first_task. */
 export function formFirstLine(cargo,id,input,es) {
    const seen=new Set();let task='';
    while(id&&cargo.forms?.[id]&&!seen.has(id)&&!task){seen.add(id);const state=cargo.forms[id];task=(es?state.first_task_es||state.first_task:state.first_task)||'';id=state.parent;}
-   return es?`Entiendo, primero vamos a ${task||'terminar esto'}. `:`I understand, first let's ${task||'finish this'}. `;
+   return (es?`Entiendo, primero vamos a ${task||'terminar esto'}. `:`I understand, first let's ${task||'finish this'}. `)+cancelLine(cargo,es)+' ';
 }
 /**
  * A form's user_description (owner 2026-11-11): what the process does, for a caller who doubts the current process is what they
@@ -81,8 +86,7 @@ export function formUserDescriptionSource(cargo,id,es) {
  * *, EXIT, SALIR), then the question again. */
 export function formConcernLine(cargo,id,es) {
    const said=String(cargo?.forms?.[id]?.concernText||'').replace(/\s+/g,' ').trim(),end=!said||/[.!?]$/.test(said)?'':'.';
-   const cancel=es?(cargo?.voice?'Para cancelar, presione la tecla de asterisco o diga SALIR.':'Para cancelar, escriba SALIR.'):(cargo?.voice?'To cancel, press the asterisk key or say EXIT.':'To cancel, type EXIT.');
-   return (said?said+end+' ':'')+cancel+' ';
+   return (said?said+end+' ':'')+cancelLine(cargo,es)+' ';
 }
 /**
  * Explicit retry wins. Otherwise acknowledge only an actual unrecognized answer, once per re-ask.

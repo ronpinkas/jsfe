@@ -69,4 +69,11 @@ for(const [said,mmyy] of [['0 6 3 0 30 se vence.','0630'],['1 2 2 9, ya','1229']
   assert.match(JSON.stringify(t.session.cargo),new RegExp(`"card_expiration":"${mmyy}"`));
  });
 }
+await test('the must_complete first-task line names the exit (SALIR / EXIT) and not an agent',async()=>{
+ const es=fixture([form('pay',[{name:'zip',field:'zip',question:'ZIP?',question_es:'¿CÓDIGO?'}],{must_complete:true})],{language:'es'});await es.say('begin','pay');
+ const reply=await es.say('la verdad no me acuerdo cuál es');
+ assert.match(reply,/Entiendo, primero vamos a .*Para cancelar, presione la tecla de asterisco o diga SALIR\./,reply);assert.doesNotMatch(reply,/AGENTE/,reply);
+ const en=fixture([form('pay',[{name:'zip',field:'zip',question:'ZIP?'}],{must_complete:true})]);en.session.cargo.voice=false;await en.say('begin','pay');
+ const text=await en.say('I am not sure what you mean by that');assert.match(text,/first let's .*To cancel, type EXIT\./,text);
+});
 if(failures.length){console.error(`digits-length-reading: ${failures.length} failed`);process.exit(1);}else console.log(`digits-length-reading: ${checks} checks passed`);
