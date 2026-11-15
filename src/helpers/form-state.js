@@ -169,10 +169,19 @@ export function formInputChain(forms, id, cargo = {}) {
    return out;
 }
 
+/** The message for a number of the wrong length (readFormAnswer's lengthMiss): the field's own length_message, else a generic
+ * one. {heard} is the digits heard; {lengths} the lengths the field takes ("5", "6 to 12" / "de 6 a 12"). */
+export function formLengthMessage(spec,miss,language='en'){
+   const es=language==='es';
+   const lengths=miss.min===miss.max?String(miss.min):(es?`de ${miss.min} a ${miss.max}`:`${miss.min} to ${miss.max}`);
+   const template=(es?spec.length_message_es:spec.length_message)||(es?'Escuché {heard} dígitos; se necesitan {lengths}.':`I heard {heard} digits; the ${String(spec.label||'answer').split(': ').pop()} has {lengths}.`);
+   return String(template).replace(/\{heard\}/g,String(miss.heard)).replace(/\{lengths\}/g,lengths);
+}
 /** Attach the canonical field contract to every claim, including independent ambiguity groups. */
 export function enrichFormMatches(matches,chain,form,names=[],asked='') {
    const enrich=h=>{
       const spec=chain.find(c=>c.form===h.form&&c.name===h.name)||{};
+      if(h.lengthMiss){h={...h,message:formLengthMessage(spec,h.lengthMiss,'en'),message_es:formLengthMessage(spec,h.lengthMiss,'es')};}else{/* read by its reader */}
       return {...h,label:h.option_label||spec.label||h.name,label_es:h.option_label_es||spec.label_es||spec.label||h.name,...(h.option_label?{option:true}:{}),
          validator:h.declined===true?'':spec.validator||'',...((matches.decisions||[]).some(d=>d.form===h.form&&d.name===h.name&&(d.rule==='out_of_order'||d.rule==='compound'))?{out_of_order:true}:{}),...(!(h.form===form&&names.includes(h.name))&&spec.profile&&!['choice','amount','text'].includes(spec.profile.kind)&&/\d/.test(String(h.value))?{out_of_order_number:true}:{}),...(spec.response?{response:spec.response}:{}),after:spec.after||'',validate_always:spec.validate_always===true,...(spec.activation?{activation:spec.activation}:{}),...(spec.silent===true?{silent:true}:{}),pii:spec.pii===true,current:h.form===form&&names.includes(h.name),asked};
    };

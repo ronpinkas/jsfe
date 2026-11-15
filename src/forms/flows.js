@@ -55,6 +55,7 @@ const MONTH_RE = MONTH_NAMES.map(([n]) => n).join('|');
 // A form uses a preset by name ({ name, field }); keys it gives override the preset's (e.g. a tenant's account pattern).
 export const FIELD_PRESETS = {
    phone: { label: 'phone number', label_es: 'número de teléfono', profile: { kind: 'phone' }, digits: { min: 10, max: 11 },
+      length_message: 'I heard {heard} digits; a phone number has 10.', length_message_es: 'Escuché {heard} dígitos; el número de teléfono tiene 10.',
       question: 'What is your phone number?', question_es: '¿Cuál es su número de teléfono?',
       retry: 'Please say or enter your 10-digit phone number.', retry_es: 'Por favor diga o ingrese su número de teléfono de 10 dígitos.',
       retry_text: 'Please type your 10-digit phone number.', retry_text_es: 'Por favor escriba su número de teléfono de 10 dígitos.' },
@@ -63,15 +64,18 @@ export const FIELD_PRESETS = {
       retry: 'Please say your email address, for example juan at gmail dot com.', retry_es: 'Por favor diga su correo electrónico, por ejemplo juan arroba gmail punto com.',
       retry_text: 'Please type your email address, for example juan@gmail.com.', retry_text_es: 'Por favor escriba su correo electrónico, por ejemplo juan@gmail.com.' },
    zip: { label: 'ZIP code', label_es: 'código postal', profile: { kind: 'digits', min: 5, max: 5, refuse_amount_shape: true }, digits: { min: 5, max: 5 },
+      length_message: 'I heard {heard} digits; a ZIP code has 5.', length_message_es: 'Escuché {heard} dígitos; el código postal tiene 5.',
       question: 'What is your ZIP code?', question_es: '¿Cuál es su código postal?',
       retry: 'Please say or enter your 5-digit ZIP code.', retry_es: 'Por favor diga o ingrese su código postal de 5 dígitos.',
       retry_text: 'Please type your 5-digit ZIP code.', retry_text_es: 'Por favor escriba su código postal de 5 dígitos.' },
    account_number: { label: 'account number', label_es: 'número de cuenta', profile: { kind: 'identifier', pattern: '^\\d{6,12}$' }, digits: { min: 6, max: 12 },
+      length_message: 'I heard {heard} digits; the account number has {lengths}.', length_message_es: 'Escuché {heard} dígitos; el número de cuenta tiene {lengths}.',
       question: 'What is your account number?', question_es: '¿Cuál es su número de cuenta?',
       retry: 'Please say or enter your account number.', retry_es: 'Por favor diga o ingrese su número de cuenta.',
       retry_text: 'Please type your account number.', retry_text_es: 'Por favor escriba su número de cuenta.' },
    ssn_last4: { label: 'last four digits of your Social Security number', label_es: 'últimos cuatro dígitos de su Seguro Social',
       profile: { kind: 'digits', min: 4, max: 4 }, digits: { min: 4, max: 4 }, pii: true,
+      length_message: 'I heard {heard} digits; I need only the last 4.', length_message_es: 'Escuché {heard} dígitos; solo necesito los últimos 4.',
       question: 'What are the last four digits of your Social Security number?', question_es: '¿Cuáles son los últimos cuatro dígitos de su Seguro Social?' },
    amount: { label: 'amount', label_es: 'monto', profile: { kind: 'amount', min: 0.01 }, amount: true,
       question: 'How much?', question_es: '¿Cuánto?' },
@@ -82,6 +86,7 @@ export const FIELD_PRESETS = {
       question: 'What state?', question_es: '¿En qué estado?' },
    card_number: { label: 'card number', label_es: 'número de tarjeta', accumulate: true, accumulate_first: '^[2-6]', profile: { kind: 'digits', min: 13, max: 19 }, digits: { min: 13, max: 19, complete:[{first:'4',lengths:[16,19]},{first:'25',lengths:[16]},{first:'3',lengths:[15]},{first:'6',lengths:[16,19]}] },
       pii: true, validator: 'validate-card-number',
+      length_message: 'I heard {heard} digits; a card number has 16, or 15 for American Express.', length_message_es: 'Escuché {heard} dígitos; el número de la tarjeta tiene 16, o 15 si es American Express.',
       question: 'Please say or enter your card number.', question_es: 'Por favor diga o ingrese el número de su tarjeta.',
       question_text: 'Please type your card number.', question_text_es: 'Por favor escriba el número de su tarjeta.',
       retry: 'Please say or enter the full card number.', retry_es: 'Por favor diga o ingrese el número completo de su tarjeta.',
@@ -90,17 +95,20 @@ export const FIELD_PRESETS = {
       // MM0YY: a zero said between month and year ("020 28", prod 2026-10-25 14:10, was taken for the billing ZIP).
       // Up to two words between month and year ("el mes 06 año 31", prod 2026-10-28 21:54, was asked again); a month by name.
       // A spoken separator with the digits apart: "0 4 guion 3 1" (owner 2026-11-02; prod 2026-11-01 15:19 was asked again).
-      profile: { kind: 'pattern', regex: `\\b(0?[1-9]|1[0-2]|${MONTH_RE})\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b|\\b(?:0\\s?[1-9]|1\\s?[0-2]|[1-9])\\s*(?:gui[oó]n|dash|hyphen|slash|barra|diagonal)\\s*(?:2\\s?0\\s?)?\\d\\s?\\d\\b` }, digits: { min: 3, max: 6 },
+      // Four single digits, month then year, with words around them: "0 6 3 0 30 se vence" (owner 2026-11-15; prod 2026-11-14).
+      profile: { kind: 'pattern', regex: `\\b(0?[1-9]|1[0-2]|${MONTH_RE})\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b|\\b(?:0\\s?[1-9]|1\\s?[0-2]|[1-9])\\s*(?:gui[oó]n|dash|hyphen|slash|barra|diagonal)\\s*(?:2\\s?0\\s?)?\\d\\s?\\d\\b|\\b(?:0\\s[1-9]|1\\s[0-2])\\s\\d\\s\\d\\b` }, digits: { min: 3, max: 6 },
       validator: 'validate-card-expiration',
       question: 'What is the expiration date, month and year?', question_es: '¿Cuál es la fecha de vencimiento, mes y año?',
       retry: 'Please say or enter the expiration as four digits, month then year, like 0 9 2 8.', retry_es: 'Por favor diga o ingrese el vencimiento en cuatro dígitos, mes y año, por ejemplo 0 9 2 8.',
       retry_text: 'Please type the expiration as four digits, month then year, like 0928.', retry_text_es: 'Por favor escriba el vencimiento en cuatro dígitos, mes y año, por ejemplo 0928.' },
    card_cvv: { label: 'security code', label_es: 'código de seguridad', profile: { kind: 'digits', min: 3, max: 4 }, digits: { min: 3, max: 4 }, pii: true,
+      length_message: 'I heard {heard} digits; the security code has 3, or 4 on the front of an American Express card.', length_message_es: 'Escuché {heard} dígitos; el código de seguridad tiene 3, o 4 al frente de una American Express.',
       validator: 'validate-card-cvv',
       question: 'What is the security code on the back of the card?', question_es: '¿Cuál es el código de seguridad al reverso de la tarjeta?' },
    // A bare five-digit number out of order may be anything (prod 2026-11-11: it replaced an answered ZIP), so it fills the
    // billing ZIP only beside the word (owner 2026-11-11).
    card_zip: { label: 'billing ZIP code', label_es: 'código postal de facturación', profile: { kind: 'digits', min: 5, max: 5, refuse_amount_shape: true }, digits: { min: 5, max: 5 },
+      length_message: 'I heard {heard} digits; the billing ZIP code has 5.', length_message_es: 'Escuché {heard} dígitos; el código postal de facturación tiene 5.',
       confirm_out_of_order: { word: 'ZIP', word_es: 'CÓDIGO POSTAL', message: 'If {value} is the billing ZIP code of the card, add the word {word}.', message_es: 'Si {value} es el código postal de facturación de la tarjeta, agregue las palabras {word}.' },
       question: 'What is the billing ZIP code for the card?', question_es: '¿Cuál es el código postal de facturación de la tarjeta?' },
 };
@@ -484,7 +492,7 @@ const validateBatch = {
       SET('vb_values','vb_values','proposedFormValues(cargo, vb_h.form, accepted)'),
       SET('vb_known','vb_known',"!!(!vb_h.revalidate && !vb_h.validate_always && cargo.forms[vb_h.form] && !cargo.forms[vb_h.form].errors[vb_h.name] && cargo.forms[vb_h.form].accepted[vb_h.name] && formValuesEqual(vb_values[vb_h.name], vb_h.value))"),
       SET('vb_outcome','vb_outcome',"vb_known ? 'known' : (hasFormValue(vb_values[vb_h.name]) && !formValuesEqual(vb_values[vb_h.name],vb_h.value) ? 'changed' : (vb_h.current ? 'stored' : 'taken'))"),
-      SIDE('vb_reset',"(cargo.inputCheck = vb_h.invalid ? { ok: false } : (vb_h.validator && !vb_known ? null : { ok: true, value: vb_h.value }), true)"),
+      SIDE('vb_reset',"(cargo.inputCheck = vb_h.invalid ? (vb_h.lengthMiss ? { ok: false, message: vb_h.message, message_es: vb_h.message_es } : { ok: false }) : (vb_h.validator && !vb_known ? null : { ok: true, value: vb_h.value }), true)"),
       SET('vb_response','vb_response',"(function(){var state=cargo.forms[vb_h.form],spec=state && state.specs.flatMap(function(s){return s.any_of || [s];}).find(function(s){return s.name===vb_h.name;});return spec && spec.response || null;})()"),
       WHEN('vb_contextual_needed',"vb_ready === true && vb_h.current && vb_response && !vb_known && !vb_h.invalid && vb_h.origin !== 'activation' && !vb_h.fromPending",FLOW('vb_read_response','read-form-response','call',{form:'{{vb_h.form}}',input:'{{vb_h.name}}'})),
       WHEN('vb_validator','vb_ready === true && vb_h.validator && !vb_known && !vb_h.invalid && !(cargo.inputCheck && cargo.inputCheck.ok === false)',FLOW('vb_validate','{{vb_h.validator}}','call',{form:'{{vb_h.form}}',input:'{{vb_h.name}}',value:'{{vb_h.value}}',values:'{{vb_values}}',reading:'{{vb_h}}'})),

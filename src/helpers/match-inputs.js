@@ -44,6 +44,8 @@ const DIGIT_RUN = /\d(?:[\s.-]?\d|(?<=(?:^|\D)\d{1,3})(?:,\s?|\.\s)(?=\d))*/g;
 function digitRuns(raw) {
    return (raw.match(DIGIT_RUN) || []).map((r) => r.replace(/\D/g, ''));
 }
+// A pause speech-to-text writes between spoken groups (DIGIT_RUN joins across it).
+const PAUSE = /,\s?|\.\s/;
 // A choice reads its keys without the comma join: "1, 2" names two keys, not 12.
 const CHOICE_RUN = /\d(?:[\s.-]?\d)*/g;
 
@@ -523,6 +525,40 @@ export function matchInputs(answer, candidates, current, choiceKey) {
          return false;
       }
    });
+
+   // The pieces of a pause join (owner 2026-11-15): the join can glue a number to the one after it ("Nuevecientos 44. 9 0 0 4 4." at
+   // a ZIP is 4490044; its pieces are 44 and 90044). When nothing at all read or was refused for the answer's digits, a digits field
+   // asked now takes the one piece of its length. Any other field's reading or refusal keeps its own handling.
+   const ownDigits = own && own.profile.kind === 'digits' ? own.profile : null;
+   const touched = (span) => [...readings, ...refused].some((reading) => (reading.spans || []).some(([s, e]) => s < span[1] && span[0] < e));
+   const joinedRuns = ownDigits && !readings.length && !clarify.length && !isAmountAnswer(raw) ? [...undecimal.matchAll(DIGIT_RUN)].filter((m) => PAUSE.test(m[0])) : [];
+   const pieces = joinedRuns.filter((m) => !touched([m.index, m.index + m[0].length])).flatMap((m) => {
+      let at = m.index;
+      return m[0].split(/(,\s?|\.\s)/).flatMap((part) => { const start = at; at += part.length; return PAUSE.test(part) || !/\d/.test(part) ? [] : [{ digits: part.replace(/\D/g, ''), span: [start, start + part.length] }]; });
+   }).filter((piece) => piece.digits.length >= Number(ownDigits?.min || 1) && piece.digits.length <= Number(ownDigits?.max || ownDigits?.min || 1));
+   if (pieces.length === 1) {
+      readings.push({ form: own.form, name: own.name, value: pieces[0].digits, known: false, repeatedChoice: false, wholeChoice: false, choice: false, narrative: false, resetOn: [], spans: [pieces[0].span], keypad: false, fallback: false,
+         group: own.group, exclusive: own.exclusive === true, level: forms.indexOf(own.scope || own.form), current: true, confirm: Array.isArray(own.confirm_against) ? own.confirm_against : [] });
+   } else {
+      // not a digits field, something read the answer, no pause join, or no single piece of its length
+   }
+   // Rule 1 by length (owner 2026-11-15): at its own question, a field that declares its length (`digits`) takes the one number
+   // of three or more digits in the answer when that number has the wrong length, words around it ignored, and nothing else read
+   // it or was refused for it (another field's number keeps its own handling: "5519936." at a 6-digit code is told how to mean the
+   // account). The reading is rejected with a message that says how many digits were heard and how many the field takes, so the caller
+   // learns what was wrong (prod 2026-11-14: "Sí, el número es 4 8 1 5 8 2 0 3" at the card number was asked again with no reason).
+   // The length declaration is the opt-in; every preset with a fixed length declares one.
+   const lengthOf = own && own.digits && !['choice', 'amount', 'text'].includes(own.profile.kind) ? own.digits : null;
+   const longRuns = [...undecimal.matchAll(DIGIT_RUN)].map((m) => ({ digits: m[0].replace(/\D/g, ''), span: [m.index, m.index + m[0].replace(/[\s.,-]+$/, '').length] })).filter((run) => run.digits.length >= 3);
+   const heard = longRuns.length === 1 ? longRuns[0] : null;
+   if (lengthOf && heard && !isAmountAnswer(raw) && decimalRuns.length === 0 && (heard.digits.length < Number(lengthOf.min || 1) || heard.digits.length > Number(lengthOf.max || lengthOf.min || 1))
+      && !clarify.length && ![...readings, ...refused].some((reading) => reading.current || invited(reading) || (reading.spans || []).some(([s, e]) => s < heard.span[1] && heard.span[0] < e))) {
+      readings.push({ form: own.form, name: own.name, value: heard.digits, invalid: true, lengthMiss: { heard: heard.digits.length, min: Number(lengthOf.min || 1), max: Number(lengthOf.max || lengthOf.min || 1) },
+         known: false, repeatedChoice: false, wholeChoice: false, choice: false, narrative: false, resetOn: [], spans: [heard.span], keypad: false, fallback: false,
+         group: own.group, exclusive: own.exclusive === true, level: forms.indexOf(own.scope || own.form), current: true, confirm: Array.isArray(own.confirm_against) ? own.confirm_against : [] });
+   } else {
+      // no length declared, no single number of three or more digits, the right length (its reader decides), or another field read it
+   }
 
    const paired = (a, b) => a.confirm.indexOf(b.name) > -1 || b.confirm.indexOf(a.name) > -1;
    // Narrative ownership protects ancestor choices and same-form choices that reset
