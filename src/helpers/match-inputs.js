@@ -547,8 +547,9 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    // it or was refused for it (another field's number keeps its own handling: "5519936." at a 6-digit code is told how to mean the
    // account). The reading is rejected with a message that says how many digits were heard and how many the field takes, so the caller
    // learns what was wrong (prod 2026-11-14: "Sí, el número es 4 8 1 5 8 2 0 3" at the card number was asked again with no reason).
-   // The length declaration is the opt-in; every preset with a fixed length declares one.
-   const lengthOf = own && own.digits && !['choice', 'amount', 'text'].includes(own.profile.kind) ? own.digits : null;
+   // The length declaration is the opt-in, on a numeric field (digits, phone, identifier); every preset with a fixed length declares
+   // one. A pattern field (a tracking number) reads only what its pattern matches, and its own validator decides the rest.
+   const lengthOf = own && own.digits && ['digits', 'phone', 'identifier'].includes(own.profile.kind) ? own.digits : null;
    const longRuns = [...undecimal.matchAll(DIGIT_RUN)].map((m) => ({ digits: m[0].replace(/\D/g, ''), span: [m.index, m.index + m[0].replace(/[\s.,-]+$/, '').length] })).filter((run) => run.digits.length >= 3);
    const heard = longRuns.length === 1 ? longRuns[0] : null;
    if (lengthOf && heard && !isAmountAnswer(raw) && decimalRuns.length === 0 && (heard.digits.length < Number(lengthOf.min || 1) || heard.digits.length > Number(lengthOf.max || lengthOf.min || 1))

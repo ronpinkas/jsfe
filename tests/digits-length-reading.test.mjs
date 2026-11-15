@@ -56,6 +56,10 @@ await test('a field without a declared length is unchanged',async()=>{
  const t=fixture([form('plain',[{name:'code',label:'code',profile:{kind:'pattern',regex:'^[A-Z]{3}$'},question:'Code?'}])]);await t.say('begin','plain');
  const reply=await t.say('it is 12345');assert.doesNotMatch(reply,/I heard/,reply);
 });
+await test('a pattern field with a declared length reads only its pattern (a tracking number): no length message',async()=>{
+ const t=fixture([form('track',[{name:'tracking_number',label:'tracking number',profile:{kind:'pattern',regex:'\\b(?=[A-Za-z0-9]*[0-9])[A-Za-z0-9]{8,40}\\b'},digits:{min:8,max:40},question:'Tracking number?'}])]);await t.say('begin','track');
+ const reply=await t.say('My invoice number is 4455667');assert.doesNotMatch(reply,/I heard/,reply);
+});
 for(const [said,zip] of [['Nuevecientos 44. 9 0 0 4 4.','90044'],['926, 1 0.','92610'],['92, 507.','92507'],['7, 9, 984. 5.',null]]){
  await test(`ZIP "${said}"`,async()=>{
   const t=fixture([form('z',[{name:'zip',field:'zip',question:'ZIP?'}])]);await t.say('begin','z');await t.say(said);
