@@ -334,7 +334,7 @@ rules should decide.
 - A picked choice is applied first, then its arguments. An argument that answers the choice's own exclusive group
   replaces it, being the more specific answer ("other amount" with $100 is the amount $100).
 - Each reading carries `origin: 'rank_argument'` and `argument: '<name>'`, so the input's validator can tell an
-  extracted value from a typed one (the Curacao amount check treats an extracted definite amount as an amount, never a
+  extracted value from a typed one (a tenant's amount check treats an extracted definite amount as an amount, never a
   key or a sub account number).
 
 **Writing the descriptions.** The description is the whole instruction to the model, so it states what counts and what

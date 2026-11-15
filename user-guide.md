@@ -554,7 +554,7 @@ interface FlowDefinition {
   - The wrapper takes the wrapped flow's `description`, `parameters`, prompts and `primary` flag unless it declares its
     own, so intent detection reads one description, kept in one place.
   - The wrapper's steps do the tenant's own work, then call the wrapped flow with arguments of their own. Example:
-    Curacao's `curacao-track-order` wraps `shopify-ql-track-order`, looks the caller up by caller ID, and passes the first
+    A retailer's `acme-track-order` wraps `shopify-ql-track-order`, looks the caller up by caller ID, and passes the first
     name as `caller_name` for the opening.
   - The engine applies wraps once, at construction, on copies (the host's flow objects are not changed). A `wraps` that
     names no flow in the menu is logged and ignored; without `wraps` nothing changes. A config that lacks the wrapped flow

@@ -106,7 +106,7 @@ const TASK = 'A workflow asked the caller a question. Decide what the caller\'s 
 const reasonTask = (x: string) => `A workflow is filing the caller's request about something the caller does not want (${x}), and asked for the reason. Decide what the caller's latest message does with that question.`;
 // A reason question offers no `abort` (owner 2026-10-31): a reason is never a withdrawal, so the ranker never has to tell
 // "I don't need it" from "I'll keep it". A caller who changes their mind declines the request's confirmation, which the
-// flow asking for the reason must have (the Curacao cancellation reads the request back before filing it).
+// flow asking for the reason must have (a tenant's cancellation flow reads the request back before filing it).
 const REASON_OPTIONS = ['answers', 'new_request'] as const;
 const reasonCriteria = (x: string): Record<typeof REASON_OPTIONS[number], { true: string; false: string }> => ({
   answers: {
@@ -151,7 +151,7 @@ const conversationText = (conversation: ReplyTurn[], input: string) =>
   `${conversation.length ? `<conversation>\n${conversation.map(t => `${t.role}: ${t.content}`).join('\n')}\n</conversation>\n` : ''}<latest-message>\n${input}\n</latest-message>`;
 
 /**
- * The reply ranker's instructions for both executors. `reasonFor` (what the caller does not want, e.g. "your Curacao
+ * The reply ranker's instructions for both executors. `reasonFor` (what the caller does not want, e.g. "your Acme
  * Club membership") ranks the reply as an answer to "why don't you want it?": only `answers` or `new_request`, no
  * choices.
  */

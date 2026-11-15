@@ -636,7 +636,7 @@ A flow with `wraps: "<id or name>"` becomes the entry point in the wrapped flow'
 - the wrapper's steps do the tenant's own work, then call the wrapped flow with arguments of their own.
 
 ```json
-{ "id": "curacao-track-order", "name": "CuracaoTrackOrder", "version": "1.0.0", "wraps": "shopify-track-order",
+{ "id": "acme-track-order", "name": "AcmeTrackOrder", "version": "1.0.0", "wraps": "shopify-track-order",
   "steps": [
     { "id": "lookup", "type": "FLOW", "value": "caller-on-file", "callType": "call" },
     { "id": "track", "type": "FLOW", "value": "shopify-track-order", "callType": "replace",

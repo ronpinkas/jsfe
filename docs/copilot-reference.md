@@ -247,7 +247,7 @@ Rules, in order:
    is asked again.
 4. **A bare number** (no money mark, no word naming a field) is an amount only at a question that is, invites or is
    declared `confirm_against` an amount. A single digit the question offers as a key is that key; one it does not offer reaches the invited amount,
-   whose validation decides. The engine holds no amounts, so "only a known amount" is the amount validator's rule: Curacao's
+   whose validation decides. The engine holds no amounts, so "only a known amount" is the amount validator's rule: a retail tenant's
    takes a bare number at the amount question, and at a question that only invites an amount only when it is an amount the
    caller can pay (else it asks for it in dollars). A bare number that does not fit the current question is
    read out of order under rule 3.
@@ -387,7 +387,7 @@ This reduced **composed-registry fragment** illustrates action authoring, not a 
     "confirm":{"question":"{{cargo.paymentConfirmation.question}}","question_es":"{{cargo.paymentConfirmation.question_es}}"}
   },
   "performs":[{
-    "action":"curacao_payment", "effect":"charge", "subject":"form.data.account",
+    "action":"tenant_payment", "effect":"charge", "subject":"form.data.account",
     "gate":{"flow":"get-account","verified":["cargo.otpVerified","cargo.authenticatedAccount"]},
     "flow":"payment-execute", "confirm":{"exact":true},
     "outcomes":{"ok":"resolved","failed":"unresolved","unknown":"unresolved"}

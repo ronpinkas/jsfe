@@ -2849,7 +2849,7 @@ function getCurrentStack(engine: Engine): FlowFrame[] {
   return engine.flowStacks[engine.flowStacks.length - 1] as FlowFrame[];
 }
 
-// Deepest journey in the Curacao flow suites: 16 frames. One flow re-entering itself adds about 9.
+// Deepest journey in a production tenant's flow suites: 16 frames. One flow re-entering itself adds about 9.
 const MAX_FLOW_STACK = 32;
 const WARN_FLOW_STACK = 24;
 
