@@ -3,7 +3,7 @@
 <!-- generated:start -->
 **CollectInput** · `collect-input` · version 1.0.0 · worker (called by other flows) · steps · isolated scope
 
-> Worker: ask the form's current input once and file the answer wherever it belongs in the form chain (matchInputs, decided by scope; a declared confirm_against pair is asked). One reading → collect-input-accept; ambiguous → disambiguate-input; a question about the form's data → provide-data; a short miss → counted, the loop re-asks; 3+ words that fit nothing → DISPATCH. Params: form, current, questions, provides, exit_context(_es).
+> Worker: ask the form's current input once and file the answer wherever it belongs in the form chain (matchInputs, decided by scope; a declared confirm_against pair is asked). One reading → collect-input-accept; ambiguous → disambiguate-input; a question about the form's data → provide-data; an answer with words that fits nothing → the reply ranker (read-form-choice); an answer without words → counted as a miss, asked again, and the fourth (max_misses) → DISPATCH. Params: form, current, questions, provides, exit_context(_es).
 
 - **Parameters:** 
   - `form`: form

@@ -3,7 +3,7 @@
 <!-- generated:start -->
 **ValidateCardCvv** · `validate-card-cvv` · version 1.0.0 · worker (called by other flows) · steps · isolated scope
 
-> Validator: the security code has the length of its card brand, 4 digits for American Express (34, 37) and 3 for every other brand; with no card number yet, 3 or 4. Params: input, value, values.
+> Validator: the security code has the length of its card brand, 4 digits for American Express (34, 37) and 3 for every other brand; with no card number yet, 3 or 4. Params: form, input, value, values, reading (it reads value and values.card_number).
 
 - **Parameters:** 
   - `input`: input name

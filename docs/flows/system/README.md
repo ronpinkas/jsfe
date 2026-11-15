@@ -54,7 +54,7 @@ flowchart LR
 | [collect-input-accept](collect-input-accept.md) | steps | Worker: validate all readings, commit accepted changes once with transitive invalidation, then acknowledge and run declared callbacks. |
 | [disambiguate-input](disambiguate-input.md) | steps | Worker: the answer fits two or more inputs at the same scope (or a declared confirm_against pair). Stores the unambiguous readings, asks wh… |
 | [form-done](form-done.md) | steps | Worker: a finished form hands its values to its parent's result input (a sub-form) and to cargo.formResults[form], without pii values unles… |
-| [validate-card-number](validate-card-number.md) | steps | Validator: a card number passes the Luhn check (validateCardNumber). Params: input, value. |
+| [validate-card-number](validate-card-number.md) | steps | Validator: a card number passes the Luhn check (validateCardNumber); normalizes to its digits. Params: form, input, value, values, reading … |
 | [validate-card-expiration](validate-card-expiration.md) | steps | Validator: month (a number or its English or Spanish name) and year, a real month, not expired (validateExpiration). Normalizes to MMYY. Pa… |
 | [collect-address](collect-address.md) | form + steps | Sub-form: street address, city, state, ZIP, in any order. Result: the parent's result input (or cargo.formResults['collect-address']). |
 | [collect-credit-card](collect-credit-card.md) | form + steps | Sub-form: card number, expiration, security code, billing ZIP, in any order. Result (with keep_pii for the charge step): the parent's resul… |

@@ -3,7 +3,7 @@
 <!-- generated:start -->
 **ValidateCardExpiration** · `validate-card-expiration` · version 1.0.0 · worker (called by other flows) · steps · isolated scope
 
-> Validator: month (a number or its English or Spanish name) and year, a real month, not expired (validateExpiration). Normalizes to MMYY. Params: input, value.
+> Validator: month (a number or its English or Spanish name) and year, a real month, not expired (validateExpiration). Normalizes to MMYY. Params: form, input, value, values, reading (it reads value).
 
 - **Parameters:** 
   - `input`: input name

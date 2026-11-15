@@ -3,7 +3,7 @@
 <!-- generated:start -->
 **ValidateCardNumber** · `validate-card-number` · version 1.0.0 · worker (called by other flows) · steps · isolated scope
 
-> Validator: a card number passes the Luhn check (validateCardNumber). Params: input, value.
+> Validator: a card number passes the Luhn check (validateCardNumber); normalizes to its digits. Params: form, input, value, values, reading (it reads value).
 
 - **Parameters:** 
   - `input`: input name

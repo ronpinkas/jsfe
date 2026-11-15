@@ -6719,7 +6719,7 @@
     "name": "CollectInput",
     "version": "1.0.0",
     "scope": "isolated",
-    "description": "Worker: ask the form's current input once and file the answer wherever it belongs in the form chain (matchInputs, decided by scope; a declared confirm_against pair is asked). One reading → collect-input-accept; ambiguous → disambiguate-input; a question about the form's data → provide-data; a short miss → counted, the loop re-asks; 3+ words that fit nothing → DISPATCH. Params: form, current, questions, provides, exit_context(_es).",
+    "description": "Worker: ask the form's current input once and file the answer wherever it belongs in the form chain (matchInputs, decided by scope; a declared confirm_against pair is asked). One reading → collect-input-accept; ambiguous → disambiguate-input; a question about the form's data → provide-data; an answer with words that fits nothing → the reply ranker (read-form-choice); an answer without words → counted as a miss, asked again, and the fourth (max_misses) → DISPATCH. Params: form, current, questions, provides, exit_context(_es).",
     "parameters": [
       {
         "name": "form",
@@ -6894,7 +6894,7 @@
         "type": "object",
         "value": {
           "version": 1,
-          "summary": "Worker: ask the form's current input once and file the answer wherever it belongs in the form chain (matchInputs, decided by scope; a declared confirm_against pair is asked). One reading → collect-input-accept; ambiguous → disambiguate-input; a question about the form's data → provide-data; a short miss → counted, the loop re-asks; 3+ words that fit nothing → DISPATCH. Params: form, current, questions, provides, exit_context(_es).",
+          "summary": "Worker: ask the form's current input once and file the answer wherever it belongs in the form chain (matchInputs, decided by scope; a declared confirm_against pair is asked). One reading → collect-input-accept; ambiguous → disambiguate-input; a question about the form's data → provide-data; an answer with words that fits nothing → the reply ranker (read-form-choice); an answer without words → counted as a miss, asked again, and the fourth (max_misses) → DISPATCH. Params: form, current, questions, provides, exit_context(_es).",
           "parametersFrom": "parameters",
           "role": "worker",
           "requires": [
@@ -8346,7 +8346,7 @@
     "name": "ValidateCardNumber",
     "version": "1.0.0",
     "scope": "isolated",
-    "description": "Validator: a card number passes the Luhn check (validateCardNumber). Params: input, value.",
+    "description": "Validator: a card number passes the Luhn check (validateCardNumber); normalizes to its digits. Params: form, input, value, values, reading (it reads value).",
     "parameters": [
       {
         "name": "input",
@@ -8384,7 +8384,7 @@
         "type": "object",
         "value": {
           "version": 1,
-          "summary": "Validator: a card number passes the Luhn check (validateCardNumber). Params: input, value.",
+          "summary": "Validator: a card number passes the Luhn check (validateCardNumber); normalizes to its digits. Params: form, input, value, values, reading (it reads value).",
           "parametersFrom": "parameters",
           "role": "worker",
           "result": {
@@ -8404,7 +8404,7 @@
     "name": "ValidateCardExpiration",
     "version": "1.0.0",
     "scope": "isolated",
-    "description": "Validator: month (a number or its English or Spanish name) and year, a real month, not expired (validateExpiration). Normalizes to MMYY. Params: input, value.",
+    "description": "Validator: month (a number or its English or Spanish name) and year, a real month, not expired (validateExpiration). Normalizes to MMYY. Params: form, input, value, values, reading (it reads value).",
     "parameters": [
       {
         "name": "input",
@@ -8442,7 +8442,7 @@
         "type": "object",
         "value": {
           "version": 1,
-          "summary": "Validator: month (a number or its English or Spanish name) and year, a real month, not expired (validateExpiration). Normalizes to MMYY. Params: input, value.",
+          "summary": "Validator: month (a number or its English or Spanish name) and year, a real month, not expired (validateExpiration). Normalizes to MMYY. Params: form, input, value, values, reading (it reads value).",
           "parametersFrom": "parameters",
           "role": "worker",
           "result": {
@@ -16630,7 +16630,7 @@
     "name": "ReadConfirmReply",
     "version": "1.4.0",
     "scope": "isolated",
-    "description": "Rank an unreadable answer to a confirmation: it declines (NO), picks another of the form's choices (a correction, read as that input's answer), says a named field read back is wrong (confirm.named_fields: that input is asked again), asks for a person, or is asked again; a withdrawal or a new request leaves with saved form progress. Never confirms.",
+    "description": "Rank an unreadable answer to a confirmation: it declines (NO), picks another of the form's choices (a correction, read as that input's answer), says a named field read back is wrong (confirm.named_fields: that input is asked again), asks for a person, or is asked again; a withdrawal or a new request leaves with saved form progress. A soft confirmation is also offered YES, which confirms; a firm one never is.",
     "parameters": [
       {
         "name": "form",
@@ -16763,7 +16763,7 @@
         "type": "object",
         "value": {
           "version": 1,
-          "summary": "Rank an unreadable answer to a confirmation: it declines (NO), picks another of the form's choices (a correction, read as that input's answer), says a named field read back is wrong (confirm.named_fields: that input is asked again), asks for a person, or is asked again; a withdrawal or a new request leaves with saved form progress. Never confirms.",
+          "summary": "Rank an unreadable answer to a confirmation: it declines (NO), picks another of the form's choices (a correction, read as that input's answer), says a named field read back is wrong (confirm.named_fields: that input is asked again), asks for a person, or is asked again; a withdrawal or a new request leaves with saved form progress. A soft confirmation is also offered YES, which confirms; a firm one never is.",
           "parametersFrom": "parameters",
           "role": "worker",
           "requires": [
@@ -17045,7 +17045,7 @@
     "name": "ValidateCardCvv",
     "version": "1.0.0",
     "scope": "isolated",
-    "description": "Validator: the security code has the length of its card brand, 4 digits for American Express (34, 37) and 3 for every other brand; with no card number yet, 3 or 4. Params: input, value, values.",
+    "description": "Validator: the security code has the length of its card brand, 4 digits for American Express (34, 37) and 3 for every other brand; with no card number yet, 3 or 4. Params: form, input, value, values, reading (it reads value and values.card_number).",
     "parameters": [
       {
         "name": "input",
@@ -17088,7 +17088,7 @@
         "type": "object",
         "value": {
           "version": 1,
-          "summary": "Validator: the security code has the length of its card brand, 4 digits for American Express (34, 37) and 3 for every other brand; with no card number yet, 3 or 4. Params: input, value, values.",
+          "summary": "Validator: the security code has the length of its card brand, 4 digits for American Express (34, 37) and 3 for every other brand; with no card number yet, 3 or 4. Params: form, input, value, values, reading (it reads value and values.card_number).",
           "parametersFrom": "parameters",
           "role": "worker",
           "result": {

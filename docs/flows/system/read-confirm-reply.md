@@ -3,7 +3,7 @@
 <!-- generated:start -->
 **ReadConfirmReply** · `read-confirm-reply` · version 1.4.0 · worker (called by other flows) · steps · isolated scope
 
-> Rank an unreadable answer to a confirmation: it declines (NO), picks another of the form's choices (a correction, read as that input's answer), says a named field read back is wrong (confirm.named_fields: that input is asked again), asks for a person, or is asked again; a withdrawal or a new request leaves with saved form progress. Never confirms.
+> Rank an unreadable answer to a confirmation: it declines (NO), picks another of the form's choices (a correction, read as that input's answer), says a named field read back is wrong (confirm.named_fields: that input is asked again), asks for a person, or is asked again; a withdrawal or a new request leaves with saved form progress. A soft confirmation is also offered YES, which confirms; a firm one never is.
 
 - **Parameters:** 
   - `form`: 
