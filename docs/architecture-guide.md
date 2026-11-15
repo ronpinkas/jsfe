@@ -366,8 +366,8 @@ it.
 
 Some options are **never offered**, so the ranker cannot pick them: the YES of a firm confirmation (an input's, or a form's
 confirmation of a payment), a `current_only` choice while another question is asked, and text. `exact` on a choice says how words
-match it, not what it does, so exact choices are offered. A charge or a cancellation is guarded by `confirm: {exact: true}`
-on its action. A form confirmation is firm only when it authorizes a payment (effect `charge`), unless the form declares
+match it, not what it does, so exact choices are offered. A charge or a cancellation is bound by `confirm: {exact: true}`
+on its action: it runs only on the values the caller confirmed (binding, not firmness). A form confirmation is firm only when it authorizes a payment (effect `charge`), unless the form declares
 `confirm.confirmation`: a firm one offers the ranker NO, corrections and a person (a ranker can understand "no thanks,
 maybe later" as NO; it can never produce a YES to a payment). Every other confirmation is soft: its YES is read as a
 soft confirmation's and is offered to the ranker too. Options that cost more when wrong need a higher score (a NO that would cancel what the
@@ -534,8 +534,9 @@ it from the company's documents.
 4. **Flow behavior lives in flows.** Offers, prompts and wording belong to flow steps, not to the host. If a flow cannot
    express something, it is a feature request for the engine.
 5. **Side effects only through `CALL-TOOL`,** with an `onFail` route and a declared answer for an unknown result.
-6. **Sensitive decisions are exact.** Any action that charges or cancels declares `confirm: {exact: true}`; a charge is
-   asked as a firm confirmation.
+6. **Sensitive decisions are bound.** Any action that charges, cancels or cannot be reversed declares
+   `confirm: {exact: true}`: it runs only on the exact values the caller confirmed. How the YES is read is separate: a
+   charge is asked as a firm confirmation, everything else softly, unless the form declares `confirm.confirmation`.
 7. **Descriptions are for detection only.** A primary's description says what starts it and what does not; caller
    wording belongs in questions and fact renderers.
 8. **`call` for a closed sub-task, `DISPATCH` for what the caller asked for.** A loop that grows the stack is a design
