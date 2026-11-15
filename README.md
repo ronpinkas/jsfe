@@ -15,6 +15,9 @@ npm i jsfe
 - **[Flows architecture guide](docs/architecture-guide.md)** - start here: the concepts, the building blocks, what the caller experiences, and how conversational AI and exact transactional flows work together (the reply ranker and DISPATCH)
 - **[Flow author reference](docs/copilot-reference.md)** - the authoritative engine and JSON authoring specification for flow authors and AI flow generators (shipped in the package; the Flow Designer's CoPilot reads it from the published version, so change it with the engine)
 - **[Form client adapter](docs/form-client.md)** - optional: a host renders the pending FORM question as a form for a capable client and reads its strict named submission through the same FORM workers; an input may name its control (`form_client`: date, date range, number since jsfe 1.44.0; place (city or address suggestions from the host) since 1.46.0)
+- **[Sendables](docs/sendables.md)** - what a flow can send the caller (registered sendables and their media) and how a host delivers it
+- **[Engine internals](docs/engine-internals.md)** - how the engine runs a turn: stacks, the form loop, attempts, queued lines and every exit
+- **[Template interpolation design notes](docs/template-interpolation-design-notes.md)** - how `{{...}}` templates are resolved
 - **[Development candidate acceptance](docs/development-release.md)** - reproducible package and cross-repository verification
 - **[System Flows](docs/flows/system/README.md)** and **[Shopify Flows](docs/flows/shopify/README.md)** - the bundled flow and tool libraries in `flows/`: a page and a chart per flow, generated from the JSON (`node scripts/flow-docs.mjs`), plus the conventions the system flows share
 
@@ -412,7 +415,7 @@ means a reply that picks none of them. A picked choice sets `responseVariable` t
 `answers` sets `{ key: '' }` unless `responseParameters` are declared too. The request carries the options it offers
 (`request.options`); a host validates a reply against those, never a fixed list. The form readers use it: an unread
 answer with any words goes to the ranker with the question's choices (`exact` ones too, since `exact` is how words match
-a choice; never the YES of a firm confirmation, which a form's confirmation is when an action it authorizes is `confirm.exact`; a NO always) and the escape every question supports, `__agent` (a person);
+a choice; never the YES of a firm confirmation, which a form's confirmation is when an action it authorizes has `effect: "charge"`; a NO always) and the escape every question supports, `__agent` (a person);
 text is never offered. **Arguments in an unread answer** (jsfe 1.36): the asked input's `rank_parameters` (`[{ name, description, type?, reads? }]`) are extracted when the ranker says the reply answers the question, and a choice's own `parameters` when it is picked (`responseParameters` may name the array variable that holds them). Each value is read by the form's reader as if said alone: `reads` names the input it answers, else it answers the asked question, so that question's rules decide a number's field. Two readings of one input that differ take nothing, and nothing read asks again, as before. A form's `confirm.rank_parameters` do the same at its confirmation (no `reads`: read as a correction there); a value read changes the form, which is confirmed again. A charge or a cancellation is guarded by the action's `confirm: {exact: true}`, not by the choice's
 `exact`. A confirmation's exhausted attempts go to the `give-up` worker.
 
@@ -450,7 +453,7 @@ and the provider menu. A flow set that sets `cargo.sorryByName = true` (for exam
 **Acknowledging only data, opt-in (jsfe 1.20.0):** a form declaring `acknowledge: 'data'` (or the nearest enclosing form
 that declares it) says "Got it, your …" / "Okay, I noted your …" only for a value the caller supplied, an input whose profile
 kind is digits, email, phone, amount, identifier, account or text. A pick among offered words (`choice`, `pattern`), such as
-NEW CARD, is not acknowledged: the next question already shows it was understood. Rejections are always said. Without the
+NEW CARD, is not acknowledged: the next question already shows it was understood. A rejection is said only with the question that asks again. Without the
 attribute every input is acknowledged as before (`formAcknowledges(cargo, reading)`).
 An input filled out of order is always acknowledged, under either mode: the caller changed something the question did not ask (owner 2026-11-02).
 
@@ -507,12 +510,17 @@ const engine = new WorkflowEngine(logger, aiCallback, flows, tools,
   elsewhere, or the host's `cargo.verb`), and `yesNoKeys(lang, cargo, yes, no)` ("Press 1 or say YES, or press 2 or say
   NO." on a call): every yes/no question names 1 for YES and 2 for NO on a call. A FLOW call's parameters interpolate
   values, not expressions, so build such a question in a SET step and pass the variable.
-- Checks: `validateDigits`, `validatePhone`, `validateEmail`, `validateCardNumber`,
-  `validateExpiration`, and `validateOTP(code, container)`, which accepts a code whose SHA-256 matches
+- Checks: `validateDigits(input, min, max)` (digits only, length in range), `validatePhone(phone, acceptInternational)`
+  (10 digits, or 11 with a leading 1; with `acceptInternational`, any 11 to 15), `validateEmail` (`x@y.z`, no spaces),
+  `validateCardNumber` (12 to 19 digits passing Luhn), `validateExpiration(MM, YY)` (a real month, not expired, at most
+  20 years out), and the async `validateOTP(code, container)`, which accepts a code whose SHA-256 matches
   `container.otpHash` within 10 minutes of `container.otpTimestamp`, or a second code emailed beside it
   (`otpAltHash` / `otpAltTimestamp`, jsfe 1.17.0) on its own clock; accepting either clears both (`clearOtp`).
-  A refusal leaves its reason in `container.otpFailure` (`missing`, `expired` or `mismatch`). Sending the
-  code is the host's job.
+  Accepting sets `container.otpVerified` and `otpVerifiedAt`; an expired code is cleared. A refusal leaves its
+  reason in `container.otpFailure` (`missing`, `expired` or `mismatch`). Sending the code is the host's job.
+- Built-in field validators: `validate-card-number` (Luhn; normalizes to digits), `validate-card-expiration` (a month
+  as a number or its English or Spanish name, and a year; normalizes to MMYY) and `validate-card-cvv` (4 digits for
+  American Express, 3 for every other brand; the rejection says "the 4 digits on the front" or "the 3 digits on the back").
 - Session-aware helpers read only the cargo a caller passes: `callerTextNumber`, `textDestination`,
   `callerIsInternational`.
 
@@ -919,8 +927,9 @@ return aiResponse;
   is already repaired: the next turn starts with fresh intent detection. Log or record the error;
   no rollback is needed. A deliberate `RETURN ''` (which ends every flow) is not flagged.
 
-Native FORM collection in 1.7.2 acknowledges an unreadable answer once, then yields the current
-utterance while retaining its draft. Explicit recovery metadata distinguishes resumption, required
+Native FORM collection asks an answer without words (symbols, an unexpected key) again three times
+and yields the fourth to DISPATCH while retaining its draft (`max_misses`, default 4); an answer with
+words goes to the reply ranker. Explicit recovery metadata distinguishes resumption, required
 restart, unknown-action hold and no promised recovery; business completion remains independent.
 See the [retry/yield/recovery contract](docs/copilot-reference.md#retry-yield-and-recovery).
 
@@ -1317,15 +1326,15 @@ their original workflow seamlessly.
 - ✅ **SWITCH** - Conditional branching based on single value matching
 - ✅ **RETURN** - Terminate all flows and return evaluated expression value (an EXIT/abort); `keepSay: true` delivers the SAY text queued before it ahead of the value
 - ✅ **END** - Return from the current flow only, resuming the parent flow — a functional `return` (no value; variables are shared with the parent)
-- ✅ **DISPATCH** - End all flows and route this turn's input through intent detection, as if no flow had been active (a matched flow starts in the same turn; no match → no response, the host answers). Resets everything; the ended flows' declared outcome is kept only when no flow matches. Takes `id`, `outcome`, `reason`. See the user guide's *DISPATCH Steps*
+- ✅ **DISPATCH** - End all flows and route this turn's input through intent detection, as if no flow had been active (a matched flow starts in the same turn; no match → no response, the host answers). Resets everything; the ended flows' declared outcome is kept only when no flow matches. Takes `id`, `outcome`, `reason`, `recovery`; a contextual DISPATCH (`onResponse: "continue"`) adds `responseContext`, `responseParameters`, `responseVariable`, `responseChoices`, `responseReasonFor`, `responseConcern`, `responseConcernForm`, `responseStay` and `onNoIntent`. See the user guide's *DISPATCH Steps*
 
 Any step may also carry `outcome` / `reason` (it applies when the flow terminates); see
 [Declared flow outcomes](#declared-flow-outcomes-lastflowoutcome).
 
 ### Step Reliability: Validation & Retry
-Any step can also declare:
-- **`inputValidation`** — regex `patterns` (`field` / `pattern` / `message`) and/or a named `customValidator` from `APPROVED_FUNCTIONS`, applied to collected input before the step runs.
-- **Automatic retry** — `maxRetries` (default 2), `retryDelay`, `retryStrategy` (`immediate` / `exponential` / `linear` / `manual`), and `retryOnConditions` (`errorPattern` → `action`), falling through to `onFail` once exhausted.
+A CALL-TOOL step can also declare:
+- **`inputValidation`**: regex `patterns` (`field` / `pattern` / `message`) and/or a named `customValidator` from `APPROVED_FUNCTIONS`, applied to collected input before the tool runs.
+- **Automatic retry**: with `maxRetries`, an error matching a `retryOnConditions` entry whose `action` is `retry`, or a timeout, network, 502, 503 or rate-limit error, is retried up to `maxRetries` times. Without `onFail` or `maxRetries`, a network or server error is retried up to 2 times. `retryDelay` (ms) and `retryStrategy: 'exponential'` set the wait; `skip` and `fallback` do not retry. Once retries are spent, `onFail` runs. `ask_user`, `fallbackStep`, `linear` and `manual` are not implemented.
 
 ### Default Timeouts
 - AI callback (`aiTimeOut`): **2000 ms**
@@ -1365,8 +1374,8 @@ while maintaining security through a trusted developer model and limiting user i
 ```
 
 #### Supported JavaScript Features
-All JavaScript features are supported within a sandboxed environment with access limited to 
-explicitly exported variables and functions.
+Expressions are trusted code: `new Function` in strict mode, with flow and session variables, `APPROVED_FUNCTIONS`
+and built-ins in scope. There is no sandbox, so expressions come only from flow authors, never from callers.
 
 #### Security Model
 - **Developer Trust**: Workflows authored by developers, not end users

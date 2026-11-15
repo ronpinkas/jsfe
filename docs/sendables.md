@@ -1,7 +1,7 @@
 # Sendables
 
 What a caller may ask to be sent ("send me that by text", "email me my statement"), offered to a generic sender
-(the SendCopy flow) without that sender knowing what any item is. All three functions are in `jsfe/helpers` and in
+(the SendCopy flow) without that sender knowing what any item is. These functions are in `jsfe/helpers` and in
 `STANDARD_FUNCTIONS`, so flows call them from expressions.
 
 ## registerSendable(cargo, entry)
@@ -20,7 +20,7 @@ registerSendable(cargo, {key:'statement', label:'Latest statement', label_es:'Ú
                          sender:'send-statement', args:{account}})
 ```
 
-`label` is what the ranker reads; `label_es` is optional. A malformed entry throws where it is registered. Keys
+`label` is what the ranker reads; `label_es` is optional. `media` (a list of distinct `text` / `email`, default both) is what the entry can be sent by. A malformed entry throws where it is registered. Keys
 starting with `reply-`, and `conversation`, are reserved. A document a caller may ask for before seeing it (the statement) is registered
 at session start. Returns `true`, so it can stand in a SET.
 

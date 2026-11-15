@@ -365,7 +365,7 @@ it.
 **A provider's menu.** `provides.menu.whole_phrases: true` (default off) applies the same rule to a menu: a fact's phrase answers only as the whole reply, and a phrase inside a longer sentence goes to the reply ranker, offered every fact with phrases, every action, `done` and a person. A fact pick is answered with every other fact that cleared `REPLY_ALSO_CUT` (0.6), so one sentence that asks two things hears both; an action pick runs alone. `answers` and `irrelevant` fall to the menu's plain DISPATCH, which hands the turn to the host without intent detection (a Guru answers from the user context the flow set); `new_request` runs intent detection. A reply with no phrase is unchanged. `menu.unanswered` handles a question the provider cannot answer: when a reply from its own menu comes back to it through intent detection with no fact to say, the caller hears the declared apology and offer (`provider-unanswered`) instead of the same facts again.
 
 Some options are **never offered**, so the ranker cannot pick them: the YES of a firm confirmation (an input's, or a form's
-confirmation of an exact action), a `current_only` choice while another question is asked, and text. `exact` on a choice says how words
+confirmation of a payment), a `current_only` choice while another question is asked, and text. `exact` on a choice says how words
 match it, not what it does, so exact choices are offered. A charge or a cancellation is guarded by `confirm: {exact: true}`
 on its action. A form confirmation is firm only when it authorizes a payment (effect `charge`), unless the form declares
 `confirm.confirmation`: a firm one offers the ranker NO, corrections and a person (a ranker can understand "no thanks,
@@ -413,7 +413,7 @@ lives:
 | --- | --- |
 | No private fact before identity is verified | a provider's `gate` and a performer's `gate` run the verification worker and check the verified paths |
 | No value accepted unchecked | every value, whether read, extracted at activation or understood by the ranker, passes the same field validator |
-| No charge without a clear YES | `confirm: { exact: true }`: only confirmation words or the option's exact phrases; never offered to the ranker |
+| No charge without a clear YES | a form that charges (`effect: "charge"`, which requires `confirm: { exact: true }`) confirms firmly: only confirmation words or the option's exact phrases; never offered to the ranker |
 | The YES confirms what the caller heard | consent is bound to the request and the input revision; changing any input invalidates it |
 | "Yes, but make it 60" is not consent | an answer with YES plus a correction or another request is not approval of the old request |
 | No guessed success | an executor reports success, failure or unknown; unknown holds the action, it is never retried as if it failed |
@@ -448,11 +448,35 @@ Cancellation and Concurrency" explains each rule and the production incident beh
   and the payment asks its question again.
 - **Menus after an answer.** A provider may offer a short menu ("To make a payment, say PAY. For a payment link, say
   LINK."). Menu choices start their flows; "no thanks" ends politely.
-- **Misses.** The first unreadable answer is acknowledged and the question is asked again; validator rejections have
-  their own budget (`max_attempts`) with a declared recovery (`on_exhausted`). Every question also accepts a request
+- **Misses.** An answer with words that the question cannot read goes to the reply ranker; one that picks nothing is
+  asked again and counts against `max_attempts`. An answer without words (symbols, an unexpected key) is acknowledged
+  and asked again three times, and the fourth goes to DISPATCH (`max_misses`, default 4). Validator rejections count
+  against `max_attempts` (default 3), with a declared recovery (`on_exhausted`). Every question also accepts a request
   for a person.
 
 ### Endings
+
+When the flows end, the turn closes in one of four ways, and each treats the caller's last message differently:
+
+| Ending | The caller's last message | What the caller gets |
+|---|---|---|
+| **Completion**: the flow runs its last step, or reaches `END` | used by the flow | what the flow said this turn. If it said nothing on the turn it started, the engine's "Processing …" placeholder; on a later turn, "Flow completed." (`flow_completed_generic`). A flow says its result before it ends. |
+| **`DISPATCH`** | passed on to intent detection, as if no flow had been active | the reply of the flow it starts, or, if none, the host's own answer. Anything the ending flow queued is not said. |
+| **`RETURN` with a value** | kept by the flow: intent detection never sees it | the step's value. Queued text is not said unless the step sets `keepSay: true`. |
+| **`RETURN ''`**: the fake flow | handed to the host, without intent detection running again | the host's own answer |
+
+`RETURN` with a value is the one ending that keeps the message from intent detection and still tells the caller
+something.
+
+`RETURN ''` exists for the **fake flow**: a primary flow that deliberately does nothing, so that a message resembling
+another flow's trigger is matched by it and answered by the host, instead of wrongly starting the similar flow. Its
+description claims the message ("Not:" lines in the similar flow point here), and its only step is `RETURN ''`. A
+`DISPATCH` cannot do this job: intent detection has just chosen this flow, so the engine refuses to route the same message
+again. For the same reason a `DISPATCH` belongs only after a question.
+
+So: completion for a finished task; `DISPATCH`, after a question, for a message that is not the flow's to handle;
+`RETURN` with a value for a message the flow must answer but not pass on; a fake flow with `RETURN ''` for a message
+that must not start a similar flow.
 
 A flow ends with an outcome (`resolved`, `unresolved`, `deflected`, or `pending` for a task that was paused), and may
 give the host recovery guidance (`resume`, `restart`, `hold`, `none`). Hosts use these for reporting and for what to
@@ -486,14 +510,14 @@ Caller: Let's do 60 with the card ending in 4242.
 One answer fills two fields: the amount (the current question) and the card (an input of the nested card form).
 
 ```text
-Agent:  I'll charge $60.00 to the card ending in 4242. Say YES to pay, or NO.
+Agent:  I'll charge $60.00 to the card ending in 4242. Press 1 or say YES to pay, or press 2 or say NO.
 Caller: Yeah, but make it 70.
 ```
 Not consent: YES plus a correction. The amount changes, the confirmation is invalidated, and the read-back is asked
 again for $70.00.
 
 ```text
-Agent:  I'll charge $70.00 to the card ending in 4242. Say YES to pay, or NO.
+Agent:  I'll charge $70.00 to the card ending in 4242. Press 1 or say YES to pay, or press 2 or say NO.
 Caller: Yes.
 Agent:  Your payment of $70.00 was successful. Is there anything else I can help you with?
 Caller: Do you have energy-saving rebates?
@@ -510,7 +534,8 @@ it from the company's documents.
 4. **Flow behavior lives in flows.** Offers, prompts and wording belong to flow steps, not to the host. If a flow cannot
    express something, it is a feature request for the engine.
 5. **Side effects only through `CALL-TOOL`,** with an `onFail` route and a declared answer for an unknown result.
-6. **Sensitive decisions are exact.** Any choice that charges or cancels is `exact`, and asked as a firm confirmation.
+6. **Sensitive decisions are exact.** Any action that charges or cancels declares `confirm: {exact: true}`; a charge is
+   asked as a firm confirmation.
 7. **Descriptions are for detection only.** A primary's description says what starts it and what does not; caller
    wording belongs in questions and fact renderers.
 8. **`call` for a closed sub-task, `DISPATCH` for what the caller asked for.** A loop that grows the stack is a design

@@ -1368,12 +1368,7 @@ The engine provides **highly controlled execution** of tools and integrations:
 
 ### Expression Security
 
-Safe expression evaluation with multiple security levels:
-
-- **Pattern Blocking**: Prevents code injection and dangerous operations
-- **Context-Aware Security**: Different security levels for different contexts
-- **Input Sanitization**: Safe handling of user-provided data
-- **No Code Execution**: Template expressions cannot execute arbitrary code
+Expressions are trusted code: `new Function` in strict mode, with flow and session variables, `APPROVED_FUNCTIONS` and built-ins in scope. There is no sandbox, so expressions come only from flow authors, never from callers. A caller's input is a value in a variable, never part of an expression.
 
 
 
@@ -3873,44 +3868,18 @@ The workflow engine uses **direct JavaScript evaluation** with a security framew
 
 ## Security Features
 
-### Simplified JavaScript Evaluation Architecture
+### JavaScript Evaluation
 
-The Workflow Engine uses a **direct JavaScript evaluation approach** with security through controlled access limited to to exported variables and functions. This simplified architecture provides 100% JavaScript compatibility while maintaining security.
+Expressions are trusted code: `new Function` in strict mode, with flow and session variables, `APPROVED_FUNCTIONS` and built-ins in scope. There is no sandbox, so expressions come only from flow authors, never from callers. A caller's input is a value in a variable, never part of an expression.
 
-#### Core Security Principles
-
-1. **Controlled Access**: Only exported entities are allowed as valid JavaScript identifiers.  
-2. **User Input Safety**: User inputs are treated as values, not code structure
-3. **Function Constructor**: Uses JavaScript Function constructor with acess explictly limited to wxported entities.
-4. **No eval()**: Direct function construction without string evaluation dangers
-
-#### Security Features
-
-**User Input Safety**:
-- User inputs become **values** in the variable context
-- Users cannot inject code structure or operators
-- Variable names are controlled by developers, not users
-
-**Function Constructor Safety**:
-- No string `eval()` vulnerabilities
-- Controlled access limited to explicitly exported variables and functions.
-- Expression evaluated in controlled scope
-
-#### What's Allowed vs Blocked
-
-**✅ ALLOWED - Full JavaScript within parameter scope**:
 ```javascript
 {{userName}}                                 // Variable access
-{{age >= 18 && verified}}                    // All logical operators
-{{price * quantity + tax}}                   // All mathematical operations  
-{{status || 'default'}}                      // Nullish coalescing
+{{age >= 18 && verified}}                    // Logical operators
+{{price * quantity + tax}}                   // Arithmetic
+{{status || 'default'}}                      // Defaults
 {{items.length > 0 ? 'Has items' : 'Empty'}} // Ternary conditionals
-{{Math.round(average)}}                      // Method calls on allowed objects
+{{Math.round(average)}}                      // Built-ins
 ```
-
-**❌ AUTOMATICALLY BLOCKED - Access to any unexported variable or function
-
-**Developer Responsibility**:
 
 ## Advanced Expression Features
 
@@ -4160,7 +4129,8 @@ Variables operate at multiple levels:
 ```
 
 **Voice input cleanup (`cargo.voice`):** when the session's `cargo.voice` is truthy, the answer is
-cleaned by `aiCallback` before it is stored in `variable`. The cleaner sees the question just asked
+cleaned by `aiCallback` before it is stored in `variable`, except an answer kept as spoken (`asSpoken`), an answer to a
+one-key question, and an answer whose digit count fits the question's `digits` (see below). The cleaner sees the question just asked
 and the caller's words, nothing else. It:
 - removes filler words;
 - maps yes/no answers to `"yes"` / `"no"`;
@@ -4175,8 +4145,9 @@ answer is stored.
 
 **Keypad collection (`digits`):** a SAY-GET may declare `digits` (e.g. `{ "min": 6, "max": 6 }`). The
 engine copies it to `cargo.digits` while the answer is awaited, so a voice host can configure
-DTMF collection, and removes it once the input is collected. The engine does not interpret the
-fields; the host does.
+DTMF collection, and removes it once the input is collected. On a call the engine also reads it: with `max: 1`
+only a whole-answer key (`0`-`9`, `*`, `#`) counts as a key, and any other answer is kept as spoken; an answer whose
+digit count is within `min`..`max` is stored as its digits, with no AI cleanup.
 
 ### SET Steps - Variable Assignment and Calculations
 
@@ -4255,7 +4226,7 @@ fields; the host does.
 ```
 
 **Key Features:**
-- **Dynamic Arguments**: Use variables and expressions in tool arguments
+- **Arguments by path**: each argument is `{{path}}` only (`{{user.id}}`); an expression resolves to ''. A whole-value `{{path}}` passes the value itself; text mixed with a template is a string. Compute expressions in a preceding SET
 - **Result Storage**: Automatically store tool responses in variables
 - **Error Handling**: Define custom responses for tool failures. `onFail` supports `parameters` when invoking formatted flows.
 - **Response Mapping**: Transform tool responses into usable data
@@ -4270,8 +4241,8 @@ fields; the host does.
   variable: "weather_data",
   args: {
     location: "{{user_location}}",
-    units: "{{user_preference_metric ? 'metric' : 'imperial'}}",
-    include_forecast: "{{subscription_tier === 'premium'}}"
+    units: "{{units}}",                    // set before: { type: "SET", variable: "units", value: "user_preference_metric ? 'metric' : 'imperial'" }
+    include_forecast: "{{include_forecast}}"
   },
   onFail: {
     type: "FLOW",
@@ -4311,7 +4282,6 @@ fields; the host does.
   type: "FLOW",
   value: "IdentityVerification",         // Target workflow name
   callType: "call",                     // Execution mode
-  variable: "verification_result",       // Store sub-workflow result
   parameters: {                          // Optional arguments
     userId: "{{session_user.id}}",
     "{{dynamic_key}}": "some_value"      // Dynamic key names supported
@@ -4322,8 +4292,7 @@ fields; the host does.
 **Key Properties:**
 - **`value`**: The name or ID of the flow to execute. Supports template interpolation `{{...}}` for dynamic flow selection. (Alias: `name` is also supported for backward compatibility)
 - **`callType`**: Controls execution behavior (`call`, `replace`, `reboot`).
-- **`parameters`**: Object of arguments to pass to the sub-flow. Values are interpolated. **Dynamic keys** are supported using template syntax (e.g., `{{keyName}}: "value"`).
-- **`variable`**: (Optional) Variable to store the result of the sub-flow (if it returns a value).
+- **`parameters`**: Object of arguments to pass to the sub-flow. Values are interpolated by path only: `{{path}}` resolves, an expression resolves to ''; a whole-value `{{path}}` passes the value itself, text mixed with a template is a string. Compute expressions in a SET first. **Dynamic keys** are supported using template syntax (e.g., `{{keyName}}: "value"`).
 
 **Call Types:**
 - **`"call"`** (default): Execute sub-workflow, return to current workflow after completion
@@ -4528,7 +4497,7 @@ fields; the host does.
 - **No flow matches**: the engine returns no response (`null`) and leaves no flow active, so the host answers the turn (as on any turn with no active flow).
 - **Everything is reset**: every flow stack, the queued SAY messages and the tentative `flow_init`. Nothing the ended flows said is delivered.
 - **The input is the turn's own**: the message the turn started with, never a flow variable a step rewrote (e.g. a normalised `user_choice`).
-- **Outcome — kept only when nothing matches**: the ended flows finalize like any terminating flow, so an `outcome` they declared (on the `DISPATCH` step itself, or earlier) is stamped with `endedBy: 'dispatch'`. When intent detection matches a flow, that outcome is **swallowed** (the user is being served); when nothing matches, it **reaches the host** (the flows' ending stands). `DISPATCH` takes only `id`, `outcome` and `reason` — no `value`.
+- **Outcome, kept only when nothing matches**: the ended flows finalize like any terminating flow, so an `outcome` they declared (on the `DISPATCH` step itself, or earlier) is stamped with `endedBy: 'dispatch'`. When intent detection matches a flow, that outcome is **swallowed** (the user is being served); when nothing matches, it **reaches the host** (the flows' ending stands). `DISPATCH` takes only `id`, `outcome`, `reason` and `recovery` (no `value`); a contextual DISPATCH (`onResponse: "continue"`) adds `responseContext`, `responseParameters`, `responseVariable`, `responseChoices`, `responseReasonFor`, `responseConcern`, `responseConcernForm`, `responseStay` and `onNoIntent`.
 - **Tool calls stay recorded**: a tool attempted earlier in the turn remains in `lastTurnToolCalls`.
 - **Reported to the host**: `engineSessionContext.lastTurnDispatch = { fromFlow, matchedFlow }` (`matchedFlow` is `null` when nothing matched), one-shot like `lastFlowOutcome`.
 
@@ -4857,14 +4826,14 @@ All step types support error handling through various mechanisms:
 
 ### Step-Level Input Validation
 
-`CALL-TOOL` and `SAY-GET` steps can validate collected input *before* the tool runs, using an `inputValidation` block with regex `patterns` and/or a named `customValidator` (resolved from `APPROVED_FUNCTIONS`):
+A `CALL-TOOL` step can validate the flow's variables *before* the tool runs, using an `inputValidation` block with regex `patterns` and/or a named `customValidator` (resolved from `APPROVED_FUNCTIONS`):
 
 ```javascript
 {
-  id: "collect-amount",
-  type: "SAY-GET",
-  variable: "amount",
-  value: "How much would you like to pay?",
+  id: "submit-amount",
+  type: "CALL-TOOL",
+  tool: "PaymentProcessor",
+  args: { amount: "{{amount}}" },
   inputValidation: {
     patterns: [
       {
@@ -4878,18 +4847,24 @@ All step types support error handling through various mechanisms:
 }
 ```
 
-Each pattern checks one `field` against a regex; on mismatch the step surfaces that pattern's `message`. The optional `customValidator` names an `APPROVED_FUNCTIONS` entry for logic a regex cannot express.
+Each pattern checks one flow variable (`field`) against a regex; on mismatch the step surfaces that pattern's `message`. The optional `customValidator` names an `APPROVED_FUNCTIONS` entry, called with the flow's variables, that returns `{isValid, errors?}`.
 
 ### Step-Level Retry Configuration
 
-Any step can declare automatic retry behavior. By default a failing step retries up to **2** times before its `onFail` (or an engine-generated default) is invoked. Tune it with:
+A `CALL-TOOL` step retries a failed tool call:
+
+- With `maxRetries`, an error matching a `retryOnConditions` entry whose `action` is `retry`, or a timeout, network, 502, 503 or rate-limit error, is retried up to `maxRetries` times.
+- Without `onFail` or `maxRetries`, a network or server error is retried up to 2 times.
+- Once retries are spent, `onFail` runs.
 
 | Field | Purpose |
 |---|---|
-| `maxRetries` | Maximum automatic retries (default 2) |
-| `retryDelay` | Delay between retries, in milliseconds |
-| `retryStrategy` | Backoff: `immediate` \| `exponential` \| `linear` \| `manual` |
-| `retryOnConditions` | Retry only when the error matches a rule: `{ errorPattern, action, fallbackStep? }` |
+| `maxRetries` | Maximum automatic retries |
+| `retryDelay` | Wait between retries, in milliseconds |
+| `retryStrategy` | `exponential`: wait 1 s, 2 s, 4 s … (at most 30 s) |
+| `retryOnConditions` | `[{ errorPattern, action }]`: `retry` retries; `skip` and `fallback` do not |
+
+`ask_user`, `fallbackStep`, `linear` and `manual` are not implemented.
 
 ```javascript
 {
@@ -4900,7 +4875,7 @@ Any step can declare automatic retry behavior. By default a failing step retries
   retryStrategy: "exponential",
   retryOnConditions: [
     { errorPattern: "timeout|network", action: "retry" },
-    { errorPattern: "invalid.*amount", action: "ask_user" }
+    { errorPattern: "invalid.*amount", action: "skip" }
   ],
   onFail: {
     type: "SAY",
@@ -4909,7 +4884,7 @@ Any step can declare automatic retry behavior. By default a failing step retries
 }
 ```
 
-`retryOnConditions[].action` is one of `retry`, `skip`, `ask_user`, or `fallback` (the last with an optional `fallbackStep`). When no condition matches, the step falls through to `onFail`.
+A charge is retried only where a lost response cannot repeat it; see the reliability rules in the flow author reference.
 
 ## Best Practices for Workflow Design
 
@@ -5263,25 +5238,11 @@ The **CASE** step provides powerful condition-based branching using expression e
 ## Expression Syntax and Safety
 
 ### Supported Operators
-All JavaScript operators and methods are supported within a sandboxed environment with
-access limited to explictly exported entities. 
+All JavaScript operators and methods are supported. Expressions are trusted code: `new Function` in strict mode, with flow and session variables, `APPROVED_FUNCTIONS` and built-ins in scope. There is no sandbox, so expressions come only from flow authors, never from callers. A caller's input is a value in a variable, never part of an expression.
 
 ### Variable Interpolation
 
-Variables and expressions are interpolated using double curly braces `{{variable_name}}`:
-
-### Security Features
-
-The expression evaluator includes multiple security layers:
-
-**Input Sanitization**
-User inputs are stored in a special class of variables which enable safety sanitation.
-
-**Context Isolation**: Expressions run in isolated context
-- No access to global objects
-- No access to Node.js APIs
-- No access to file system
-- No network access
+Variables and expressions are interpolated using double curly braces `{{variable_name}}`.
 
 ## Error Handling in Conditional Steps
 
@@ -5768,7 +5729,8 @@ The JavaScript Flow Engine comes with a set of production-ready core flows that 
 - **`live-agent-requested`** (primary): offers to keep helping, then transfers (the host performs the transfer), or shares contact info when no agent is available.
 - **`switch-to-text`** (primary): moves a voice call to SMS.
 - **`contact-support`**: shares support contact info. It ends with `outcome: "unresolved"`.
-- **`cancel-process`**: confirms a cancellation.
+- **`global-exit`**: started by the engine on a whole answer `*`, EXIT, QUIT or SALIR at any question: ends every flow, says the request was cancelled and offers more help.
+- **`send-copy`**: sends the caller what they ask for (a sendable: a receipt, a statement, the conversation) by text or email.
 - **`no-action-needed`**: `RETURN ''`, which hands the turn back to the host.
 
 ## Shopify Flows

@@ -115,7 +115,7 @@ function interpolateMessage(
 }
 ```
 
-**B.2 — Replace `interpolateObject(step.parameters, ...)` at call sites (lines 3752, 4373) with a shallow walker:**
+**B.2: Replace `interpolateObject(step.parameters, ...)` at its FLOW call sites with a shallow walker:**
 
 ```typescript
 function buildSubFlowParameters(
@@ -152,21 +152,22 @@ Document the limitation (this file), apply the hoist-to-SET workaround as needed
 
 ## Scope Where JSFE Uses Which Interpolator
 
-Source: `src/index.ts` as of 2026-04-23.
+All three live in `src/index.ts`.
 
-- `interpolateObject` defined around line 1963. Called from:
-  - Line 4540 — CALL-TOOL args
-  - Line 4373 — FLOW step `parameters`
-  - Line 3752 — FLOW step `onFail.parameters`
-- `interpolateMessage` defined around line 5832. Used throughout SAY, SAY-GET, FLOW `value`/`name`, and for any free-form string template outside structured argument objects.
-- `evaluateExpression` defined around line 5555. Called directly for SET values, CASE conditions, RETURN values, and via `interpolateMessage` / `evaluateSafeCondition`.
+- `interpolateObject`. Called from:
+  - `generateToolCallAndResponse`: CALL-TOOL args
+  - `handleSubFlowStep`: FLOW step `parameters`
+  - `handleToolStep`: a CALL-TOOL's `onFail.parameters`
+  - `handleSayGetStep`: `digits`
+- `interpolateMessage`. Used throughout SAY, SAY-GET, FLOW `value`/`name`, and for any free-form string template outside structured argument objects.
+- `evaluateExpression`. Called directly for SET values, CASE conditions, RETURN values, and via `interpolateMessage` / `evaluateSafeCondition`.
 
 ## For Future Maintainers
 
 Before modifying any of the three interpolators, recall these invariants:
 
 1. **Null-safe traversal of dot-paths is production-critical.** 23+ existing CALL-TOOL arg templates assume `{{a.b.c}}` resolves to `""` when any intermediate is null. Do not break this.
-2. **Type preservation for single-template matches matters.** `{{some_array}}` as a CALL-TOOL arg or FLOW parameter must return the actual array, not its stringified form. `interpolateObject`'s line 1990 `return value !== undefined && value !== null ? value : ''` is load-bearing.
+2. **Type preservation for single-template matches matters.** `{{some_array}}` as a CALL-TOOL arg or FLOW parameter must return the actual array, not its stringified form. `interpolateObject`'s `return value !== undefined && value !== null ? value : ''` is load-bearing.
 3. **SAY/SET/CASE/RETURN already have full JS.** Consistency with those contexts is the argument for unification, but the cost is borne mostly by CALL-TOOL args (highest traffic + most nested paths).
 4. **The hoist-to-SET workaround is always available.** Any pain from the asymmetry has a clean, documented escape hatch.
 
