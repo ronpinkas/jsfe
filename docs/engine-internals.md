@@ -130,13 +130,20 @@ While the current stack has frames:
 
 ### 4.4 Expressions and named functions
 
-`SET` values, `CASE` conditions and `{{…}}` interpolations are JavaScript evaluated with `new Function` in strict mode.
-In scope: the frame's variables, session variables (`cargo`, `language`, `$outcome`, the engine globals and others), every
-`APPROVED_FUNCTIONS` entry by name, `fn` (named functions), and the standard built-ins. There is no sandbox; this is
-trusted code. Objects are passed by reference, which is how worker flows write `cargo.inputCheck` and other cargo state.
+`SET` values, `CASE` conditions and `{{…}}` interpolations are JavaScript in strict mode, evaluated in the engine's
+QuickJS sandbox (`src/helpers/expression-sandbox.js`; design: `docs/expression-sandbox-design.md`). Flow text is
+untrusted: an expression reaches only what is in scope, never the host's globals (`process`, `fetch`, `require`) or its
+`Function` constructor. In scope: the frame's variables, session variables (`cargo`, `language`, `$outcome`, the engine
+globals and others), every `APPROVED_FUNCTIONS` entry by name, `fn` (named functions), and the sandbox's own standard
+built-ins (no `Intl`; locale formatting and `structuredClone` are provided). Host objects are passed as live stand-ins:
+reads and writes reach the host object itself, which is how worker flows write `cargo.inputCheck` and other cargo state;
+only own properties cross. Host functions run on the host, with only their arguments and result crossing. Each
+evaluation has a 500 ms deadline; the sandbox (one per process, shared by every engine) has a 256 MB cap, and its
+globals and built-ins are frozen, so no evaluation leaves state for another.
 
-A flow may carry a `functions` section: named functions compiled at load (`src/helpers/named-functions.js`) and called
-from expressions as `fn.<name>(…)`. They run inside the step that calls them and see only their arguments.
+A flow may carry a `functions` section: named functions compiled once per process, in the same sandbox
+(`src/helpers/named-functions.js`), and called from expressions as `fn.<name>(…)`. They run inside the step that calls
+them and see only their arguments and the approved functions, which they call by name from the evaluating engine's table.
 
 An expression cannot run a step. SAY, SAY-GET, DISPATCH, FLOW and every other step type run only from the step loop.
 A function called from an expression is not recorded as a tool call; a side effect a flow must account for belongs in a

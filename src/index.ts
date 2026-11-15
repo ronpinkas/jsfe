@@ -1,6 +1,7 @@
 import {compileFlowDeclarations, flowSetData} from './forms/declarations.js';
 import {findFlowTraps, formatFlowTrap} from './forms/flow-traps.js';
 import {compileNamedFunctions} from './helpers/named-functions.js';
+import {ExpressionSandbox, sharedSandbox} from './helpers/expression-sandbox.js';
 import {closeFormInstance} from './helpers/form-state.js';
 import {isGlobalExit} from './helpers/answer.js';
 import {callerTextNumber} from './helpers/contact.js';
@@ -6859,7 +6860,7 @@ function evaluateExpression(
         // Preserve objects for SET steps (javascript-evaluation context) so flow variables can hold objects
         // RETURN steps also use this context but String() is applied later in handleReturnStep
         const preserveObjects = opts.context === 'javascript-evaluation';
-        const evaluationResult = evaluateJavaScriptExpression(singleExpressionMatch.trim(), context, preserveObjects);
+        const evaluationResult = evaluateJavaScriptExpression(singleExpressionMatch.trim(), context, preserveObjects, engine);
         logger.debug(`Simplified evaluation complete (single): ${expression} -> ${evaluationResult}`);
         return convertReturnType(evaluationResult, opts.returnType);
       } catch (error: unknown) {
@@ -6880,7 +6881,7 @@ function evaluateExpression(
       try {
         // Direct JavaScript evaluation with injected variables
         logger.debug(`Evaluating expression: ${expr.trim()}`);
-        const evaluationResult = evaluateJavaScriptExpression(expr.trim(), context);
+        const evaluationResult = evaluateJavaScriptExpression(expr.trim(), context, false, engine);
         logger.debug(`Expression evaluated: ${expr.trim()} -> ${evaluationResult}`);
         return String(evaluationResult);
       } catch (error: unknown) {
@@ -7043,9 +7044,10 @@ function createSimplifiedEvaluationContext(
 }
 
 /**
- * Safely evaluate JavaScript expression with injected context
+ * Evaluate a flow expression in the engine's QuickJS sandbox (docs/expression-sandbox-design.md): it reaches only the
+ * names in its context, never the host's globals.
  */
-function evaluateJavaScriptExpression(expression: string, context: Record<string, unknown>, preserveObjects: boolean = false): unknown {
+function evaluateJavaScriptExpression(expression: string, context: Record<string, unknown>, preserveObjects: boolean = false, engine?: Engine): unknown {
   // Filter to only valid JavaScript identifiers (root variables only)
   const validParamNames = Object.keys(context).filter(key =>
     /^[a-zA-Z_$][a-zA-Z0-9_$]*$/.test(key)
@@ -7063,10 +7065,8 @@ function evaluateJavaScriptExpression(expression: string, context: Record<string
     return value;
   });
 
-  // Keep evaluator temporaries outside the generated function: a flow may legitimately declare `result`.
-  const evaluatorFunction = new Function(...validParamNames, `"use strict"; return (${expression});`);
   try {
-    const evaluated = evaluatorFunction(...paramValues);
+    const evaluated: any = expressionSandboxOf(engine).evaluate(expression, validParamNames, paramValues, engine?.APPROVED_FUNCTIONS);
     if (!preserveObjects && typeof evaluated === 'object' && evaluated !== null &&
         !(evaluated.__userInput === true && evaluated.__literal === true)) {
       return JSON.stringify(evaluated);
@@ -7075,6 +7075,11 @@ function evaluateJavaScriptExpression(expression: string, context: Record<string
   } catch (error: any) {
     throw new Error('Expression evaluation failed: ' + error.message);
   }
+}
+
+// The process's sandbox (every engine shares it; an engine may carry another as expressionSandbox).
+function expressionSandboxOf(engine?: Engine): ExpressionSandbox {
+  return (engine as any)?.expressionSandbox || sharedSandbox();
 }
 
 /**
@@ -8108,6 +8113,7 @@ export class WorkflowEngine implements Engine {
   public flowsMenu: FlowDefinition[];
   private readonly sourceFlowDeclarations: Array<FlowDefinition | FlowDeclaration>;
   private readonly namedFunctionNamespaces = new Map<string, Record<string, unknown>>();
+  declare readonly expressionSandbox: ExpressionSandbox;
   /** The flow set's shared data, read in expressions as $data.<name>: deep-frozen, never persisted in session variables. */
   public sharedData?: Record<string, unknown>;
   // $callers: for each flow, the primaries whose call graph reaches it ({id, label}); a gate offers them as its use cases.
@@ -8286,6 +8292,8 @@ export class WorkflowEngine implements Engine {
     logger = withPiiRedaction(hostLogger); // Assign to global logger (a SAY-GET's `pii` answer never reaches it)
 
     this.aiCallback = aiCallback;
+    // Flow expressions and named functions run in the process's sandbox, never in the host's realm; non-enumerable, never serialized.
+    Object.defineProperty(this, 'expressionSandbox', {value: sharedSandbox(), enumerable: false, writable: false});
     this.sourceFlowDeclarations = cloneFlowValue(flowsMenu);
     const compiledFlows = compileFlowDeclarations(cloneFlowValue(this.sourceFlowDeclarations), {tools:toolsRegistry}) as FlowDefinition[];
     for (const flow of compiledFlows) {
@@ -8309,7 +8317,7 @@ export class WorkflowEngine implements Engine {
     };
     for (const flow of this.flowsMenu) {
       if (!((flow.metadata?.declaration as any)?.version >= 1) || !(flow as any).functions) continue;
-      const functions = compileNamedFunctions((flow as any).functions, {approvedFunctions:this.APPROVED_FUNCTIONS,label:flow.id});
+      const functions = compileNamedFunctions((flow as any).functions, {approvedFunctions:this.APPROVED_FUNCTIONS,label:flow.id,sandbox:this.expressionSandbox});
       if (!functions) continue;
       if (Object.prototype.hasOwnProperty.call(flow.variables || {}, 'fn') || (flow.parameters || []).some(parameter => parameter.name === 'fn') || Object.prototype.hasOwnProperty.call(this.APPROVED_FUNCTIONS, 'fn') || Object.prototype.hasOwnProperty.call(globalVariables || {}, 'fn')) throw new Error('Named functions '+flow.id+': fn is a reserved evaluation namespace');
       this.namedFunctionNamespaces.set(flow.id, functions);

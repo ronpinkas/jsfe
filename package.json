@@ -48,7 +48,7 @@
     "docs/development-release.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/stamp-runtime.mjs",
+    "build": "tsc -p tsconfig.json && node scripts/bundle-quickjs.mjs && node scripts/stamp-runtime.mjs",
     "clean": "rm -rf dist",
     "test": "for t in tests/*.test.mjs; do node \"$t\" || exit 1; done",
     "prepublishOnly": "npm run clean && npm run build",
@@ -65,9 +65,12 @@
   ],
   "devDependencies": {
     "@types/node": "^24.2.1",
+    "esbuild": "0.25.12",
     "nodemailer": "^7.0.6",
     "twilio": "^5.8.2",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "@jitl/quickjs-singlefile-mjs-release-sync": "0.32.0",
+    "quickjs-emscripten-core": "0.32.0"
   },
   "dependencies": {
     "ajv": "^8.17.1",

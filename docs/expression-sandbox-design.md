@@ -1,6 +1,6 @@
 # Expression sandbox (design, for review)
 
-Status: proposal. No code yet.
+Status: implemented (`src/helpers/expression-sandbox.js`).
 
 ## Problem
 
@@ -69,43 +69,55 @@ Consequences, each covered by a prototype test:
   call and at the end, only if the expression changed it after storing it.
 - The result crosses like any value. With `preserveObjects` false, an object result is stringified on the host, as now.
 
-### Which functions are callable
+### Host functions
 
-A function reached through a stand-in is callable only when it is an approved function or a member of `fn`. Any other
-function-valued property of host data crosses as `undefined`. (The prototype bridged every function; this tightens it.)
-An approved function that returns a Promise throws `bridged function returned a Promise`: an expression is synchronous,
-and today such a call yields an unusable Promise object.
+Any host function an expression reaches (an approved function, or a function the host itself placed in data: JSON flow
+text cannot hold one) is called on the host; only its arguments and result cross. A host function's id lasts one
+evaluation; named functions hold approved functions by name. An approved function that returns a
+Promise throws `an approved function returned a Promise; expressions are synchronous`. A function an expression creates
+and hands to the host is callable only while that evaluation runs.
+
+A host error reaches the sandbox with its name and message (built by the sandbox's own constructor: the frozen
+`Error.prototype` refuses an assigned message).
 
 ## Named functions
 
-Named functions are flow text and move into the sandbox too. They are compiled ONCE, when the engine loads the flow, as
-now: a function compiled in a QuickJS context can be called from any later evaluation in the same context (verified).
-A syntax error still fails the flow at load.
+Named functions are flow text and run in the sandbox too. Each distinct source is compiled once per process; a syntax
+error still fails the flow at load. They call approved functions BY NAME, from the table of the engine evaluating (called
+from the host, from the table they were compiled with), so one compiled copy serves every engine. Their members are
+frozen and hold no state.
 
 ## Contexts, limits, loading
 
-- **Runtime:** one QuickJS runtime per process (Node) or page (browser), created when jsfe is imported. jsfe evaluates
-  synchronously, so evaluations never overlap in a runtime.
-- **Context:** one context per engine, created with the engine. It holds the guest runtime and the named functions,
-  compiled once. Before the first evaluation, the context's global object and every built-in and prototype are frozen,
-  so neither an expression nor a named function can leave state for a later evaluation (strict mode already refuses
-  undeclared assignments). Each evaluation compiles its expression as a fresh function in that context, passes only
-  the names the expression mentions, and on exit clears the host's object and function tables and the guest's
-  stand-in cache, so no stand-in outlives its evaluation. The prototype measured a new context per evaluation (p50
-  0.49 ms); reusing one should be faster (inference, to be measured), and freezing must pass every flow suite.
-- **Limits** (engine options, these defaults): memory 64 MB, stack 1 MB, a wall deadline of 500 ms per evaluation checked
+- **One sandbox per process** (`sharedSandbox()`): one QuickJS runtime and context, shared by every engine. Measured with
+  a tenant's full flow set: a per-engine sandbox recompiled every flow's named functions in each engine (engine
+  construction p50 404 ms against 162 ms natively, and the host builds an engine per turn); shared, construction is 158 ms
+  against 164 ms, and the first engine in a process pays about 200 ms once.
+- **Isolation between evaluations and engines:** the context's global object and every built-in and prototype are frozen
+  before the first evaluation, so nothing an expression or a named function does survives it (strict mode already refuses
+  undeclared assignments). Each evaluation compiles its expression as a fresh function, passes only the names it mentions,
+  and on exit the host's object and function tables and the guest's stand-in cache are cleared, so no stand-in outlives
+  its evaluation. jsfe evaluates synchronously, so evaluations never overlap.
+- **Limits** (`EXPRESSION_LIMITS`; an `ExpressionSandbox` takes overrides, the engine uses these): memory 256 MB for the
+  process (a tenant's full flow set compiled uses about 12 MB), stack 1 MB, a wall deadline of 500 ms per evaluation checked
   by the interrupt handler. The prototype's slowest evaluation took 70 ms. A limit hit throws `Expression evaluation
   failed: interrupted` (or `out of memory`), handled like any failed expression.
-- **Loading:** the WebAssembly is embedded in the package (the single-file variant) and instantiated with a top-level
-  `await` in jsfe's entry module, so `new WorkflowEngine(...)` stays synchronous and hosts change nothing. Node and every
-  current browser support top-level await in ES modules, and esbuild's `esm` format keeps it.
+- **Compiled expressions** are cached per sandbox (1,000, least recently used); a cached wrapper holds no state.
+- **Release:** the shared sandbox lives as long as the process. A separately created `ExpressionSandbox` is released by
+  `dispose()` or when it is collected (a `FinalizationRegistry`; the bridge reaches it only through a `WeakRef`).
+- **Loading:** `scripts/bundle-quickjs.mjs` bundles QuickJS with its WebAssembly embedded into one relative module,
+  `dist/vendor/quickjs.js` (the Flow Designer imports `dist/` from a CDN with no bundler, so `dist/` holds no bare
+  package import). It is instantiated with a top-level `await`, so `new WorkflowEngine(...)` stays synchronous and hosts
+  change nothing. The QuickJS packages are build-time dependencies only.
 
 ## Behaviour that changes for flow authors
 
 - Host globals that jsfe never exposed are gone: `structuredClone`, `fetch`, `process`, `setTimeout`, `globalThis`
   members, `require`. The standard built-ins (`Object`, `Array`, `JSON`, `Math`, `Date`, `String`, `Number`, `Boolean`,
   `RegExp`, `Map`, `Set`, ...) are the sandbox's own, with the same behaviour.
-- `Intl` is absent; the locale methods above are bridged.
+- `Intl` holds only `DateTimeFormat` and `NumberFormat` (`format`, `formatToParts`, `resolvedOptions`), formatted by the
+  host; with the locale methods above, the only formatting the flow sets use.
+- `structuredClone` is the sandbox's own: plain objects, arrays, `Date`, `Map`, `Set`, `RegExp`, cycles kept.
 - `Date` local time is the host's: QuickJS asks the host's own `Date` for the time zone. Verified equal (offset, hours,
   day, both DST transitions, local-time parsing) in Node, Chromium and WebKit, in five zones. The one difference:
   `Date#toString` and `toTimeString` omit the zone name ("(Pacific Standard Time)"), so both are bridged to the host

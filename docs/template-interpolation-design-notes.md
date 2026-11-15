@@ -60,7 +60,7 @@ Neither one is wrong for its original purpose. The footgun is that the same `{{ 
 - Partial tool results: `{ success: false }` with no `.store` sub-object
 - Branch-specific cargo fields populated only on certain flow paths
 
-Raw JavaScript evaluation (`new Function(...)` under `evaluateJavaScriptExpression`) **throws** on `null.field`. That TypeError would become a runtime failure for any flow relying on the null-safe behavior. Audits identified 23 nested-dot-path templates in CALL-TOOL args (e.g., `{{cargo.accountNumber}}`, `{{location_result.store.address}}`) that all rely on this invariant.
+Raw JavaScript evaluation (`evaluateJavaScriptExpression`, in the expression sandbox) **throws** on `null.field`. That TypeError would become a runtime failure for any flow relying on the null-safe behavior. Audits identified 23 nested-dot-path templates in CALL-TOOL args (e.g., `{{cargo.accountNumber}}`, `{{location_result.store.address}}`) that all rely on this invariant.
 
 This is why the asymmetry cannot be "fixed" by mechanically swapping the interpolator. Any unification must either:
 - Preserve null-safe behavior for pure dot-paths while enabling JS for complex expressions (a heuristic approach), OR

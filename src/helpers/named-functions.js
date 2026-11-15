@@ -1,11 +1,14 @@
-/** Compile trusted, JSON-saved JavaScript helpers once for a loaded flow definition.
- * Only explicit arguments and approved platform helpers enter their lexical scope.
- * Runtime/session values are passed by callers; a registry never captures a session.
+/** Compile JSON-saved JavaScript helpers once for a loaded flow definition, in the expression sandbox (flow text is
+ * untrusted: it never runs in the host's realm). Only explicit arguments and approved platform helpers enter their
+ * lexical scope. Runtime/session values are passed by callers; a registry never captures a session.
  */
+import {sharedSandbox} from './expression-sandbox.js';
+/** @typedef {import('./expression-sandbox.js').ExpressionSandbox} ExpressionSandbox */
 const identifier=/^[A-Za-z_$][\w$]*$/;
 const forbidden=new Set(['fn','__proto__','prototype','constructor']);
 const own=(value,key)=>Object.prototype.hasOwnProperty.call(value,key);
-export function compileNamedFunctions(definitions,{approvedFunctions={},label='flow'}={}) {
+/** @param {any} definitions @param {{approvedFunctions?: Record<string, any>, label?: string, sandbox?: ExpressionSandbox}} [options] @returns {Record<string, (...args: any[]) => any> | undefined} */
+export function compileNamedFunctions(definitions,{approvedFunctions={},label='flow',sandbox}={}) {
    if(definitions===undefined)return undefined;
    if(!definitions||typeof definitions!=='object'||Array.isArray(definitions))throw new Error(`Named functions ${label}: functions must be an object`);
    const names=Object.keys(definitions);
@@ -31,12 +34,7 @@ export function compileNamedFunctions(definitions,{approvedFunctions={},label='f
    });
    // Local declaration names shadow same-named approved helpers exactly as ordinary JS lexical bindings do.
    const approvedNames=Object.keys(approvedFunctions).filter(name=>identifier.test(name)&&name!=='fn'&&!own(definitions,name));
-   let factory;
-   try {
-      factory=new Function('fn',...approvedNames,`"use strict";\n${statements.join('\n')}\nreturn [${names.join(',')}];`);
-   }catch(error){fail(`invalid JavaScript: ${error.message}`);}
-   const namespace=Object.create(null);
-   const functions=factory(namespace,...approvedNames.map(name=>approvedFunctions[name]));
-   names.forEach((name,index)=>{namespace[name]=functions[index];});
-   return Object.freeze(namespace);
+   const approved={};
+   for(const name of approvedNames)approved[name]=approvedFunctions[name];
+   return (sandbox||sharedSandbox()).defineNamespace({names,source:statements.join('\n'),approvedFunctions:approved,label});
 }

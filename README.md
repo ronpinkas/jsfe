@@ -1374,13 +1374,14 @@ while maintaining security through a trusted developer model and limiting user i
 ```
 
 #### Supported JavaScript Features
-Expressions are trusted code: `new Function` in strict mode, with flow and session variables, `APPROVED_FUNCTIONS`
-and built-ins in scope. There is no sandbox, so expressions come only from flow authors, never from callers.
+Expressions run in strict mode in a QuickJS sandbox (WebAssembly), with flow and session variables,
+`APPROVED_FUNCTIONS` and the sandbox's own built-ins in scope. Flow text is untrusted: an expression never reaches the
+host's globals or its `Function` constructor. See `docs/expression-sandbox-design.md`.
 
 #### Security Model
-- **Developer Trust**: Workflows authored by developers, not end users
+- **Sandboxed evaluation**: host objects are live stand-ins (own properties only); host functions run on the host
+- **Limits**: 500 ms per evaluation, 256 MB for the process's sandbox; its globals and built-ins are frozen
 - **Parameter Filtering**: Only valid JavaScript identifiers allowed as parameters
-- **No eval()**: Direct Function constructor with parameter validation
 - **User Input Safety**: User inputs are treated as values, not code
 
 ### Internationalization and Localization
