@@ -44,7 +44,7 @@ context; each takes and returns only numbers and strings:
 | `__set(id, key, json)` | writes the decoded value; `__proto__` is refused |
 | `__has(id, key)` / `__del(id, key)` / `__keys(id)` | own-property test, delete, `Object.keys` |
 | `__call(fid, json)` | calls the host function with decoded arguments; its result crosses back like `__get`'s |
-| `__locale(kind, value, locales, options)` | `toLocaleDateString` / `toLocaleString` / `toLocaleTimeString` and `Number#toLocaleString` on the host (QuickJS has no `Intl`) |
+| `__locale(kind, value, locales, options)` | `toLocaleDateString` / `toLocaleString` / `toLocaleTimeString`, `Date#toString` / `toTimeString` and `Number#toLocaleString` on the host (QuickJS has no `Intl`) |
 
 Tags use a private-use character (``) prefix: `o:<id>` an object (`:a` an array), `f:<id>` a host function,
 `g:<id>` a sandbox function. NUL cannot be used: it truncates QuickJS C strings.
@@ -78,19 +78,21 @@ and today such a call yields an unusable Promise object.
 
 ## Named functions
 
-Named functions are flow text and move into the sandbox too. At flow load, jsfe compiles the factory source once in a
-throwaway context, so a syntax error still fails the flow at load as now. An evaluation whose expression mentions `fn`
-evaluates the factory source in its context, with the approved functions as bridged host functions, and passes the
-resulting namespace as `fn`. Named functions calling each other and approved functions keep today's semantics. Cost per
-evaluation that uses `fn` is to be measured; if it matters, the factory is compiled once per turn context instead (see
-Contexts).
+Named functions are flow text and move into the sandbox too. They are compiled ONCE, when the engine loads the flow, as
+now: a function compiled in a QuickJS context can be called from any later evaluation in the same context (verified).
+A syntax error still fails the flow at load.
 
 ## Contexts, limits, loading
 
 - **Runtime:** one QuickJS runtime per process (Node) or page (browser), created when jsfe is imported. jsfe evaluates
   synchronously, so evaluations never overlap in a runtime.
-- **Context:** a new context per evaluation, disposed with every handle in a `finally`. Only the names the expression
-  mentions are passed in. No state survives an evaluation.
+- **Context:** one context per engine, created with the engine. It holds the guest runtime and the named functions,
+  compiled once. Before the first evaluation, the context's global object and every built-in and prototype are frozen,
+  so neither an expression nor a named function can leave state for a later evaluation (strict mode already refuses
+  undeclared assignments). Each evaluation compiles its expression as a fresh function in that context, passes only
+  the names the expression mentions, and on exit clears the host's object and function tables and the guest's
+  stand-in cache, so no stand-in outlives its evaluation. The prototype measured a new context per evaluation (p50
+  0.49 ms); reusing one should be faster (inference, to be measured), and freezing must pass every flow suite.
 - **Limits** (engine options, these defaults): memory 64 MB, stack 1 MB, a wall deadline of 500 ms per evaluation checked
   by the interrupt handler. The prototype's slowest evaluation took 70 ms. A limit hit throws `Expression evaluation
   failed: interrupted` (or `out of memory`), handled like any failed expression.
@@ -104,14 +106,16 @@ Contexts).
   members, `require`. The standard built-ins (`Object`, `Array`, `JSON`, `Math`, `Date`, `String`, `Number`, `Boolean`,
   `RegExp`, `Map`, `Set`, ...) are the sandbox's own, with the same behaviour.
 - `Intl` is absent; the locale methods above are bridged.
-- `Date` local-time methods use the sandbox's time zone. To be verified equal to the host's in Node and in the browser
-  before release.
+- `Date` local time is the host's: QuickJS asks the host's own `Date` for the time zone. Verified equal (offset, hours,
+  day, both DST transitions, local-time parsing) in Node, Chromium and WebKit, in five zones. The one difference:
+  `Date#toString` and `toTimeString` omit the zone name ("(Pacific Standard Time)"), so both are bridged to the host
+  like the locale methods.
 
 ## Browser
 
 The Flow Designer loads jsfe in a page. WebAssembly compilation needs `'wasm-unsafe-eval'` if the page sets a Content
-Security Policy; that is narrower than the `'unsafe-eval'` that `new Function` needs today. The package grows by the
-embedded WebAssembly (about 0.5 MB, more as base64; to be measured).
+Security Policy; that is narrower than the `'unsafe-eval'` that `new Function` needs today. The browser bundle grows by about
+0.9 MB (QuickJS with its WebAssembly embedded, measured with esbuild).
 
 ## Tests
 
@@ -121,7 +125,7 @@ embedded WebAssembly (about 0.5 MB, more as base64; to be measured).
 - **Limits:** an infinite loop, recursion, unbounded arrays and strings; the next evaluation must succeed.
 - **Parity:** jsfe's own suite and every host flow suite, unchanged.
 - **Latency:** the per-evaluation benchmark, published with the release.
-- **Browser:** the escape and parity suites in Chromium, WebKit and Firefox; time zone checks in each.
+- **Browser:** the escape and parity suites in Chromium, WebKit and Firefox, and the time zone comparison.
 
 ## Rollout
 
