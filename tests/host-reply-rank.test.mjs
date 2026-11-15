@@ -53,12 +53,12 @@ test('declared choices are options before the fixed three, with their own criter
  const open=buildReplyRank('chino',conversation,'Current question: Say the product number to check nearby stores.',[{key:'__agent',label:'a live agent'}]);
  assert.deepEqual(open.systemOne.index.map(q=>q.option),['choice:__agent','answers','abort','new_request','irrelevant']);
 });
-test('irrelevant: its own cut, and it takes a choice only from the higher one',()=>{
+test('irrelevant: its own cut, and it outranks any choice it is rated above',()=>{
  const open=(ans,ab,nr,irr)=>decodeReplyRankSystemOne({r0:{noul:ans},r1:{noul:ab},r2:{noul:nr},r3:{noul:irr}},r).option;
  assert.equal(open(.2,.1,.1,.71),'irrelevant','a stray word');assert.equal(open(.3,.1,.1,.69),'answers','below its cut the default stands');
  assert.equal(open(.9,.1,.1,.75),'answers','an answer rated higher stays an answer');assert.equal(open(.1,.1,.8,.75),'new_request','a request rated higher stays a request');
  const pick=(ch,irr)=>decodeReplyRankSystemOne({r0:{noul:ch},r1:{noul:.1},r2:{noul:.1},r3:{noul:.1},r4:{noul:irr}},c).option;
- assert.equal(pick(.7,.78),'choice:1','below 0.8 a cleared choice stands ("Operator.")');assert.equal(pick(.7,.86),'irrelevant','from 0.8 a stray word is not a pick ("You.")');
+ assert.equal(pick(.64,.71),'irrelevant','rated above a cleared choice, a stray word is not a pick');assert.equal(pick(.7,.86),'irrelevant','a stray word is not a pick ("You.")');
  assert.equal(pick(.9,.85),'choice:1','a choice rated higher stands');
 });
 test('a cleared new_request outranks irrelevant, on an open question and never over a cleared choice',()=>{

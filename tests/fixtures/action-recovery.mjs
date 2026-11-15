@@ -5,7 +5,7 @@ import {createActionJournal,createMemoryActionStorage} from '../../dist/host/ind
 const set=(id,variable,value)=>({id,type:'SET',variable,value});
 const flow=(id,value)=>({id,type:'FLOW',value,callType:'call'});
 const quiet={debug(){},info(){},warn(){},error(){}};
-export function fixture(namespace,{storage=createMemoryActionStorage(),nested=false,completionTimeout}={}) {
+export function fixture(namespace,{storage=createMemoryActionStorage(),nested=false}={}) {
    const effects=[];
    const port=()=>createActionJournal({storage,namespace});
    const performer=label=>definePerformer({id:label+'-task',name:label+'Task',description:'Independent '+label+' effect.',inputs:[],contract:{summary:'Recovery fixture '+label},prepare:'prepare-'+label,present:'present-'+label,
@@ -21,7 +21,6 @@ export function fixture(namespace,{storage=createMemoryActionStorage(),nested=fa
    const tools=[{id:'write',name:'write',description:'Fixture effect.',parameters:{type:'object',properties:{label:{type:'string'}},required:['label']},implementation:{type:'local',function:'write',retries:0}}];
    function engine(journal=port()) {
       const e=new WorkflowEngine(quiet,async()=>'{"flowName":"None"}',linkFormSchemas([...FLOWS,performer('alpha'),performer('beta'),...workers]),tools,{...STANDARD_FUNCTIONS,write:async({label})=>{effects.push(label);return {status:'saved',reference:label+'-'+effects.length};}},{},false,'en');
-      if(completionTimeout!==undefined)e.toolsRegistry=e.toolsRegistry.map(tool=>tool.id==='jsfe:action-complete'?{...tool,implementation:{...tool.implementation,timeout:completionTimeout}}:tool);
       e.disableCommands();e.actionJournal=journal;return e;
    }
    return {engine,port,effects};

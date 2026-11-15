@@ -7,7 +7,7 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 let checks=0;
 async function test(name,run){await run();checks++;console.log('PASS '+name);}
 await test('late first completion projects onto current state without repeating the acknowledged second write',async()=>{
-   const f=fixture('late-first-chain',{completionTimeout:5}),base=f.port();let release,finished;
+   const f=fixture('late-first-chain'),base=f.port();let release,finished;
    const gate=new Promise(resolve=>release=resolve),settled=new Promise(resolve=>finished=resolve);
    let e=f.engine({...base,complete:async args=>{if(args.record.action==='alpha'){await gate;try{return await base.complete(args);}finally{finished();}}return base.complete(args);}});
    let live=await e.updateActivity({role:'user',content:'create both',start:{flow:'both-and-wait'}},e.initSession('user','late-first-chain','en'));
@@ -31,7 +31,7 @@ await test('late first completion projects onto current state without repeating 
    assert.deepEqual(f.effects,['alpha','beta']);assert.equal(live.flowStacks.flat().length,0,'suspended pending input resumes normally');
 });
 await test('late lower-progress projection survives a newer pending snapshot whose save was lost',async()=>{
-   const f=fixture('late-multiple-pending',{completionTimeout:5}),base=f.port();let release,finished;
+   const f=fixture('late-multiple-pending'),base=f.port();let release,finished;
    const gate=new Promise(resolve=>release=resolve),settled=new Promise(resolve=>finished=resolve);
    let e=f.engine({...base,complete:async args=>{await gate;try{return await base.complete(args);}finally{finished();}}});
    let persisted=await e.updateActivity({role:'user',content:'create A',start:{flow:'alpha-task'}},e.initSession('user','late-multiple-pending','en'));

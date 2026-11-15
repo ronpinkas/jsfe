@@ -28,7 +28,7 @@ await test('recovery explicitly reports the deferred message in the session lang
    assert.match(recovered.response,/Su último mensaje no se procesó; envíelo de nuevo/);assert.doesNotMatch(recovered.response,/Your latest message/);assert.equal(recovered.lastTurnRecovery.deferredInput.content,'cancela el servicio');assert.deepEqual(f.effects,['alpha']);
 });
 await test('a completion-port timeout can recover its late durable result without another effect',async()=>{
-   const f=fixture('ack-real-timeout',{completionTimeout:5}),base=f.port();let release,finished;
+   const f=fixture('ack-real-timeout'),base=f.port();let release,finished;
    const gate=new Promise(resolve=>{release=resolve;}),settled=new Promise(resolve=>{finished=resolve;});
    let e=f.engine({...base,complete:async args=>{await gate;try{return await base.complete(args);}finally{finished();}}});
    const origin=e.initSession('user-A','timeout-A','en');const live=await e.updateActivity({role:'user',content:'create',start:{flow:'alpha-task'}},origin);

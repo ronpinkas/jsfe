@@ -373,7 +373,7 @@ deterministic reader cannot read, jsfe asks what the reply does with the step's 
 `answers`, `abort`, `new_request` or `irrelevant`. ONE aiCallback call whose 4th argument is `task: 'rank_reply'` with both
 executors' instructions (`llm`, `systemOne`); the host replies `{ "option": … }`, plus `"fallback": true` when the
 option is `answers` only because nothing cleared the cut (System One). `jsfe/host` exports
-`buildReplyRank`, `decodeReplyRankLlm` and `decodeReplyRankSystemOne` (the highest option at or above its cut: 0.5, or `choice:no` 0.65, `new_request` 0.6, `irrelevant` 0.7; a cleared choice outranks `answers` and `new_request`, and `irrelevant` from 0.8; else `answers`). `answers` continues the flow, after extracting the step's `responseParameters` with a stage-2 request
+`buildReplyRank`, `decodeReplyRankLlm` and `decodeReplyRankSystemOne` (the highest option at or above its cut: 0.5, or `choice:no` 0.65, `new_request` 0.6, `irrelevant` 0.7; a cleared choice outranks `answers` and `new_request`, and `irrelevant` rated above it outranks the choice; else `answers`). `answers` continues the flow, after extracting the step's `responseParameters` with a stage-2 request
 when it declares them. A confident `answers` (no `fallback`) is never lost: when the declaration is one parameter marked
 `verbatim: true` (an open string whose words are the value, such as a reason) and extraction finds nothing or fails,
 the field is the reply as said. Unmarked fields (a product, a city) always need a real extraction. After a
@@ -385,7 +385,7 @@ in the chain declaring `user_description` / `user_description_es`, written with 
 a reason question; cut 0.6, and the top score wins over a cleared choice): the caller expresses doubt that the current process is what they need.
 The reader says the description, how to cancel ("To cancel, press the asterisk key or say EXIT." / "To cancel, type EXIT."; Spanish
 SALIR) and the question again; no attempt is counted;
-`irrelevant` (a stray word, an unfinished sentence, speech to someone else; cut 0.7, and 0.8 to outrank a cleared choice) extracts nothing and asks again: no flow moves. `new_request` ends the flows and routes the input through intent detection. Only a new request is routed: after
+`irrelevant` (a stray word, an unfinished sentence, speech to someone else; cut 0.7; rated above a cleared choice, it outranks it) extracts nothing and asks again: no flow moves. `new_request` ends the flows and routes the input through intent detection. Only a new request is routed: after
 `answers` a later ordinary DISPATCH in the same turn hands the host the turn without detection. A host that does not know the task answers the `llm`
 instructions with its text model.
 

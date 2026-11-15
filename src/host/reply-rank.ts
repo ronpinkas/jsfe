@@ -51,11 +51,6 @@ export const REPLY_CUTS: Partial<Record<ReplyOption, number>> = {
   concern: 0.6,
 };
 /**
- * `irrelevant` outranks a cleared choice only from here: a false pick can transfer the call. Measured 2026-11-01: "You." and
- * "And, Leslie." at a pay menu rated 0.86 and were taken as a request for a person; "Operator." 0.78 is that request.
- */
-export const REPLY_IRRELEVANT_OVER_CHOICE = 0.8;
-/**
  * The cut another declared choice must clear to be reported beside the pick (`also`): a reply may ask for two of a menu's
  * facts ("my due date and the amount"). Measured 2026-11-02 on 136 prod replies at the account menu: 0.6 kept those and
  * dropped the neighbours a single question rates 0.50-0.59.
@@ -243,8 +238,10 @@ export function decodeReplyRankSystemOne(
   const firstChoice = cleared.find(o => o.startsWith(CHOICE_PREFIX));
   const named = firstChoice === `${CHOICE_PREFIX}no` ? cleared.find(o => o.startsWith(CHOICE_PREFIX) && ![`${CHOICE_PREFIX}no`, `${CHOICE_PREFIX}yes`].includes(o) && !o.startsWith(`${CHOICE_PREFIX}__`)) : undefined;
   const choice = named ?? firstChoice;
-  // `irrelevant` takes a choice's place only from its own higher cut (REPLY_IRRELEVANT_OVER_CHOICE).
-  const yieldsToChoice = (named !== undefined && cleared[0] === `${CHOICE_PREFIX}no`) || cleared[0] === 'answers' || cleared[0] === 'new_request' || (cleared[0] === 'irrelevant' && scores.irrelevant < REPLY_IRRELEVANT_OVER_CHOICE);
+  // `irrelevant` rated above every cleared choice wins (owner 2026-11-15): it asks the question again and moves nothing,
+  // so it is the safer verdict when a false pick could transfer the call. A reply a question's reader takes (an agent
+  // request such as "Operator.") never reaches the ranker.
+  const yieldsToChoice = (named !== undefined && cleared[0] === `${CHOICE_PREFIX}no`) || cleared[0] === 'answers' || cleared[0] === 'new_request';
   // A clear ask outranks noise (owner 2026-11-02, prod "¿Quién habla?" irrelevant .85, new_request .72): with both cleared the reply is a request.
   const best = choice && yieldsToChoice ? choice : cleared[0] === 'irrelevant' && !choice && cleared.includes('new_request') ? 'new_request' : cleared[0];
   if (best) {
