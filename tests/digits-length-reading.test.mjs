@@ -73,6 +73,17 @@ for(const [said,mmyy] of [['0 6 3 0 30 se vence.','0630'],['1 2 2 9, ya','1229']
   assert.match(JSON.stringify(t.session.cargo),new RegExp(`"card_expiration":"${mmyy}"`));
  });
 }
+await test('four single digits out of order are not an expiration: at the billing ZIP, "1 2 3 6 Avenue ... 8 9 3 0 1" keeps its ZIP and asks no expiration-or-code question',async()=>{
+ const t=fixture([]);await t.say('start','collect-credit-card');await t.say('4111111111111111');await t.say('0929');await t.say('123');
+ const reply=await t.say('1 2 3 6 Avenue, g Nevada 8 9 3 0 1.');
+ assert.doesNotMatch(reply,/expiration/i,reply);
+ assert.match(JSON.stringify(t.session.cargo),/"card_zip":"89301"/);
+ assert.doesNotMatch(JSON.stringify(t.session.cargo),/"card_expiration":"1 ?2 ?3 ?6"/);
+});
+await test('a spoken expiration with no words is stored as its four digits, never with spaces',async()=>{
+ const t=fixture([]);await t.say('start','collect-credit-card');await t.say('4111111111111111');await t.say('0 5 2 9.');
+ assert.match(JSON.stringify(t.session.cargo),/"card_expiration":"0529"/);
+});
 await test('the must_complete first-task line names the exit (SALIR / EXIT) and not an agent',async()=>{
  const es=fixture([form('pay',[{name:'zip',field:'zip',question:'ZIP?',question_es:'¿CÓDIGO?'}],{must_complete:true})],{language:'es'});await es.say('begin','pay');
  const reply=await es.say('la verdad no me acuerdo cuál es');

@@ -542,6 +542,17 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    } else {
       // not a digits field, something read the answer, no pause join, or no single piece of its length
    }
+   // A pattern field's asked_regex (owner 2026-11-15): a form read only at the field's own question, when nothing else read the answer,
+   // stored as its digits ("0 6 3 0 30 se vence" at the expiration is 0630). Out of order it reads nothing, so another field keeps its digits.
+   const askedRegex = own && own.profile.kind === 'pattern' && own.profile.asked_regex ? new RegExp(own.profile.asked_regex, 'gi') : null;
+   const askedHits = askedRegex && !readings.length && !clarify.length ? [...undecimal.matchAll(askedRegex)] : [];
+   if (askedHits.length === 1) {
+      const hit = askedHits[0];
+      readings.push({ form: own.form, name: own.name, value: hit[0].replace(/\s+/g, ''), known: false, repeatedChoice: false, wholeChoice: false, choice: false, narrative: false, resetOn: [], spans: [[hit.index, hit.index + hit[0].length]], keypad: false, fallback: false,
+         group: own.group, exclusive: own.exclusive === true, level: forms.indexOf(own.scope || own.form), current: true, confirm: Array.isArray(own.confirm_against) ? own.confirm_against : [] });
+   } else {
+      // no asked_regex, something already read the answer, or not exactly one match
+   }
    // Rule 1 by length (owner 2026-11-15): at its own question, a field that declares its length (`digits`) takes the one number
    // of three or more digits in the answer when that number has the wrong length, words around it ignored, and nothing else read
    // it or was refused for it (another field's number keeps its own handling: "5519936." at a 6-digit code is told how to mean the
