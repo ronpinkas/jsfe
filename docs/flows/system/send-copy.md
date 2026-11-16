@@ -3,7 +3,7 @@
 <!-- generated:start -->
 **SendCopy** · `send-copy` · version 1.1.0 · **entry point** (intent detection can start it) · steps · isolated scope
 
-> Asks to be sent, by text or email, something the assistant said in this conversation, or a copy of the whole conversation ('text me that', 'send me that by email', 'email me a copy of this chat', 'mándame eso por mensaje', 'envíeme toda la conversación al correo'). Not: continuing the conversation by text (SwitchToText); a person (LiveAgentRequested).
+> Asks to be sent something by text or email, whatever it is ('email me that', 'text me the case number', 'can I have that emailed to me', 'send me a copy of this chat', 'mándame eso por mensaje', 'me lo puede mandar por correo'). Not: continuing the conversation by text (SwitchToText); a payment receipt (PaymentReceipt); a statement (SendStatement).
 
 - **Parameters:** 
   - `item`: What the user asks to have sent: the reply or document they name or point to. 'That', 'it', 'this', 'eso' or 'lo que me dijo' is the latest reply; the whole chat, conversation or transcript ('toda la conversación') is the whole conversation.

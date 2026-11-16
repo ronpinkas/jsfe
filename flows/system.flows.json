@@ -8898,7 +8898,7 @@
             "label_es": "fecha de vencimiento",
             "profile": {
               "kind": "pattern",
-              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b|\\b(?:0\\s?[1-9]|1\\s?[0-2]|[1-9])\\s*(?:gui[oó]n|dash|hyphen|slash|barra|diagonal)\\s*(?:2\\s?0\\s?)?\\d\\s?\\d\\b",
+              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b|\\b(?:0\\s?[1-9]|1\\s?[0-2]|[1-9])[\\s,.]*(?:gui[oó]n|dash|hyphen|slash|barra|diagonal)[\\s,.]*(?:2\\s?0\\s?)?\\d\\s?\\d\\b",
               "asked_regex": "\\b(?:0\\s[1-9]|1\\s[0-2])\\s\\d\\s\\d\\b"
             },
             "digits": {
@@ -10257,7 +10257,7 @@
             "label_es": "fecha de vencimiento",
             "profile": {
               "kind": "pattern",
-              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b|\\b(?:0\\s?[1-9]|1\\s?[0-2]|[1-9])\\s*(?:gui[oó]n|dash|hyphen|slash|barra|diagonal)\\s*(?:2\\s?0\\s?)?\\d\\s?\\d\\b",
+              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b|\\b(?:0\\s?[1-9]|1\\s?[0-2]|[1-9])[\\s,.]*(?:gui[oó]n|dash|hyphen|slash|barra|diagonal)[\\s,.]*(?:2\\s?0\\s?)?\\d\\s?\\d\\b",
               "asked_regex": "\\b(?:0\\s[1-9]|1\\s[0-2])\\s\\d\\s\\d\\b"
             },
             "digits": {
@@ -17893,7 +17893,7 @@
     "primary": true,
     "prompt": "Send a copy",
     "prompt_es": "Enviar una copia",
-    "description": "Asks to be sent, by text or email, something the assistant said in this conversation, or a copy of the whole conversation ('text me that', 'send me that by email', 'email me a copy of this chat', 'mándame eso por mensaje', 'envíeme toda la conversación al correo'). Not: continuing the conversation by text (SwitchToText); a person (LiveAgentRequested).",
+    "description": "Asks to be sent something by text or email, whatever it is ('email me that', 'text me the case number', 'can I have that emailed to me', 'send me a copy of this chat', 'mándame eso por mensaje', 'me lo puede mandar por correo'). Not: continuing the conversation by text (SwitchToText); a payment receipt (PaymentReceipt); a statement (SendStatement).",
     "parameters": [
       {
         "name": "item",
