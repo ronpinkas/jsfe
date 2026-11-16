@@ -8581,6 +8581,8 @@
               "min": 5,
               "max": 5
             },
+            "length_message": "I heard {heard} digits; a ZIP code has 5.",
+            "length_message_es": "Escuché {heard} dígitos; el código postal tiene 5.",
             "question": "What is your ZIP code?",
             "question_es": "¿Cuál es su código postal?",
             "retry": "Please say or enter your 5-digit ZIP code.",
@@ -8878,6 +8880,8 @@
             },
             "pii": true,
             "validator": "validate-card-number",
+            "length_message": "I heard {heard} digits; a card number has 16, or 15 for American Express.",
+            "length_message_es": "Escuché {heard} dígitos; el número de la tarjeta tiene 16, o 15 si es American Express.",
             "question": "Please say or enter your card number.",
             "question_es": "Por favor diga o ingrese el número de su tarjeta.",
             "question_text": "Please type your card number.",
@@ -8894,7 +8898,8 @@
             "label_es": "fecha de vencimiento",
             "profile": {
               "kind": "pattern",
-              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b|\\b(?:0\\s?[1-9]|1\\s?[0-2]|[1-9])\\s*(?:gui[oó]n|dash|hyphen|slash|barra|diagonal)\\s*(?:2\\s?0\\s?)?\\d\\s?\\d\\b"
+              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b|\\b(?:0\\s?[1-9]|1\\s?[0-2]|[1-9])\\s*(?:gui[oó]n|dash|hyphen|slash|barra|diagonal)\\s*(?:2\\s?0\\s?)?\\d\\s?\\d\\b",
+              "asked_regex": "\\b(?:0\\s[1-9]|1\\s[0-2])\\s\\d\\s\\d\\b"
             },
             "digits": {
               "min": 3,
@@ -8923,6 +8928,8 @@
               "max": 4
             },
             "pii": true,
+            "length_message": "I heard {heard} digits; the security code has 3, or 4 on the front of an American Express card.",
+            "length_message_es": "Escuché {heard} dígitos; el código de seguridad tiene 3, o 4 al frente de una American Express.",
             "validator": "validate-card-cvv",
             "question": "What is the security code on the back of the card?",
             "question_es": "¿Cuál es el código de seguridad al reverso de la tarjeta?",
@@ -8942,6 +8949,8 @@
               "min": 5,
               "max": 5
             },
+            "length_message": "I heard {heard} digits; the billing ZIP code has 5.",
+            "length_message_es": "Escuché {heard} dígitos; el código postal de facturación tiene 5.",
             "confirm_out_of_order": {
               "word": "ZIP",
               "word_es": "CÓDIGO POSTAL",
@@ -10067,6 +10076,8 @@
               "min": 10,
               "max": 11
             },
+            "length_message": "I heard {heard} digits; a phone number has 10.",
+            "length_message_es": "Escuché {heard} dígitos; el número de teléfono tiene 10.",
             "question": "What is your phone number?",
             "question_es": "¿Cuál es su número de teléfono?",
             "retry": "Please say or enter your 10-digit phone number.",
@@ -10100,6 +10111,8 @@
               "min": 5,
               "max": 5
             },
+            "length_message": "I heard {heard} digits; a ZIP code has 5.",
+            "length_message_es": "Escuché {heard} dígitos; el código postal tiene 5.",
             "question": "What is your ZIP code?",
             "question_es": "¿Cuál es su código postal?",
             "retry": "Please say or enter your 5-digit ZIP code.",
@@ -10118,6 +10131,8 @@
               "min": 6,
               "max": 12
             },
+            "length_message": "I heard {heard} digits; the account number has {lengths}.",
+            "length_message_es": "Escuché {heard} dígitos; el número de cuenta tiene {lengths}.",
             "question": "What is your account number?",
             "question_es": "¿Cuál es su número de cuenta?",
             "retry": "Please say or enter your account number.",
@@ -10138,6 +10153,8 @@
               "max": 4
             },
             "pii": true,
+            "length_message": "I heard {heard} digits; I need only the last 4.",
+            "length_message_es": "Escuché {heard} dígitos; solo necesito los últimos 4.",
             "question": "What are the last four digits of your Social Security number?",
             "question_es": "¿Cuáles son los últimos cuatro dígitos de su Seguro Social?"
           },
@@ -10224,6 +10241,8 @@
             },
             "pii": true,
             "validator": "validate-card-number",
+            "length_message": "I heard {heard} digits; a card number has 16, or 15 for American Express.",
+            "length_message_es": "Escuché {heard} dígitos; el número de la tarjeta tiene 16, o 15 si es American Express.",
             "question": "Please say or enter your card number.",
             "question_es": "Por favor diga o ingrese el número de su tarjeta.",
             "question_text": "Please type your card number.",
@@ -10238,7 +10257,8 @@
             "label_es": "fecha de vencimiento",
             "profile": {
               "kind": "pattern",
-              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b|\\b(?:0\\s?[1-9]|1\\s?[0-2]|[1-9])\\s*(?:gui[oó]n|dash|hyphen|slash|barra|diagonal)\\s*(?:2\\s?0\\s?)?\\d\\s?\\d\\b"
+              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b|\\b(?:0\\s?[1-9]|1\\s?[0-2]|[1-9])\\s*(?:gui[oó]n|dash|hyphen|slash|barra|diagonal)\\s*(?:2\\s?0\\s?)?\\d\\s?\\d\\b",
+              "asked_regex": "\\b(?:0\\s[1-9]|1\\s[0-2])\\s\\d\\s\\d\\b"
             },
             "digits": {
               "min": 3,
@@ -10265,6 +10285,8 @@
               "max": 4
             },
             "pii": true,
+            "length_message": "I heard {heard} digits; the security code has 3, or 4 on the front of an American Express card.",
+            "length_message_es": "Escuché {heard} dígitos; el código de seguridad tiene 3, o 4 al frente de una American Express.",
             "validator": "validate-card-cvv",
             "question": "What is the security code on the back of the card?",
             "question_es": "¿Cuál es el código de seguridad al reverso de la tarjeta?"
@@ -10282,6 +10304,8 @@
               "min": 5,
               "max": 5
             },
+            "length_message": "I heard {heard} digits; the billing ZIP code has 5.",
+            "length_message_es": "Escuché {heard} dígitos; el código postal de facturación tiene 5.",
             "confirm_out_of_order": {
               "word": "ZIP",
               "word_es": "CÓDIGO POSTAL",
@@ -11451,7 +11475,7 @@
         "id": "vb_reset",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(cargo.inputCheck = vb_h.invalid ? { ok: false } : (vb_h.validator && !vb_known ? null : { ok: true, value: vb_h.value }), true)"
+        "value": "(cargo.inputCheck = vb_h.invalid ? (vb_h.lengthMiss ? { ok: false, message: vb_h.message, message_es: vb_h.message_es } : { ok: false }) : (vb_h.validator && !vb_known ? null : { ok: true, value: vb_h.value }), true)"
       },
       {
         "id": "vb_response",
@@ -13235,6 +13259,8 @@
               "min": 5,
               "max": 5
             },
+            "length_message": "I heard {heard} digits; a ZIP code has 5.",
+            "length_message_es": "Escuché {heard} dígitos; el código postal tiene 5.",
             "question": "What is the 5-digit zip code of your new address?",
             "question_es": "¿Cuál es el código postal de 5 dígitos de su nueva dirección?",
             "retry": "Please say or enter your 5-digit ZIP code.",
