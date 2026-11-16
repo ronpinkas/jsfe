@@ -115,7 +115,7 @@ eq(names(r), ['word=visa'], 'a word: the nearest form takes it');
    const exp = { form: 'card', name: 'card_expiration', ...FIELD_PRESETS.card_expiration };
    const zip = { form: 'card', name: 'card_zip', profile: { kind: 'digits', min: 5, max: 5 } };
    const cvv2 = { form: 'card', name: 'card_cvv', profile: { kind: 'digits', min: 3, max: 4 } };
-   for (const said of ['04 guion 31', '0 4 guion 31', '04 guion 3 1', '0 4 guion 3 1', '0 4 guión 3 1.', '12 dash 31', '1 2 guion 2 0 3 1', '04 slash 31', '0 4 slash 3 1', '0 4 barra 3 1', '04 diagonal 31', '0 4 hyphen 3 1']) {
+   for (const said of ['04 guion 31', '0 4 guion 31', '04 guion 3 1', '0 4 guion 3 1', '0 4 guión 3 1.', '12 dash 31', '1 2 guion 2 0 3 1', '04 slash 31', '0 4 slash 3 1', '0 4 barra 3 1', '04 diagonal 31', '0 4 hyphen 3 1', '10, diagonal 31.', '10, slash, 31', '0 4. guion. 3 1']) {
       r = matchInputs(said, [exp, cvv2, zip], { form: 'card', name: 'card_expiration' });
       eq(r.hits.map((h) => h.name), ['card_expiration'], `"${said}" is the expiration`);
       eq(/gui[oó]n|dash|hyphen|slash|barra|diagonal/i.test(r.hits[0].value), true, `"${said}": read whole [${r.hits[0].value}]`);

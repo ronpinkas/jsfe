@@ -94,9 +94,10 @@ export const FIELD_PRESETS = {
    card_expiration: { label: 'expiration date', label_es: 'fecha de vencimiento',
       // MM0YY: a zero said between month and year ("020 28", prod 2026-10-25 14:10, was taken for the billing ZIP).
       // Up to two words between month and year ("el mes 06 año 31", prod 2026-10-28 21:54, was asked again); a month by name.
-      // A spoken separator with the digits apart: "0 4 guion 3 1" (owner 2026-11-02; prod 2026-11-01 15:19 was asked again).
+      // A spoken separator with the digits apart: "0 4 guion 3 1" (owner 2026-11-02; prod 2026-11-01 15:19 was asked again),
+      // with STT's punctuation around it: "10, diagonal 31." (prod 2026-11-15 16:37 was asked again).
       // Four single digits, month then year, with words around them: "0 6 3 0 30 se vence" (owner 2026-11-15; prod 2026-11-14): asked_regex.
-      profile: { kind: 'pattern', regex: `\\b(0?[1-9]|1[0-2]|${MONTH_RE})\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b|\\b(?:0\\s?[1-9]|1\\s?[0-2]|[1-9])\\s*(?:gui[oó]n|dash|hyphen|slash|barra|diagonal)\\s*(?:2\\s?0\\s?)?\\d\\s?\\d\\b`,
+      profile: { kind: 'pattern', regex: `\\b(0?[1-9]|1[0-2]|${MONTH_RE})\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b|\\b(?:0\\s?[1-9]|1\\s?[0-2]|[1-9])[\\s,.]*(?:gui[oó]n|dash|hyphen|slash|barra|diagonal)[\\s,.]*(?:2\\s?0\\s?)?\\d\\s?\\d\\b`,
          // Read only at its own question, when nothing else read the answer: out of order, "1 2 3 6" is a security code (prod 2026-11-14 15:20).
          asked_regex: `\\b(?:0\\s[1-9]|1\\s[0-2])\\s\\d\\s\\d\\b` }, digits: { min: 3, max: 6 },
       validator: 'validate-card-expiration',
