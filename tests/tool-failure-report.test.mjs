@@ -80,4 +80,14 @@ const PC99 = { success: false, error: 3, code: 'PC99-C', error_message: "Subscri
   eq(failureWarnings((await run(true)).warns), [], 'an array result is not inspected');
 }
 
+// 5. A response mapping's '' fallback never hides the message in a later field (Curacao prod 2026-11-16:
+//    "answered a failure (AIC22): no message" while its info said what was wrong)
+{
+  produce = () => ({ success: false, code: 'AIC22', info: 'Please provide a valid mobile phone number.', error: null, error_message: '' });
+  const w = failureWarnings((await run(true)).warns);
+  ok(w.length === 1 && /\(AIC22\): Please provide a valid mobile phone number\./.test(w[0]), `the first field with words: ${w[0]}`);
+  produce = () => ({ success: false, code: 'X1', error_message: '  ', info: '' });
+  ok(/\(X1\): no message$/.test(failureWarnings((await run(true)).warns)[0]), 'blank everywhere: no message');
+}
+
 console.log(`tool-failure-report: ${checks} checks passed`);

@@ -2610,7 +2610,10 @@ function reportToolFailure(engine: Engine, tool: ToolDefinition, result: unknown
     const failed = r.success === false || (err !== undefined && err !== null && err !== 0 && err !== '0' && err !== false && err !== '');
     if (!failed) return;
     const code = r.code ?? r.error_code ?? (typeof err === 'object' ? '' : err);
-    const raw = r.error_message ?? r.message ?? r.error_reason ?? r.info ?? (typeof err === 'string' ? err : '');
+    // The first field that holds words: a tool's response mapping fills an absent field with '' (a fallback),
+    // which must not hide the message in a later one (Curacao's `info` behind an empty `error_message`).
+    const raw = [r.error_message, r.message, r.error_reason, r.info, typeof err === 'string' ? err : '']
+      .find((v) => v !== undefined && v !== null && String(v).trim() !== '');
     const text = String(raw ?? '').replace(/\d{4,}/g, '<n>').replace(/\s+/g, ' ').trim().slice(0, 240);
     logger.warn(`Tool ${tool.id} answered a failure${code !== '' && code !== undefined && code !== null ? ` (${String(code).replace(/\d{4,}/g, '<n>')})` : ''}: ${text || 'no message'}`);
   } catch (e: any) {
