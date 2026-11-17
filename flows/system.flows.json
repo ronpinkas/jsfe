@@ -18864,5 +18864,63 @@
       }
     ],
     "safetyRevision": "dispatch-intake-2026-10-22"
+  },
+  {
+    "id": "validate-us-phone",
+    "name": "ValidateUsPhone",
+    "version": "1.0.0",
+    "scope": "isolated",
+    "description": "Validator: a US or Canada phone number, 10 digits or 11 starting with 1 (validatePhone); normalizes to its 10 digits. The phone reader alone also takes an 11-13 digit international number. Params: form, input, value, values, reading (it reads value).",
+    "parameters": [
+      {
+        "name": "input",
+        "type": "string",
+        "description": "input name"
+      },
+      {
+        "name": "value",
+        "type": "string",
+        "description": "the reading"
+      }
+    ],
+    "steps": [
+      {
+        "id": "validate-us-phone_continuation_safety_protocol",
+        "type": "SET",
+        "variable": "noop",
+        "value": "continuationSafetyProtocol() === 1",
+        "requireTrue": true
+      },
+      {
+        "id": "vup_check",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(function (d) { cargo.inputCheck = validatePhone(d) ? { ok: true, value: d.slice(-10) } : { ok: false, message: 'I heard ' + d.length + ' digits; a phone number has 10.', message_es: 'Escuché ' + d.length + ' dígitos; el número de teléfono tiene 10.' }; return true; })(String(value).replace(/\\D/g, ''))"
+      }
+    ],
+    "variables": {
+      "noop": {
+        "type": "boolean",
+        "scope": "flow",
+        "value": false
+      },
+      "contract": {
+        "type": "object",
+        "value": {
+          "version": 1,
+          "summary": "Validator: a US or Canada phone number, 10 digits or 11 starting with 1 (validatePhone); normalizes to its 10 digits. The phone reader alone also takes an 11-13 digit international number. Params: form, input, value, values, reading (it reads value).",
+          "parametersFrom": "parameters",
+          "role": "worker",
+          "result": {
+            "path": "cargo.inputCheck",
+            "type": "object"
+          },
+          "requires": [
+            "jsfe:continuation-safety:v1"
+          ]
+        }
+      }
+    },
+    "safetyRevision": "dispatch-intake-2026-10-22"
   }
 ]
