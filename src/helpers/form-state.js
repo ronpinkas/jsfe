@@ -630,6 +630,13 @@ export function acceptFormReadings(cargo, hits, additionalCandidates=[]) {
    for (const [id, readings] of groups) {
       const state = cargo.forms[id];
       const cleared=[];
+      // A conflict kept from the request (deferFormClarification) is settled once any input it names, or a member of that input's
+      // exclusive group, takes a value: it is never asked later, even if the input is reset.
+      if(Array.isArray(state.clarify)){
+         const settled=new Set(readings.flatMap(h=>{const group=state.specs.find(s=>s.any_of&&s.any_of.some(i=>i.name===h.name));return [h.name,...(group?group.any_of.map(i=>i.name):[])];}));
+         state.clarify=state.clarify.filter(group=>!group.some(r=>settled.has(r.name)));
+         if(!state.clarify.length)delete state.clarify;
+      }
       for(const group of state.specs.filter(s=>s.exclusive&&s.any_of)){
          const selected=readings.filter(h=>group.any_of.some(i=>i.name===h.name));
          if(new Set(selected.map(h=>h.name)).size>1)throw new Error('Exclusive FORM alternatives require clarification');

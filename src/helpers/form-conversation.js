@@ -20,6 +20,39 @@ export function keepFormLine(cargo,id,message,message_es) {
    (state.lines ||= []).push({message:en,message_es:String(message_es||'').trim()||en});
    return true;
 }
+/**
+ * Which input an activation value belongs to is asked when the form asks that input, never when the form opens (owner
+ * 2026-11-17; prod 2026-11-16 18:15: a payment request carrying 1500 and the monthly option said "nothing is due" and, in the
+ * same reply, "Is 1500 your amount or your payment option?"). The conflicting readings are kept on their form; run-form asks
+ * them in place of the question of the first of their inputs it reaches (takeFormClarification). A form that stops, ends or
+ * fills those inputs first never asks. A conflict in a reply is the caller answering now and is still asked at once.
+ */
+export function deferFormClarification(cargo,readings) {
+   const list=Array.isArray(readings)?readings.filter(Boolean):[];
+   const state=cargo.forms?.[list[0]?.form];
+   if(!state||list.length<2)throw new Error('A deferred clarification needs two or more readings of an open form');
+   if(list.some(r=>r.form!==state.id))throw new Error('A deferred clarification must belong to one form');
+   (state.clarify ||= []).push(list.map(r=>({...r})));
+   return true;
+}
+/** The kept clarification for input `next` of form `id` (one of its readings is `next` or a member of its group), removed from the form; else null. */
+export function takeFormClarification(cargo,id,next) {
+   const state=cargo.forms?.[id];
+   if(!state||!next||!Array.isArray(state.clarify)||!state.clarify.length)return null;
+   const spec=(state.specs||[]).find(s=>s.name===next);
+   const names=new Set([next,...((spec&&spec.any_of)||[]).map(i=>i.name)]);
+   const i=state.clarify.findIndex(group=>group.some(r=>names.has(r.name)));
+   if(i<0)return null;
+   const [group]=state.clarify.splice(i,1);
+   if(!state.clarify.length)delete state.clarify;
+   return group;
+}
+/** Whether a conflict kept from the request names input `name` of form `id`: the caller gave a value for it, so a flow that
+ * fills inputs on its own (a default plan) leaves it for the form to ask, as it does for a pending value. */
+export function formClarificationKept(cargo,id,name) {
+   const state=cargo.forms?.[id];
+   return !!state&&Array.isArray(state.clarify)&&state.clarify.some(group=>group.some(r=>r.name===name));
+}
 /** The forms whose lines the question of form `id` says: every open form of its task (the same root form), outermost first. */
 function formRoot(cargo,id) {
    const seen=new Set();let root=id;

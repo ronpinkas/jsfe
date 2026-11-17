@@ -339,7 +339,7 @@ const runForm = {
    id: 'run-form', name: 'RunForm', version: '1.0.0',
    description: "Worker (shared scope, called by a form flow): the FORM loop. Merges the form's activation parameters into cargo.forms[rf_form] once, then each pass finds the first missing input whose `when` holds, collects it (collect-input) or runs its sub-form, and replaces itself until nothing is missing. Sets rf_status: 'complete' | 'stopped' (a path in rf_stop was set) | 'unwound'. Reads the form's `inputs`, `parent_form`, `result_input`, `questions`, `provides`, `exit_context(_es)`.",
    parameters: [{name:'rf_resume_parent',type:'boolean',description:'Yield a context collector when its owning form accepts a change'}, { name: 'rf_form', type: 'string', description: 'The form id (the calling form flow id)' }, { name: 'rf_resume', type: 'string', description: "'true' on the loop's own replays" }, { name: 'rf_stop', type: 'string', description: 'A cargo path (or list) that ends the form when set' }],
-   variables: vars({ rf_stop: '', rf_resume: '', rf_resume_parent:false, rf_parent_resume:null, rf_status: '', rf_next: '', rf_next_form: '', rf_questions: [], rf_provides: null, rf_max: 0, rf_pending: [], rf_deferred:[],rf_proposal:null,rf_proposal_readings:[] }),
+   variables: vars({ rf_stop: '', rf_resume: '', rf_resume_parent:false, rf_parent_resume:null, rf_status: '', rf_next: '', rf_next_form: '', rf_questions: [], rf_provides: null, rf_max: 0, rf_pending: [], rf_deferred:[],rf_proposal:null,rf_proposal_readings:[],rf_clarify:null }),
    steps: [
       SIDE('rf_resume_policy', '(rf_resume_parent === true && cargo.forms[rf_form] && cargo.forms[rf_form].context_only ? (cargo.forms[rf_form].resume_on_parent_change=true) : true, true)'),
       SET('rf_ancestor_resume','rf_parent_resume','formParentResume(cargo,rf_form,rf_resume_parent,nextFormProposal)'),
@@ -368,6 +368,10 @@ const runForm = {
       SET('rf_find_form', 'rf_next_form', "rf_next ? ((cargo.forms[rf_form].specs || []).filter(function (i) { return i.name === rf_next; })[0] || {}).form || '' : ''"),
       SET('rf_done', 'rf_status', "(function () { var stops = [].concat(typeof rf_stop !== 'undefined' && rf_stop ? rf_stop : []); return stops.some(function (p) { return !!formPath({cargo:cargo},p); }) ? 'stopped' : (rf_next ? '' : 'complete'); })()"),
       WHEN('rf_complete', "rf_status === 'complete' || rf_status === 'stopped'", END('rf_complete_end')),
+      // A conflict kept from the request is asked now, in place of the question of its input (deferFormClarification).
+      SET('rf_clarify_take','rf_clarify','takeFormClarification(cargo, rf_form, rf_next)'),
+      WHEN('rf_clarify_ask','rf_clarify',FLOW('rf_clarify_flow','disambiguate-input','call',{readings:'{{rf_clarify}}',hits:[],remaining:[]})),
+      WHEN('rf_clarify_repeat','rf_clarify',FLOW('rf_clarify_again','run-form','replace',{ rf_form: '{{rf_form}}', rf_resume: 'true', rf_stop: '{{rf_stop}}',rf_resume_parent:'{{rf_resume_parent}}' })),
       SET('rf_questions', 'rf_questions', 'cargo.forms[rf_form].questions'),
       SET('rf_provides', 'rf_provides', 'cargo.forms[rf_form].providers'),
       { id: 'rf_collect', type: 'CASE', branches: {
@@ -710,10 +714,16 @@ const accept = {
    id: 'collect-input-accept', name: 'CollectInputAccept', version: '2.0.0', scope: 'isolated',
    description: 'Worker: validate all readings, commit accepted changes once with transitive invalidation, then acknowledge and run declared callbacks.',
    parameters: [{name:'hits',type:'array'}],
-   variables: vars({ca_ordered:[],ca_results:[],ca_partition:null}),
+   variables: vars({ca_ordered:[],ca_results:[],ca_partition:null,ca_defer:false}),
    steps: [
       SET('ca_expand','hits','expandFormActivations(cargo, hits)'),
       SET('ca_partition','ca_partition','exclusiveFormReadings(cargo, hits)'),
+      // Values the request carried (nothing asked yet) that conflict are asked when the form asks their input (owner 2026-11-17,
+      // deferFormClarification); the rest of the batch is accepted now. A conflict in a reply is asked at once, below.
+      SET('ca_defer_check','ca_defer',"ca_partition.ambiguous.length > 1 && ca_partition.ambiguous.every(function (h) { return h.origin === 'activation'; })"),
+      WHEN('ca_defer_store','ca_defer',SIDE('ca_defer_keep','deferFormClarification(cargo, ca_partition.ambiguous)')),
+      WHEN('ca_defer_rest','ca_defer && ca_partition.hits.length > 0',FLOW('ca_defer_accept','collect-input-accept','call',{hits:'{{ca_partition.hits}}'})),
+      WHEN('ca_defer_return','ca_defer',END('ca_deferred_end')),
       WHEN('ca_ambiguous','ca_partition.ambiguous.length > 0',FLOW('ca_clarify','disambiguate-input','call',{readings:'{{ca_partition.ambiguous}}',hits:'{{ca_partition.hits}}'})),
       WHEN('ca_ambiguity_return','ca_partition.ambiguous.length > 0',END('ca_clarified_end')),
       SET('ca_order','ca_ordered','orderFormReadings(cargo, hits)'),

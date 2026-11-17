@@ -360,6 +360,14 @@ it.
 
 **A number that must name itself.** `input.confirm_out_of_order: {word, word_es, message, message_es}` (default off): out of order a number fills this input only beside its word, in either language ("account 5373850"). Alone it may be something else, a code said with an extra digit, so nothing is filled: the caller hears `message` (`{value}` the number, digit by digit on a call; `{word}` the word) and the current question again, which counts as an attempt at that question. It works at `collect-input` and `confirm-form` questions. At its own question the number needs no word. A pattern field's `asked_regex` also reads out of order beside the word ("vencimiento 0 4 3 1"); a reading of the field asked now wins over a number refused for want of its word, and no line is said. The card presets declare it on the expiration (EXPIRATION / VENCIMIENTO), the security code (SECURITY CODE / CÓDIGO DE SEGURIDAD) and the billing ZIP (owner 2026-11-17). `collect-credit-card` also checks the completed card (`validate-credit-card`): a security code whose length is not its brand's (4 for American Express, 3 for others) is asked again. `authenticate-user`'s `code_confirm` takes the same declaration for a `code_validator`, whose flow reads it with the helpers `saysConfirmWord(answer, spec)` and `confirmOutOfOrderLine(spec, value, language, voice)`.
 
+**A conflict the request carried is asked at its input (jsfe 1.74.0, owner 2026-11-17).** When values given at activation
+(nothing asked yet) compete for one exclusive group, such as an amount and a payment option, the conflict is kept on the form
+(`deferFormClarification`) and asked in place of the question of its input when the form reaches it (`takeFormClarification`,
+run-form), like a validator's line. A form that stops or ends first never asks it; a value accepted for that input or its group
+settles it. A flow that fills inputs on its own treats `formClarificationKept(cargo, form, name)` like a pending value. A
+conflict in a reply is the caller answering now and is still asked at once. Prod 2026-11-16: a payment with nothing due said so
+and, in the same reply, asked "Is 1500 your amount or your payment option?".
+
 **An amount-shaped number is no ZIP.** `profile.refuse_amount_shape: true` (digits profile, default off): "119 19" (three digits then two) is not the field's digits out of order; at its own question it reads. Declared by the `zip` and `card_zip` presets; `card_zip` also takes a bare number out of order only beside ZIP / CÓDIGO POSTAL (`confirm_out_of_order`).
 
 **A number of the wrong length says so.** A numeric field (`digits`, `phone` or `identifier` kind) that declares `digits` takes, at its own question, the one 3+ digit number of the wrong length that no other field read or refused; validation rejects it with the count heard and the count it takes (`length_message`), said with the question that re-asks. Routing is unchanged.
