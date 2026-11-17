@@ -41,4 +41,7 @@ await begin('es',true);
 r=await say('vencimiento 0 4 3 1');assert.equal(values().card_expiration,'0431',r);assert.doesNotMatch(r,/código de seguridad/,r);checks++;
 await begin('es',true);await say('4111111111111111');
 r=await say('1 2 2 9, ya');assert.equal(values().card_expiration,'1229','at its own question the expiration needs no word');checks++;
+// A number two fields could take names both (owner 2026-11-17).
+await begin('en',false);
+r=await say('1234');assert.match(r,/If 1234 is the expiration date of the card, add the word EXPIRATION\. If 1234 is the security code of the card, add the words SECURITY CODE\./,r);checks++;
 console.log(`Card security code: all ${checks} checks passed`);

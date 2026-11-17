@@ -286,7 +286,9 @@ export function confirmOutOfOrderLine(spec, value, language, voice) {
    const es = language === 'es';
    const line = String((es && spec?.message_es) || spec?.message || '');
    const word = String((es && spec?.word_es) || spec?.word || '');
-   return line.replace('{value}', String(value ?? '').split('').join(voice ? ' ' : '')).replace('{word}', word);
+   const own = line.replace('{value}', String(value ?? '').split('').join(voice ? ' ' : '')).replace('{word}', word);
+   // The same number may name several fields ("1234": an expiration or a security code): each one's line is said (owner 2026-11-17).
+   return [own, ...(Array.isArray(spec?.also) ? spec.also.map((other) => confirmOutOfOrderLine({ ...other, also: undefined }, other.value, language, voice)) : [])].filter(Boolean).join(' ');
 }
 
 // A declinable input's "there is none" (docs/copilot-reference.md: declinable): the whole answer says the caller has no
@@ -685,6 +687,7 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    if (current?.whole_reply === true && hits.length && !isReaderFiller(unclaimedSpans(raw, kept).map(([a, b]) => raw.slice(a, b)).join(' '))) {
       return { hits: [], ambiguous, refused: [...stopped, ...hits.map((hit) => ({ form: hit.form, name: hit.name, value: hit.value, rule: 'unaccounted_words', spans: hit.spans }))], ...(decisions.length ? {decisions} : {}) };
    } else {
+      if (clarify.length > 1) clarify[0] = { ...clarify[0], also: clarify.slice(1).filter((other, i, all) => other.name !== clarify[0].name && all.findIndex((x) => x.name === other.name) === i) };
       return { hits, ambiguous, ...(remaining.length ? {remaining} : {}), ...(stopped.length ? {refused: stopped} : {}), ...(decisions.length ? {decisions} : {}), ...(clarify.length ? {clarify} : {}) };
    }
 }
