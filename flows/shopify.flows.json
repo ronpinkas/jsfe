@@ -3667,6 +3667,25 @@
         "value": "cargo.orderAuthPending = false"
       },
       {
+        "id": "to_verified_tenant",
+        "type": "CASE",
+        "branches": {
+          "condition: cargo.otpVerified === true && cargo.shopifyOptions && cargo.shopifyOptions.verified_flow": {
+            "id": "to_verified_reader",
+            "type": "FLOW",
+            "value": "{{cargo.shopifyOptions.verified_flow}}",
+            "parameters": {},
+            "callType": "call"
+          },
+          "default": {
+            "id": "to_verified_tenant_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "to_subject_gate",
         "type": "FLOW",
         "value": "shopify-ql-order-gate",
@@ -4049,7 +4068,7 @@
         "id": "orders_load_scope",
         "type": "SET",
         "variable": "noop",
-        "value": "(cargo.shopifyOrders=(function(r,id,phoneKey){var orders=r&&r.orders;if(!Array.isArray(orders))return false;if(!orders.length)return true;var c=r.customer||{};id=String(id||'').trim();if(id.indexOf('@')>=0)return String(c.email||'').trim().toLowerCase()===id.toLowerCase();var key=phoneKey(id);return !!key&&phoneKey(c.phone)===key;})(result,identifier,function orderPhoneKey(value){\n const raw=String(value || '').trim();\n if(!raw || /[A-Za-z@]/.test(raw))return '';\n let digits=raw.replace(/\\D/g,'');\n if(/^00\\d/.test(raw.replace(/[\\s().-]/g,'')))digits=digits.slice(2);\n if(digits.length===11&&digits.startsWith('1'))digits=digits.slice(1);\n return digits.length>=8&&digits.length<=15?digits:'';\n})?result:{success:true,orders:[],customer:{}},cargo.shopifyOrdersFor=identifier,true)"
+        "value": "(cargo.shopifyOrders=(function(r,id,phoneKey){var orders=r&&r.orders;if(!Array.isArray(orders))return false;if(!orders.length)return true;var c=r.customer||{};return [id].concat(Array.isArray(cargo.verifiedContacts)?cargo.verifiedContacts:[]).some(function(v){v=String(v||'').trim();if(v.indexOf('@')>=0)return String(c.email||'').trim().toLowerCase()===v.toLowerCase();var key=phoneKey(v);return !!key&&phoneKey(c.phone)===key;});})(result,identifier,function orderPhoneKey(value){\n const raw=String(value || '').trim();\n if(!raw || /[A-Za-z@]/.test(raw))return '';\n let digits=raw.replace(/\\D/g,'');\n if(/^00\\d/.test(raw.replace(/[\\s().-]/g,'')))digits=digits.slice(2);\n if(digits.length===11&&digits.startsWith('1'))digits=digits.slice(1);\n return digits.length>=8&&digits.length<=15?digits:'';\n})?result:{success:true,orders:[],customer:{}},cargo.shopifyOrdersFor=identifier,true)"
       }
     ],
     "safetyRevision": "order-recovery-2026-10-22"

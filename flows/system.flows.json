@@ -4720,7 +4720,7 @@
         "id": "ac_late_code_check",
         "type": "SET",
         "variable": "ac_late",
-        "value": "(function(t, c) { if (typeof form_context !== 'undefined' && form_context && form_context.form) { var fc=form_context, chain=formInputChain(cargo.forms,fc.form,cargo), read=readFormAnswer(t,chain,Array.isArray(fc.names)&&fc.names.length>1?{form:fc.form,names:fc.names}:{form:fc.form,name:fc.current},'',fc.questions||[]); if(read.hits.length || read.ambiguous.length || read.questions.length) return false; } t = String(t || '').trim(); c = String(c || ''); if (c.length !== 6) { return false; } var rest = t.replace(/^(?:(?:el|mi|the|my)\\s+)?(?:c[oó]digo|code)(?:\\s+(?:es|is|era|was))?\\s*[:,.-]?\\s*/i, ''); if (!/^[\\d\\s.,-]+$/.test(rest)) { return false; } var d = rest.replace(/\\D/g, ''); return d.length >= 2 && d.length <= 6 && c.indexOf(d) >= 0; })(ac_answer, ac_code)"
+        "value": "(function(t, c) { if (typeof form_context !== 'undefined' && form_context && form_context.form) { var fc=form_context, chain=formInputChain(cargo.forms,fc.form,cargo), read=readFormAnswer(t,chain,Array.isArray(fc.names)&&fc.names.length>1?{form:fc.form,names:fc.names}:{form:fc.form,name:fc.current},'',fc.questions||[]); if(read.hits.length || read.ambiguous.length || read.questions.length || (read.clarify || []).length) return false; } t = String(t || '').trim(); c = String(c || ''); if (c.length !== 6) { return false; } var rest = t.replace(/^(?:(?:el|mi|the|my)\\s+)?(?:c[oó]digo|code)(?:\\s+(?:es|is|era|was))?\\s*[:,.-]?\\s*/i, ''); if (!/^[\\d\\s.,-]+$/.test(rest)) { return false; } var d = rest.replace(/\\D/g, ''); return d.length >= 2 && d.length <= 6 && c.indexOf(d) >= 0; })(ac_answer, ac_code)"
       },
       {
         "id": "ac_late_code_reask",
@@ -6257,6 +6257,10 @@
         "type": "array",
         "value": []
       },
+      "rf_clarify": {
+        "type": "object",
+        "value": null
+      },
       "contract": {
         "type": "object",
         "value": {
@@ -6650,6 +6654,60 @@
           },
           "default": {
             "id": "rf_complete_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "rf_clarify_take",
+        "type": "SET",
+        "variable": "rf_clarify",
+        "value": "takeFormClarification(cargo, rf_form, rf_next)"
+      },
+      {
+        "id": "rf_clarify_ask",
+        "type": "CASE",
+        "branches": {
+          "condition: rf_clarify": {
+            "id": "rf_clarify_flow",
+            "type": "FLOW",
+            "value": "disambiguate-input",
+            "callType": "call",
+            "parameters": {
+              "readings": "{{rf_clarify}}",
+              "hits": [],
+              "remaining": []
+            }
+          },
+          "default": {
+            "id": "rf_clarify_ask_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "rf_clarify_repeat",
+        "type": "CASE",
+        "branches": {
+          "condition: rf_clarify": {
+            "id": "rf_clarify_again",
+            "type": "FLOW",
+            "value": "run-form",
+            "callType": "replace",
+            "initializeDefaults": true,
+            "parameters": {
+              "rf_form": "{{rf_form}}",
+              "rf_resume": "true",
+              "rf_stop": "{{rf_stop}}",
+              "rf_resume_parent": "{{rf_resume_parent}}"
+            }
+          },
+          "default": {
+            "id": "rf_clarify_repeat_skip",
             "type": "SET",
             "variable": "noop",
             "value": "true"
@@ -7715,6 +7773,10 @@
         "type": "object",
         "value": null
       },
+      "ca_defer": {
+        "type": "boolean",
+        "value": false
+      },
       "contract": {
         "type": "object",
         "value": {
@@ -7747,6 +7809,67 @@
         "type": "SET",
         "variable": "ca_partition",
         "value": "exclusiveFormReadings(cargo, hits)"
+      },
+      {
+        "id": "ca_defer_check",
+        "type": "SET",
+        "variable": "ca_defer",
+        "value": "ca_partition.ambiguous.length > 1 && ca_partition.ambiguous.every(function (h) { return h.origin === 'activation'; })"
+      },
+      {
+        "id": "ca_defer_store",
+        "type": "CASE",
+        "branches": {
+          "condition: ca_defer": {
+            "id": "ca_defer_keep",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "deferFormClarification(cargo, ca_partition.ambiguous)"
+          },
+          "default": {
+            "id": "ca_defer_store_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ca_defer_rest",
+        "type": "CASE",
+        "branches": {
+          "condition: ca_defer && ca_partition.hits.length > 0": {
+            "id": "ca_defer_accept",
+            "type": "FLOW",
+            "value": "collect-input-accept",
+            "callType": "call",
+            "parameters": {
+              "hits": "{{ca_partition.hits}}"
+            }
+          },
+          "default": {
+            "id": "ca_defer_rest_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "ca_defer_return",
+        "type": "CASE",
+        "branches": {
+          "condition: ca_defer": {
+            "id": "ca_deferred_end",
+            "type": "END"
+          },
+          "default": {
+            "id": "ca_defer_return_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
       },
       {
         "id": "ca_ambiguous",
@@ -8906,6 +9029,12 @@
               "max": 6
             },
             "validator": "validate-card-expiration",
+            "confirm_out_of_order": {
+              "word": "EXPIRATION",
+              "word_es": "VENCIMIENTO",
+              "message": "If {value} is the expiration date of the card, add the word {word}.",
+              "message_es": "Si {value} es la fecha de vencimiento de la tarjeta, agregue la palabra {word}."
+            },
             "question": "What is the expiration date, month and year?",
             "question_es": "¿Cuál es la fecha de vencimiento, mes y año?",
             "retry": "Please say or enter the expiration as four digits, month then year, like 0 9 2 8.",
@@ -8931,6 +9060,12 @@
             "length_message": "I heard {heard} digits; the security code has 3, or 4 on the front of an American Express card.",
             "length_message_es": "Escuché {heard} dígitos; el código de seguridad tiene 3, o 4 al frente de una American Express.",
             "validator": "validate-card-cvv",
+            "confirm_out_of_order": {
+              "word": "SECURITY CODE",
+              "word_es": "CÓDIGO DE SEGURIDAD",
+              "message": "If {value} is the security code of the card, add the words {word}.",
+              "message_es": "Si {value} es el código de seguridad de la tarjeta, agregue las palabras {word}."
+            },
             "question": "What is the security code on the back of the card?",
             "question_es": "¿Cuál es el código de seguridad al reverso de la tarjeta?",
             "name": "card_cvv",
@@ -9114,6 +9249,207 @@
           },
           "default": {
             "id": "collect-credit-card_left_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "collect-credit-card_values",
+        "type": "SET",
+        "variable": "form_values",
+        "value": "cargo.forms[form_instance].values"
+      },
+      {
+        "id": "collect-credit-card_validation_reset",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(cargo.formCheck = null, true)"
+      },
+      {
+        "id": "collect-credit-card_validate",
+        "type": "FLOW",
+        "value": "validate-credit-card",
+        "callType": "call",
+        "parameters": {
+          "form": "{{form_instance}}",
+          "values": "{{form_values}}"
+        }
+      },
+      {
+        "id": "collect-credit-card_closed_at_validation",
+        "type": "CASE",
+        "branches": {
+          "condition: !cargo.forms[form_instance]": {
+            "id": "collect-credit-card_closed_at_validation_end",
+            "type": "END"
+          },
+          "default": {
+            "id": "collect-credit-card_closed_at_validation_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "collect-credit-card_validation",
+        "type": "SET",
+        "variable": "form_validation",
+        "value": "applyFormValidation(cargo, form_instance, cargo.formCheck)"
+      },
+      {
+        "id": "collect-credit-card_resolve_validation_exhausted",
+        "type": "CASE",
+        "branches": {
+          "condition: form_validation === 'failed'": {
+            "id": "collect-credit-card_validation_exhaustion",
+            "type": "SET",
+            "variable": "form_exhaustion",
+            "value": "exhaustFormInput(cargo,form_instance,((cargo.formCheck || {}).invalid || [])[0] ? cargo.formCheck.invalid[0].name : '')"
+          },
+          "default": {
+            "id": "collect-credit-card_resolve_validation_exhausted_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "collect-credit-card_recover_validation_exhausted",
+        "type": "CASE",
+        "branches": {
+          "condition: form_exhaustion": {
+            "id": "collect-credit-card_validation_recovery",
+            "type": "FLOW",
+            "value": "{{form_exhaustion.flow}}",
+            "callType": "reboot",
+            "parameters": {
+              "form": "{{form_exhaustion.form}}",
+              "failed_form": "{{form_exhaustion.failed_form}}",
+              "input": "{{form_exhaustion.input}}",
+              "failed_input": "{{form_exhaustion.failed_input}}",
+              "reason": "{{form_exhaustion.reason}}"
+            }
+          },
+          "default": {
+            "id": "collect-credit-card_recover_validation_exhausted_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "collect-credit-card_optional_validation_failed",
+        "type": "CASE",
+        "branches": {
+          "condition: (form_validation === 'failed') && !!formIncompleteOutcome(cargo,form_instance,{outcome:'unresolved',reason:form_instance+'_incomplete'}).owner": {
+            "id": "collect-credit-card_optional_validation_failed_dispatch",
+            "type": "DISPATCH",
+            "outcome": "{{formConversationOutcome(cargo,form_instance,form_instance+'_incomplete',true,\"none\").outcome}}",
+            "reason": "{{formConversationOutcome(cargo,form_instance,form_instance+'_incomplete',true,\"none\").reason}}",
+            "recovery": {
+              "version": 1,
+              "mode": "{{formConversationOutcome(cargo,form_instance,form_instance+'_incomplete',true,\"none\").recovery.mode}}",
+              "reason": "{{formConversationOutcome(cargo,form_instance,form_instance+'_incomplete',true,\"none\").recovery.reason}}",
+              "form": "{{formConversationOutcome(cargo,form_instance,form_instance+'_incomplete',true,\"none\").recovery.form || ''}}",
+              "flow": "{{formConversationOutcome(cargo,form_instance,form_instance+'_incomplete',true,\"none\").recovery.flow || ''}}"
+            }
+          },
+          "default": {
+            "id": "collect-credit-card_optional_validation_failed_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "collect-credit-card_validation_failed_recovery",
+        "type": "CASE",
+        "branches": {
+          "condition: form_validation === 'failed'": {
+            "id": "collect-credit-card_validation_stamp",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true",
+            "recovery": {
+              "version": 1,
+              "mode": "{{formConversationOutcome(cargo,form_instance,'validation_exhausted',true,\"none\").recovery.mode}}",
+              "reason": "{{formConversationOutcome(cargo,form_instance,'validation_exhausted',true,\"none\").recovery.reason}}",
+              "form": "{{formConversationOutcome(cargo,form_instance,'validation_exhausted',true,\"none\").recovery.form || ''}}",
+              "flow": "{{formConversationOutcome(cargo,form_instance,'validation_exhausted',true,\"none\").recovery.flow || ''}}"
+            }
+          },
+          "default": {
+            "id": "collect-credit-card_validation_failed_recovery_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "collect-credit-card_validation_failed",
+        "type": "CASE",
+        "branches": {
+          "condition: form_validation === 'failed'": {
+            "id": "collect-credit-card_validation_give_up",
+            "type": "FLOW",
+            "value": "give-up",
+            "callType": "reboot",
+            "parameters": {
+              "context": "{{exit_context}}",
+              "context_es": "{{exit_context_es}}"
+            }
+          },
+          "default": {
+            "id": "collect-credit-card_validation_failed_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "collect-credit-card_validation_message",
+        "type": "CASE",
+        "branches": {
+          "condition: form_validation === 'retry' && cargo.formCheck.message": {
+            "id": "collect-credit-card_validation_keep",
+            "type": "SET",
+            "variable": "assignment_side_effect",
+            "value": "keepFormLine(cargo,form_instance,cargo.formCheck.message,cargo.formCheck.message_es)"
+          },
+          "default": {
+            "id": "collect-credit-card_validation_message_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "collect-credit-card_validation_retry",
+        "type": "CASE",
+        "branches": {
+          "condition: form_validation === 'retry'": {
+            "id": "collect-credit-card_validate_again",
+            "type": "FLOW",
+            "value": "collect-credit-card",
+            "callType": "replace",
+            "initializeDefaults": true,
+            "parameters": {
+              "parent_form": "{{parent_form}}",
+              "result_input": "{{result_input}}",
+              "form_instance": "{{form_instance}}"
+            }
+          },
+          "default": {
+            "id": "collect-credit-card_validation_retry_skip",
             "type": "SET",
             "variable": "noop",
             "value": "true"
@@ -10265,6 +10601,12 @@
               "max": 6
             },
             "validator": "validate-card-expiration",
+            "confirm_out_of_order": {
+              "word": "EXPIRATION",
+              "word_es": "VENCIMIENTO",
+              "message": "If {value} is the expiration date of the card, add the word {word}.",
+              "message_es": "Si {value} es la fecha de vencimiento de la tarjeta, agregue la palabra {word}."
+            },
             "question": "What is the expiration date, month and year?",
             "question_es": "¿Cuál es la fecha de vencimiento, mes y año?",
             "retry": "Please say or enter the expiration as four digits, month then year, like 0 9 2 8.",
@@ -10288,6 +10630,12 @@
             "length_message": "I heard {heard} digits; the security code has 3, or 4 on the front of an American Express card.",
             "length_message_es": "Escuché {heard} dígitos; el código de seguridad tiene 3, o 4 al frente de una American Express.",
             "validator": "validate-card-cvv",
+            "confirm_out_of_order": {
+              "word": "SECURITY CODE",
+              "word_es": "CÓDIGO DE SEGURIDAD",
+              "message": "If {value} is the security code of the card, add the words {word}.",
+              "message_es": "Si {value} es el código de seguridad de la tarjeta, agregue las palabras {word}."
+            },
             "question": "What is the security code on the back of the card?",
             "question_es": "¿Cuál es el código de seguridad al reverso de la tarjeta?"
           },
@@ -18913,6 +19261,64 @@
           "role": "worker",
           "result": {
             "path": "cargo.inputCheck",
+            "type": "object"
+          },
+          "requires": [
+            "jsfe:continuation-safety:v1"
+          ]
+        }
+      }
+    },
+    "safetyRevision": "dispatch-intake-2026-10-22"
+  },
+  {
+    "id": "validate-credit-card",
+    "name": "ValidateCreditCard",
+    "version": "1.0.0",
+    "scope": "isolated",
+    "description": "Form validator: the security code has the length of the card brand, 4 digits for American Express (34, 37) and 3 for every other brand. Params: form, values.",
+    "parameters": [
+      {
+        "name": "form",
+        "type": "string",
+        "description": "form instance"
+      },
+      {
+        "name": "values",
+        "type": "object",
+        "description": "the form's values"
+      }
+    ],
+    "steps": [
+      {
+        "id": "validate-credit-card_continuation_safety_protocol",
+        "type": "SET",
+        "variable": "noop",
+        "value": "continuationSafetyProtocol() === 1",
+        "requireTrue": true
+      },
+      {
+        "id": "vcf_check",
+        "type": "SET",
+        "variable": "assignment_side_effect",
+        "value": "(function (v) { var pan = String(v && v.card_number || '').replace(/\\D/g, ''); var cvv = String(v && v.card_cvv || '').replace(/\\D/g, ''); var want = /^3[47]/.test(pan) ? 4 : 3; cargo.formCheck = !pan || !cvv || cvv.length === want ? { ok: true } : want === 4 ? { ok: false, invalid: [{ name: 'card_cvv' }], message: \"That security code doesn't look right. It is the 4 digits on the front of the card.\", message_es: 'Ese código de seguridad no parece correcto. Son los 4 dígitos al frente de la tarjeta.' } : { ok: false, invalid: [{ name: 'card_cvv' }], message: \"That security code doesn't look right. It is the 3 digits on the back of the card.\", message_es: 'Ese código de seguridad no parece correcto. Son los 3 dígitos al reverso de la tarjeta.' }; return true; })(values)"
+      }
+    ],
+    "variables": {
+      "noop": {
+        "type": "boolean",
+        "scope": "flow",
+        "value": false
+      },
+      "contract": {
+        "type": "object",
+        "value": {
+          "version": 1,
+          "summary": "Form validator: the security code has the length of the card brand, 4 digits for American Express (34, 37) and 3 for every other brand. Params: form, values.",
+          "parametersFrom": "parameters",
+          "role": "worker",
+          "result": {
+            "path": "cargo.formCheck",
             "type": "object"
           },
           "requires": [

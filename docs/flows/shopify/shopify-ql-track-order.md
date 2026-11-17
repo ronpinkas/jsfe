@@ -12,7 +12,7 @@
   - `ask` (track / delivery / items / details / list / pickup): What they want to know: 'track' (where it is, its tracking), 'delivery' (when it arrives, whether it was delivered), 'items' (what is in it), 'details' (its status or details), 'list' (their orders), 'pickup' (a will call or store pickup order); else leave empty.
   - `asked` (track / delivery / items / details): track: where the package is and its tracking. delivery: when the order arrives or was delivered. items: what is in the order. details: order state, total, items and shipping address
   - `no_orders` (return): Internal: 'return' hands a caller with no online orders back to the tenant wrapper that called this flow (cargo.shopifyNoOrders) instead of asking for a tracking number; empty for the default.
-- **Calls:** [shopify-ql-order-gate](shopify-ql-order-gate.md) (call), [shopify-ql-order-facts-load](shopify-ql-order-facts-load.md) (call), [authenticate-user](../system/authenticate-user.md) (system) (call), [shopify-ql-track-order](shopify-ql-track-order.md) (retry_flow of authenticate-user), [contact-support](../system/contact-support.md) (system) (cancel_flow of authenticate-user, cancel_flow), [shopify-ql-shipstation-track-by-number-verified](shopify-ql-shipstation-track-by-number-verified.md) (replace), [shopify-ql-order-desk](shopify-ql-order-desk.md) (replace)
+- **Calls:** [shopify-ql-order-gate](shopify-ql-order-gate.md) (call), [shopify-ql-order-facts-load](shopify-ql-order-facts-load.md) (call), [authenticate-user](../system/authenticate-user.md) (system) (call), [shopify-ql-track-order](shopify-ql-track-order.md) (retry_flow of authenticate-user), [contact-support](../system/contact-support.md) (system) (cancel_flow of authenticate-user, cancel_flow), {{cargo.shopifyOptions.verified_flow}} (call), [shopify-ql-shipstation-track-by-number-verified](shopify-ql-shipstation-track-by-number-verified.md) (replace), [shopify-ql-order-desk](shopify-ql-order-desk.md) (replace)
 - **Tools:** none
 - **Called by:** intent detection, [shopify-ql-track-order](shopify-ql-track-order.md) (retry_flow of authenticate-user), [shopify-ql-order-gate](shopify-ql-order-gate.md) (retry_flow of authenticate-user, retry_flow)
 
@@ -33,17 +33,23 @@ flowchart TD
    n4["set assignment_side_effect"]
    c2 -- "cargo.otpVerified === true && (cargo.otp_email #124;#124; cargo.otp_cell_numb…" --> n4
    b3 --> n4
-   n5[["call shopify-ql-order-gate"]]
-   class n5 flowstep
-   n4 --> n5
-   c6{"case"}
-   n5 --> c6
-   b7(["replace → shopify-ql-shipstation-track-by-number-verified"])
-   class b7 endstep
-   c6 -- "cargo.trackingNumberAsked.length #gt;= 8 && cargo.trackingNumberAsked.le…" --> b7
-   b8(["replace → shopify-ql-order-desk"])
-   class b8 endstep
-   c6 -- "else" --> b8
+   c5{"case"}
+   n4 --> c5
+   b6[["call #123;#123;cargo.shopifyOptions.verified_flow#125;#125;"]]
+   class b6 flowstep
+   c5 -- "cargo.otpVerified === true && cargo.shopifyOptions && cargo.shopifyOp…" --> b6
+   n7[["call shopify-ql-order-gate"]]
+   class n7 flowstep
+   b6 --> n7
+   c5 -- "else" --> n7
+   c8{"case"}
+   n7 --> c8
+   b9(["replace → shopify-ql-shipstation-track-by-number-verified"])
+   class b9 endstep
+   c8 -- "cargo.trackingNumberAsked.length #gt;= 8 && cargo.trackingNumberAsked.le…" --> b9
+   b10(["replace → shopify-ql-order-desk"])
+   class b10 endstep
+   c8 -- "else" --> b10
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

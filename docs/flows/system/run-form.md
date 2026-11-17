@@ -10,7 +10,7 @@
   - `rf_form`: The form id (the calling form flow id)
   - `rf_resume`: 'true' on the loop's own replays
   - `rf_stop`: A cargo path (or list) that ends the form when set
-- **Calls:** [resume-form](resume-form.md) (reboot), [provide-queued-data](provide-queued-data.md) (call), [collect-input-accept](collect-input-accept.md) (call), [run-form](run-form.md) (replace), [confirm-input-proposal](confirm-input-proposal.md) (call), {{rf_next_form}} (call), [collect-input](collect-input.md) (call)
+- **Calls:** [resume-form](resume-form.md) (reboot), [provide-queued-data](provide-queued-data.md) (call), [collect-input-accept](collect-input-accept.md) (call), [run-form](run-form.md) (replace), [confirm-input-proposal](confirm-input-proposal.md) (call), [disambiguate-input](disambiguate-input.md) (call), {{rf_next_form}} (call), [collect-input](collect-input.md) (call)
 - **Tools:** none
 - **Called by:** [run-form](run-form.md), [collect-address](collect-address.md), [collect-credit-card](collect-credit-card.md), [collect-service-answer](collect-service-answer.md), [collect-geocoded-address](collect-geocoded-address.md), [confirm-input-proposal](confirm-input-proposal.md), [collect-contextual-answer](collect-contextual-answer.md), [shopify-ql-get-search-query](../shopify/shopify-ql-get-search-query.md) (shopify), [shopify-ql-product-dialog](../shopify/shopify-ql-product-dialog.md) (shopify), [shopify-ql-product-stores](../shopify/shopify-ql-product-stores.md) (shopify), [shopify-ql-product-variant](../shopify/shopify-ql-product-variant.md) (shopify), [shopify-ql-product-location-retry](../shopify/shopify-ql-product-location-retry.md) (shopify), [shopify-ql-product-links](../shopify/shopify-ql-product-links.md) (shopify), [shopify-ql-order-question](../shopify/shopify-ql-order-question.md) (shopify), [shopify-ql-tracking-inputs](../shopify/shopify-ql-tracking-inputs.md) (shopify), [shopify-ql-policy-question](../shopify/shopify-ql-policy-question.md) (shopify)
 
@@ -116,20 +116,33 @@ flowchart TD
    b38(["end (back to caller)"])
    class b38 endstep
    c37 -- "rf_status === 'complete' #124;#124; rf_status === 'stopped'" --> b38
-   n39["set rf_questions, rf_provides"]
+   n39["set rf_clarify"]
    c37 -- "else" --> n39
    c40{"case"}
    n39 --> c40
-   b41[["call #123;#123;rf_next_form#125;#125;"]]
+   b41[["call disambiguate-input"]]
    class b41 flowstep
-   c40 -- "rf_next_form" --> b41
-   b42[["call collect-input"]]
-   class b42 flowstep
-   c40 -- "else" --> b42
-   n43(["replace → run-form"])
-   class n43 endstep
-   b41 --> n43
-   b42 --> n43
+   c40 -- "rf_clarify" --> b41
+   c42{"case"}
+   b41 --> c42
+   c40 -- "else" --> c42
+   b43(["replace → run-form"])
+   class b43 endstep
+   c42 -- "rf_clarify" --> b43
+   n44["set rf_questions, rf_provides"]
+   c42 -- "else" --> n44
+   c45{"case"}
+   n44 --> c45
+   b46[["call #123;#123;rf_next_form#125;#125;"]]
+   class b46 flowstep
+   c45 -- "rf_next_form" --> b46
+   b47[["call collect-input"]]
+   class b47 flowstep
+   c45 -- "else" --> b47
+   n48(["replace → run-form"])
+   class n48 endstep
+   b46 --> n48
+   b47 --> n48
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

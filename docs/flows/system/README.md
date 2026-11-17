@@ -1,7 +1,7 @@
 # System flows
 
 <!-- generated:start -->
-75 flows (3 entry points), 12 tools. The graph shows each entry point and the flows it reaches directly; a dotted arrow is a flow named rather than called (a hook, a prepare or present step, a default target). Each flow page charts its declarations: a provider (gate, source, facts, menu), a form (inputs in order, then its after steps), a performer (prepare, present, action) and any step list.
+76 flows (3 entry points), 12 tools. The graph shows each entry point and the flows it reaches directly; a dotted arrow is a flow named rather than called (a hook, a prepare or present step, a default target). Each flow page charts its declarations: a provider (gate, source, facts, menu), a form (inputs in order, then its after steps), a performer (prepare, present, action) and any step list.
 
 ```mermaid
 flowchart LR
@@ -100,6 +100,7 @@ flowchart LR
 | [global-exit](global-exit.md) | steps | Worker (started by the engine): the caller exited; say the process was cancelled at their request (thanks when the outcome in force is reso… |
 | [contact-misread](contact-misread.md) | steps | Ask the contact question again after an answer that is no contact, then offer the common retry menu at the third miss in a row. |
 | [validate-us-phone](validate-us-phone.md) | steps | Validator: a US or Canada phone number, 10 digits or 11 starting with 1 (validatePhone); normalizes to its 10 digits. The phone reader alon… |
+| [validate-credit-card](validate-credit-card.md) | steps | Form validator: the security code has the length of the card brand, 4 digits for American Express (34, 37) and 3 for every other brand. Par… |
 <!-- generated:end -->
 
 ## How to read these docs
