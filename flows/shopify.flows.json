@@ -250,7 +250,7 @@
           "condition: cargo.shopifyProducts.products.length===0": {
             "id": "product_empty",
             "type": "RETURN",
-            "value": "language==='es'?'No encontré productos para '+cargo.shopifyProducts.query+'. Puede describirlos de otra forma.':'I could not find products for '+cargo.shopifyProducts.query+'. You can describe them another way.'",
+            "value": "''",
             "outcome": "resolved",
             "reason": "no_products_found"
           },
@@ -1822,7 +1822,7 @@
         "id": "product_variant_options",
         "type": "SET",
         "variable": "options",
-        "value": "(function productVariantOptions(product, voice) {\n const variants=Array.isArray(product?.variants)?product.variants:[];\n const records=variants.filter(v=>typeof (v.id || v.variant_id)==='string' && String(v.id || v.variant_id).trim()).map(v=>{\n  const options=Array.isArray(v.selectedOptions)?v.selectedOptions:Array.isArray(v.options)?v.options:[];\n  const detail=options.map(o=>o && typeof o==='object'?[o.name,o.value].filter(x=>typeof x==='string'&&x.trim()).join(': '):typeof o==='string'?o:'').filter(Boolean).join(', ');\n  return {id:String(v.id || v.variant_id),label:detail || (typeof v.title==='string'?v.title.trim():'') || (typeof v.name==='string'?v.name.trim():'')};\n });\n if(records.length===1 && variants.length===1)return records.map((v,i)=>({...v,key:String(i+1),words:[String(i+1),...(v.label?[v.label]:[])]}));\n if(records.length!==variants.length || !records.length || records.some(v=>!v.label || /^default(?: title)?$/i.test(v.label)) || new Set(records.map(v=>v.id)).size!==records.length || new Set(records.map(v=>v.label.toLowerCase())).size!==records.length)return [];\n return records.slice(0,voice?3:5).map((v,i)=>({...v,key:String(i+1),words:[String(i+1),...(v.label?[v.label]:[])]}));\n})(cargo.shopifyProducts.products[Number(position)-1],!!cargo.voice)"
+        "value": "(function productVariantOptions(product, voice) {\n const variants=Array.isArray(product?.variants)?product.variants:[];\n const records=variants.filter(v=>typeof (v.id || v.variant_id)==='string' && String(v.id || v.variant_id).trim()).map(v=>{\n  const options=Array.isArray(v.selectedOptions)?v.selectedOptions:Array.isArray(v.options)?v.options:[];\n  const detail=options.map(o=>o && typeof o==='object'?[o.name,o.value||o.label].filter(x=>typeof x==='string'&&x.trim()).join(': '):typeof o==='string'?o:'').filter(Boolean).join(', ');\n  return {id:String(v.id || v.variant_id),label:detail || (typeof v.title==='string'?v.title.trim():'') || (typeof v.name==='string'?v.name.trim():'')};\n });\n if(records.length===1 && variants.length===1)return records.map((v,i)=>({...v,key:String(i+1),words:[String(i+1),...(v.label?[v.label]:[])]}));\n if(records.length!==variants.length || !records.length || records.some(v=>!v.label || /^default(?: title)?$/i.test(v.label)) || new Set(records.map(v=>v.id)).size!==records.length || new Set(records.map(v=>v.label.toLowerCase())).size!==records.length)return [];\n return records.slice(0,voice?3:5).map((v,i)=>({...v,key:String(i+1),words:[String(i+1),...(v.label?[v.label]:[])]}));\n})(cargo.shopifyProducts.products[Number(position)-1],!!cargo.voice)"
       },
       {
         "id": "product_variant_choices",
