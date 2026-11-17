@@ -82,6 +82,18 @@ const read=(cargo,id,text,current)=>{const chain=formInputChain(cargo.forms,id,c
    eq(run('1234',{}).ok,true,'no card number yet: 3 or 4 digits');
    eq(/front/.test(run('123',{card_number:'341111111111111'}).message),true,'the American Express message names the front');
 }
+// validate-us-phone: a US or Canada number only (validatePhone); the phone reader alone also takes 11-13 digits as international.
+{
+   const flow=FLOWS.find(f=>f.id==='validate-us-phone');
+   assert(flow,'validate-us-phone is a system worker');checks++;
+   const expr=flow.steps.find(step=>step.id==='vup_check').value;
+   const validatePhone=(p)=>{const c=String(p??'').replace(/\D/g,'');return c.length===10||(c.length===11&&c.startsWith('1'));};
+   const run=(value)=>{const cargo={};new Function('cargo','value','validatePhone',`return ${expr}`)(cargo,value,validatePhone);return cargo.inputCheck;};
+   eq(run('(213) 887-0758'),{ok:true,value:'2138870758'},'10 digits: its digits');
+   eq(run('12138870758'),{ok:true,value:'2138870758'},'a leading 1 dropped');
+   eq(run('5622138870758').ok,false,'13 digits refused');
+   eq(run('5622138870758').message_es,'Escuché 13 dígitos; el número de teléfono tiene 10.','told how many were heard');
+}
 // Dot-grouped thousands: three digits after a dot are never cents.
 for(const [text,value] of [['1.500',1500],['1.500 dólares',1500],['2.000.000',2000000],['1.50',1.5],['$12.50',12.5],['1.234,56',1234.56]])eq(amountInAnswer(text),value,text);
 console.log(`form-shape-and-input-activation: ${checks} checks passed`);

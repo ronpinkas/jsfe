@@ -522,7 +522,10 @@ const engine = new WorkflowEngine(logger, aiCallback, flows, tools,
   reason in `container.otpFailure` (`missing`, `expired` or `mismatch`). Sending the code is the host's job.
 - Built-in field validators: `validate-card-number` (Luhn; normalizes to digits), `validate-card-expiration` (a month
   as a number or its English or Spanish name, and a year; normalizes to MMYY) and `validate-card-cvv` (4 digits for
-  American Express, 3 for every other brand; the rejection says "the 4 digits on the front" or "the 3 digits on the back").
+  American Express, 3 for every other brand; the rejection says "the 4 digits on the front" or "the 3 digits on the back"),
+  and `validate-us-phone` (a US or Canada number, 10 digits or 11 starting with 1; normalizes to the 10 digits). The
+  `phone` preset's reader alone also takes an 11-13 digit international number: declare this validator where only a US
+  number is valid.
 - Session-aware helpers read only the cargo a caller passes: `callerTextNumber`, `textDestination`,
   `callerIsInternational`.
 
