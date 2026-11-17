@@ -4356,7 +4356,7 @@
           "condition: cargo.agentPhoneNumber": {
             "id": "confirm_transfer",
             "type": "RETURN",
-            "value": "after_give_up ? (language == 'es' ? 'Te transfiero a un agente en vivo.' : 'Let me transfer you to a live agent.') : (language == 'es' ? 'Entendido. Te transfiero a un agente en vivo.' : 'Understood. Let me transfer you to a live agent.')",
+            "value": "language == 'es' ? 'Te transfiero a un agente en vivo.' : 'Let me transfer you to a live agent.'",
             "keepSay": true
           },
           "default": {
