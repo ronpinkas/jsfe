@@ -101,12 +101,17 @@ export const FIELD_PRESETS = {
          // Read only at its own question, when nothing else read the answer: out of order, "1 2 3 6" is a security code (prod 2026-11-14 15:20).
          asked_regex: `\\b(?:0\\s[1-9]|1\\s[0-2])\\s\\d\\s\\d\\b` }, digits: { min: 3, max: 6 },
       validator: 'validate-card-expiration',
+      // Out of order it fills only beside its word, as the security code and the ZIP do (owner 2026-11-17).
+      confirm_out_of_order: { word: 'EXPIRATION', word_es: 'VENCIMIENTO', message: 'If {value} is the expiration date of the card, add the word {word}.', message_es: 'Si {value} es la fecha de vencimiento de la tarjeta, agregue la palabra {word}.' },
       question: 'What is the expiration date, month and year?', question_es: '¿Cuál es la fecha de vencimiento, mes y año?',
       retry: 'Please say or enter the expiration as four digits, month then year, like 0 9 2 8.', retry_es: 'Por favor diga o ingrese el vencimiento en cuatro dígitos, mes y año, por ejemplo 0 9 2 8.',
       retry_text: 'Please type the expiration as four digits, month then year, like 0928.', retry_text_es: 'Por favor escriba el vencimiento en cuatro dígitos, mes y año, por ejemplo 0928.' },
    card_cvv: { label: 'security code', label_es: 'código de seguridad', profile: { kind: 'digits', min: 3, max: 4 }, digits: { min: 3, max: 4 }, pii: true,
       length_message: 'I heard {heard} digits; the security code has 3, or 4 on the front of an American Express card.', length_message_es: 'Escuché {heard} dígitos; el código de seguridad tiene 3, o 4 al frente de una American Express.',
       validator: 'validate-card-cvv',
+      // A bare 3-4 digit number out of order may be a group of the card number (prod 2026-11-16: a lone 4-digit group at the card number
+      // question was stored as the code and three Visa charges were declined), so it fills the code only beside the word (owner 2026-11-17).
+      confirm_out_of_order: { word: 'SECURITY CODE', word_es: 'CÓDIGO DE SEGURIDAD', message: 'If {value} is the security code of the card, add the words {word}.', message_es: 'Si {value} es el código de seguridad de la tarjeta, agregue las palabras {word}.' },
       question: 'What is the security code on the back of the card?', question_es: '¿Cuál es el código de seguridad al reverso de la tarjeta?' },
    // A bare five-digit number out of order may be anything (prod 2026-11-11: it replaced an answered ZIP), so it fills the
    // billing ZIP only beside the word (owner 2026-11-11).
@@ -899,6 +904,12 @@ const validators = [
       description: 'Validator: a US or Canada phone number, 10 digits or 11 starting with 1 (validatePhone); normalizes to its 10 digits. The phone reader alone also takes an 11-13 digit international number. Params: form, input, value, values, reading (it reads value).',
       parameters: [{ name: 'input', type: 'string', description: 'input name' }, { name: 'value', type: 'string', description: 'the reading' }],
       steps: [SIDE('vup_check', "(function (d) { cargo.inputCheck = validatePhone(d) ? { ok: true, value: d.slice(-10) } : { ok: false, message: 'I heard ' + d.length + ' digits; a phone number has 10.', message_es: 'Escuché ' + d.length + ' dígitos; el número de teléfono tiene 10.' }; return true; })(String(value).replace(/\\D/g, ''))")] },
+   // The card as a whole (owner 2026-11-17): a security code stored before the card number was known passed as 3 or 4 digits; the
+   // completed card is checked again so a Visa never carries 4 (prod 2026-11-16: three charges declined). The code is asked again.
+   { id: 'validate-credit-card', name: 'ValidateCreditCard', version: '1.0.0', scope: 'isolated',
+      description: 'Form validator: the security code has the length of the card brand, 4 digits for American Express (34, 37) and 3 for every other brand. Params: form, values.',
+      parameters: [{ name: 'form', type: 'string', description: 'form instance' }, { name: 'values', type: 'object', description: "the form's values" }],
+      steps: [SIDE('vcf_check', "(function (v) { var pan = String(v && v.card_number || '').replace(/\\D/g, ''); var cvv = String(v && v.card_cvv || '').replace(/\\D/g, ''); var want = /^3[47]/.test(pan) ? 4 : 3; cargo.formCheck = !pan || !cvv || cvv.length === want ? { ok: true } : want === 4 ? { ok: false, invalid: [{ name: 'card_cvv' }], message: \"That security code doesn't look right. It is the 4 digits on the front of the card.\", message_es: 'Ese código de seguridad no parece correcto. Son los 4 dígitos al frente de la tarjeta.' } : { ok: false, invalid: [{ name: 'card_cvv' }], message: \"That security code doesn't look right. It is the 3 digits on the back of the card.\", message_es: 'Ese código de seguridad no parece correcto. Son los 3 dígitos al reverso de la tarjeta.' }; return true; })(values)")] },
    { id: 'validate-card-cvv', name: 'ValidateCardCvv', version: '1.0.0', scope: 'isolated',
       description: 'Validator: the security code has the length of its card brand, 4 digits for American Express (34, 37) and 3 for every other brand; with no card number yet, 3 or 4. Params: form, input, value, values, reading (it reads value and values.card_number).',
       parameters: [{ name: 'input', type: 'string', description: 'input name' }, { name: 'value', type: 'string', description: 'the reading' }, { name: 'values', type: 'object', description: "the form's values, for the card number" }],
@@ -914,6 +925,7 @@ const subForms = [
    formFlow({ id: 'collect-credit-card', name: 'CollectCreditCard', version: '1.0.0', first_task: 'enter your new card details', first_task_es: 'ingresar los datos de su tarjeta nueva',
       description: "Sub-form: card number, expiration, security code, billing ZIP, in any order. Result (with keep_pii for the charge step): the parent's result input.",
       inputs: [{ name: 'card_number', field: 'card_number' }, { name: 'card_expiration', field: 'card_expiration' }, { name: 'card_cvv', field: 'card_cvv' }, { name: 'card_zip', field: 'card_zip' }],
+      validator: 'validate-credit-card',
       extraVars: { exit_context: 'your payment', exit_context_es: 'su pago' } }),
 ];
 // collect-credit-card hands the card on WITH its pii (the charge needs it); the parent clears it after use.
@@ -1183,6 +1195,7 @@ const LIBRARY_CONTRACTS={
    'validate-card-number':{role:'worker',result:{path:'cargo.inputCheck',type:'object'}},
    'validate-card-expiration':{role:'worker',result:{path:'cargo.inputCheck',type:'object'}},
    'validate-card-cvv':{role:'worker',result:{path:'cargo.inputCheck',type:'object'}},
+   'validate-credit-card':{role:'worker',result:{path:'cargo.formCheck',type:'object'}},
    'validate-us-phone':{role:'worker',result:{path:'cargo.inputCheck',type:'object'}},
    'collect-address':{role:'collector'},'collect-credit-card':{role:'collector'}
 };

@@ -120,8 +120,12 @@ eq(names(r), ['word=visa'], 'a word: the nearest form takes it');
       eq(r.hits.map((h) => h.name), ['card_expiration'], `"${said}" is the expiration`);
       eq(/gui[oó]n|dash|hyphen|slash|barra|diagonal/i.test(r.hits[0].value), true, `"${said}": read whole [${r.hits[0].value}]`);
    }
+   // Out of order only beside its word (owner 2026-11-17); alone the caller is told how to mean it.
    r = matchInputs('0 4 guion 31', [cvv2, zip, exp], { form: 'card', name: 'card_zip' });
-   eq(names(r).map((x) => x.split('=')[0]), ['card_expiration'], 'out of order too');
+   eq(r.hits.length, 0, 'out of order alone fills nothing');
+   eq((r.clarify || []).map((x) => x.name), ['card_expiration'], 'out of order alone: the expiration line');
+   r = matchInputs('vencimiento 0 4 guion 31', [cvv2, zip, exp], { form: 'card', name: 'card_zip' });
+   eq(names(r).map((x) => x.split('=')[0]), ['card_expiration'], 'out of order beside its word');
 }
 
 // confirm_out_of_order: a number alone is not taken; beside its word it is (owner 2026-11-02)

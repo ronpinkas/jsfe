@@ -545,13 +545,29 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    // A pattern field's asked_regex (owner 2026-11-15): a form read only at the field's own question, when nothing else read the answer,
    // stored as its digits ("0 6 3 0 30 se vence" at the expiration is 0630). Out of order it reads nothing, so another field keeps its digits.
    const askedRegex = own && own.profile.kind === 'pattern' && own.profile.asked_regex ? new RegExp(own.profile.asked_regex, 'gi') : null;
-   const askedHits = askedRegex && !readings.length && !clarify.length ? [...undecimal.matchAll(askedRegex)] : [];
+   // A number refused out of order (confirm_out_of_order) does not stop the current field's own reading: the current field is
+   // preferred (owner 2026-11-17: "1 2 2 9, ya" at the expiration is the expiration, not a security code to name), and its clarify line is dropped.
+   const askedHits = askedRegex && !readings.length ? [...undecimal.matchAll(askedRegex)] : [];
    if (askedHits.length === 1) {
       const hit = askedHits[0];
+      clarify.length = 0;
       readings.push({ form: own.form, name: own.name, value: hit[0].replace(/\s+/g, ''), known: false, repeatedChoice: false, wholeChoice: false, choice: false, narrative: false, resetOn: [], spans: [[hit.index, hit.index + hit[0].length]], keypad: false, fallback: false,
          group: own.group, exclusive: own.exclusive === true, level: forms.indexOf(own.scope || own.form), current: true, confirm: Array.isArray(own.confirm_against) ? own.confirm_against : [] });
    } else {
       // no asked_regex, something already read the answer, or not exactly one match
+   }
+   // Out of order, the field's confirm_out_of_order word lets its asked_regex read too ("vencimiento 0 4 3 1" at the card number
+   // question is the expiration, owner 2026-11-17); the number's other readings were refused for want of their own word.
+   for (const c of list) {
+      const regex = !isCur(c) && c.profile.kind === 'pattern' && c.profile.asked_regex && c.confirm_out_of_order && saysConfirmWord(raw, c.confirm_out_of_order) ? new RegExp(c.profile.asked_regex, 'gi') : null;
+      const hits = regex && !readings.some((reading) => reading.form === c.form && reading.name === c.name) ? [...undecimal.matchAll(regex)] : [];
+      if (hits.length === 1 && !readings.some((reading) => (reading.spans || []).some(([s, e]) => s < hits[0].index + hits[0][0].length && hits[0].index < e))) {
+         readings.push({ form: c.form, name: c.name, value: hits[0][0].replace(/\s+/g, ''), known: false, repeatedChoice: false, wholeChoice: false, choice: false, narrative: false, resetOn: [], spans: [[hits[0].index, hits[0].index + hits[0][0].length]], keypad: false, fallback: false,
+            group: c.group, exclusive: c.exclusive === true, level: forms.indexOf(c.scope || c.form), current: false, confirm: Array.isArray(c.confirm_against) ? c.confirm_against : [], rule: 'out_of_order' });
+         clarify.length = 0;
+      } else {
+         // not a pattern field named by its word, already read, or not exactly one free match
+      }
    }
    // Rule 1 by length (owner 2026-11-15): at its own question, a field that declares its length (`digits`) takes the one number
    // of three or more digits in the answer when that number has the wrong length, words around it ignored, and nothing else read
