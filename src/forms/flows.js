@@ -590,7 +590,8 @@ const readProviderReply={
 // reply answers the question, and a choice's own `parameters`, extracted when it is picked. Each value is read by the form's
 // own reader, as if the caller had said only that: `reads` names the input it answers, else it answers the asked question
 // (so the question's rules decide a number's field). Two readings of one input that differ take nothing: asked again.
-// Each reading carries origin 'rank_argument' and its parameter's name (argument), for the input's validator.
+// Each reading carries origin 'rank_argument' and its parameter's name (argument), for the input's validator. An amount is
+// taken only where the caller said it, read from the caller's words (readArgument; owner 2026-11-18).
 const RANK_ARGUMENTS_JS=`(function(){
  var own=(choices || []).concat(others || []).filter(function(c){return String(c.key)===String(reply && reply.key || '');})[0];
  var declared=reply && reply.key!==undefined ? (own && Array.isArray(own.parameters) ? own.parameters : []) : params;
@@ -602,7 +603,7 @@ const RANK_ARGUMENTS_JS=`(function(){
   var said=String(values[p.name]===undefined || values[p.name]===null ? '' : values[p.name]).trim();
   if(!said)return;
   var target=p.reads ? {form:form,name:p.reads} : group ? {form:form,names:group} : {form:form,name:input};
-  var read=enrichFormMatches(readFormAnswer(said, chain, target, said, []), chain, form, target.names || [target.name], input);
+  var read=enrichFormMatches(readArgument(said, cargo.choiceText, chain, target, said), chain, form, target.names || [target.name], input);
   read.hits.forEach(function(h){h=Object.assign({},h,{origin:'rank_argument',argument:p.name});if(!hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)===String(h.value);}))hits.push(h);});
   ambiguous=ambiguous.concat(read.ambiguous);
  });
@@ -688,7 +689,7 @@ const readConfirmReply={
     var said=String(values[p.name]===undefined || values[p.name]===null ? '' : values[p.name]).trim();
     if(!said)return;
     var target=p.reads ? {form:form,name:p.reads} : {form:form,name:'',invites:Array.isArray(invites) ? invites : []};
-    enrichFormMatches(readFormAnswer(said, chain, target, '', []), chain, form).hits.forEach(function(h){h=Object.assign({},h,{origin:'rank_argument',argument:p.name});if(!hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)===String(h.value);}))hits.push(h);});
+    enrichFormMatches(readArgument(said, cargo.choiceText, chain, target, ''), chain, form).hits.forEach(function(h){h=Object.assign({},h,{origin:'rank_argument',argument:p.name});if(!hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)===String(h.value);}))hits.push(h);});
    });
    return hits.some(function(h){return hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)!==String(h.value);});}) ? {hits:[]} : {hits:hits};
   })()`),
@@ -696,7 +697,7 @@ const readConfirmReply={
   SET('confirm_read_args','reading',"reading && reading.hits.length ? Object.assign({},reading,{hits:(function(hits,args){var groupOf=function(h){var st=cargo.forms[h.form];var g=st && (st.specs || []).filter(function(s){return s.exclusive && Array.isArray(s.any_of) && s.any_of.some(function(i){return i.name===h.name;});})[0];return g ? h.form+'.'+g.name : '';};return hits.filter(function(h){var g=groupOf(h);return !(g && args.some(function(a){return groupOf(a)===g;}));}).concat(args);})(reading.hits,args.hits)}) : reading"),
   WHEN('confirm_change','reading && reading.hits.length',FLOW('confirm_change_accept','collect-input-accept','call',{hits:'{{reading.hits}}'})),
   SET('confirm_field','field',"fields.filter(function(c){return reply && c.key===reply.key;})[0] || null"),
-  SET('confirm_corrections','corrections',"field && reply.arguments ? fields.reduce(function(all,c){var said=String(reply.arguments[c.owner.name] || '').trim();return said ? all.concat(enrichFormMatches(readFormAnswer(said, chain, c.owner, said, []), chain, form, [c.owner.name], c.owner.name).hits) : all;},[]) : []"),
+  SET('confirm_corrections','corrections',"field && reply.arguments ? fields.reduce(function(all,c){var said=String(reply.arguments[c.owner.name] || '').trim();return said ? all.concat(enrichFormMatches(readArgument(said, cargo.choiceText, chain, c.owner, said), chain, form, [c.owner.name], c.owner.name).hits) : all;},[]) : []"),
   WHEN('confirm_correct','corrections.length',FLOW('confirm_correct_accept','collect-input-accept','call',{hits:'{{corrections}}'})),
   WHEN('confirm_field_reset','field && !corrections.length',SIDE('confirm_field_ask','(resetFormInputs(cargo, field.owner.form, [field.owner.name]), true)')),
 

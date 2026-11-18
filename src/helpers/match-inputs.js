@@ -316,6 +316,49 @@ export function saysNoValue(answer) {
    return !!text && !/\d/.test(text) && NO_VALUE.test(text);
 }
 
+/**
+ * Where the caller said amount n (owner 2026-11-18: an amount's digits come only from the caller's own words; a model may
+ * choose WHICH number is the amount, never supply one). The span of the caller's answer that says n as a whole number: every
+ * digit run it touches lies entirely inside it (DIGIT_RUN joins "43, 4, 97" into one number, so "43" is a piece of it), with
+ * the money word beside it. A model that added cents the caller did not say ("1.00" for "1", "157.95" for "157") is
+ * grounded on the number said, and the field's own rules decide it. Null when the answer does not say it: the model's
+ * value is not taken. Prod 2026-11-17 CA3a7c: "43, 4, 97. ¿Ya?" (code digits) was proposed as $43.
+ */
+export function groundAmount(utterance, value) {
+   const raw = unescape(utterance), n = Number(String(value ?? '').replace(/[^\d.]/g, ''));
+   if (!raw.trim() || !Number.isFinite(n)) return null; else { /* something to ground */ }
+   const decimalRuns = [...raw.matchAll(DECIMAL_AMOUNT)].map((m) => [m.index, m.index + m[0].length]);
+   const undecimal = decimalRuns.reduce((text, [a, b]) => text.slice(0, a) + ' '.repeat(b - a) + text.slice(b), raw);
+   const runs = [...undecimal.matchAll(DIGIT_RUN)].map((m) => [m.index, m.index + m[0].replace(/[\s.,]+$/, '').length]).concat(decimalRuns);
+   const whole = ([s, e]) => runs.every(([a, b]) => !(s < b && a < e) || (s <= a && e >= b));
+   const spansOf = (x) => [...amountSpans(raw, x), ...readSpokenMoney(raw).filter((r) => r.value === x).map((r) => [r.start, r.end])].filter(whole);
+   const spans = spansOf(n).length ? spansOf(n) : n !== Math.trunc(n) || /\.0+$/.test(String(value)) ? spansOf(Math.trunc(n)) : [];
+   if (!spans.length) return null; else { /* said whole */ }
+   const [a, b] = spans[0];
+   const tail = (raw.slice(b).match(/^\s*(?:cents?|centavos?|dollars?|d[oó]lares?|d[oó]lar|pesos?|bucks?)\b/i) || [''])[0];
+   const head = (raw.slice(0, a).match(/[$]\s*$/) || [''])[0];
+   return { text: raw.slice(a - head.length, b + tail.length), start: a - head.length, end: b + tail.length };
+}
+/**
+ * A model's argument read as the caller's answer (the reply ranker's extracted parameters, a picked correction's fields):
+ * a value for an AMOUNT input is taken only where the caller said it (groundAmount), and read from those words, so its
+ * money word and its whole number are the caller's; any other input is read from the value, as before. `utterance` is the
+ * caller's whole answer, kept on every reading for the field's validator.
+ */
+export function readArgument(said, utterance, candidates, current, choiceKey = '') {
+   const read = readFormAnswer(said, candidates, current, choiceKey, []);
+   const kindOf = (h) => ((candidates || []).find((c) => c.form === h.form && c.name === h.name)?.profile || {}).kind;
+   if (!String(utterance ?? '').trim()) return read; else { /* the caller's words are known */ }
+   const ground = (h) => {
+      if (kindOf(h) !== 'amount') return [{ ...h, utterance: unescape(utterance) }]; else { /* an amount: the caller's words decide */ }
+      const g = groundAmount(utterance, h.value);
+      if (!g) return []; else { /* said */ }
+      const again = readFormAnswer(g.text, candidates, { form: h.form, name: h.name }, choiceKey, []).hits.filter((x) => x.form === h.form && x.name === h.name);
+      return again.map((x) => ({ ...x, raw: g.text, utterance: unescape(utterance) }));
+   };
+   const ungrounded = read.hits.filter((h) => kindOf(h) === 'amount' && !groundAmount(utterance, h.value)).map((h) => ({ form: h.form, name: h.name, value: h.value, rule: 'not_said' }));
+   return { ...read, hits: read.hits.flatMap(ground), ambiguous: read.ambiguous.flatMap(ground), refused: [...(read.refused || []), ...ungrounded] };
+}
 export function readFormAnswer(answer,candidates,current,choiceKey,questions=[]) {
    const raw=unescape(answer),parts=raw.split(/([?;\n]|\b(?:and|y)\b)/i),asked=[];
    let consumed=false;

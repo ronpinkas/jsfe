@@ -327,7 +327,7 @@ rules should decide.
 
 **How the values are taken:**
 
-- Each value is read by the readers as if said alone, then validated and stored like a typed answer, with the same
+- Each value is read by the readers as if said alone, then validated and stored like a typed answer, with the same An AMOUNT is the exception (jsfe 1.77, owner 2026-11-18): its digits come only from the caller's own words. A model's amount (these arguments, or an activation parameter intent detection extracted) is taken only where the caller said it as a whole number, and is read from those words with their money mark (`groundAmount`); a number the caller did not say, or a piece of one ("43" in "43, 4, 97"), is not taken.
   acknowledgement, attempts and confirmation. A value read at a confirmation changes the form, which is confirmed again.
 - Nothing read: the question is asked again, as without the declaration. Extraction failing behaves the same.
 - Two readings of one input that differ take nothing: the question is asked again.

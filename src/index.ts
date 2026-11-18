@@ -3048,6 +3048,11 @@ async function isFlowActivated(input: string, engine: Engine, userId: string = '
     if (parameters) {
       logger.info(`Injecting extracted parameters into flow variables: ${JSON.stringify(parameters)}`);
       Object.assign(variables, parameters);
+      // Which values a model extracted from the caller's words (not a host start): a form takes an amount among them only
+      // where the caller said it (formInitialReadings; owner 2026-11-18).
+      if (result.hostStart !== true) variables.__extracted_arguments = Object.keys(parameters); else { /* the host's own values */ }
+    } else {
+      // no parameters
     }
 
     const flowFrame: FlowFrame = {
@@ -3932,7 +3937,7 @@ export async function getFlowForInput(input: string, engine: Engine): Promise<Fl
   return result ? result.flow : null;
 }
 
-export async function detectFlowWithParameters(input: string, engine: Engine): Promise<{ flow: FlowDefinition, parameters?: Record<string, any> } | null> {
+export async function detectFlowWithParameters(input: string, engine: Engine): Promise<{ flow: FlowDefinition, parameters?: Record<string, any>, hostStart?: boolean } | null> {
   // CRITICAL: This function requires AI access via engine.aiCallback
   // Without AI, the engine cannot detect user intent and activate flows
   // Sessions would never be activated as no workflows could be triggered
@@ -3966,7 +3971,7 @@ export async function detectFlowWithParameters(input: string, engine: Engine): P
         return null;
       } else {
         const given = wanted.arguments && typeof wanted.arguments === 'object' ? wanted.arguments as Record<string, any> : {};
-        return { flow, parameters: enforceParameterEnums(flow, enforceParameterTypes(flow, ownParametersOnly(flow, given))) };
+        return { flow, hostStart: true, parameters: enforceParameterEnums(flow, enforceParameterTypes(flow, ownParametersOnly(flow, given))) };
       }
     } else {
       // no host start: intent detection decides
@@ -7536,7 +7541,7 @@ async function handleRegularFlowInterruption(intentAnalysis: any, engine: Engine
         flowStepsStack: cloneFlowValue(targetFlowDefinition.steps).reverse(),
         contextStack: [], // Start with empty context - don't use interruption input
         inputStack: [],   // Start with empty input stack - new flow will get proper input next
-        variables: { ...getInitialVariables(engine, targetFlowDefinition), ...(intentAnalysis.parameters || {}) }, // fresh variables + the arguments detection extracted
+        variables: { ...getInitialVariables(engine, targetFlowDefinition), ...(intentAnalysis.parameters || {}), __extracted_arguments: Object.keys(intentAnalysis.parameters || {}) }, // fresh variables + the arguments detection extracted (a model's: see formInitialReadings)
         transaction: newTransaction,
         userId: userId,
         startTime: Date.now()

@@ -1,7 +1,7 @@
 import {validateFormResponse} from './contextual-response.js';
 import {validateFormProposalPolicy} from './proposal-contract.js';
 /** Shared FORM semantics. Pure readers plus explicit mutations of the supplied session container; no host I/O. */
-import { readInputProfile } from './match-inputs.js';
+import { readInputProfile, groundAmount } from './match-inputs.js';
 import {validateMoneyOptions} from './money.js';
 
 const own = (o, k) => Object.prototype.hasOwnProperty.call(o || {}, k);
@@ -343,7 +343,13 @@ export function formInitialReadings(state, supplied = {},cargo={}) {
          continue;
       }
       if (!own(supplied,input.name)||!hasFormValue(supplied[input.name])||!input.profile)continue;
-      const value=supplied[input.name];
+      // An amount the model extracted at activation is taken only where the caller said it, read from the caller's words
+      // (owner 2026-11-18): not said, the form asks for it. A value the host or a flow passed is read as given.
+      const said=String(supplied.userInput||'');
+      const extracted=Array.isArray(supplied.__extracted_arguments)&&supplied.__extracted_arguments.includes(input.name);
+      const grounded=extracted&&input.profile.kind==='amount'&&said.trim()&&typeof supplied[input.name]!=='object'?groundAmount(said,supplied[input.name]):undefined;
+      if(grounded===null)continue;
+      const value=grounded?grounded.text:supplied[input.name];
       const reading=typeof value==='object'?null:input.profile.kind==='choice'&&(input.profile.choices||[]).some(c=>c.key===String(value))
          ?{value:String(value)}:readInputProfile({...input.profile,marked:false},value,true);
       const valid=reading&&own(reading,'value')&&hasFormValue(reading.value);

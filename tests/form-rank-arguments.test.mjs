@@ -1,5 +1,6 @@
 /** Arguments in an unread answer (owner 2026-11-06): the asked input's rank_parameters on `answers`, a choice's parameters
- * on its pick. Each value is read by the form's own reader as if said alone; `reads` names its input, else it answers the
+ * on its pick. Each value is read by the form's own reader as if said alone, except an amount: it is taken only where the
+ * caller said it, read from the caller's words (owner 2026-11-18: a model chooses which number, never supplies one); `reads` names its input, else it answers the
  * asked question (its rules decide a number's field). Fixture decisions measure the wiring, not the model. */
 import assert from 'node:assert/strict';
 import {WorkflowEngine} from '../dist/index.js';
@@ -25,7 +26,7 @@ function fixture({method=methodInput(),rank={option:'answers'},args={}}={}){
 }
 await test('answers: a definite amount is read as the amount input, by its reader',async()=>{
  const t=fixture({args:{amount:'30 dollars'}});await t.say('start',true);
- const r=await t.say('the usual payment, like last time');
+ const r=await t.say('the usual payment, so 30 like last time');
  assert.equal(Number(t.values.amount),30);assert.equal(t.values.method,undefined);assert.match(r,/Card or link/);
  assert.deepEqual(t.calls,['rank_reply','extract_parameters']);
 });
@@ -46,7 +47,7 @@ await test('two readings of one input that differ take nothing: asked again',asy
 });
 await test('a picked choice carries its arguments: the choice, then the amount',async()=>{
  const t=fixture({rank:{option:'choice:custom'},args:{amount:'25 dollars'}});await t.say('start',true);
- await t.say('a different one, like the usual');
+ await t.say('a different one, so 25');
  assert.equal(t.done.method,'custom');assert.equal(Number(t.done.amount),25,'the form completes with both');
 });
 await test('nothing extracted: asked again, as before',async()=>{
@@ -71,7 +72,8 @@ await test('a confirmation: confirm.rank_parameters read the amount and the form
  let session=engine.initSession('synthetic',crypto.randomUUID(),'en');session.cargo.voice=false;
  const say=async(content,start)=>{session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start:{flow:'pay',arguments:{amount:'25'}}}:{})},session)));return session.response||'';};
  assert.match(await say('start',true),/Pay 25 dollars/);
- assert.match(await say('well actually the usual one please'),/Pay 40 dollars/);assert.deepEqual(calls,['rank_reply','extract_parameters']);
+ cfg.args={amount:'40'};assert.match(await say('well actually the usual one please'),/Pay 25 dollars/,'an amount not said: confirmed as it was');assert.deepEqual(calls,['rank_reply','extract_parameters']);
+ assert.match(await say('well actually the usual one, so 40'),/Pay 40 dollars/,'said: read from the caller (lexically, the amount is invited)');
  cfg.args={};assert.match(await say('hmm let me think'),/Pay 40 dollars/,'nothing extracted: asked again');
  assert.throws(()=>defineForm({id:'bad',name:'Bad',description:'b',contract:{summary:'b'},inputs:[{name:'amount',profile:{kind:'amount'}}],confirm:{question:'q',rank_parameters:[{name:'x'}]}}),/rank_parameters must list/);
 });
@@ -83,7 +85,7 @@ await test("a confirmation: another input's picked option carries its parameters
  let session=engine.initSession('synthetic',crypto.randomUUID(),'en');session.cargo.voice=false;
  const say=async(content,start)=>{session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start:{flow:'pay',arguments:{plan:'due',amount:'25'}}}:{})},session)));return session.response||'';};
  assert.match(await say('start',true),/Pay due 25/);
- assert.match(await say('make it the usual one instead'),/Pay custom 40/);assert.ok(offered.includes('choice:custom'));assert.deepEqual(calls,['rank_reply','extract_parameters']);
+ assert.match(await say('make it the usual one instead, 40'),/Pay custom 40/);assert.ok(offered.includes('choice:custom'));assert.deepEqual(calls,['rank_reply','extract_parameters']);
 });
 await test("an argument answering the picked option's exclusive group replaces the option",async()=>{
  const form=defineForm({id:'pay',name:'Pay',primary:true,description:'Pay',contract:{summary:'Pay'},inputs:[{name:'selection',exclusive:true,question:'Due or another amount?',any_of:[{name:'option',profile:{kind:'choice',choices:[{key:'due',phrases:['due'],exact:true},{key:'amount',phrases:['different sum'],exact:true,parameters:[definite]}]}},{name:'amount',label:'amount',profile:{kind:'amount',min:0.01}}]}],confirm:{question:'Pay {{cargo.forms[form_instance].values.option}} {{cargo.forms[form_instance].values.amount}}?'},after:[{id:'done',type:'SET',variable:'noop',value:'(cargo.done=structuredClone(cargo.forms[form_instance].values),true)'}]});
@@ -93,6 +95,18 @@ await test("an argument answering the picked option's exclusive group replaces t
  let session=engine.initSession('synthetic',crypto.randomUUID(),'en');session.cargo.voice=false;
  const say=async(content,start)=>{session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content,...(start?{start:{flow:'pay',arguments:{}}}:{})},session)));return session.response||'';};
  assert.match(await say('start',true),/Due or another/);
- const r=await say('I would like to pay something else, like the usual');assert.match(r,/ 40\?$/,r);assert.doesNotMatch(r,/option or/i);
+ const r=await say('I would like to pay something else, like 40');assert.match(r,/ 40\?$/,r);assert.doesNotMatch(r,/option or/i);
+});
+await test('an amount the caller did not say is not taken: asked again (owner 2026-11-18)',async()=>{
+ const t=fixture({method:methodInput({invites:['amount']}),args:{amount:'30 dollars'}});await t.say('start',true);
+ const r=await t.say('the usual payment, like last time');assert.equal(t.values.amount,undefined);assert.match(r,/Card or link/);
+});
+await test('a piece of a number said is not an amount (prod 2026-11-17 CA3a7c: "43, 4, 97" proposed as $43)',async()=>{
+ const t=fixture({method:methodInput({invites:['amount']}),args:{amount:'43'}});await t.say('start',true);
+ const r=await t.say('43, 4, 97. Ya?');assert.equal(t.values.amount,undefined);assert.match(r,/Card or link/);
+});
+await test("the caller's money word is kept: read from the caller's words, not the model's",async()=>{
+ const t=fixture({method:methodInput({invites:['amount']}),args:{amount_candidate:'2'}});await t.say('start',true);
+ await t.say('Un 2 dolares mas que me faltan');assert.equal(Number(t.values.amount),2);
 });
 console.log(`form-rank-arguments: ${checks} checks passed`);
