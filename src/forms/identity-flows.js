@@ -73,13 +73,16 @@ export function otpDigits(text) {
    const tokens=String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(/[\s,.;:!?-]+/).filter(t=>t&&!filler.has(t));
    const spoken=tokens.length && tokens.some(t=>Object.hasOwn(map,t)) && tokens.every(t=>/^\d+$/.test(t)||Object.hasOwn(map,t))?tokens.map(t=>map[t]??t).join(''):'';
    if(spoken.length===6)return spoken;
-   // A caller who restarts the code ("57. 57, 21, 80.") or says it twice gives the code last (owner 2026-11-18): the last
-   // six digits are the code when they start at a pause and what came before is how they begin, or the same six again.
-   // Anything else (an 8-digit account number typed or said as one run) is left as it was.
-   const groups=tokens.every(t=>/^\d+$/.test(t)||Object.hasOwn(map,t))?tokens.map(t=>map[t]??t):String(text || '').match(/\d+/g) || [];
-   const all=groups.join(''),cut=all.length-6;
-   let at=0;const pauses=new Set(groups.map(g=>(at+=g.length)));
-   if(cut>0 && cut<=6 && pauses.has(cut) && all.slice(cut).startsWith(all.slice(0,cut)))return all.slice(cut);
+   // A caller who restarts the code ("57. 57, 21, 80.") or says it twice gives the code last (owner 2026-11-18). Only an answer
+   // that is nothing but digits: the same six twice, or a restart that ends at a pause the transcript marks (a period or
+   // comma) and is how the last six begin. A number said digit by digit, a single run, or one with other words is left as it was.
+   if(tokens.length && tokens.every(t=>/^\d+$/.test(t)||Object.hasOwn(map,t))){
+      const all=tokens.map(t=>map[t]??t).join(''),cut=all.length-6,head=all.slice(0,cut),tail=all.slice(cut);
+      const marked=String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(/[.,;]/).map(p=>p.split(/\s+/).filter(t=>t&&!filler.has(t)).map(t=>map[t]??t).join('')).filter(Boolean);
+      let at=0;const pauses=new Set(marked.map(p=>(at+=p.length)));
+      const twice=cut===6&&head===tail&&tokens.length>=2,restart=cut>0&&cut<6&&pauses.has(cut)&&tail.startsWith(head);
+      if(twice || restart)return tail;
+   } else { /* other words: read as before */ }
    return String(text || '').replace(/\D/g,'');
 }
 export function contactPrompt(cargo,options,callerAllowed,partial=false,es=false) {
@@ -295,13 +298,14 @@ const validateCode=worker('validate-otp-code','ValidateOtpCode','Validate a chal
    set('otp_cancel','otp_cancel',"cargo.authCancelFlow || 'contact-support'"),
    set('otp_email_too_ready','email_too',"!!(cargo.otp_cell_number && cargo.otpAltSent !== true && cargo.otpAltSent !== 'failed' && validateEmail(String(cargo.otpAltEmail || '')))"),
    set('otp_reset_no_code','no_code_given','false'),set('otp_reset_invite','whatsapp_invite_sent','false'),set('otp_reset_callback','answer_key',"''"),
-   when('otp_tenant_code','cargo.authOptions && cargo.authOptions.code_validator && normalized_otp_code.length !== 6 && /[0-9]/.test(user_choice)',call('otp_tenant_code_call','{{cargo.authOptions.code_validator}}',{answer:'{{user_choice}}'})),
+   when('otp_tenant_code','cargo.authOptions && cargo.authOptions.code_validator && String(user_choice).replace(/\\D/g,\'\').length !== 6 && /[0-9]/.test(user_choice)',call('otp_tenant_code_call','{{cargo.authOptions.code_validator}}',{answer:'{{user_choice}}'})),
    set('otp_other_given','other_account_given',"answer_key === 'another_account' ? (cargo.authOtherAccount=String(answer_value || ''),true) : false"),
    set('otp_other_requested','wants_other_account','other_account_given || !!(cargo.callerPreselected && normalized_otp_code.length !== 6 && ((cargo.authOptions && cargo.authOptions.other_whole_answer ? pickChoice(user_choice,[{key:\'other\',phrases:otp_phrases.other,exact:true}],false) === \'other\' : matchesChoice(user_choice,otp_phrases.other)) || otp_phrases.other_alone.includes(user_choice.replace(/[.,!?¡¿]/g,\'\').trim())))'),
    when('otp_tenant_answer','cargo.authOptions && cargo.authOptions.answer_handler && normalized_otp_code.length !== 6 && !wants_other_account && answer_key !== \'code_notice\'',call('otp_tenant_answer_call','{{cargo.authOptions.answer_handler}}',{answer:'{{user_choice}}'})),
    set('otp_where_early','otp_where',expression(otpWhere,'cargo')),set('otp_where_early_es','otp_where_es',expression(otpWhere,'cargo','true')),
    cases('otp_response',{
-      'condition: normalized_otp_code.length === 6':{id:'otp_check_tool',type:'CALL-TOOL',tool:'validate-otp',variable:'otp_validation_result',args:{otp:'{{normalized_otp_code}}',container:'{{cargo}}'},onFail:call('otp_check_failed','get-and-validate-otp-code',undefined,'replace')},
+      // The tenant's reading of the digits comes first (owner 2026-11-18: a real account number is taken before a code is tried).
+      "condition: normalized_otp_code.length === 6 && answer_key !== 'another_account' && answer_key !== 'code_notice'":{id:'otp_check_tool',type:'CALL-TOOL',tool:'validate-otp',variable:'otp_validation_result',args:{otp:'{{normalized_otp_code}}',container:'{{cargo}}'},onFail:call('otp_check_failed','get-and-validate-otp-code',undefined,'replace')},
       'condition: wants_other_account':toParent(call('otp_change_account','authenticate-user',{cell_number:'',email:'',retrying:true,declined_caller:true},'replace')),
       // Email asked for at a code sent by text: authentication is an input step, so the contact question is asked again
       // (without the caller-ID offer) and the caller gives the email; a code sent by email keeps "no me llegó el correo" a resend.
