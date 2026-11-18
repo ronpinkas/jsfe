@@ -91,35 +91,38 @@ flowchart TD
    b20(["replace → contact-misread"])
    class b20 endstep
    c14 -- "contact_kind === 'invalid_phone'" --> b20
-   b21(["dispatch: intent detection"])
+   b21(["replace → contact-misread"])
    class b21 endstep
-   c14 -- "contact_kind === 'unmapped'" --> b21
-   b22(["replace → contact-misread"])
+   c14 -- "contact_kind === 'invalid_email'" --> b21
+   b22(["dispatch: intent detection"])
    class b22 endstep
-   c14 -- "contact_kind === 'invalid'" --> b22
-   c23{"case"}
-   c14 -- "else" --> c23
-   b24(["replace → contact-misread"])
-   class b24 endstep
-   c23 -- "contact_kind === 'unmapped'" --> b24
-   n25["set acct_number, cell_number, email, contact_check_key"]
-   c23 -- "else" --> n25
-   c26{"case"}
-   n25 --> c26
-   b27[["call #123;#123;contact_options.validate_flow#125;#125;"]]
-   class b27 flowstep
-   c26 -- "contact_check_key && !cargo.contactCheck" --> b27
-   n28["set contact_error, contact_error_es"]
-   b27 --> n28
-   c26 -- "else" --> n28
-   c29{"case"}
-   n28 --> c29
-   b30(["replace → contact-not-on-file"])
-   class b30 endstep
-   c29 -- "cargo.contactCheck === #quot;none#quot;" --> b30
+   c14 -- "contact_kind === 'unmapped'" --> b22
+   b23(["replace → contact-misread"])
+   class b23 endstep
+   c14 -- "contact_kind === 'invalid'" --> b23
+   c24{"case"}
+   c14 -- "else" --> c24
+   b25(["replace → contact-misread"])
+   class b25 endstep
+   c24 -- "contact_kind === 'unmapped'" --> b25
+   n26["set acct_number, cell_number, email, contact_check_key"]
+   c24 -- "else" --> n26
+   c27{"case"}
+   n26 --> c27
+   b28[["call #123;#123;contact_options.validate_flow#125;#125;"]]
+   class b28 flowstep
+   c27 -- "contact_check_key && !cargo.contactCheck" --> b28
+   n29["set contact_error, contact_error_es"]
+   b28 --> n29
+   c27 -- "else" --> n29
+   c30{"case"}
+   n29 --> c30
+   b31(["replace → contact-not-on-file"])
+   class b31 endstep
+   c30 -- "cargo.contactCheck === #quot;none#quot;" --> b31
    DONE(["end (back to caller)"])
    class DONE endstep
-   c29 -- "else" --> DONE
+   c30 -- "else" --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

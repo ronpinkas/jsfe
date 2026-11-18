@@ -1512,7 +1512,7 @@
         "id": "identity_contact_piece",
         "type": "SET",
         "variable": "contact_digits",
-        "value": "!/@/.test(contact_text) && !readEmail(contact_text) && /^[^0-9]*[0-9][0-9\\s.,-]*[^0-9]*$/.test(contact_digits) ? contact_digits.replace(/\\D/g,'') : ''"
+        "value": "!/@/.test(contact_text) && !readEmail(contact_text) && !(function emailAttempt(text) {\n   return /@|\\barroba\\b|\\b(?:g\\s?mail|gmai|hotmail|hot mail|yahoo|outlook|icloud|aol)\\b/i.test(String(text ?? ''));\n})(contact_text) && /^[^0-9]*[0-9][0-9\\s.,-]*[^0-9]*$/.test(contact_digits) ? contact_digits.replace(/\\D/g,'') : ''"
       },
       {
         "id": "identity_contact_join",
@@ -1621,7 +1621,7 @@
         "id": "identity_contact_classify",
         "type": "SET",
         "variable": "contact_kind",
-        "value": "contact_id && contact_id.kind === 'account' ? 'account' : contact_phone ? 'phone' : contact_mail ? 'email' : contact_options.account_pattern && !contact_digits && matchesChoice(contact_text,contact_names_account) ? 'names_account' : readInternationalPhone(contact_text) ? 'international' : isAgentRequest(contact_text) ? 'agent' : isExitRequest(contact_text) ? 'exit' : contact_allowed && /^(?:no|nope|nah)\\b/i.test(contact_text.trim()) && !/[0-9@]/.test(contact_text) ? 'decline' : contact_allowed && cargo.serviceAnswer && cargo.serviceAnswer.values.caller_decision === 'yes' ? 'caller' : contact_digits ? 'invalid_phone' : contact_text.trim().split(/\\s+/).length>=3 && !/[0-9@]/.test(contact_text) ? 'unmapped' : 'invalid'"
+        "value": "contact_id && contact_id.kind === 'account' ? 'account' : contact_phone ? 'phone' : contact_mail ? 'email' : contact_options.account_pattern && !contact_digits && matchesChoice(contact_text,contact_names_account) ? 'names_account' : readInternationalPhone(contact_text) ? 'international' : isAgentRequest(contact_text) ? 'agent' : isExitRequest(contact_text) ? 'exit' : (function emailAttempt(text) {\n   return /@|\\barroba\\b|\\b(?:g\\s?mail|gmai|hotmail|hot mail|yahoo|outlook|icloud|aol)\\b/i.test(String(text ?? ''));\n})(contact_text) ? 'invalid_email' : contact_allowed && /^(?:no|nope|nah)\\b/i.test(contact_text.trim()) && !/[0-9@]/.test(contact_text) ? 'decline' : contact_allowed && cargo.serviceAnswer && cargo.serviceAnswer.values.caller_decision === 'yes' ? 'caller' : contact_digits ? 'invalid_phone' : contact_text.trim().split(/\\s+/).length>=3 && !/[0-9@]/.test(contact_text) ? 'unmapped' : 'invalid'"
       },
       {
         "id": "identity_contact_named",
@@ -1633,13 +1633,13 @@
         "id": "identity_contact_error",
         "type": "SET",
         "variable": "contact_error",
-        "value": "(function contactError(kind,options,es=false) {\n   const account=options.account_pattern?(es?options.account_name_es || options.account_name:options.account_name):'';\n   if(kind==='international')return es?\"Un número fuera de EE. UU. y Canadá no se puede usar aquí. Por favor indique el correo de su cuenta\"+(account?', o '+account:'')+\", o un celular de EE. UU. o Canadá.\":\"A number outside the US and Canada can't be used here. Please give the email on your account\"+(account?', or '+account:'')+\", or a US or Canadian mobile number.\";\n   if(kind==='invalid_phone')return es?'El número de teléfono que proporcionó no es válido.':\"Sorry, the phone number you provided isn't valid.\";\n   return es?'Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta'+(account?', o '+account:'')+' para continuar.':'Sorry, I do need the phone or email associated with your account'+(account?', or '+account:'')+' to proceed.';\n})(contact_kind,contact_options)"
+        "value": "(function contactError(kind,options,es=false) {\n   const account=options.account_pattern?(es?options.account_name_es || options.account_name:options.account_name):'';\n   if(kind==='international')return es?\"Un número fuera de EE. UU. y Canadá no se puede usar aquí. Por favor indique el correo de su cuenta\"+(account?', o '+account:'')+\", o un celular de EE. UU. o Canadá.\":\"A number outside the US and Canada can't be used here. Please give the email on your account\"+(account?', or '+account:'')+\", or a US or Canadian mobile number.\";\n   if(kind==='invalid_email')return es?'Lo siento, no entendí el correo electrónico completo, por ejemplo: nombre arroba gmail punto com.':\"Sorry, I didn't get the whole email address, for example: name at gmail dot com.\";\n   if(kind==='invalid_phone')return es?'El número de teléfono que proporcionó no es válido.':\"Sorry, the phone number you provided isn't valid.\";\n   return es?'Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta'+(account?', o '+account:'')+' para continuar.':'Sorry, I do need the phone or email associated with your account'+(account?', or '+account:'')+' to proceed.';\n})(contact_kind,contact_options)"
       },
       {
         "id": "identity_contact_error_es",
         "type": "SET",
         "variable": "contact_error_es",
-        "value": "(function contactError(kind,options,es=false) {\n   const account=options.account_pattern?(es?options.account_name_es || options.account_name:options.account_name):'';\n   if(kind==='international')return es?\"Un número fuera de EE. UU. y Canadá no se puede usar aquí. Por favor indique el correo de su cuenta\"+(account?', o '+account:'')+\", o un celular de EE. UU. o Canadá.\":\"A number outside the US and Canada can't be used here. Please give the email on your account\"+(account?', or '+account:'')+\", or a US or Canadian mobile number.\";\n   if(kind==='invalid_phone')return es?'El número de teléfono que proporcionó no es válido.':\"Sorry, the phone number you provided isn't valid.\";\n   return es?'Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta'+(account?', o '+account:'')+' para continuar.':'Sorry, I do need the phone or email associated with your account'+(account?', or '+account:'')+' to proceed.';\n})(contact_kind,contact_options,true)"
+        "value": "(function contactError(kind,options,es=false) {\n   const account=options.account_pattern?(es?options.account_name_es || options.account_name:options.account_name):'';\n   if(kind==='international')return es?\"Un número fuera de EE. UU. y Canadá no se puede usar aquí. Por favor indique el correo de su cuenta\"+(account?', o '+account:'')+\", o un celular de EE. UU. o Canadá.\":\"A number outside the US and Canada can't be used here. Please give the email on your account\"+(account?', or '+account:'')+\", or a US or Canadian mobile number.\";\n   if(kind==='invalid_email')return es?'Lo siento, no entendí el correo electrónico completo, por ejemplo: nombre arroba gmail punto com.':\"Sorry, I didn't get the whole email address, for example: name at gmail dot com.\";\n   if(kind==='invalid_phone')return es?'El número de teléfono que proporcionó no es válido.':\"Sorry, the phone number you provided isn't valid.\";\n   return es?'Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta'+(account?', o '+account:'')+' para continuar.':'Sorry, I do need the phone or email associated with your account'+(account?', or '+account:'')+' to proceed.';\n})(contact_kind,contact_options,true)"
       },
       {
         "id": "identity_contact_route",
@@ -1694,6 +1694,18 @@
           },
           "condition: contact_kind === 'invalid_phone'": {
             "id": "identity_contact_invalid_phone",
+            "type": "FLOW",
+            "value": "contact-misread",
+            "callType": "replace",
+            "parameters": {
+              "contact_options": "{{contact_options}}",
+              "error_message": "{{contact_error}}",
+              "error_message_es": "{{contact_error_es}}"
+            },
+            "initializeDefaults": true
+          },
+          "condition: contact_kind === 'invalid_email'": {
+            "id": "identity_contact_invalid_email",
             "type": "FLOW",
             "value": "contact-misread",
             "callType": "replace",
