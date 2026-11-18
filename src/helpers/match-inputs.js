@@ -335,7 +335,7 @@ export function groundAmount(utterance, value) {
    const spans = spansOf(n).length ? spansOf(n) : n !== Math.trunc(n) || /\.0+$/.test(String(value)) ? spansOf(Math.trunc(n)) : [];
    if (!spans.length) return null; else { /* said whole */ }
    const [a, b] = spans[0];
-   const tail = (raw.slice(b).match(/^\s*(?:cents?|centavos?|dollars?|d[oó]lares?|d[oó]lar|pesos?|bucks?)\b/i) || [''])[0];
+   const tail = (raw.slice(b).match(/^\s*(?:(?:cents?|centavos?|dollars?|d[oó]lares?|d[oó]lar|pesos?|bucks?)\b|\$)/i) || [''])[0];
    const head = (raw.slice(0, a).match(/[$]\s*$/) || [''])[0];
    return { text: raw.slice(a - head.length, b + tail.length), start: a - head.length, end: b + tail.length };
 }

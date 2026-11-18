@@ -16,6 +16,9 @@ const cases=[
  ['mi cuenta 55967192 y pago 40','40','40','beside an account number'],
  ['pago 40 de 55967192','5596',null,'a piece of the account number'],
  ['','40',null,'no words'],
+ ['Pagar 100$','100','100$','the mark after it'],
+ ['100 $ por favor','100','100 $','the mark after it, spaced'],
+ ['My name is Consoleto. 3 51.','3.51','3 51','a naked number in a sentence: its own words'],
 ];
 for(const [u,v,want,why] of cases)assert.equal(said(u,v),want,`${why}: ${JSON.stringify(u)} ${v}`);
 console.log(`ground-amount: ${cases.length} checks passed`);

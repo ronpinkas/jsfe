@@ -21,3 +21,5 @@ test('spoken amount has normal conflict evidence rather than falling through an 
 test('USD never treats pesos as dollars',()=>{for(const text of ['50 pesos','cincuenta pesos','15 pesos con 5']){assert.ok(Number.isNaN(readMoneyAmount(text,USD)));assert.equal(readInputProfile({kind:'amount',marked:true,money:USD},text,false),null);}});
 test('numeric dollar/cents behavior remains unchanged',()=>{for(const [input,value] of [['$82.50',82.5],['82 con 50',82.5],['50 cents',.5],['1,234.56',1234.56],['pay 50 with card ending in 9552',50]])assert.equal(readMoneyAmount(input,USD),value);});
 console.log(`Spoken money: all checks passed (${checks})`);
+test('a payment said as a noun is the same instruction (owner 2026-11-18)',()=>{for(const [phrase,want] of [['Pago de 100 dólares',100],['Un pago de 100 dólares.',100],['Voy a hacer un pago de 100 dólares.',100],['Payment of 100 dollars.',100],['Make a payment of $30',30]])assert.equal(readMoneyAmount(phrase,USD),want,phrase);
+ for(const phrase of ['pago','Pagué 100 dólares ayer','payment plan of 6 months'])assert.ok(Number.isNaN(readMoneyAmount(phrase,USD)),phrase);});
