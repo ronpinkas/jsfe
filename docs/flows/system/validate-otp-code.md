@@ -21,7 +21,7 @@ flowchart TD
    n0 --> c1
    b2[["call #123;#123;cargo.authOptions.code_validator#125;#125;"]]
    class b2 flowstep
-   c1 -- "cargo.authOptions && cargo.authOptions.code_validator && normalized_o…" --> b2
+   c1 -- "cargo.authOptions && cargo.authOptions.code_validator && String(user_…" --> b2
    n3["set other_account_given, wants_other_account"]
    b2 --> n3
    c1 -- "else" --> n3
@@ -37,7 +37,7 @@ flowchart TD
    n6 --> c7
    b8[/"tool: validate-otp"/]
    class b8 toolstep
-   c7 -- "normalized_otp_code.length === 6" --> b8
+   c7 -- "normalized_otp_code.length === 6 && answer_key !== 'another_account' …" --> b8
    b8f(["replace → get-and-validate-otp-code"])
    class b8f endstep
    b8 -- "fails" --> b8f
