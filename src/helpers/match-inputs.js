@@ -173,6 +173,9 @@ export function readInputProfile(profile, answer, isCurrent = true) {
       if (readings.length === 1) { const { option_label,option_label_es,...one } = readings[0]; return one; }
       // other_needs_letter: a name, so a number that is no offered choice is not an answer ("15" at a city list).
       if(profile.other_needs_letter===true&&!/\p{L}/u.test(raw))return null;
+      // other_needs_digit: a number (an account number), so a word that is no offered choice is not an answer: the reply
+      // ranker reads it against the choices ("Omitr" at OMITIR; owner 2026-11-18).
+      if(profile.other_needs_digit===true&&!/\d/.test(raw))return null;
       return isCurrent&&profile.accept_other===true&&raw.trim()?{value:raw.trim(),...(profile.narrative===true?{fallback:true}:{}),spans:[[0,raw.length]]}:null;
    } else if (kind === 'amount') {
       const money=profile.money;

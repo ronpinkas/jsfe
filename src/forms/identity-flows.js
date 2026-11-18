@@ -312,7 +312,7 @@ const validateCode=worker('validate-otp-code','ValidateOtpCode','Validate a chal
       ['condition: email_too && normalized_otp_code.length !== 6 && ('+'matchesChoice(user_choice,otp_phrases.resend) || matchesChoice(user_choice,otp_phrases.cannot_find) || matchesChoice(user_choice,otp_phrases.another_way) || matchesChoice(user_choice,otp_phrases.email)'+')']:call('otp_email_too','send-otp-email-too'),
       'condition: !!cargo.otp_cell_number && normalized_otp_code.length !== 6 && matchesChoice(user_choice,otp_phrases.email)':toParent(call('otp_use_email','authenticate-user',{cell_number:'',email:'',retrying:true,declined_caller:true},'replace')),
       "condition: isExitRequest(user_choice)":call('otp_exit','{{otp_cancel}}',undefined,'reboot'),
-      "condition: isAnswer(user_choice,'agent')":call('otp_agent','live-agent-requested',undefined,'reboot'),
+      "condition: isAgentRequest(user_choice)":call('otp_agent','live-agent-requested',undefined,'reboot'),
       "condition: isAnswer(user_choice,'text')":call('otp_text','switch-to-text',undefined,'reboot'),
       'condition: matchesChoice(user_choice,otp_phrases.resend)':call('otp_resend','resend-otp-code',{resend_reason:'requested'}),
       'condition: matchesChoice(user_choice,otp_phrases.cannot_find)':say('otp_cannot_find','{{otp_where}}','{{otp_where_es}}'),

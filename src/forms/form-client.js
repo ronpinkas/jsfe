@@ -303,7 +303,7 @@ export function formSubmissionReaders(submission, getSession) {
         const read = profile.kind === 'choice'
           ? (profile.choices || []).some(choice => String(choice.key) === raw && (!choice.current_only || hit.form === current.form && (hit.name === current.name || current.names?.includes(hit.name)))) ? {value: raw}
             // A combobox's own text: a choice that takes other text keeps it (with a letter when the profile asks for one).
-            : profile.accept_other === true && raw.trim() && (!profile.other_needs_letter || /\p{L}/u.test(raw)) ? {value: raw.trim()} : null
+            : profile.accept_other === true && raw.trim() && (!profile.other_needs_letter || /\p{L}/u.test(raw)) && (!profile.other_needs_digit || /\d/.test(raw)) ? {value: raw.trim()} : null
           : readInputProfile({...profile, marked: false}, raw, true);
         const valid = read && Object.hasOwn(read, 'value') && read.value !== '' && read.refused !== true && !read.incompleteMoney;
         return {...hit, value: valid ? read.value : raw, invalid: !valid, origin: 'form_submission', current: false, utterance: ''};

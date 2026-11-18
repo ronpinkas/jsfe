@@ -196,7 +196,7 @@ Profiles:
 
 | `profile.kind` | Options |
 | --- | --- |
-| `choice` | `choices:[{key,phrases,label?,label_es?,keys?,exact?,neutral?,negative?,current_only?}]`; optional `accept_other`, `numeric_values`, `narrative`, `whole_phrases`, `template_words`. |
+| `choice` | `choices:[{key,phrases,label?,label_es?,keys?,exact?,neutral?,negative?,current_only?}]`; optional `accept_other` (with `other_needs_letter`: other text only with a letter, such as a city; with `other_needs_digit`: only with a digit, such as an account number, so a word that is no choice goes to the reply ranker), `numeric_values`, `narrative`, `whole_phrases`, `template_words`. |
 | `digits` | `min`, `max`: one unambiguous digit run of that length. |
 | `identifier` | `pattern`: permitted account identifier shape. |
 | `pattern` | `regex`, optional `flags`, `group`; optional `accept_other` for the current field only, `whole_phrases`, `template_words`; `spoken_digits` (`true`, or `'house_number'` when a numbered street can follow) reads a number said in pieces as one number ("5 0 9 Lazy Lane", "apt 2 0 4"), required on any pattern that reads digits. |
