@@ -31,11 +31,23 @@ export function readEmail(text, { literal = false } = {}) {
       const addresses = [...String(text ?? '').matchAll(/(?<![a-z0-9._%+@-])([a-z0-9][a-z0-9._%+-]*@[a-z0-9.-]+\.[a-z]{2,})(?![a-z0-9_@-])/gi)].map(match=>match[1].toLowerCase());
       if (addresses.length) return new Set(addresses).size === 1 ? addresses[0] : '';
    }
-   const spoken = String(text ?? '')
-      .replace(/\s+(?:at|arroba)\s+/gi, ' @ ')
-      .replace(/\s+(?:dot|punto)\s+/gi, '.')
+   let spoken = String(text ?? '')
+      // how speech engines write the commonest providers and endings (prod 2026-11-10..17): "g mail", "Gmaildot",
+      // "punt com", "ponto com", "Gmail com"
+      .replace(/\b(?:g[\s-]mail|gee\s?mail|gmai|gmial|gamil|gmaill)\b/gi, 'gmail')
+      .replace(/\b(gmail|hotmail|yahoo|outlook|icloud|aol)dot\b/gi, '$1')   // its "com" was lost: read as the bare provider
+      .replace(/(?:^|\s+)(?:at|arroba)\s+/gi, ' @ ')
+      .replace(/\s+(?:dot|punto|punt|ponto)\s+/gi, '.')
+      .replace(/\b(gmail|hotmail|yahoo|outlook|icloud|aol)\s+(?:com|con)\b/gi, '$1.com')
       .replace(/\s+(?:underscore|gui[oó]n bajo)[.,]?(?:\s+|$)/gi, '_')
       .replace(/\s+(?:dash|hyphen|gui[oó]n)[.,]?(?:\s+|$)/gi, '-');
+   // a provider with its ending and no "at" (the speech engine dropped it): "Castillo Mónica 22 Gmail punto com"
+   const inferred = !spoken.includes('@') && PROVIDER_WITH_ENDING.test(spoken);
+   if (inferred) {
+      spoken = spoken.replace(PROVIDER_WITH_ENDING, ' @ $1');
+   } else {
+      // the @ was said or typed, or there is none
+   }
    const at = spoken.lastIndexOf('@');   // a speech engine may write an @ inside the name too: the last one is the address's
    if (at < 0) {
       return '';
@@ -54,9 +66,40 @@ export function readEmail(text, { literal = false } = {}) {
             local.unshift(pieces[k]);
          }
       }
-      const email = (local.join('') + '@' + domain).toLowerCase();
-      return /^[a-z0-9][a-z0-9._%+-]*@[a-z0-9.-]+\.[a-z]{2,}$/.test(email) ? email : '';
+      // "gmail dot" cut short (a window of "gmail dot com") is no bare gmail
+      const fixed = /^\s*(?:dot|punto|punt|ponto)\b/i.test(after.slice(after.toLowerCase().indexOf(domain.toLowerCase()) + domain.length)) ? domain : providerDomain(domain);
+      const email = (local.join('') + '@' + fixed).toLowerCase();
+      // a guessed @ or ending needs a name with a letter: "8 4 Gmail punto com" is the end of an address given across turns
+      const guessed = inferred || fixed !== domain.toLowerCase();
+      return /^[a-z0-9][a-z0-9._%+-]*@[a-z0-9.-]+\.[a-z]{2,}$/.test(email) && (!guessed || /[a-z]/i.test(local.join(''))) ? email : '';
    }
+}
+
+const PROVIDER_WITH_ENDING = /\s+((?:gmail|hotmail|yahoo|outlook|icloud|aol)\.(?:com|net|es|com\.mx|co\.uk)\b)/i;
+
+/**
+ * A provider's domain as callers say it: "gmail" alone is gmail.com (the one consumer Gmail address), and a misheard
+ * ending of a known provider (".con", ".cmo") is ".com". Another provider without its ending is left alone: hotmail and
+ * yahoo have country domains, so the caller is asked again (owner 2026-11-17).
+ */
+function providerDomain(domain) {
+   const d = domain.toLowerCase();
+   if (d === 'gmail') {
+      return 'gmail.com';
+   } else if (/^(?:gmail|hotmail|yahoo|outlook|icloud|aol)\.(?:con|cmo|calm|come|comm|om)$/.test(d)) {
+      return d.replace(/\.[a-z]+$/, '.com');
+   } else {
+      return d;
+   }
+}
+
+/**
+ * True when an answer tries to give an email address that could not be read: an @, "arroba", or a known provider's name
+ * ("at gmail", "Yahoo"), so the caller hears the email was incomplete rather than that a phone number was invalid (prod
+ * 2026-11-17: "Juana Perez 12 34 at gmail." heard "the phone number you provided isn't valid").
+ */
+export function emailAttempt(text) {
+   return /@|\barroba\b|\b(?:g\s?mail|gmai|hotmail|hot mail|yahoo|outlook|icloud|aol)\b/i.test(String(text ?? ''));
 }
 
 const northAmerican = (digits) => digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits.length === 10 ? digits : '';

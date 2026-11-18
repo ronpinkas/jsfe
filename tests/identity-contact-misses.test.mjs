@@ -28,6 +28,14 @@ await test('two answers that are no contact ask the question again; the third of
  for(const said of ['the small account please','my little account']){const r=await t.say(said);assert.match(r,/^Sorry, I do need the phone or email.*Please type the phone or email/,said);assert.ok(flows(t.s).includes('GetCellOrEmail'));}
  assert.match(await t.say('no idea which account'),/Would you like to try again\?/);assert.ok(flows(t.s).includes('GenericRetryWithOptions'));
 });
+await test('an email with no ending is read, and one that cannot be read is asked as an email, never an invalid phone (prod 2026-11-17)',async()=>{
+ let t=fixture();await t.start('lookup');
+ assert.equal(await t.say('Juana Perez 12 34 at gmail.'),'FOUND juanaperez1234@gmail.com');
+ t=fixture();await t.start('lookup');
+ const r=await t.say('J d o e 7 7 at Yahoo');assert.match(r,/^Sorry, I didn't get the whole email address.*Please type the phone or email/);assert.doesNotMatch(r,/phone number you provided/);
+ t=fixture({},'es');await t.start('lookup');
+ assert.match(await t.say('Lucia Gómez número 5 arroba punto com.'),/^Lo siento, no entendí el correo electrónico completo/);
+});
 await test('a new contact question starts a new count',async()=>{
  const t=fixture();await t.start('lookup');await t.say('the small account please');await t.say('my little account');await t.say('no idea which account');
  assert.match(await t.say('yes'),/^Please type the phone or email/);

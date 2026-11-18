@@ -104,7 +104,14 @@ function emailSpans(raw, value) {
       const spans = [];
       for (let i = 0; i + size <= tokens.length; i++) {
          const a = tokens[i].index, b = tokens[i+size-1].index + tokens[i+size-1][0].length;
-         if (readEmail(raw.slice(a,b)) === value) spans.push([a,b]);
+         if (readEmail(raw.slice(a,b)) === value) {
+            // "juan at gmail" already reads as gmail.com: the spoken ending after it belongs to the same address
+            let j = i + size;
+            while (j < tokens.length && /^(?:dot|punto|punt|ponto|com|con|\.com)[.,;:!?]*$/i.test(tokens[j][0])) j++;
+            spans.push([a, j > i + size ? tokens[j-1].index + tokens[j-1][0].length : b]);
+         } else {
+            // this window is not the address
+         }
       }
       if (spans.length) return spans;
    }

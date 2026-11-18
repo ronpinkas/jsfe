@@ -2,7 +2,9 @@
 import {defineWorker,defineForm} from './contracts.js';
 import {OTP_EXPIRY_MS} from '../helpers/otp-check.js';
 // maskEmail is a standard function: these functions run as flow expressions too, where it is in scope by name.
-import {maskEmail} from '../helpers/contact.js';
+import {maskEmail,emailAttempt} from '../helpers/contact.js';
+// an answer that tries to give an email is never a phone number (prod 2026-11-17); inlined, so it needs no host function
+const emailTry=`(${emailAttempt.toString()})(contact_text)`;
 const vars=o=>Object.fromEntries(Object.entries(o).map(([k,v])=>[k,{type:Array.isArray(v)?'array':v===null||typeof v==='object'?'object':typeof v,value:v}]));
 const param=(name,description,type='string')=>({name,type,description});
 const set=(id,variable,value)=>({id,type:'SET',variable,value});
@@ -92,6 +94,7 @@ const contactMenu=id=>call(id,'generic-retry-with-options',{error_message:'{{con
 export function contactError(kind,options,es=false) {
    const account=options.account_pattern?(es?options.account_name_es || options.account_name:options.account_name):'';
    if(kind==='international')return es?"Un número fuera de EE. UU. y Canadá no se puede usar aquí. Por favor indique el correo de su cuenta"+(account?', o '+account:'')+", o un celular de EE. UU. o Canadá.":"A number outside the US and Canada can't be used here. Please give the email on your account"+(account?', or '+account:'')+", or a US or Canadian mobile number.";
+   if(kind==='invalid_email')return es?'Lo siento, no entendí el correo electrónico completo, por ejemplo: nombre arroba gmail punto com.':"Sorry, I didn't get the whole email address, for example: name at gmail dot com.";
    if(kind==='invalid_phone')return es?'El número de teléfono que proporcionó no es válido.':"Sorry, the phone number you provided isn't valid.";
    return es?'Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta'+(account?', o '+account:'')+' para continuar.':'Sorry, I do need the phone or email associated with your account'+(account?', or '+account:'')+' to proceed.';
 }
@@ -120,7 +123,7 @@ const contact=worker('get-cell-or-email','GetCellOrEmail','Identify a supplied c
       call('identity_contact_collect','collect-service-answer',{profiles:'{{contact_profiles}}',question:'{{contact_question}}',question_es:'{{contact_question_es}}',keypad:'{{contact_keypad}}',prefill:'{{contact_prefill}}',parent_form:'{{contact_options.parent_form}}',context:'account verification',context_es:'verificación de cuenta'}),
       set('identity_contact_answer','contact_text',expression(contactAnswer,'cargo.serviceAnswer')),
       set('identity_contact_spoken','contact_digits',`(${serviceDigits.toString()})(contact_text)`),
-      set('identity_contact_piece','contact_digits',"!/@/.test(contact_text) && !readEmail(contact_text) && /^[^0-9]*[0-9][0-9\\s.,-]*[^0-9]*$/.test(contact_digits) ? contact_digits.replace(/\\D/g,'') : ''"),
+      set('identity_contact_piece','contact_digits',"!/@/.test(contact_text) && !readEmail(contact_text) && !"+emailTry+" && /^[^0-9]*[0-9][0-9\\s.,-]*[^0-9]*$/.test(contact_digits) ? contact_digits.replace(/\\D/g,'') : ''"),
       set('identity_contact_join','contact_text',"contact_partial && contact_digits ? String(cargo.gcePartial)+contact_digits : contact_text"),
       set('identity_contact_join_digits','contact_digits',"contact_partial && contact_digits ? String(cargo.gcePartial)+contact_digits : contact_digits"),effect('identity_contact_piece_consumed',"(cargo.gcePartial='',cargo.contactIntroSkip=false,true)"),
       when('identity_contact_split',"contact_options.merge_partials && contact_digits && (contact_options.account_shape || []).some(function(s){return String(s.first || '').includes(contact_digits.charAt(0)) && contact_digits.length < Math.min.apply(null,s.lengths || [0]);})",effect('identity_contact_hold','(cargo.gcePartial=contact_digits,true)')),
@@ -128,7 +131,7 @@ const contact=worker('get-cell-or-email','GetCellOrEmail','Identify a supplied c
       when('identity_contact_split_overshoot',"contact_partial && contact_digits.length > (contact_options.account_shape || []).reduce(function(max,s){return Math.max(max,Math.max.apply(null,s.lengths || [0]));},0)",call('identity_contact_restart_split','contact-split-failed',{contact_options:'{{contact_options}}'},'replace')),
       set('identity_contact_identifier','contact_id',"contact_options.account_pattern ? readIdentifier(contact_text,contact_options.account_pattern) : null"),
       set('identity_contact_phone','contact_phone',"readPhone(contact_text) || (validatePhone(contact_digits) ? contact_digits : '')"),set('identity_contact_email','contact_mail','readEmail(contact_text)'),
-      set('identity_contact_classify','contact_kind',"contact_id && contact_id.kind === 'account' ? 'account' : contact_phone ? 'phone' : contact_mail ? 'email' : contact_options.account_pattern && !contact_digits && matchesChoice(contact_text,contact_names_account) ? 'names_account' : readInternationalPhone(contact_text) ? 'international' : isAgentRequest(contact_text) ? 'agent' : isExitRequest(contact_text) ? 'exit' : contact_allowed && /^(?:no|nope|nah)\\b/i.test(contact_text.trim()) && !/[0-9@]/.test(contact_text) ? 'decline' : contact_allowed && cargo.serviceAnswer && cargo.serviceAnswer.values.caller_decision === 'yes' ? 'caller' : contact_digits ? 'invalid_phone' : contact_text.trim().split(/\\s+/).length>=3 && !/[0-9@]/.test(contact_text) ? 'unmapped' : 'invalid'"),
+      set('identity_contact_classify','contact_kind',"contact_id && contact_id.kind === 'account' ? 'account' : contact_phone ? 'phone' : contact_mail ? 'email' : contact_options.account_pattern && !contact_digits && matchesChoice(contact_text,contact_names_account) ? 'names_account' : readInternationalPhone(contact_text) ? 'international' : isAgentRequest(contact_text) ? 'agent' : isExitRequest(contact_text) ? 'exit' : "+emailTry+" ? 'invalid_email' : contact_allowed && /^(?:no|nope|nah)\\b/i.test(contact_text.trim()) && !/[0-9@]/.test(contact_text) ? 'decline' : contact_allowed && cargo.serviceAnswer && cargo.serviceAnswer.values.caller_decision === 'yes' ? 'caller' : contact_digits ? 'invalid_phone' : contact_text.trim().split(/\\s+/).length>=3 && !/[0-9@]/.test(contact_text) ? 'unmapped' : 'invalid'"),
       set('identity_contact_named','contact_named_options',"Object.assign({},contact_options,{fromMenu:false,intro:'Sure, your account number.',intro_es:'Claro, su número de cuenta.'})"),
       set('identity_contact_error','contact_error',expression(contactError,'contact_kind','contact_options')),set('identity_contact_error_es','contact_error_es',expression(contactError,'contact_kind','contact_options','true')),
       cases('identity_contact_route',{
@@ -140,6 +143,7 @@ const contact=worker('get-cell-or-email','GetCellOrEmail','Identify a supplied c
          "condition: contact_kind === 'names_account'":contactReplay('identity_contact_names_account',{contact_options:'{{contact_named_options}}'}),
          "condition: contact_kind === 'international'":contactMiss('identity_contact_international'),
          "condition: contact_kind === 'invalid_phone'":contactMiss('identity_contact_invalid_phone'),
+         "condition: contact_kind === 'invalid_email'":contactMiss('identity_contact_invalid_email'),
          "condition: contact_kind === 'unmapped'":{id:'identity_contact_off_topic',type:'DISPATCH',onResponse:'continue',responseContext:'account identifier: phone number, email address or account number (teléfono, correo o número de cuenta)',outcome:'unresolved',reason:'auth_prompt_off_topic'},
          "condition: contact_kind === 'invalid'":contactMiss('identity_contact_missing'),default:effect('identity_contact_typed','true')}),
       // A classified response is not authority to abandon identification: the question again, then the bounded recovery menu.

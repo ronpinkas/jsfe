@@ -1,7 +1,7 @@
 // jsfe/helpers contact.js — a contact in a customer's answer.
 //   node tests/helpers-contact.test.mjs
 import assert from 'node:assert/strict';
-import { readEmail, readPhone, readIdentifier, last4, maskEmail, callerTextNumber, textDestination, readInternationalPhone, callerIsInternational } from '../dist/helpers/contact.js';
+import { readEmail, emailAttempt, readPhone, readIdentifier, last4, maskEmail, callerTextNumber, textDestination, readInternationalPhone, callerIsInternational } from '../dist/helpers/contact.js';
 
 let checks = 0;
 const eq = (got, want, what) => { assert.deepEqual(got, want, what); checks++; };
@@ -29,6 +29,26 @@ eq(readEmail('correo electrónico Raúl Jiménez Ortega 31@gmail.com'), 'rauljim
 eq(readEmail('En el correo es Lucia campo@790@gmail.com.'), 'luciacampo790@gmail.com', 'a stray @ inside the name');
 eq(readEmail('hola, es maria at hotmail dot com'), 'maria@hotmail.com', 'a greeting is not part of it');
 eq(readEmail('my email address is j u a n at gmail dot com'), 'juan@gmail.com', 'spelled after a filler phrase');
+// how speech engines write the commonest providers (prod 2026-11-10..17); gmail alone is gmail.com (owner 2026-11-17)
+eq(readEmail('Juana Perez 12 34 at gmail.'), 'juanaperez1234@gmail.com', 'gmail with no ending is gmail.com (prod 2026-11-17)');
+eq(readEmail('Anna07@Gmail.'), 'anna07@gmail.com', 'typed @Gmail with no ending');
+eq(readEmail('j u a n x 3 at g mail.'), 'juanx3@gmail.com', '"g mail"');
+eq(readEmail('JP at Gmail com.'), 'jp@gmail.com', '"Gmail com" without the dot');
+eq(readEmail('MariaElenaLopez@Gmaildot.'), 'mariaelenalopez@gmail.com', '"Gmaildot"');
+eq(readEmail('Castillo Mónica 22 Gmail punto com.'), 'castillomonica22@gmail.com', 'the "at" dropped by the speech engine, the ending said');
+eq(readEmail('I am giving you the email, Smith Laura 4 5 6 Gmail dot com.'), 'smithlaura456@gmail.com', 'dropped "at" after a lead-in');
+eq(readEmail('juan arroba gmail punt com'), 'juan@gmail.com', '"punt"');
+eq(readEmail('juan arroba gmail ponto com'), 'juan@gmail.com', '"ponto"');
+eq(readEmail('juan at hotmail dot con'), 'juan@hotmail.com', 'a misheard ending of a known provider');
+eq(readEmail('8 4 Gmail punto com.'), '', 'digits alone before a guessed @ are the end of an address given across turns');
+eq(readEmail('9 11 at Gmail.'), '', 'digits alone before a completed gmail');
+eq(readEmail('Send it to my Gmail dot com.'), '', 'no name');
+eq(readEmail('arroba Gmail punt com.'), '', 'a leading arroba is no name');
+eq(readEmail('J d o e 7 7 at Yahoo'), '', 'yahoo without its ending is not guessed (country domains)');
+eq(readEmail('juan at gmail.co'), 'juan@gmail.co', 'a stated ending other than a misheard .com is kept');
+eq(emailAttempt('J d o e 7 7 at Yahoo'), true, 'an email attempt');
+eq(emailAttempt('Lucia G Gómez número 5 arroba punto com.'), true, 'arroba is an email attempt');
+eq(emailAttempt('I am at home 213 555'), false, '"at" alone is not');
 eq(readPhone('(213) 555-0147'), '2135550147', 'formatted');
 eq(readPhone('1 213 555 0147'), '2135550147', 'leading 1');
 eq(readPhone('555-0147'), '', 'seven digits is not a phone');
