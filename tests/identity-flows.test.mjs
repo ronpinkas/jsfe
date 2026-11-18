@@ -3,6 +3,8 @@ import {FLOWS,identityResumeContext,serviceDigits,otpDigits,contactPrompt,contac
 let checks=0;const equal=(a,b)=>{assert.deepEqual(a,b);checks++;};
 equal(serviceDigits('1 zero').replace(/\D/g,''),'10');equal(serviceDigits('three four, 356').replace(/\D/g,''),'34356');
 equal(otpDigits('el código es uno 2 3 cuatro five seis'),'123456');equal(otpDigits('my code is 0 9 3 1'),'0931');equal(otpDigits('hold on'),'');
+// A restarted or repeated code gives the code last (owner 2026-11-18); a single run of more digits is left alone.
+equal(otpDigits('57. 57, 21, 80.'),'572180');equal(otpDigits('572180 572180'),'572180');equal(otpDigits('cinco siete, cinco siete dos uno ocho cero'),'572180');equal(otpDigits('my code is 5 7 2, 572 180'),'572180');equal(otpDigits('12123456'),'12123456');equal(otpDigits('56 00 00 01'),'56000001');equal(otpDigits('57 21 80 12'),'57218012');equal(otpDigits('1234 567'),'1234567');
 const cargo={voice:false,verb:'type',verb_es:'escriba',callerPreselected:false};
 equal(contactPrompt(cargo,{account_pattern:'^X',account_name:'your reference',account_name_es:'su referencia'},false).includes(', or your reference'),true);
 equal(contactPrompt(cargo,{},true).startsWith('To use your caller id'),true);equal(contactPrompt(cargo,{},false,true),'Go on.');

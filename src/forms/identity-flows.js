@@ -72,7 +72,15 @@ export function otpDigits(text) {
    const filler=new Set(['el','mi','es','codigo','code','is','my','the','numero','number','a','ver']);
    const tokens=String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(/[\s,.;:!?-]+/).filter(t=>t&&!filler.has(t));
    const spoken=tokens.length && tokens.some(t=>Object.hasOwn(map,t)) && tokens.every(t=>/^\d+$/.test(t)||Object.hasOwn(map,t))?tokens.map(t=>map[t]??t).join(''):'';
-   return spoken.length===6?spoken:String(text || '').replace(/\D/g,'');
+   if(spoken.length===6)return spoken;
+   // A caller who restarts the code ("57. 57, 21, 80.") or says it twice gives the code last (owner 2026-11-18): the last
+   // six digits are the code when they start at a pause and what came before is how they begin, or the same six again.
+   // Anything else (an 8-digit account number typed or said as one run) is left as it was.
+   const groups=tokens.every(t=>/^\d+$/.test(t)||Object.hasOwn(map,t))?tokens.map(t=>map[t]??t):String(text || '').match(/\d+/g) || [];
+   const all=groups.join(''),cut=all.length-6;
+   let at=0;const pauses=new Set(groups.map(g=>(at+=g.length)));
+   if(cut>0 && cut<=6 && pauses.has(cut) && all.slice(cut).startsWith(all.slice(0,cut)))return all.slice(cut);
+   return String(text || '').replace(/\D/g,'');
 }
 export function contactPrompt(cargo,options,callerAllowed,partial=false,es=false) {
    if(partial)return es?'Continúe.':'Go on.';
