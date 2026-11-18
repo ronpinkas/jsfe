@@ -8,7 +8,7 @@
 - **Parameters:** none
 - **Calls:** [give-up](give-up.md) (reboot)
 - **Tools:** `get-whatsapp-link`, `switch-to-sms`
-- **Called by:** intent detection, [validate-otp-code](validate-otp-code.md), [generic-retry-with-options](generic-retry-with-options.md), [ask-choice](ask-choice.md), [9](9.md)
+- **Called by:** intent detection, [get-cell-or-email](get-cell-or-email.md), [validate-otp-code](validate-otp-code.md), [generic-retry-with-options](generic-retry-with-options.md), [ask-choice](ask-choice.md), [9](9.md)
 
 ### Steps
 

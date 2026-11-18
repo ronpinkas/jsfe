@@ -27,7 +27,7 @@
   - `gce_partial`: Internal split identifier continuation
   - `gce_rejected`: Internal rejected contact continuation
   - `gce_missed`: Internal misread contact continuation
-- **Calls:** [authenticate-user](authenticate-user.md) (value, by name), [contact-support](contact-support.md) (value, by name), [collect-service-answer](collect-service-answer.md) (call), [get-cell-or-email](get-cell-or-email.md) (replace), [contact-split-failed](contact-split-failed.md) (replace), [live-agent-requested](live-agent-requested.md) (reboot), {{contact_options.cancel_flow}} (reboot), [contact-caller-declined](contact-caller-declined.md) (replace), [contact-misread](contact-misread.md) (replace), {{contact_options.validate_flow}} (call), [contact-not-on-file](contact-not-on-file.md) (replace)
+- **Calls:** [authenticate-user](authenticate-user.md) (value, by name), [contact-support](contact-support.md) (value, by name), [collect-service-answer](collect-service-answer.md) (call), [get-cell-or-email](get-cell-or-email.md) (replace), [contact-split-failed](contact-split-failed.md) (replace), [live-agent-requested](live-agent-requested.md) (reboot), {{contact_options.cancel_flow}} (reboot), [contact-caller-declined](contact-caller-declined.md) (replace), [contact-misread](contact-misread.md) (replace), [switch-to-text](switch-to-text.md) (reboot), {{contact_options.validate_flow}} (call), [contact-not-on-file](contact-not-on-file.md) (replace)
 - **Tools:** none
 - **Called by:** [authenticate-user](authenticate-user.md), [get-cell-or-email](get-cell-or-email.md), [contact-caller-declined](contact-caller-declined.md), [contact-split-failed](contact-split-failed.md), [contact-not-on-file](contact-not-on-file.md), [contact-misread](contact-misread.md)
 
@@ -100,29 +100,43 @@ flowchart TD
    b23(["replace → contact-misread"])
    class b23 endstep
    c14 -- "contact_kind === 'invalid'" --> b23
-   c24{"case"}
-   c14 -- "else" --> c24
-   b25(["replace → contact-misread"])
-   class b25 endstep
-   c24 -- "contact_kind === 'unmapped'" --> b25
-   n26["set acct_number, cell_number, email, contact_check_key"]
-   c24 -- "else" --> n26
-   c27{"case"}
-   n26 --> c27
-   b28[["call #123;#123;contact_options.validate_flow#125;#125;"]]
-   class b28 flowstep
-   c27 -- "contact_check_key && !cargo.contactCheck" --> b28
-   n29["set contact_error, contact_error_es"]
-   b28 --> n29
-   c27 -- "else" --> n29
-   c30{"case"}
-   n29 --> c30
-   b31(["replace → contact-not-on-file"])
-   class b31 endstep
-   c30 -- "cargo.contactCheck === #quot;none#quot;" --> b31
+   n24["set contact_rank_kind, contact_rank_options, contact_rank_first, contact_…"]
+   c14 -- "else" --> n24
+   c25{"case"}
+   n24 --> c25
+   b26(["reboot → live-agent-requested"])
+   class b26 endstep
+   c25 -- "contact_rank_kind === '__agent'" --> b26
+   b27(["reboot → #123;#123;contact_options.cancel_flow#125;#125;"])
+   class b27 endstep
+   c25 -- "contact_rank_kind === 'exit'" --> b27
+   b28(["reboot → switch-to-text"])
+   class b28 endstep
+   c25 -- "contact_rank_kind === 'text'" --> b28
+   b29(["replace → get-cell-or-email"])
+   class b29 endstep
+   c25 -- "contact_rank_first" --> b29
+   b30(["replace → contact-misread"])
+   class b30 endstep
+   c25 -- "contact_kind === 'unmapped'" --> b30
+   n31["set acct_number, cell_number, email, contact_check_key"]
+   c25 -- "else" --> n31
+   c32{"case"}
+   n31 --> c32
+   b33[["call #123;#123;contact_options.validate_flow#125;#125;"]]
+   class b33 flowstep
+   c32 -- "contact_check_key && !cargo.contactCheck" --> b33
+   n34["set contact_error, contact_error_es"]
+   b33 --> n34
+   c32 -- "else" --> n34
+   c35{"case"}
+   n34 --> c35
+   b36(["replace → contact-not-on-file"])
+   class b36 endstep
+   c35 -- "cargo.contactCheck === #quot;none#quot;" --> b36
    DONE(["end (back to caller)"])
    class DONE endstep
-   c30 -- "else" --> DONE
+   c35 -- "else" --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

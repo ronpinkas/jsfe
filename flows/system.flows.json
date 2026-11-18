@@ -1306,6 +1306,30 @@
         "type": "object",
         "value": null
       },
+      "contact_rank_asked": {
+        "type": "string",
+        "value": ""
+      },
+      "contact_rank_offers": {
+        "type": "array",
+        "value": []
+      },
+      "contact_rank_reply": {
+        "type": "object",
+        "value": null
+      },
+      "contact_rank_kind": {
+        "type": "string",
+        "value": ""
+      },
+      "contact_rank_options": {
+        "type": "object",
+        "value": null
+      },
+      "contact_rank_first": {
+        "type": "boolean",
+        "value": false
+      },
       "contact_names_account": {
         "type": "array",
         "value": [
@@ -1341,6 +1365,7 @@
           },
           "parametersFrom": "parameters",
           "requires": [
+            "jsfe:contextual-responses:v1",
             "jsfe:continuation-safety:v1"
           ]
         }
@@ -1352,6 +1377,13 @@
         "type": "SET",
         "variable": "noop",
         "value": "continuationSafetyProtocol() === 1",
+        "requireTrue": true
+      },
+      {
+        "id": "get-cell-or-email_contextual_response_protocol",
+        "type": "SET",
+        "variable": "noop",
+        "value": "contextualResponseProtocol() === 1",
         "requireTrue": true
       },
       {
@@ -1398,7 +1430,7 @@
             "id": "identity_contact_misses_reset",
             "type": "SET",
             "variable": "noop",
-            "value": "(cargo.gceMisses=0,true)"
+            "value": "(cargo.gceMisses=0,cargo.gceRanked=false,true)"
           },
           "default": {
             "id": "identity_contact_new_miss_series_skip",
@@ -1621,7 +1653,7 @@
         "id": "identity_contact_classify",
         "type": "SET",
         "variable": "contact_kind",
-        "value": "contact_id && contact_id.kind === 'account' ? 'account' : contact_phone ? 'phone' : contact_mail ? 'email' : contact_options.account_pattern && !contact_digits && matchesChoice(contact_text,contact_names_account) ? 'names_account' : readInternationalPhone(contact_text) ? 'international' : isAgentRequest(contact_text) ? 'agent' : isExitRequest(contact_text) ? 'exit' : (function emailAttempt(text) {\n   return /@|\\barroba\\b|\\b(?:g\\s?mail|gmai|hotmail|hot mail|yahoo|outlook|icloud|aol)\\b/i.test(String(text ?? ''));\n})(contact_text) ? 'invalid_email' : contact_allowed && /^(?:no|nope|nah)\\b/i.test(contact_text.trim()) && !/[0-9@]/.test(contact_text) ? 'decline' : contact_allowed && cargo.serviceAnswer && cargo.serviceAnswer.values.caller_decision === 'yes' ? 'caller' : contact_digits ? 'invalid_phone' : contact_text.trim().split(/\\s+/).length>=3 && !/[0-9@]/.test(contact_text) ? 'unmapped' : 'invalid'"
+        "value": "contact_id && contact_id.kind === 'account' ? 'account' : contact_phone ? 'phone' : contact_mail ? 'email' : contact_options.account_pattern && !contact_digits && matchesChoice(contact_text,contact_names_account) ? 'names_account' : readInternationalPhone(contact_text) ? 'international' : isAgentRequest(contact_text) ? 'agent' : isExitRequest(contact_text) ? 'exit' : (function emailAttempt(text) {\n   return /@|\\barroba\\b|\\b(?:g\\s?mail|gmai|hotmail|hot mail|yahoo|outlook|icloud|aol)\\b/i.test(String(text ?? ''));\n})(contact_text) ? 'invalid_email' : contact_allowed && /^(?:no|nope|nah)\\b/i.test(contact_text.trim()) && !/[0-9@]/.test(contact_text) ? 'decline' : contact_allowed && cargo.serviceAnswer && cargo.serviceAnswer.values.caller_decision === 'yes' ? 'caller' : contact_digits ? 'invalid_phone' : /[a-záéíóúñü]/i.test(contact_text) ? 'unmapped' : 'invalid'"
       },
       {
         "id": "identity_contact_named",
@@ -1640,6 +1672,24 @@
         "type": "SET",
         "variable": "contact_error_es",
         "value": "(function contactError(kind,options,es=false) {\n   const account=options.account_pattern?(es?options.account_name_es || options.account_name:options.account_name):'';\n   if(kind==='international')return es?\"Un número fuera de EE. UU. y Canadá no se puede usar aquí. Por favor indique el correo de su cuenta\"+(account?', o '+account:'')+\", o un celular de EE. UU. o Canadá.\":\"A number outside the US and Canada can't be used here. Please give the email on your account\"+(account?', or '+account:'')+\", or a US or Canadian mobile number.\";\n   if(kind==='invalid_email')return es?'Lo siento, no entendí el correo electrónico completo, por ejemplo: nombre arroba gmail punto com.':\"Sorry, I didn't get the whole email address, for example: name at gmail dot com.\";\n   if(kind==='invalid_phone')return es?'El número de teléfono que proporcionó no es válido.':\"Sorry, the phone number you provided isn't valid.\";\n   return es?'Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta'+(account?', o '+account:'')+' para continuar.':'Sorry, I do need the phone or email associated with your account'+(account?', or '+account:'')+' to proceed.';\n})(contact_kind,contact_options,true)"
+      },
+      {
+        "id": "identity_contact_rank_asked",
+        "type": "SET",
+        "variable": "contact_rank_asked",
+        "value": "language === 'es' ? contact_question_es : contact_question"
+      },
+      {
+        "id": "identity_contact_rank_offers",
+        "type": "SET",
+        "variable": "contact_rank_offers",
+        "value": "[{key:'no_identifier',label:'does not know or does not have the phone number, email or account number on the account'},{key:'other_contact',label:'has or wants to give a different phone number or email'},{key:'__agent',label:'speak with a person (a live agent)'},{key:'exit',label:'does not want to continue and stops here'}].concat(callerTextNumber(cargo) ? [{key:'text',label:'continue by text message'}] : [])"
+      },
+      {
+        "id": "identity_contact_rank_clear",
+        "type": "SET",
+        "variable": "contact_rank_reply",
+        "value": "null"
       },
       {
         "id": "identity_contact_route",
@@ -1720,7 +1770,9 @@
             "id": "identity_contact_off_topic",
             "type": "DISPATCH",
             "onResponse": "continue",
-            "responseContext": "account identifier: phone number, email address or account number (teléfono, correo o número de cuenta)",
+            "responseContext": "Current question: {{contact_rank_asked}}",
+            "responseChoices": "contact_rank_offers",
+            "responseVariable": "contact_rank_reply",
             "outcome": "unresolved",
             "reason": "auth_prompt_off_topic"
           },
@@ -1745,9 +1797,77 @@
         }
       },
       {
+        "id": "identity_contact_rank_read",
+        "type": "SET",
+        "variable": "contact_rank_kind",
+        "value": "contact_kind === 'unmapped' && contact_rank_reply && contact_rank_reply.key ? String(contact_rank_reply.key) : ''"
+      },
+      {
+        "id": "identity_contact_rank_options",
+        "type": "SET",
+        "variable": "contact_rank_options",
+        "value": "['no_identifier','other_contact'].includes(contact_rank_kind) ? Object.assign({},contact_options,{fromMenu:false,intro:(function rankedContactLine(kind,options,cargo,es=false) {\n   const verb=es?cargo.verb_es:cargo.verb;\n   const account=options.account_pattern?(es?options.account_name_es || options.account_name:options.account_name):'';\n   if(kind==='other_contact')return es?`Claro, ${verb} ese teléfono o correo electrónico.`:`Sure, ${verb} that phone number or email.`;\n   return es?`No hay problema. Sirve cualquier teléfono o correo electrónico de su cuenta${account?', o '+account:''}. Si no tiene ninguno, ${verb} AGENTE para hablar con una persona.`:`No problem. Any phone number or email on your account works${account?', or '+account:''}. If you don't have any of them, ${verb} AGENT to speak with a person.`;\n})(contact_rank_kind,contact_options,cargo),intro_es:(function rankedContactLine(kind,options,cargo,es=false) {\n   const verb=es?cargo.verb_es:cargo.verb;\n   const account=options.account_pattern?(es?options.account_name_es || options.account_name:options.account_name):'';\n   if(kind==='other_contact')return es?`Claro, ${verb} ese teléfono o correo electrónico.`:`Sure, ${verb} that phone number or email.`;\n   return es?`No hay problema. Sirve cualquier teléfono o correo electrónico de su cuenta${account?', o '+account:''}. Si no tiene ninguno, ${verb} AGENTE para hablar con una persona.`:`No problem. Any phone number or email on your account works${account?', or '+account:''}. If you don't have any of them, ${verb} AGENT to speak with a person.`;\n})(contact_rank_kind,contact_options,cargo,true)}) : null"
+      },
+      {
+        "id": "identity_contact_rank_first",
+        "type": "SET",
+        "variable": "contact_rank_first",
+        "value": "!!contact_rank_options && !cargo.gceRanked"
+      },
+      {
+        "id": "identity_contact_rank_mark",
+        "type": "SET",
+        "variable": "noop",
+        "value": "(contact_rank_options ? cargo.gceRanked=true : true,true)"
+      },
+      {
+        "id": "identity_contact_rank_line",
+        "type": "SET",
+        "variable": "contact_error",
+        "value": "contact_rank_options ? contact_rank_options.intro : contact_error"
+      },
+      {
+        "id": "identity_contact_rank_line_es",
+        "type": "SET",
+        "variable": "contact_error_es",
+        "value": "contact_rank_options ? contact_rank_options.intro_es : contact_error_es"
+      },
+      {
         "id": "identity_contact_unmapped_retry",
         "type": "CASE",
         "branches": {
+          "condition: contact_rank_kind === '__agent'": {
+            "id": "identity_contact_rank_agent",
+            "type": "FLOW",
+            "value": "live-agent-requested",
+            "callType": "reboot"
+          },
+          "condition: contact_rank_kind === 'exit'": {
+            "id": "identity_contact_rank_exit",
+            "type": "FLOW",
+            "value": "{{contact_options.cancel_flow}}",
+            "callType": "reboot"
+          },
+          "condition: contact_rank_kind === 'text'": {
+            "id": "identity_contact_rank_text",
+            "type": "FLOW",
+            "value": "switch-to-text",
+            "callType": "reboot"
+          },
+          "condition: contact_rank_first": {
+            "id": "identity_contact_rank_again",
+            "type": "FLOW",
+            "value": "get-cell-or-email",
+            "callType": "replace",
+            "parameters": {
+              "contact_options": "{{contact_rank_options}}",
+              "cell_number": "",
+              "email": "",
+              "acct_number": "",
+              "gce_missed": true
+            },
+            "initializeDefaults": true
+          },
           "condition: contact_kind === 'unmapped'": {
             "id": "identity_contact_unmapped",
             "type": "FLOW",
