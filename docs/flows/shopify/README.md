@@ -47,7 +47,7 @@ flowchart LR
 | [shopify-ql-product-dialog](shopify-ql-product-dialog.md) | form + steps | Collect the next question about shown products; unknown requests yield through the shared FORM contract. |
 | [shopify-ql-product-stores](shopify-ql-product-stores.md) | form + steps | Collect the listed product and nearby city/state/ZIP, then retrieve live store inventory for its variant. |
 | [shopify-ql-product-variant](shopify-ql-product-variant.md) | form + steps | Choose one descriptively labeled source variant for physical-store inventory. Online stock never implies the intended variant. |
-| [shopify-ql-product-selection-prepare](shopify-ql-product-selection-prepare.md) | steps | Offer only the product positions the channel actually showed. |
+| [shopify-ql-product-selection-prepare](shopify-ql-product-selection-prepare.md) | steps | Offer only the product positions the channel actually showed, each labelled with its product title so the reply ranker can match any part o… |
 | [shopify-ql-product-dialog-prepare](shopify-ql-product-dialog-prepare.md) | steps | Offer only supported store and text actions for this channel. |
 | [shopify-ql-product-query-validate](shopify-ql-product-query-validate.md) | steps | Classify a product query before committing it. |
 | [shopify-ql-product-dialog-validate](shopify-ql-product-dialog-validate.md) | steps | Distinguish a question about shown results from a new product request before accepting it. |

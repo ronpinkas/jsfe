@@ -48,60 +48,70 @@ flowchart TD
    b9(["dispatch: intent detection"])
    class b9 endstep
    c8 -- "!email_choice && !readEmail(email_raw) && isOtherRequest(email_raw,'e…" --> b9
-   n10["set email_found, email_spelling"]
+   n10["set email_found"]
    c8 -- "else" --> n10
    c11{"case"}
    n10 --> c11
    c12{"case"}
-   c11 -- "email_spelling" --> c12
+   c11 -- "!email_found && !email_choice && !!emailWithoutEnding(email_raw)" --> c12
    c11 -- "else" --> c12
    b13(["replace → ask-email"])
    class b13 endstep
-   c12 -- "email_spelling" --> b13
-   n14["set email_new, email_readback, email_readback_es"]
+   c12 -- "!email_found && !!email_state.ending" --> b13
+   n14["set email_spelling"]
    c12 -- "else" --> n14
    c15{"case"}
    n14 --> c15
-   b16[["call collect-service-answer"]]
-   class b16 flowstep
-   c15 -- "email_new" --> b16
-   c17{"case"}
-   b16 --> c17
-   c15 -- "else" --> c17
-   c18{"case"}
-   c17 -- "email_new && isOtherRequest(cargo.serviceAnswer.raw,'email') && !pick…" --> c18
-   c17 -- "else" --> c18
-   b19(["dispatch: intent detection"])
-   class b19 endstep
-   c18 -- "email_new && isOtherRequest(cargo.serviceAnswer.raw,'email') && !pick…" --> b19
-   c20{"case"}
-   c18 -- "else" --> c20
-   b21["set email_found"]
-   c20 -- "email_new && pickChoice(cargo.serviceAnswer.raw,[#123;key:'no',phrases:['…" --> b21
+   c16{"case"}
+   c15 -- "email_spelling" --> c16
+   c15 -- "else" --> c16
+   b17(["replace → ask-email"])
+   class b17 endstep
+   c16 -- "email_spelling" --> b17
+   n18["set email_new, email_readback, email_readback_es"]
+   c16 -- "else" --> n18
+   c19{"case"}
+   n18 --> c19
+   b20[["call collect-service-answer"]]
+   class b20 flowstep
+   c19 -- "email_new" --> b20
+   c21{"case"}
+   b20 --> c21
+   c19 -- "else" --> c21
    c22{"case"}
-   b21 --> c22
-   c20 -- "else" --> c22
-   c23{"case"}
-   c22 -- "!!email_found" --> c23
-   c22 -- "else" --> c23
-   b24(["end (back to caller)"])
-   class b24 endstep
-   c23 -- "!!email_found" --> b24
-   c25{"case"}
-   c23 -- "else" --> c25
-   n26["set noop"]
-   c25 -- "email_choice === 'another' && !!email_state.on_file" --> n26
-   c25 -- "else" --> n26
+   c21 -- "email_new && isOtherRequest(cargo.serviceAnswer.raw,'email') && !pick…" --> c22
+   c21 -- "else" --> c22
+   b23(["dispatch: intent detection"])
+   class b23 endstep
+   c22 -- "email_new && isOtherRequest(cargo.serviceAnswer.raw,'email') && !pick…" --> b23
+   c24{"case"}
+   c22 -- "else" --> c24
+   b25["set email_found"]
+   c24 -- "email_new && pickChoice(cargo.serviceAnswer.raw,[#123;key:'no',phrases:['…" --> b25
+   c26{"case"}
+   b25 --> c26
+   c24 -- "else" --> c26
    c27{"case"}
-   n26 --> c27
-   b28(["replace → ask-email"])
+   c26 -- "!!email_found" --> c27
+   c26 -- "else" --> c27
+   b28(["end (back to caller)"])
    class b28 endstep
-   c27 -- "email_state.attempt#lt;2" --> b28
-   n29["set noop"]
-   c27 -- "else" --> n29
+   c27 -- "!!email_found" --> b28
+   c29{"case"}
+   c27 -- "else" --> c29
+   n30["set noop"]
+   c29 -- "email_choice === 'another' && !!email_state.on_file" --> n30
+   c29 -- "else" --> n30
+   c31{"case"}
+   n30 --> c31
+   b32(["replace → ask-email"])
+   class b32 endstep
+   c31 -- "email_state.attempt#lt;2" --> b32
+   n33["set noop"]
+   c31 -- "else" --> n33
    DONE(["end (back to caller)"])
    class DONE endstep
-   n29 --> DONE
+   n33 --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

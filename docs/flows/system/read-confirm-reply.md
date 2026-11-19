@@ -23,7 +23,7 @@
 ```mermaid
 flowchart TD
    START(("start"))
-   n0["set asked, stay, chain, prompt, others, fields, field_arguments, ranked, …"]
+   n0["set asked, stay, chain, prompt, others, fields, field_arguments, edits, r…"]
    START --> n0
    n1(["dispatch: intent detection"])
    class n1 endstep
@@ -62,18 +62,26 @@ flowchart TD
    c12 -- "else" --> c14
    b15["set assignment_side_effect"]
    c14 -- "field && !corrections.length" --> b15
-   c16{"case"}
-   b15 --> c16
-   c14 -- "else" --> c16
-   b17[["call collect-input-accept"]]
-   class b17 flowstep
-   c16 -- "!picked && args.hits.length" --> b17
-   n18["set assignment_side_effect"]
-   b17 --> n18
-   c16 -- "else" --> n18
+   n16["set edit, edit_hits"]
+   b15 --> n16
+   c14 -- "else" --> n16
+   c17{"case"}
+   n16 --> c17
+   b18[["call collect-input-accept"]]
+   class b18 flowstep
+   c17 -- "edit_hits.length" --> b18
+   c19{"case"}
+   b18 --> c19
+   c17 -- "else" --> c19
+   b20[["call collect-input-accept"]]
+   class b20 flowstep
+   c19 -- "!picked && args.hits.length" --> b20
+   n21["set assignment_side_effect"]
+   b20 --> n21
+   c19 -- "else" --> n21
    DONE(["end (back to caller)"])
    class DONE endstep
-   n18 --> DONE
+   n21 --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

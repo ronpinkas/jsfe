@@ -1910,7 +1910,7 @@
     "version": "3.0.0",
     "id": "shopify-ql-product-selection-prepare",
     "name": "ShopifyQLProductSelectionPrepare",
-    "description": "Offer only the product positions the channel actually showed.",
+    "description": "Offer only the product positions the channel actually showed, each labelled with its product title so the reply ranker can match any part of it (brand, model, color).",
     "parameters": [
       {
         "name": "form",
@@ -1934,7 +1934,7 @@
         "id": "product_selection_limit",
         "type": "SET",
         "variable": "noop",
-        "value": "(function(){var s=cargo.forms[form].specs.find(function(s){return s.name==='selection';});var n=Math.min(cargo.shopifyProducts.products.length,cargo.voice?3:5);s.profile.choices=s.profile.choices.slice(0,n);return true;})()"
+        "value": "(function(){var s=cargo.forms[form].specs.find(function(s){return s.name==='selection';});var n=Math.min(cargo.shopifyProducts.products.length,cargo.voice?3:5);var ps=cargo.shopifyProducts.products;s.profile.choices=s.profile.choices.slice(0,n).map(function(c,i){var t=String((ps[i]||{}).title||'').trim();return Object.assign({},c,t?{label:String(c.key)+': '+t,label_es:String(c.key)+': '+t}:{});});return true;})()"
       }
     ]
   },

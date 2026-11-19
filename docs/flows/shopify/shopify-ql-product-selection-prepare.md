@@ -3,7 +3,7 @@
 <!-- generated:start -->
 **ShopifyQLProductSelectionPrepare** · `shopify-ql-product-selection-prepare` · version 3.0.0 · worker (called by other flows) · steps · isolated scope
 
-> Offer only the product positions the channel actually showed.
+> Offer only the product positions the channel actually showed, each labelled with its product title so the reply ranker can match any part of it (brand, model, color).
 
 - **Parameters:** 
   - `form`: Owning form

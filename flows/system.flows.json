@@ -5612,7 +5612,7 @@
         "id": "email_protocol",
         "type": "SET",
         "variable": "email_state",
-        "value": "email_state || {question:question,question_es:question_es || question,on_file:on_file,confirm:confirm === true || confirm === 'true',attempt:Number(attempt || 0),why:why,draft:why === 'more'?String(cargo.emailDraft || ''):'',parent_form:parent_form}"
+        "value": "email_state || {question:question,question_es:question_es || question,on_file:on_file,confirm:confirm === true || confirm === 'true',attempt:Number(attempt || 0),why:why,draft:why === 'more'?String(cargo.emailDraft || ''):'',ending:'',parent_form:parent_form}"
       },
       {
         "id": "email_profiles",
@@ -5624,13 +5624,13 @@
         "id": "email_question",
         "type": "SET",
         "variable": "email_question",
-        "value": "email_state.why === 'more' ? 'Got it. Go on.' : (email_state.attempt>0 ? email_state.why === 'retry' ? \"Okay, let's try again. \" : \"That doesn't look like an email address. \" : '')+email_state.question"
+        "value": "email_state.why === 'ending' ? 'What comes after '+email_state.ending.split('@')[1]+'? For example, dot com.' : email_state.why === 'more' ? 'Got it. Go on.' : (email_state.attempt>0 ? email_state.why === 'retry' ? \"Okay, let's try again. \" : \"That doesn't look like an email address. \" : '')+email_state.question"
       },
       {
         "id": "email_question_es",
         "type": "SET",
         "variable": "email_question_es",
-        "value": "email_state.why === 'more' ? 'Entendido. Continúe.' : (email_state.attempt>0 ? email_state.why === 'retry' ? 'De acuerdo, intentemos de nuevo. ' : 'Eso no parece un correo electrónico. ' : '')+email_state.question_es"
+        "value": "email_state.why === 'ending' ? '¿Qué sigue después de '+email_state.ending.split('@')[1]+'? Por ejemplo, punto com.' : email_state.why === 'more' ? 'Entendido. Continúe.' : (email_state.attempt>0 ? email_state.why === 'retry' ? 'De acuerdo, intentemos de nuevo. ' : 'Eso no parece un correo electrónico. ' : '')+email_state.question_es"
       },
       {
         "id": "email_collect",
@@ -5728,7 +5728,53 @@
         "id": "email_parse",
         "type": "SET",
         "variable": "email_found",
-        "value": "(email_state.draft ? readEmail(email_state.draft+' '+email_raw) : '') || readEmail(email_raw) || (email_choice === 'ok' && email_state.on_file ? String(email_state.on_file).toLowerCase() : '')"
+        "value": "(email_state.ending && emailEnding(email_raw) ? email_state.ending+emailEnding(email_raw) : '') || (email_state.draft ? readEmail(email_state.draft+' '+email_raw) : '') || readEmail(email_raw) || (email_choice === 'ok' && email_state.on_file ? String(email_state.on_file).toLowerCase() : '')"
+      },
+      {
+        "id": "email_ending_drop",
+        "type": "SET",
+        "variable": "noop",
+        "value": "(email_state.ending='',email_state.why=email_state.why === 'ending' ? '' : email_state.why,true)"
+      },
+      {
+        "id": "email_keep_ending",
+        "type": "CASE",
+        "branches": {
+          "condition: !email_found && !email_choice && !!emailWithoutEnding(email_raw)": {
+            "id": "email_ending_draft",
+            "type": "SET",
+            "variable": "noop",
+            "value": "(email_state.ending=emailWithoutEnding(email_raw),email_state.why='ending',email_state.draft='',cargo.emailDraft='',true)"
+          },
+          "default": {
+            "id": "email_keep_ending_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "email_ask_ending",
+        "type": "CASE",
+        "branches": {
+          "condition: !email_found && !!email_state.ending": {
+            "id": "email_ending_field",
+            "type": "FLOW",
+            "value": "ask-email",
+            "callType": "replace",
+            "parameters": {
+              "email_state": "{{email_state}}"
+            },
+            "initializeDefaults": true
+          },
+          "default": {
+            "id": "email_ask_ending_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
       },
       {
         "id": "email_fragment",
@@ -7506,6 +7552,12 @@
         "type": "SET",
         "variable": "ci_partial",
         "value": "(function () { var state = cargo.forms[form]; if (!ci_spec || ci_spec.accumulate !== true || !ci_spec.digits) return ''; var said = String(cargo.choiceText || '').trim(); var data = state.data = state.data || {}; var key = '__partial_' + current; if (!/^[0-9][0-9\\s.,-]*$/.test(said)) { delete data[key]; return ''; } var joined = String(data[key] || '') + said.replace(/[^0-9]/g, ''); var starts = ci_spec.accumulate_first ? new RegExp(ci_spec.accumulate_first) : null; if (!data[key] && starts && !starts.test(joined)) return ''; if (joined.length < Number(ci_spec.digits.min || 0)) { data[key] = joined; var fb = state.feedback || {}; fb[current] = 'partial'; state.feedback = fb; return 'hold'; } delete data[key]; cargo.choiceText = joined; cargo.choice = joined; return 'joined'; })()"
+      },
+      {
+        "id": "ci_email_join",
+        "type": "SET",
+        "variable": "ci_partial",
+        "value": "ci_partial ? ci_partial : (function () { var state = cargo.forms[form]; var email = !!ci_spec && (ci_spec.profile && ci_spec.profile.kind === 'email' || (ci_spec.any_of || []).some(function (i) { return i.profile && i.profile.kind === 'email'; })); if (!email) return ''; var data = state.data = state.data || {}; var key = '__email_' + current; var said = String(cargo.choiceText || '').trim(); var held = String(data[key] || ''); delete data[key]; var end = held ? emailEnding(said) : ''; if (end) { cargo.choiceText = held + end; cargo.choice = held + end; return 'joined'; } var part = emailWithoutEnding(said); if (!part) return ''; data[key] = part; var fb = state.feedback || {}; fb[current] = 'email_ending'; state.feedback = fb; return 'hold'; })()"
       },
       {
         "id": "ci_partial_hold",
@@ -17261,6 +17313,18 @@
         "type": "array",
         "value": []
       },
+      "edits": {
+        "type": "array",
+        "value": []
+      },
+      "edit": {
+        "type": "object",
+        "value": null
+      },
+      "edit_hits": {
+        "type": "array",
+        "value": []
+      },
       "args": {
         "type": "object",
         "value": null
@@ -17337,10 +17401,16 @@
         "value": "fields.map(function(c){var i=(chain || []).filter(function(i){return i.form===c.owner.form && i.name===c.owner.name;})[0];var l=String(i.label || i.names[0]);return {name:c.owner.name,type:'string',description:'The correct '+(i.argument_description || l)+' the caller gives now. Leave it empty when they give none.'};})"
       },
       {
+        "id": "confirm_edits",
+        "type": "SET",
+        "variable": "edits",
+        "value": "(chain || []).filter(function(i){var v=cargo.forms[form] && cargo.forms[form].values;return i.form===form && i.confirm_edit===true && i.profile && i.profile.kind==='text' && v && typeof v[i.name]==='string' && !!v[i.name].trim();}).reduce(function(all,i){var l=String(i.label || i.name);return all.concat([{key:'add:'+i.name,label:'add: gives more details for the '+l+' read back, keeping what it says',owner:{form:i.form,name:i.name},mode:'add'},{key:'replace:'+i.name,label:'replace: says the '+l+' read back is wrong and gives a different one instead',owner:{form:i.form,name:i.name},mode:'replace'}]);},[])"
+      },
+      {
         "id": "confirm_ranked_choices",
         "type": "SET",
         "variable": "ranked",
-        "value": "((confirmation==='soft' ? [{key:'yes',label:'yes: agrees to what the question asks to confirm'}] : []).concat([{key:'no',label:'no: declines or refuses what the question asks to confirm'}]).concat(others.map(function(c){return Object.assign({key:c.key,label:c.label},c.parameters ? {parameters:c.parameters.map(function(p){return {name:p.name,type:p.type || 'string',description:p.description};})} : {});})).concat(fields.map(function(c){return {key:c.key,label:c.label,parameters:field_arguments};}))).concat([{key:'__agent',label:'speak with a person (a live agent)'}])"
+        "value": "((confirmation==='soft' ? [{key:'yes',label:'yes: agrees to what the question asks to confirm'}] : []).concat([{key:'no',label:'no: declines or refuses what the question asks to confirm'}]).concat(others.map(function(c){return Object.assign({key:c.key,label:c.label},c.parameters ? {parameters:c.parameters.map(function(p){return {name:p.name,type:p.type || 'string',description:p.description};})} : {});})).concat(fields.map(function(c){return {key:c.key,label:c.label,parameters:field_arguments};})).concat(edits.map(function(c){return {key:c.key,label:c.label};}))).concat([{key:'__agent',label:'speak with a person (a live agent)'}])"
       },
       {
         "id": "confirm_rank_params",
@@ -17517,6 +17587,39 @@
         }
       },
       {
+        "id": "confirm_edit",
+        "type": "SET",
+        "variable": "edit",
+        "value": "edits.filter(function(c){return reply && c.key===reply.key;})[0] || null"
+      },
+      {
+        "id": "confirm_edit_hits",
+        "type": "SET",
+        "variable": "edit_hits",
+        "value": "(function(){if(!edit)return [];var said=String(cargo.choiceText || '').trim();if(!said)return [];var old=String((cargo.forms[edit.owner.form].values || {})[edit.owner.name] || '').trim();var value=edit.mode==='add' ? old.replace(/[\\s.]+$/,'')+'. '+said : said.replace(/^(?:no|nope)\\s*[,.!]\\s*/i,'');return enrichFormMatches(readArgument(value, cargo.choiceText, chain, edit.owner, ''), chain, form, [edit.owner.name], edit.owner.name).hits;})()"
+      },
+      {
+        "id": "confirm_edit_accept",
+        "type": "CASE",
+        "branches": {
+          "condition: edit_hits.length": {
+            "id": "confirm_edit_accept_flow",
+            "type": "FLOW",
+            "value": "collect-input-accept",
+            "callType": "call",
+            "parameters": {
+              "hits": "{{edit_hits}}"
+            }
+          },
+          "default": {
+            "id": "confirm_edit_accept_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "confirm_args_accept",
         "type": "CASE",
         "branches": {
@@ -17541,7 +17644,7 @@
         "id": "confirm_ranked",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(cargo.confirmRanked=reading && reading.hits.length || field || args.hits.length ? 'changed' : reply && (reply.key==='yes' || reply.key==='no') ? reply.key : 'none',true)"
+        "value": "(cargo.confirmRanked=reading && reading.hits.length || field || args.hits.length || edit_hits.length ? 'changed' : reply && (reply.key==='yes' || reply.key==='no') ? reply.key : 'none',true)"
       }
     ],
     "safetyRevision": "dispatch-intake-2026-10-22"
