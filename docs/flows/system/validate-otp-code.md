@@ -55,7 +55,7 @@ flowchart TD
    c7 -- "isExitRequest(user_choice)" --> b12
    b13(["reboot → live-agent-requested"])
    class b13 endstep
-   c7 -- "isAnswer(user_choice,'agent')" --> b13
+   c7 -- "isAgentRequest(user_choice)" --> b13
    b14(["reboot → switch-to-text"])
    class b14 endstep
    c7 -- "isAnswer(user_choice,'text')" --> b14

@@ -2721,7 +2721,7 @@
             "value": "{{otp_cancel}}",
             "callType": "reboot"
           },
-          "condition: isAnswer(user_choice,'agent')": {
+          "condition: isAgentRequest(user_choice)": {
             "id": "otp_agent",
             "type": "FLOW",
             "value": "live-agent-requested",
@@ -16931,7 +16931,7 @@
         "id": "choice_args",
         "type": "SET",
         "variable": "args",
-        "value": "(function(){\n var own=(choices || []).concat(others || []).filter(function(c){return String(c.key)===String(reply && reply.key || '');})[0];\n var declared=reply && reply.key!==undefined ? (own && Array.isArray(own.parameters) ? own.parameters : []) : params;\n var values=reply && reply.key!==undefined ? (reply.arguments || {}) : (reply || {});\n var spec=((cargo.forms[form] || {}).specs || []).filter(function(i){return i.name===input;})[0] || {};\n var group=Array.isArray(spec.any_of) ? spec.any_of.map(function(i){return i.name;}) : null;\n var hits=[],ambiguous=[];\n declared.forEach(function(p){\n  var said=String(values[p.name]===undefined || values[p.name]===null ? '' : values[p.name]).trim();\n  if(!said)return;\n  var target=p.reads ? {form:form,name:p.reads} : group ? {form:form,names:group} : {form:form,name:input};\n  var read=enrichFormMatches(readFormAnswer(said, chain, target, said, []), chain, form, target.names || [target.name], input);\n  read.hits.forEach(function(h){h=Object.assign({},h,{origin:'rank_argument',argument:p.name});if(!hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)===String(h.value);}))hits.push(h);});\n  ambiguous=ambiguous.concat(read.ambiguous);\n });\n var conflict=hits.some(function(h){return hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)!==String(h.value);});});\n return conflict ? {hits:[],ambiguous:[],conflict:true} : {hits:hits,ambiguous:hits.length ? [] : ambiguous,conflict:false};\n})()"
+        "value": "(function(){\n var own=(choices || []).concat(others || []).filter(function(c){return String(c.key)===String(reply && reply.key || '');})[0];\n var declared=reply && reply.key!==undefined ? (own && Array.isArray(own.parameters) ? own.parameters : []) : params;\n var values=reply && reply.key!==undefined ? (reply.arguments || {}) : (reply || {});\n var spec=((cargo.forms[form] || {}).specs || []).filter(function(i){return i.name===input;})[0] || {};\n var group=Array.isArray(spec.any_of) ? spec.any_of.map(function(i){return i.name;}) : null;\n var hits=[],ambiguous=[];\n declared.forEach(function(p){\n  var said=String(values[p.name]===undefined || values[p.name]===null ? '' : values[p.name]).trim();\n  if(!said)return;\n  var target=p.reads ? {form:form,name:p.reads} : group ? {form:form,names:group} : {form:form,name:input};\n  var read=enrichFormMatches(readArgument(said, cargo.choiceText, chain, target, said), chain, form, target.names || [target.name], input);\n  read.hits.forEach(function(h){h=Object.assign({},h,{origin:'rank_argument',argument:p.name});if(!hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)===String(h.value);}))hits.push(h);});\n  ambiguous=ambiguous.concat(read.ambiguous);\n });\n var conflict=hits.some(function(h){return hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)!==String(h.value);});});\n return conflict ? {hits:[],ambiguous:[],conflict:true} : {hits:hits,ambiguous:hits.length ? [] : ambiguous,conflict:false};\n})()"
       },
       {
         "id": "choice_args_clear",
@@ -17436,7 +17436,7 @@
         "id": "confirm_args",
         "type": "SET",
         "variable": "args",
-        "value": "(function(){\n   var declared=reply && reply.key!==undefined ? (picked && Array.isArray(picked.parameters) ? picked.parameters : []) : (Array.isArray(rank_parameters) ? rank_parameters : []);\n   var values=reply && reply.key!==undefined ? (reply.arguments || {}) : (reply || {});\n   var hits=[];\n   declared.forEach(function(p){\n    var said=String(values[p.name]===undefined || values[p.name]===null ? '' : values[p.name]).trim();\n    if(!said)return;\n    var target=p.reads ? {form:form,name:p.reads} : {form:form,name:'',invites:Array.isArray(invites) ? invites : []};\n    enrichFormMatches(readFormAnswer(said, chain, target, '', []), chain, form).hits.forEach(function(h){h=Object.assign({},h,{origin:'rank_argument',argument:p.name});if(!hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)===String(h.value);}))hits.push(h);});\n   });\n   return hits.some(function(h){return hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)!==String(h.value);});}) ? {hits:[]} : {hits:hits};\n  })()"
+        "value": "(function(){\n   var declared=reply && reply.key!==undefined ? (picked && Array.isArray(picked.parameters) ? picked.parameters : []) : (Array.isArray(rank_parameters) ? rank_parameters : []);\n   var values=reply && reply.key!==undefined ? (reply.arguments || {}) : (reply || {});\n   var hits=[];\n   declared.forEach(function(p){\n    var said=String(values[p.name]===undefined || values[p.name]===null ? '' : values[p.name]).trim();\n    if(!said)return;\n    var target=p.reads ? {form:form,name:p.reads} : {form:form,name:'',invites:Array.isArray(invites) ? invites : []};\n    enrichFormMatches(readArgument(said, cargo.choiceText, chain, target, ''), chain, form).hits.forEach(function(h){h=Object.assign({},h,{origin:'rank_argument',argument:p.name});if(!hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)===String(h.value);}))hits.push(h);});\n   });\n   return hits.some(function(h){return hits.some(function(o){return o.form===h.form && o.name===h.name && String(o.value)!==String(h.value);});}) ? {hits:[]} : {hits:hits};\n  })()"
       },
       {
         "id": "confirm_read_args",
@@ -17475,7 +17475,7 @@
         "id": "confirm_corrections",
         "type": "SET",
         "variable": "corrections",
-        "value": "field && reply.arguments ? fields.reduce(function(all,c){var said=String(reply.arguments[c.owner.name] || '').trim();return said ? all.concat(enrichFormMatches(readFormAnswer(said, chain, c.owner, said, []), chain, form, [c.owner.name], c.owner.name).hits) : all;},[]) : []"
+        "value": "field && reply.arguments ? fields.reduce(function(all,c){var said=String(reply.arguments[c.owner.name] || '').trim();return said ? all.concat(enrichFormMatches(readArgument(said, cargo.choiceText, chain, c.owner, said), chain, form, [c.owner.name], c.owner.name).hits) : all;},[]) : []"
       },
       {
         "id": "confirm_correct",
