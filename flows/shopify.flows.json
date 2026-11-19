@@ -7,7 +7,7 @@
     "name": "ShopifyQLProductSearch",
     "prompt": "product search",
     "prompt_es": "buscar producto",
-    "description": "Wants to find, price or check availability of a product, including one named alone ('tires'); wants to place a new order ('quiero hacer un pedido de un televisor', 'I want to order a TV'); or asks about the products shown. Not: 'I have an order for X', 'I placed an order for X', 'tengo un pedido de X' or 'hice un pedido de X', whatever X is: that order already exists, so it is order tracking, never a search; when a product will be restocked (None); store policies; interest, APR or financing terms, advice or greetings (None).",
+    "description": "Wants to find, price or check availability of a product, including one named alone ('tires') or on sale ('¿tienen televisores en oferta?'); wants to place a new order ('quiero hacer un pedido de un televisor', 'I want to order a TV'); or asks about the products shown. Not: sales, specials, deals or promotions in general ('¿qué especiales tienen para Black Friday?') with no product named (None); 'I have an order for X', 'I placed an order for X', 'tengo un pedido de X' or 'hice un pedido de X', whatever X is: that order already exists, so it is order tracking, never a search; when a product will be restocked (None); store policies; interest, APR or financing terms, advice or greetings (None).",
     "parameters": [
       {
         "name": "search_query",
@@ -210,11 +210,11 @@
         "type": "CASE",
         "branches": {
           "condition: !request.query": {
-            "id": "product_collect_query",
-            "type": "FLOW",
-            "value": "shopify-ql-get-search-query",
-            "parameters": {},
-            "callType": "call"
+            "id": "product_no_query",
+            "type": "RETURN",
+            "value": "''",
+            "outcome": "unresolved",
+            "reason": "no_product_named"
           },
           "default": {
             "id": "product_need_query_skip",
@@ -804,7 +804,7 @@
             "validator": "shopify-ql-product-dialog-validate",
             "profile": {
               "kind": "pattern",
-              "regex": "^(?:(?=[\\s\\S]*[\\p{L}\\p{N}][^\\p{L}\\p{N}]+[\\p{L}\\p{N}])[\\s\\S]+|(?=[\\s\\S]*(?<![\\p{L}\\p{N}_])(?:yes|yeah|yea|yep|yup|sure|ok|okay|okey|please|of course|correct|right|go ahead|alright|all right|absolutely|definitely|certainly|sounds good|that's fine|that is fine|fine|that's ok|that's okay|that's right|that is right|that's correct|that works|agree|i agree|agreed|approve|i approve|approved|confirm|i confirm|confirmed|proceed|do it|perfect|exactly|i do|si|sí|claro|claro que sí|claro que si|seguro|por favor|correcto|está bien|esta bien|de acuerdo|estoy de acuerdo|dale|por supuesto|bueno|confirmo|confirmado|apruebo|aprobado|adelante|hazlo|procede|perfecto|exacto|eso es|así es|asi es|continue|i want to continue|go on|go ahead please|please do|yes i do|sí quiero|si quiero|continuar|quiero continuar|seguir|sigue|continúe|continue por favor|proceder|procedo|procede por favor|proceda|proceda por favor|sí proceda|si proceda|no|nope|nah|no thanks|no thank you|not now|not today|no gracias|ahora no|hoy no|text|texto|sms|message|mensaje|text me|by text|por texto|mensaje de texto|whatsapp|escríbeme|escribeme|text me the links|send me the links|send the links|envíame los enlaces|mándame los enlaces|mándamelos por texto|los enlaces|links|stock|in stock|available online|disponibles|disponible en linea|price|cost|how much|precio|cuánto|cuesta|cheapest|least expensive|más barato|mas barato|details|detalles|store|stores|tienda|tiendas|first|second|third|fourth|fifth|primero|primera|segundo|segunda|tercero|tercera|done|listo|1|2|3|4|5)(?![\\p{L}\\p{N}_]))[\\s\\S]+)$",
+              "regex": "^(?:(?=[\\s\\S]*[\\p{L}\\p{N}][^\\p{L}\\p{N}]+[\\p{L}\\p{N}])[\\s\\S]+|(?=[\\s\\S]*(?<![\\p{L}\\p{N}_])(?:yes|yeah|yea|yep|yup|sure|ok|okay|okey|please|of course|correct|right|go ahead|alright|all right|absolutely|definitely|certainly|sounds good|that's fine|that is fine|fine|that's ok|that's okay|that's right|that is right|that's correct|that works|agree|i agree|agreed|approve|i approve|approved|confirm|i confirm|confirmed|proceed|do it|perfect|exactly|i do|si|sí|claro|claro que sí|claro que si|seguro|por favor|correcto|está bien|esta bien|de acuerdo|estoy de acuerdo|dale|por supuesto|bueno|confirmo|confirmado|apruebo|aprobado|adelante|hazlo|procede|perfecto|exacto|eso es|así es|asi es|continue|i want to continue|go on|go ahead please|please do|yes i do|sí quiero|si quiero|continuar|quiero continuar|seguir|sigue|continúe|continue por favor|proceder|procedo|procede por favor|proceda|proceda por favor|sí proceda|si proceda|no|nope|nah|no thanks|no thank you|not now|not today|no gracias|ahora no|hoy no|text|texto|sms|message|mensaje|text me|by text|por texto|mensaje de texto|whatsapp|escríbeme|escribeme|text me the links|send me the links|send the links|envíame los enlaces|mándame los enlaces|mándamelos por texto|los enlaces|links|stock|in stock|available online|disponibles|disponible en linea|price|prices|cost|how much|precio|precios|availability|disponibilidad|cuánto|cuesta|cheapest|least expensive|más barato|mas barato|details|detalles|store|stores|tienda|tiendas|first|second|third|fourth|fifth|primero|primera|segundo|segunda|tercero|tercera|done|listo|1|2|3|4|5)(?![\\p{L}\\p{N}_]))[\\s\\S]+)$",
               "flags": "iu"
             },
             "question": "You can ask about stock, prices, or the cheapest shown product. To check nearby stores, say the product number. Or say DONE.",

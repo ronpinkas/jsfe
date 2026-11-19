@@ -10,7 +10,7 @@
   - `form_instance`: Internal instance to resume
 - **Calls:** [shopify-ql-product-query-validate](shopify-ql-product-query-validate.md) (validator), [collect-input-accept](../system/collect-input-accept.md) (system) (call), [run-form](../system/run-form.md) (system) (call), [form-done](../system/form-done.md) (system) (call)
 - **Tools:** none
-- **Called by:** [shopify-ql-product-search](shopify-ql-product-search.md), [shopify-ql-products-fetch](shopify-ql-products-fetch.md) (by name)
+- **Called by:** [shopify-ql-products-fetch](shopify-ql-products-fetch.md) (by name)
 
 ### Form inputs
 

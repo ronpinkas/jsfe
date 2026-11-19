@@ -8,7 +8,6 @@ flowchart LR
    shopify_ql_product_search(["ShopifyQLProductSearch · shopify-ql-product-search"])
    shopify_ql_product_search --> shopify_ql_product_facts_load["shopify-ql-product-facts-load"]
    shopify_ql_product_search --> shopify_ql_product_stores["shopify-ql-product-stores"]
-   shopify_ql_product_search --> shopify_ql_get_search_query["shopify-ql-get-search-query"]
    shopify_ql_product_search --> shopify_ql_products_fetch["shopify-ql-products-fetch"]
    shopify_ql_product_search --> x_text_destination[("text-destination (system)")]
    shopify_ql_product_search --> x_provide_data[("provide-data (system)")]
@@ -33,7 +32,7 @@ flowchart LR
 
 | flow | kind | what it is |
 |---|---|---|
-| [shopify-ql-product-search](shopify-ql-product-search.md) | steps | Wants to find, price or check availability of a product, including one named alone ('tires'); wants to place a new order ('quiero hacer un … |
+| [shopify-ql-product-search](shopify-ql-product-search.md) | steps | Wants to find, price or check availability of a product, including one named alone ('tires') or on sale ('¿tienen televisores en oferta?');… |
 | [shopify-ql-track-order](shopify-ql-track-order.md) | steps | Asks about an order or package they placed: status, arrival, pickup readiness, tracking, contents, not arrived, or a list of their orders (… |
 | [shopify-ql-store-policies](shopify-ql-store-policies.md) | steps | Asks a general store policy or FAQ rule: returns, refunds, exchanges, shipping or delivery ('do you ship to Canada', '¿cuál es su política … |
 
