@@ -3853,7 +3853,10 @@ async function detectFlowInTwoStages(input: string, engine: Engine, flows: FlowD
       // enum_from parameters take this session's values now; the flow itself is unchanged.
       const asked: FlowDefinition = resolveEnumSources(flow, engine.cargo);
       if (!hasStageParameters(asked.parameters)) return { flow, parameters: {} };
-      const stage2 = buildParameterStage(cleanInput, conversation, asked);
+      // Arguments are read from the latest message and the assistant's last message only, never the user's earlier words
+      // (owner 2026-11-18: prod CA957394, a ZIP code said before an account request was extracted as its phone number).
+      // Stage 1 still reads the whole last exchange.
+      const stage2 = buildParameterStage(cleanInput, conversation.filter(turn => turn.role === 'assistant'), asked);
       const reply2 = parseStageReply(await fetchAiResponse(stage2.llm.system, stage2.llm.user, engine.aiCallback, engine.aiTimeOut, stageSchema('extract_parameters', stage2.llm.schema), stage2));
       const given = reply2.parameters && typeof reply2.parameters === 'object' ? reply2.parameters as Record<string, any> : {};
       return { flow, parameters: enforceParameterEnums(asked, enforceParameterTypes(asked, ownParametersOnly(asked, given))) };
@@ -3912,9 +3915,10 @@ function verbatimReplyField(parameters: (FlowParameterDefinition & { verbatim?: 
  * intent stage-2 request (the question is the assistant's last turn). Missing fields stay missing; a failure throws.
  */
 async function extractReplyParameters(input: string, engine: Engine, question: string, parameters: FlowParameterDefinition[]): Promise<Record<string, any>> {
-  const { input: cleanInput, conversation } = buildDetectFlowRequest(input, engine.lastChatTurn, []);
+  // The reply is read with the question it answers and nothing earlier (owner 2026-11-18).
+  const cleanInput = String(sanitizeInput(input));
   const reply: FlowDefinition = { id: '__jsfe_reply__', name: 'CurrentQuestion', version: '1.0.0', description: 'The reply to the current question', steps: [], parameters: parameters.map(({ verbatim, ...parameter }: FlowParameterDefinition & { verbatim?: boolean }) => parameter) };
-  const stage2 = buildParameterStage(cleanInput, conversation.concat([{ role: 'assistant', content: question }]), reply);
+  const stage2 = buildParameterStage(cleanInput, [{ role: 'assistant', content: question }], reply);
   const answer = parseStageReply(await fetchAiResponse(stage2.llm.system, stage2.llm.user, engine.aiCallback, engine.aiTimeOut, stageSchema('extract_parameters', stage2.llm.schema), stage2));
   const given = answer.parameters && typeof answer.parameters === 'object' ? answer.parameters as Record<string, any> : {};
   return structuredClone(enforceParameterEnums(reply, enforceParameterTypes(reply, ownParametersOnly(reply, given))));

@@ -355,7 +355,9 @@ plus the flow's optional `parameterInstructions` (rules that span its parameters
 `internal: true` is the flow's own and is never asked. A parameter with `enum_from: 'sendables'` (a string
 parameter, instead of `enum`) takes its values from the session when its flow is selected: stage 2 offers that
 source's keys, each with its label for both executors, and an empty source leaves the parameter for the flow to ask.
-No other flow's request changes. Each stage is ONE aiCallback call: the positional
+No other flow's request changes. Stage 2, and the extraction of a typed reply, read the latest message and the
+assistant's last message only, never the user's earlier words; stage 1 reads the whole last exchange (owner 2026-11-18:
+a ZIP code said before an account request was extracted as its phone number). Each stage is ONE aiCallback call: the positional
 arguments are the LLM instructions, and the 4th argument (`task: 'detect_flow'` with `stage: 1`, or
 `task: 'extract_parameters'` with `stage: 2`) carries both executors' instructions, `llm` and `systemOne`.
 The host runs either, or both as a hedge, and replies with the canonical JSON: `{ "flowName": … }` for
