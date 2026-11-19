@@ -286,7 +286,7 @@ export function parseFormSubmission(prompt, view) {
   return {prompt, form: envelope.form, values};
 }
 
-/** Install these two overrides for one preflighted submission turn only; restore the host's functions afterwards.
+/** Install these overrides for one preflighted submission turn only; restore the host's functions afterwards.
  * No parser, new state, or changed behavior is installed on ordinary clients/turns.
  */
 export function formSubmissionReaders(submission, getSession) {
@@ -321,6 +321,11 @@ export function formSubmissionReaders(submission, getSession) {
       const changed = hits.filter(hit => !unchanged(hit));
       const read = changed.length ? changed : hits;
       return {hits: read, ambiguous: [], remaining: [], questions: [], refused: [], decisions: read.map(hit => ({form: hit.form, name: hit.name, rule: 'form_submission'}))};
+    },
+    // What the caller submitted, for the models that judge the turn (reply ranker, argument extraction, intent detection):
+    // the host's masked text of the submission (`submission.said`); undefined on any other input or without it.
+    formSubmissionText(answer) {
+      return String(answer).trim() === submission.prompt && typeof submission.said === 'string' && submission.said.trim() ? submission.said : undefined;
     },
     enrichFormMatches(matches, chain, form, names = [], asked = '') {
       const result = enrichFormMatches(matches, chain, form, names, asked);

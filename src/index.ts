@@ -7616,6 +7616,10 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
 
     // Sanitize input
     const sanitizedInput = sanitizeInput(input);
+    // A form submission's marker is not what the caller said: the models that judge the turn read the submitted text
+    // (owner 2026-11-19: prod 'Busco GTA' sent from a product card was ranked as the marker, irrelevant 0.78).
+    const submitted = engine.APPROVED_FUNCTIONS?.formSubmissionText?.(String(sanitizedInput));
+    const judgedInput = typeof submitted === 'string' && submitted.trim() ? String(sanitizeInput(submitted)) : String(sanitizedInput);
 
     // Debug logging
     logger.info(`processActivity received input: ${JSON.stringify(input)}, sanitized: ${JSON.stringify(sanitizedInput)}`);
@@ -7659,7 +7663,7 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
       const reasonFor = declaration?.reasonFor ? interpolateMessage(declaration.reasonFor,frame.contextStack,frame.variables,engine).trim() : '';
       // A question whose process is described (a form's user_description) offers `concern`; empty offers nothing more.
       const concern = renderConcern(declaration, frame, engine);
-      try { ({ option, confident, also } = await rankReply(String(sanitizedInput),engine,question,choices,reasonFor,concern)); } catch (error) { guardedRoutingFailed = true; throw error; }
+      try { ({ option, confident, also } = await rankReply(judgedInput,engine,question,choices,reasonFor,concern)); } catch (error) { guardedRoutingFailed = true; throw error; }
       // A declared choice routed as a new request (route: 'new_request') leaves like one.
       const pickedChoice = option.startsWith(CHOICE_PREFIX) ? choices.find(c => CHOICE_PREFIX + c.key === option) : undefined;
       if (pickedChoice?.route === 'new_request') {
@@ -7684,7 +7688,7 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
         let extractedArguments: Record<string, any> | null = null;
         if (pickedChoice?.parameters?.length) {
           try {
-            extractedArguments = await extractReplyParameters(String(sanitizedInput),engine,question,pickedChoice.parameters as FlowParameterDefinition[]);
+            extractedArguments = await extractReplyParameters(judgedInput,engine,question,pickedChoice.parameters as FlowParameterDefinition[]);
           } catch (error) {
             logger.warn(`Contextual DISPATCH in '${frame.flowName}': extracting the arguments of '${pickedChoice.key}' failed (${(error as Error)?.message}); the pick stands`);
             extractedArguments = {};
@@ -7706,7 +7710,7 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
           const verbatim = confident ? verbatimReplyField(declaration.parameters) : null;
           let extracted: Record<string, any>;
           try {
-            extracted = await extractReplyParameters(String(sanitizedInput),engine,question,declaration.parameters);
+            extracted = await extractReplyParameters(judgedInput,engine,question,declaration.parameters);
           } catch (error) {
             if (verbatim) {
               logger.warn(`Contextual DISPATCH in '${frame.flowName}': extraction failed (${(error as Error)?.message}); the confident answer is kept as said`);
@@ -7758,7 +7762,7 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
           // Only a request a flow serves leaves (onNoIntent: 'stay'): intent detection decides now, and a reply it routes to
           // no flow (noise, a remark) is an answer to this question, so the flow continues. The decision is reused below.
           let detected: any;
-          try { detected = await detectFlowWithParameters(String(sanitizedInput), engine); } catch (error) { setChatTurn(chatTurnBefore); guardedRoutingFailed = true; throw error; }
+          try { detected = await detectFlowWithParameters(judgedInput, engine); } catch (error) { setChatTurn(chatTurnBefore); guardedRoutingFailed = true; throw error; }
           if (!detected || !detected.flow) {
             setChatTurn(chatTurnBefore);
             ranked = 'answers';
@@ -7910,7 +7914,7 @@ async function processActivity(input: string, userId: string, engine: WorkflowEn
       // The global exit's flow starts as a host start does: no intent detection.
       if (exitStart) engine.hostStart = exitStart;
       else { /* intent detection decides, or no activation this turn */ }
-      const activatedFlow = exitStart ? await isFlowActivated(String(sanitizedInput), engine, userId) : activatedThisTurn || (ranked !== null && ranked !== 'new_request') ? null : await isFlowActivated(String(sanitizedInput), engine, userId, preDetected);
+      const activatedFlow = exitStart ? await isFlowActivated(String(sanitizedInput), engine, userId) : activatedThisTurn || (ranked !== null && ranked !== 'new_request') ? null : await isFlowActivated(ranked === 'new_request' ? judgedInput : String(sanitizedInput), engine, userId, preDetected);
       if (activatedFlow) activatedThisTurn = true;
 
       if (dispatchedFrom !== null) {
