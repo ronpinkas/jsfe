@@ -61,7 +61,8 @@ await test('an email with no ending is read, and one that cannot be read is aske
  let t=fixture();await t.start('lookup');
  assert.equal(await t.say('Juana Perez 12 34 at gmail.'),'FOUND juanaperez1234@gmail.com');
  t=fixture();await t.start('lookup');
- const r=await t.say('J d o e 7 7 at Yahoo');assert.match(r,/^Sorry, I didn't get the whole email address.*Please type the phone or email/);assert.doesNotMatch(r,/phone number you provided/);
+ // a known provider without its ending asks only the ending, and the ending alone completes it (owner 2026-11-18)
+ const r=await t.say('J d o e 7 7 at Yahoo');assert.equal(r,'What comes after yahoo? For example, dot com.');assert.equal(await t.say('dot com'),'FOUND jdoe77@yahoo.com');
  t=fixture({},'es');await t.start('lookup');
  assert.match(await t.say('Lucia Gómez número 5 arroba punto com.'),/^Lo siento, no entendí el correo electrónico completo/);
 });

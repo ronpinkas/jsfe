@@ -131,6 +131,7 @@ export function formInputPrompt(cargo,id,input,spec,data={},language='en') {
    const question=spec.question_from&&(es?(data[spec.question_from+'_es']||data[spec.question_from]):data[spec.question_from]) || written('question') || (es?(spec.question_es||spec.question):spec.question) || '';
    const retry=written('retry') || (es?spec.retry_es:spec.retry);
    if(feedback==='partial')return es?'Continúe.':'Go on.';
+   if(feedback==='email_ending'){const provider=String(cargo.forms?.[id]?.data?.['__email_'+input]||'').split('@')[1]||'';return es?`¿Qué sigue después de ${provider}? Por ejemplo, punto com.`:`What comes after ${provider}? For example, dot com.`;}
    // What a validator said about the last answer this turn (keepFormLine) leads the question.
    const lead=lineForms(cargo,id).flatMap(state=>state.lines||[]).map(x=>es?x.message_es||x.message:x.message).filter(Boolean).join('\n\n');
    const body=feedback==='first'?formFirstLine(cargo,id,input,es)+(retry||question)

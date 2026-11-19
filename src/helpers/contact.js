@@ -75,6 +75,43 @@ export function readEmail(text, { literal = false } = {}) {
    }
 }
 
+/**
+ * An address at a known provider said without its ending ("Cecilia 41, at Yahoo."): its name and provider
+ * ("cecilia41@yahoo"), so the caller is asked only for what comes after the provider (owner 2026-11-18, prod 11-18 17:30:
+ * the whole address was asked again). gmail is completed by readEmail; an unknown domain is never guessed, so it is ''.
+ */
+export function emailWithoutEnding(text) {
+   const t = String(text ?? '').trim().replace(/[.,;:!?]+$/, '');
+   if (!t || readEmail(t) || !/\b(?:hotmail|hot mail|yahoo|outlook|icloud|aol)\s*$/i.test(t)) {
+      return '';
+   } else {
+      const whole = readEmail(t.replace(/hot mail\s*$/i, 'hotmail') + ' dot com');
+      const m = whole.match(/^(.+@(?:hotmail|yahoo|outlook|icloud|aol))\.com$/);
+      return m ? m[1] : '';
+   }
+}
+
+/**
+ * The ending a caller gives on its own after being asked what comes after the provider ("Punto com.", "dot net",
+ * ".com", "com", "punto com punto mx"): ".com", ".net", ".es", ".com.mx" … or '' for any other reply. Whole reply only.
+ */
+export function emailEnding(text) {
+   const t = String(text ?? '').trim().toLowerCase().replace(/[!?,;]+$/, '').replace(/\.$/, '').trim();
+   const dot = '(?:dot|punto|punt|ponto|\\.)';
+   const m = t.match(new RegExp('^(?:' + dot + '\\s*)?(com|con|net|org|edu|es|mx|co)(?:\\s*' + dot + '?\\s*(mx|uk|ar|co|es))?$'));
+   if (!m) {
+      return '';
+   } else {
+      return '.' + (m[1] === 'con' ? 'com' : m[1]) + (m[2] ? '.' + m[2] : '');
+   }
+}
+
+/** An address as it is read back: on a call letter by letter, with at / dot (arroba / punto) said as words. */
+export function emailSaid(address, voice, es = false) {
+   const said = String(address || '');
+   return voice ? said.split('').join(' ').replace(/ @ /, es ? ' arroba ' : ' at ').replace(/ \. /g, es ? ' punto ' : ' dot ').replace(/ _ /g, es ? ' guion bajo ' : ' underscore ').replace(/ - /g, es ? ' guion ' : ' dash ') : said;
+}
+
 const PROVIDER_WITH_ENDING = /\s+((?:gmail|hotmail|yahoo|outlook|icloud|aol)\.(?:com|net|es|com\.mx|co\.uk)\b)/i;
 
 /**
