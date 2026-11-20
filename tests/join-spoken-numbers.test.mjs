@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import {findNumbers, assignNumbers, joinSpokenNumbers} from '../dist/helpers/numbers.js';
 import {STANDARD_FUNCTIONS} from '../dist/helpers/index.js';
+import {FIELD_PRESETS} from '../dist/forms/flows.js';
 let checks=0;const eq=(a,b,why)=>{assert.deepEqual(a,b,why);checks++;};
 const values=(s)=>findNumbers(s).map((n)=>n.value);
 
@@ -57,23 +58,46 @@ eq(joinSpokenNumbers('I have two hundred 5 here'),'I have 205 here','joined text
 // A lone "one" is found as 1 (on a call it may be the digit); a caller reading positions decides what it means.
 eq(findNumbers('the second one').map(({value,start,end})=>[value,start,end]),[['1',11,14]],'a lone "one": the digit, spanning the word');
 eq(findNumbers('one two three').map((n)=>n.value),['123'],'"one" among number words is a digit');
-// Several values typed one after another (split; owner 2026-11-20, prod WhatsApp 11-20 08:23 "07 10 1972 9238").
-const date=(v)=>{if(v.length!==8)return false;const m=+v.slice(0,2),d=+v.slice(2,4),y=+v.slice(4),t=new Date(Date.UTC(y,m-1,d));return y>=1900&&y<=2026&&t.getUTCMonth()+1===m&&t.getUTCDate()===d&&`${y}-${v.slice(0,2)}-${v.slice(2,4)}`;};
-const id={account:(v)=>/^5\d{6,7}$/.test(v),ssn:(v)=>v.length===4,dob:date};
-const split={split:true};
+// Specs: known kinds and described custom kinds, no code (owner 2026-11-20).
+const id=[{name:'dob',kind:'date',past:true},{name:'ssn',kind:'ssn_last4'},{name:'account',kind:'pattern',regex:'^5\\d{6,7}$'}];
+const many={multiple:true};
 eq(findNumbers('07 10 1972 9238')[0].groups,['07','10','1972','9238'],'groups as the caller separated them');
-eq(assignNumbers(findNumbers('07 10 1972 9238'),id).values,{},'without split: unchanged, nothing taken');
-eq(assignNumbers(findNumbers('07 10 1972 9238'),id,split),{values:{dob:'1972-07-10',ssn:'9238'},ambiguous:[],unread:[]},'a date then the last four: the only reading');
-eq(assignNumbers(findNumbers('9238 07 10 1972'),id,split).values,{ssn:'9238',dob:'1972-07-10'},'either order');
-eq(assignNumbers(findNumbers('07101972 9238'),id,split).values,{dob:'1972-07-10',ssn:'9238'},'a date typed as one group');
-eq(assignNumbers(findNumbers('323 5713211'),id,split).values,{},'a phone: 323 is no value, never a piece taken (prod 11-17)');
-eq(assignNumbers(findNumbers('1 12 2000 5'),id,split).values,{},'a stray digit fits nothing: every digit must be consumed');
-eq(assignNumbers(findNumbers('1972 9238'),id,split),{values:{},ambiguous:[],unread:findNumbers('1972 9238')},'two last-fours: one kind cannot take both, nothing read');
-eq(assignNumbers(findNumbers('1972 9238'),id,{split:true,multiple:['ssn']}).values,{ssn:['1972','9238']},'unless the kind takes several');
-eq(assignNumbers(findNumbers('5603 5214'),id,split).values,{account:'56035214'},'a whole number that fits is never split');
-eq(assignNumbers(findNumbers('1234 5678'),{a:(v)=>v.length===4,b:(v)=>v.length===4},split).ambiguous,['a','b'],'two readings: ambiguous, asked');
-eq(assignNumbers(findNumbers('7 10 1972 9238'),id,split).values,{},'a part no test reads (a 7-digit date): nothing taken');
-eq(assignNumbers(findNumbers('120 not 124'),{amount:(v)=>v.length===3},{multiple:['amount']}).values,{amount:['120','124']},'multiple: every value, in order');
-eq(assignNumbers(findNumbers('1 2 3 4 5 6 7 8 9 0 1 2 3'),{d:(v)=>v.length===1},split).values,{},'a run of more than 12 groups is never split');
+eq(assignNumbers(findNumbers('07101972'),id).values,{dob:'1972-07-10'},'a date: its value is YYYY-MM-DD');
+eq(assignNumbers(findNumbers('17101981'),id).values,{dob:'1981-10-17'},'day first only when it cannot be month first');
+eq(assignNumbers(findNumbers('071072'),id).values,{dob:'1972-07-10'},'a two-digit year in the past');
+eq(assignNumbers(findNumbers('11220005'),id).values,{},'a four-digit year as typed: 0005 is no year');
+eq(assignNumbers(findNumbers('13452000'),id).values,{},'no 13th month, no 45th day');
+eq(assignNumbers(findNumbers('56035214'),id).values,{account:'56035214'},'a custom pattern');
+eq(assignNumbers(findNumbers('07 10 1972 9238'),id).values,{},'without multiple: one number, one spec, nothing taken');
+eq(assignNumbers(findNumbers('07 10 1972 9238'),id,many),{values:{dob:'1972-07-10',ssn:'9238'},ambiguous:[],unread:[]},'multiple: a date then the last four, the only reading');
+eq(assignNumbers(findNumbers('07 10 1972 9238'),id,{split:true}).values,{dob:'1972-07-10',ssn:'9238'},'split: true, the 1.83.0 name, still works');
+eq(assignNumbers(findNumbers('9238 07 10 1972'),id,many).values,{ssn:'9238',dob:'1972-07-10'},'either order');
+eq(assignNumbers(findNumbers('07101972 9238'),id,many).values,{dob:'1972-07-10',ssn:'9238'},'a date typed as one group');
+eq(assignNumbers(findNumbers('17 10 1981 9238'),id,many).values,{dob:'1981-10-17',ssn:'9238'},'a day-first date in parts');
+eq(assignNumbers(findNumbers('56035214 9238'),id,many).values,{account:'56035214',ssn:'9238'},'two numbers, two specs');
+eq(assignNumbers(findNumbers('323 5713211'),id,many).values,{},'a phone: 323 is no value, never a piece taken (prod 11-17)');
+eq(assignNumbers(findNumbers('1 12 2000 5'),id,many).values,{},'a stray digit fits nothing: every digit must be consumed');
+eq(assignNumbers(findNumbers('1972 9238'),id,many).values,{},'two last-fours: one spec cannot take both');
+eq(assignNumbers(findNumbers('5603 5214'),id,many).values,{account:'56035214'},'a whole number that fits is never cut');
+eq(assignNumbers(findNumbers('1234 5678'),[{name:'a',kind:'digits',min:4},{name:'b',kind:'digits',min:4}],many).ambiguous,['a','b'],'two readings: ambiguous, asked');
+eq(assignNumbers(findNumbers('7 10 1972 9238'),id,many).values,{},'a part no spec reads (a 7-digit date): nothing taken');
+eq(assignNumbers(findNumbers('1 2 3 4 5 6 7 8 9 0 1 2 3'),[{name:'d',kind:'digits',min:1}],many).values,{},'a run of more than 12 groups is never cut');
+// Card kinds: the card's own checks separate what lengths cannot.
+const card=[{name:'number',kind:'card_number'},{name:'exp',kind:'card_expiration'},{name:'cvv',kind:'card_cvv'},{name:'zip',kind:'card_zip'}];
+eq(assignNumbers(findNumbers('4111 1111 1111 1111 123'),card,many).values,{number:'4111111111111111',cvv:'123'},'a card, then its security code (Luhn)');
+eq(assignNumbers(findNumbers('4111 1111 1111 1111 0930 123 92610'),card,many).values,{number:'4111111111111111',exp:'0930',cvv:'123',zip:'92610'},'the whole card in one line');
+eq(assignNumbers(findNumbers('4111 1111 1111 1112'),card,many).values,{},'a number failing Luhn is no card');
+eq(assignNumbers(findNumbers('1320'),[{name:'exp',kind:'card_expiration'}]).values,{},'no 13th month');
+// A spec declared wrong fails where it is declared.
+const throws=(f,rx,why)=>{assert.throws(f,rx,why);checks++;};
+throws(()=>assignNumbers([],[{name:'x',kind:'amount'}]),/kind "amount"/,'amount is the money reader\'s, not a kind here');
+throws(()=>assignNumbers([],[{name:'x',kind:'pattern'}]),/without its regex/,'a pattern needs its regex');
+throws(()=>assignNumbers([],[{name:'x',kind:'digits'}]),/without min/,'digits needs min');
+throws(()=>assignNumbers([],[{name:'x',kind:'zip'},{name:'x',kind:'zip'}]),/repeated/,'names are unique');
+// The preset lengths are FIELD_PRESETS' (a fact stated twice is pinned).
+for (const [kind,[min,max]] of Object.entries({zip:[5,5],card_zip:[5,5],ssn_last4:[4,4],account_number:[6,12],phone:[10,11],card_cvv:[3,4],card_number:[13,19]})) {
+   eq([FIELD_PRESETS[kind].digits.min,FIELD_PRESETS[kind].digits.max],[min,max],`${kind}: the preset's own lengths`);
+}
+eq(assignNumbers(findNumbers('92610'),[{name:'z',kind:'zip'}]).values,{z:'92610'},'a preset kind reads its length');
 eq(['findNumbers','assignNumbers','joinSpokenNumbers','addressDraft'].every((f)=>typeof STANDARD_FUNCTIONS[f]==='function'),true,'offered to flows');
 console.log(`numbers: ${checks} checks passed`);

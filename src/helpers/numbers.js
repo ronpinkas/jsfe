@@ -4,10 +4,11 @@
  * that took pieces read a phone typed "323 5713211" as account 5713211 (prod 2026-11-17) and the year of a spoken date as an
  * SSN's last four (11-18).
  *
- * findNumbers finds; it never decides what a number is. The caller's own tests decide that (assignNumbers), so a tenant's
- * proprietary identifier is one more test, not a matcher here. Shape reading only; part of jsfe/helpers, imports a sibling.
+ * findNumbers finds; it never decides what a number is. The caller's specs decide that (assignNumbers: known kinds, or a
+ * described pattern), so a tenant's proprietary identifier is one more spec, not a matcher here. Shape reading only; part of jsfe/helpers, imports siblings.
  */
 import { cardinalWords, isNumberWord, plainWord } from './spoken-money.js';
+import { validateCardNumber, validateExpiration } from './card-checks.js';
 
 /** A run of digits as said: spoken digits come apart ("4 3 2 1", "555-123-4567"), so a single space, dash or dot inside a run
  * joins it, and so does a comma (or a period and a space) after a group of one to three digits: speech-to-text writes the
@@ -128,26 +129,81 @@ export function findNumbers(answer) {
 }
 
 /**
- * Which numbers are which, by the caller's tests: kinds = {name: (digits) => false | true | normalized value}. One value per kind.
- * A number is read by every test its complete digits pass and, for a restart, every test the number once passes. A number
- * read more than one way is ambiguous, and so is a kind given two different values: those kinds take no value, so the caller
- * asks (the longest match wins only when it is the only match: "5603 5603" is an 8-digit account or SSN 5603 said twice).
- * A number no test reads is ignored here; the caller decides whether that means asking again.
+ * The kinds a number can be (owner 2026-11-20): a known kind is a jsfe field preset of digits, or a date; a custom kind is
+ * described, never coded: {kind: 'pattern', regex, flags?} or {kind: 'digits', min, max}. Each reads a number's complete
+ * digits and gives its value (a date as YYYY-MM-DD, everything else its digits) or '' when it is not that kind. The preset
+ * lengths are pinned to FIELD_PRESETS by tests/join-spoken-numbers.test.mjs. An amount is not here: it is read by the
+ * money reader, never out of a run of digits.
+ */
+const length = (min, max = min) => (digits) => (digits.length >= min && digits.length <= max ? digits : '');
+/** A date typed as digits: MMDDYYYY or MMDDYY, day first ("17101981") only when it cannot be month first. past: no later
+ * year than this one, and a two-digit year is the most recent one (a date of birth). */
+function dateDigits(digits, spec) {
+   if (digits.length !== 6 && digits.length !== 8) return '';
+   const now = new Date().getFullYear();
+   const take = (m, d, y) => {
+      let year = Number(y);
+      if (y.length === 2) year += spec.past === true ? (year > now % 100 ? 1900 : 2000) : 2000; else { /* four digits, as typed */ }
+      const month = Number(m), day = Number(d), at = new Date(Date.UTC(year, month - 1, day));
+      const valid = year >= 1900 && year <= (spec.past === true ? now : 2099) && at.getUTCFullYear() === year && at.getUTCMonth() + 1 === month && at.getUTCDate() === day;
+      return valid ? `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}` : '';
+   };
+   const a = digits.slice(0, 2), b = digits.slice(2, 4), y = digits.slice(4);
+   return take(a, b, y) || (Number(a) > 12 ? take(b, a, y) : '');
+}
+const KNOWN_KINDS = {
+   date: (spec) => (digits) => dateDigits(digits, spec),
+   zip: () => length(5),
+   card_zip: () => length(5),
+   ssn_last4: () => length(4),
+   account_number: () => length(6, 12),
+   phone: () => length(10, 11),
+   card_cvv: () => length(3, 4),
+   card_number: () => (digits) => (digits.length >= 13 && digits.length <= 19 && validateCardNumber(digits) ? digits : ''),
+   card_expiration: () => (digits) => (digits.length === 4 && validateExpiration(digits.slice(0, 2), digits.slice(2)) ? digits : ''),
+   pattern: (spec) => { const rx = new RegExp(spec.regex, spec.flags || ''); return (digits) => (rx.test(digits) ? digits : ''); },
+   digits: (spec) => length(Number(spec.min), Number(spec.max ?? spec.min))
+};
+export const NUMBER_KINDS = Object.keys(KNOWN_KINDS);
+
+/** specs → [{name, read}]. A spec list is the documented form; a {name: (digits) => false | true | value} object (jsfe
+ * 1.81-1.83) is still read the same way. An unknown kind, a pattern without its regex, digits without min, or a repeated
+ * name throws: a reader declared wrong fails where it is declared, never by reading nothing. */
+function readersOf(specs) {
+   if (!Array.isArray(specs)) {
+      return Object.entries(specs || {}).map(([name, test]) => ({ name, read: (digits) => { const r = test(digits); return r === true ? digits : r ? String(r) : ''; } }));
+   } else { /* a spec list */ }
+   const names = new Set();
+   return specs.map((spec) => {
+      const name = spec && spec.name, kind = spec && spec.kind;
+      if (!name || typeof name !== 'string' || names.has(name)) throw new Error(`assignNumbers: spec name ${JSON.stringify(name)} is missing or repeated`);
+      if (!Object.hasOwn(KNOWN_KINDS, kind)) throw new Error(`assignNumbers: ${name} has kind ${JSON.stringify(kind)}; the kinds are ${NUMBER_KINDS.join(', ')}`);
+      if (kind === 'pattern' && typeof spec.regex !== 'string') throw new Error(`assignNumbers: ${name} is a pattern without its regex`);
+      if (kind === 'digits' && !(Number(spec.min) > 0)) throw new Error(`assignNumbers: ${name} is digits without min`);
+      names.add(name);
+      return { name, read: KNOWN_KINDS[kind](spec) };
+   });
+}
+
+/**
+ * Which numbers are which: specs = [{name, kind, ...}] (NUMBER_KINDS above), one value per spec. A number is read by every
+ * spec its complete digits fit and, for a restart, every spec the number once fits. A number read more than one way is
+ * ambiguous, and so is a spec given two different values: those take no value, so the caller asks (the longest match wins
+ * only when it is the only match: "5603 5603" is an 8-digit account or SSN 5603 said twice). A number no spec reads is
+ * returned in unread; the caller decides whether that means asking again.
  *
- * options (optional; without them nothing above changes):
- * - split: true — a number no test reads, whole or as a restart, may be several values the caller typed one after another
- *   (owner 2026-11-20; prod WhatsApp 11-20 08:23 "07 10 1972 9238" was a date of birth and an SSN's last four, asked for
- *   "2 digits for the month, 2 for the day and 4 for the year"). It is split only where the caller separated it, never inside
- *   a group, and only into parts that EVERY one passes a test, so every digit is consumed. Exactly one such reading is taken;
- *   two or more make their kinds ambiguous; none leaves the number unread. A kind takes one part unless it is in multiple.
- * - multiple: [names] — those kinds may take several values: their value is the list of distinct values in order.
+ * options.multiple: true — one answer may fill several specs with one number typed in parts (owner 2026-11-20; prod WhatsApp
+ * 11-20 08:23 "07 10 1972 9238" was a date of birth and an SSN's last four). A number no spec reads whole is cut only where
+ * the caller separated it, never inside a group, into parts that each fill a different spec, so every digit is consumed;
+ * exactly one such reading is taken, two or more make their specs ambiguous, none leaves the number unread. (split: true is
+ * the jsfe 1.83.0 name for it.)
  * → {values: {name: value}, ambiguous: [names], unread: [numbers]}
  */
-const MAX_SPLIT_GROUPS = 12;   // 2^11 ways to split; a longer run is digits said one by one, never several values
+const MAX_SPLIT_GROUPS = 12;   // 2^11 ways to cut; a longer run is digits said one by one, never several values
 
-/** The single reading of a number as consecutive parts, each read by a test: [[kind, value], ...]; null for none; 'ambiguous'
- * (with the kinds) for several. */
-function splitReading(groups, kinds, read, multiple) {
+/** The single reading of a number as consecutive parts, each filling a different spec: [[name, value], ...]; null for none;
+ * {ambiguous: [names]} for several. */
+function splitReading(groups, readers) {
    const found = new Map();
    const parts = (from) => {   // every way to cut groups[from..] into consecutive parts
       if (from === groups.length) return [[]];
@@ -159,56 +215,54 @@ function splitReading(groups, kinds, read, multiple) {
    };
    for (const cut of parts(0)) {
       if (cut.length < 2) { continue; } else { /* the whole number was already tried */ }
-      const options = cut.map((digits) => Object.entries(kinds).map(([kind, test]) => [kind, read(test, digits)]).filter(([, v]) => v));
+      const options = cut.map((digits) => readers.map(({ name, read }) => [name, read(digits)]).filter(([, v]) => v));
       const assign = (i, used, chosen) => {
          if (i === cut.length) { found.set(JSON.stringify(chosen), chosen); return; } else { /* next part */ }
-         for (const [kind, value] of options[i]) {
-            if (used.has(kind) && !multiple.has(kind)) { continue; } else { /* this kind may take this part */ }
-            assign(i + 1, new Set(used).add(kind), [...chosen, [kind, value]]);
+         for (const [name, value] of options[i]) {
+            if (used.has(name)) { continue; } else { /* a spec not filled yet */ }
+            assign(i + 1, new Set(used).add(name), [...chosen, [name, value]]);
          }
       };
-      if (options.every((o) => o.length)) assign(0, new Set(), []); else { /* a part no test reads: not this cut */ }
+      if (options.every((o) => o.length)) assign(0, new Set(), []); else { /* a part no spec reads: not this cut */ }
    }
    if (found.size === 1) return [...found.values()][0];
-   if (found.size > 1) return { ambiguous: [...new Set([...found.values()].flat().map(([kind]) => kind))] };
+   if (found.size > 1) return { ambiguous: [...new Set([...found.values()].flat().map(([name]) => name))] };
    return null;
 }
 
-export function assignNumbers(numbers, kinds, options) {
+export function assignNumbers(numbers, specs, options) {
+   const readers = readersOf(specs);
+   const multiple = options?.multiple === true || options?.split === true;
    const seen = {}, ambiguous = new Set(), unread = [];
-   const multiple = new Set(Array.isArray(options?.multiple) ? options.multiple : []);
-   const read = (test, digits) => { const r = test(digits); return r === true ? digits : r ? String(r) : ''; };
    for (const n of numbers || []) {
       const readings = [];
-      for (const [kind, test] of Object.entries(kinds || {})) {
-         const whole = read(test, n.value);
-         if (whole) readings.push([kind, whole]); else { /* the complete number is not this kind */ }
+      for (const { name, read } of readers) {
+         const whole = read(n.value);
+         if (whole) readings.push([name, whole]); else { /* the complete number is not this kind */ }
          for (const restart of n.restarts || []) {
-            const once = read(test, restart);
-            if (once) readings.push([kind, once]); else { /* not this kind */ }
+            const once = read(restart);
+            if (once) readings.push([name, once]); else { /* not this kind */ }
          }
       }
       if (readings.length === 1) {
          (seen[readings[0][0]] ||= new Set()).add(readings[0][1]);
       } else if (readings.length > 1) {
-         readings.forEach(([kind]) => ambiguous.add(kind));
+         readings.forEach(([name]) => ambiguous.add(name));
       } else {
          const groups = n.groups || [];
-         const split = options?.split === true && groups.length > 1 && groups.length <= MAX_SPLIT_GROUPS
-            ? splitReading(groups, kinds || {}, read, multiple) : null;
+         const split = multiple && groups.length > 1 && groups.length <= MAX_SPLIT_GROUPS ? splitReading(groups, readers) : null;
          if (Array.isArray(split)) {
-            split.forEach(([kind, value]) => (seen[kind] ||= new Set()).add(value));
+            split.forEach(([name, value]) => (seen[name] ||= new Set()).add(value));
          } else if (split) {
-            split.ambiguous.forEach((kind) => ambiguous.add(kind));
+            split.ambiguous.forEach((name) => ambiguous.add(name));
          } else {
             unread.push(n);
          }
       }
    }
    const values = {};
-   for (const [kind, set] of Object.entries(seen)) {
-      if (ambiguous.has(kind)) { continue; } else { /* read */ }
-      if (multiple.has(kind)) values[kind] = [...set]; else if (set.size === 1) values[kind] = [...set][0]; else ambiguous.add(kind);
+   for (const [name, set] of Object.entries(seen)) {
+      if (set.size === 1 && !ambiguous.has(name)) values[name] = [...set][0]; else ambiguous.add(name);
    }
    return { values, ambiguous: [...ambiguous], unread };
 }
