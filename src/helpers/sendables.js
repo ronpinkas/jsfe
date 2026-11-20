@@ -73,7 +73,7 @@ export function registerSendable(cargo, entry) {
  * Everything the caller may ask to be sent now: the registered documents, the whole conversation (once the assistant has
  * replied), then the last REPLY_COUNT non-empty assistant turns of cargo.chatTurns, newest last. Each item is
  * {key, label, label_es?, kind, media?, content | sender+args}; the conversation is {key: CONVERSATION_KEY, kind:
- * 'conversation', media: ['email']} with no content (conversationCopy makes it). A reply's key is "reply-<n>" (its turn
+ * 'conversation'} with no content (conversationCopy makes it; SendCopy texts it when it fits one message, else emails it). A reply's key is "reply-<n>" (its turn
  * number) and its label "Reply <n>: <first 120 characters>".
  */
 export function sendables(cargo) {
@@ -85,7 +85,7 @@ export function sendables(cargo) {
       return {key: `reply-${turn.n}`, label: `Reply ${turn.n}: ${head}`, kind: 'reply', content: text};
    });
    const conversation = replies.length
-      ? [{key: CONVERSATION_KEY, label: 'The whole conversation', label_es: 'Toda nuestra conversación', kind: 'conversation', media: ['email']}]
+      ? [{key: CONVERSATION_KEY, label: 'The whole conversation', label_es: 'Toda nuestra conversación', kind: 'conversation'}]
       : [];
    return [...documents, ...conversation, ...replies];
 }

@@ -4,10 +4,11 @@
  *
  * Intent detection picks the item, the medium and any destination in one stage-2 request: `item` is enum_from
  * 'sendables' (jsfe 1.60.0), so its values are this session's sendables(cargo) keys with their labels.
- * - The whole conversation (once the assistant has replied) goes by email only, as conversationCopy(cargo.chatTurns,
- *   language): the turns before this request, in the caller's language.
- * - A content item (a reply, a text document) is sent as is: text through text-destination's number (or the one the
- *   caller gave) and send-text; email to the address given, else ask-email, and send-email-message.
+ * - The whole conversation (once the assistant has replied) is conversationCopy(cargo.chatTurns, language): the turns
+ *   before this request, in the caller's language.
+ * - A content item (a reply, a text document, the conversation) is sent as is: text through text-destination's number
+ *   (or the one the caller gave) and send-text when it fits one text message (TEXT_MAX), else by email; email to the
+ *   address given, else ask-email, and send-email-message.
  * - A sender item runs its flow with {medium, destination, args} (destination: only what the caller gave): the sender
  *   collects the rest, sets cargo.copyHandled = true as it takes over and tells the caller every outcome. Without it (a
  *   missing sender) SendCopy says it could not send. A sender's declared media limit the medium (statement: email).
@@ -28,6 +29,8 @@ const call = (id, value, parameters) => ({ id, type: 'FLOW', value, callType: 'c
 const ANYTHING_ELSE = ' Is there anything else I can help you with?';
 const ANYTHING_ELSE_ES = ' ¿Hay algo más en lo que le pueda ayudar?';
 const TEXT_WORDS = ['1', 'text', 'texto', 'sms', 'message', 'text message', 'mensaje', 'mensaje de texto'];
+// A text message is one message: Twilio rejects a body over 1,600 characters (error 21617), so longer content goes by email.
+const TEXT_MAX = 1600;
 const EMAIL_WORDS = ['2', 'email', 'e-mail', 'mail', 'correo', 'correo electrónico', 'correo electronico', 'email address'];
 
 const sendCopy = defineWorker({
@@ -38,7 +41,7 @@ const sendCopy = defineWorker({
    primary: true,
    prompt: 'Send a copy',
    prompt_es: 'Enviar una copia',
-   description: "Asks to be sent something by text or email, whatever it is ('email me that', 'text me the case number', 'can I have that emailed to me', 'send me a copy of this chat', 'mándame eso por mensaje', 'me lo puede mandar por correo'). Not: continuing the conversation by text (SwitchToText); a payment receipt (PaymentReceipt); a statement (SendStatement).",
+   description: "Asks to be sent something by text or email, whatever it is ('email me that', 'text me the case number', 'send me the receipt', 'can I have that emailed to me', 'send me a copy of this chat', 'mándame eso por mensaje', 'me lo puede mandar por correo'). Not: continuing the conversation by text (SwitchToText).",
    parameters: [
       { name: 'item', type: 'string', enum_from: 'sendables', description: "What the user asks to have sent: the reply or document they name or point to. 'That', 'it', 'this', 'eso' or 'lo que me dijo' is the latest reply; the whole chat, conversation or transcript ('toda la conversación') is the whole conversation." },
       { name: 'medium', type: 'string', enum: ['text', 'email'], description: "How the user asks to have it sent: text for a text message or SMS ('mensaje', 'texto'), email for an email ('correo')." },
@@ -47,7 +50,7 @@ const sendCopy = defineWorker({
    ],
    variables: vars({
       noop: false, sc_items: [], sc_key: '', sc_item: null, sc_last: null, sc_last_head: '', sc_offer_q: '', sc_offer_q_es: '', sc_doc_list: '', sc_email: '', sc_phone: '',
-      sc_medium: '', sc_medium_q: '', sc_medium_q_es: '', sc_given: '', sc_other: false, sc_media: [], sc_forced: '', sc_to: '', sc_subject: '', sc_content: '', sc_sent: false,
+      sc_medium: '', sc_medium_q: '', sc_medium_q_es: '', sc_given: '', sc_other: false, sc_too_long: false, sc_media: [], sc_forced: '', sc_to: '', sc_subject: '', sc_content: '', sc_sent: false,
    }),
    steps: [
       set('sc_items', 'sc_items', 'sendables(cargo)'),
@@ -80,10 +83,14 @@ const sendCopy = defineWorker({
       set('sc_email', 'sc_email', "(String(typeof destination === 'string' ? destination : '').match(/[^\\s@]+@[^\\s@]+\\.[^\\s@]+/) || [''])[0].replace(/[.,;:]+$/, '')"),
       set('sc_phone', 'sc_phone', "readPhone(typeof destination === 'string' ? destination : '')"),
       set('sc_medium', 'sc_medium', "typeof medium === 'string' && (medium === 'text' || medium === 'email') ? medium : sc_email ? 'email' : sc_phone ? 'text' : ''"),
-      // the media this item can go by: a sender's declared media; content by text only where the line has a sender
-      set('sc_media', 'sc_media', "Array.isArray(sc_item.media) && sc_item.media.length ? sc_item.media : (sc_item.sender || cargo.twilioNumber ? ['text', 'email'] : ['email'])"),
+      // the media this item can go by: a sender's declared media; content by text only where the line has a sender and it
+      // fits one text message (TEXT_MAX), else by email
+      set('sc_content', 'sc_content', "sc_item.kind === 'conversation' ? conversationCopy(cargo.chatTurns, language) : String(sc_item.content || '')"),
+      set('sc_too_long', 'sc_too_long', `!sc_item.sender && sc_content.length > ${TEXT_MAX}`),
+      set('sc_media', 'sc_media', "Array.isArray(sc_item.media) && sc_item.media.length ? sc_item.media : ((sc_item.sender || cargo.twilioNumber) && !sc_too_long ? ['text', 'email'] : ['email'])"),
       set('sc_forced', 'sc_forced', "sc_media.length === 1 && !!sc_medium && sc_medium !== sc_media[0] ? sc_media[0] : ''"),
-      when('sc_forced_email', "sc_forced === 'email'", say('sc_forced_email_say', "I can only send that by email, so I'll email it.", 'Solo puedo enviarlo por correo, así que se lo enviaré por correo.')),
+      when('sc_forced_long', "sc_forced === 'email' && sc_too_long", say('sc_forced_long_say', "That's too long for a text message, so I'll email it.", 'Es demasiado largo para un mensaje de texto, así que se lo enviaré por correo.')),
+      when('sc_forced_email', "sc_forced === 'email' && !sc_too_long", say('sc_forced_email_say', "I can only send that by email, so I'll email it.", 'Solo puedo enviarlo por correo, así que se lo enviaré por correo.')),
       when('sc_forced_text', "sc_forced === 'text'", say('sc_forced_text_say', "I can only send that by text, so I'll text it.", 'Solo puedo enviarlo por mensaje de texto, así que se lo enviaré por mensaje.')),
       set('sc_medium_one', 'sc_medium', "sc_media.length === 1 ? sc_media[0] : sc_medium"),
       // FLOW parameters are paths only: the wording is chosen here
@@ -151,7 +158,6 @@ const sendCopy = defineWorker({
 
       // send: a sender item runs its flow (it tells the caller); content goes as is
       set('sc_subject', 'sc_subject', "language === 'es' ? 'Su copia de nuestra conversación' : sc_item.kind === 'conversation' ? 'Your copy of our conversation' : 'Your copy from our conversation'"),
-      set('sc_content', 'sc_content', "sc_item.kind === 'conversation' ? conversationCopy(cargo.chatTurns, language) : sc_item.content"),
       when('sc_send_text', "sc_medium === 'text'", call('sc_send_text_call', 'send-text', { message: '{{sc_content}}' })),
       when('sc_send_email', "sc_medium === 'email'", call('sc_send_email_call', 'send-email-message', { to: '{{sc_to}}', subject: '{{sc_subject}}', message: '{{sc_content}}', cc: '' })),
       set('sc_sent', 'sc_sent', "sc_medium === 'text' ? cargo.textSent === true : cargo.emailSent === true"),

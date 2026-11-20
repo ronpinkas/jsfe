@@ -65,10 +65,10 @@ check('only the last six replies are offered, and a long reply has a short label
    assert.equal(list[6].content, long);
 });
 
-check('once the assistant has replied, the whole conversation is offered: email only, no content of its own', () => {
+check('once the assistant has replied, the whole conversation is offered: no declared media (SendCopy texts it when it fits), no content of its own', () => {
    assert.equal(CONVERSATION_KEY, 'conversation');
    assert.deepEqual(sendables({chatTurns: turns}).find((item) => item.key === 'conversation'),
-      {key: 'conversation', label: 'The whole conversation', label_es: 'Toda nuestra conversación', kind: 'conversation', media: ['email']});
+      {key: 'conversation', label: 'The whole conversation', label_es: 'Toda nuestra conversación', kind: 'conversation'});
    assert.deepEqual(sendables({chatTurns: [{n: 1, role: 'user', text: 'hola'}]}), [], 'a caller turn alone: nothing said yet');
    assert.deepEqual(sendables({chatTurns: [{n: 1, role: 'user', text: 'hola'}, {n: 2, role: 'assistant', text: ' '}]}), [], 'an empty reply is not a conversation');
    assert.deepEqual(enumSourceOptions('sendables', {chatTurns: turns}).map((o) => o.label), ['The whole conversation', 'Reply 2: Su saldo es $1.92.'], 'stage 2 sees it by its label');
