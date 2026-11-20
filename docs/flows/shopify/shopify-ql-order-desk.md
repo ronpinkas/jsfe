@@ -84,13 +84,15 @@ flowchart TD
    b24[["call shopify-ql-order-details"]]
    class b24 flowstep
    c19 -- "else" --> b24
-   n25(["replace → shopify-ql-order-question"])
-   class n25 endstep
+   n25["set offers"]
    b20 --> n25
    b21 --> n25
    b22 --> n25
    b23 --> n25
    b24 --> n25
+   n26(["replace → shopify-ql-order-question"])
+   class n26 endstep
+   n25 --> n26
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

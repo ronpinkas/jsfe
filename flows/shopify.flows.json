@@ -4997,12 +4997,18 @@
         }
       },
       {
+        "id": "dk_follow_up_offers",
+        "type": "SET",
+        "variable": "offers",
+        "value": "(function orderOffers(){ /* owner 2026-11-20: offer only what this order can answer now, never the question just answered */\n const o=((cargo.orderDetails || {})[cargo.orderFocus] || {}).order || {};\n const shipped=!o.cancelled && ((o.fulfillments || []).some(f=>(f.tracking || []).some(t=>t && t.number)) || ['FULFILLED','PARTIALLY_FULFILLED'].includes(String(o.fulfillmentStatus || '')));\n const ask=cargo.orderAsk || 'details';\n const say=es=>{const offers=[shipped && ask!=='track' && (es?'dónde está':'where it is'),shipped && ask!=='delivery' && (es?'cuándo llega':'when it arrives'),!['items','details'].includes(ask) && (es?'qué tiene':'what is in it')].filter(Boolean);\n  if(!offers.length)return '';\n  const last=offers[offers.length-1],list=offers.length===1?last:offers.slice(0,-1).join(', ')+(es?' o ':offers.length>2?', or ':' or ')+last;\n  return (es?' Puede preguntar ':' You can ask ')+list+'.';};\n return {en:say(false),es:say(true)};\n})()"
+      },
+      {
         "id": "dk_follow_up",
         "type": "FLOW",
         "value": "shopify-ql-order-question",
         "parameters": {
-          "question": "Anything else about order {{cargo.orderFocus}}? You can ask where it is, when it arrives, or what is in it.",
-          "question_es": "¿Algo más sobre el pedido {{cargo.orderFocus}}? Puede preguntar dónde está, cuándo llega o qué tiene."
+          "question": "Anything else about order {{cargo.orderFocus}}?{{offers.en}}",
+          "question_es": "¿Algo más sobre el pedido {{cargo.orderFocus}}?{{offers.es}}"
         },
         "callType": "replace",
         "initializeDefaults": true
