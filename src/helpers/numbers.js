@@ -98,9 +98,9 @@ function restartsOf(said) {
 }
 
 /**
- * Every number in the answer, in order: [{value, said, start, end, restarts}]. value is the complete number's digits; said the
- * text it was read from (start/end index the answer); restarts the readings of the number once when the caller repeated it
- * (restartsOf), else []. Number words
+ * Every number in the answer, in order: [{value, said, start, end, restarts, groups}]. value is the complete number's digits; said
+ * the text it was read from (start/end index the answer); restarts the readings of the number once when the caller repeated it
+ * (restartsOf), else []; groups its digits as the caller separated them ("07 10 1972" → ['07', '10', '1972']). Number words
  * are numbers ("one thousand and 3" → 1003, "cinco cinco cinco" → 555); every other word separates two numbers.
  */
 export function findNumbers(answer) {
@@ -122,7 +122,8 @@ export function findNumbers(answer) {
    return [...text.matchAll(DIGIT_RUN)].map((m) => {
       const said = m[0].replace(/[\s.,-]+$/, '');
       const start = firstOf[m.index], end = lastOf[m.index + said.length - 1] + 1;
-      return { value: said.replace(/\D/g, ''), said: raw.slice(start, end), start, end, restarts: restartsOf(said) };
+      return { value: said.replace(/\D/g, ''), said: raw.slice(start, end), start, end, restarts: restartsOf(said),
+         groups: said.split(/\D+/).filter(Boolean) };
    });
 }
 
@@ -132,10 +133,50 @@ export function findNumbers(answer) {
  * read more than one way is ambiguous, and so is a kind given two different values: those kinds take no value, so the caller
  * asks (the longest match wins only when it is the only match: "5603 5603" is an 8-digit account or SSN 5603 said twice).
  * A number no test reads is ignored here; the caller decides whether that means asking again.
+ *
+ * options (optional; without them nothing above changes):
+ * - split: true — a number no test reads, whole or as a restart, may be several values the caller typed one after another
+ *   (owner 2026-11-20; prod WhatsApp 11-20 08:23 "07 10 1972 9238" was a date of birth and an SSN's last four, asked for
+ *   "2 digits for the month, 2 for the day and 4 for the year"). It is split only where the caller separated it, never inside
+ *   a group, and only into parts that EVERY one passes a test, so every digit is consumed. Exactly one such reading is taken;
+ *   two or more make their kinds ambiguous; none leaves the number unread. A kind takes one part unless it is in multiple.
+ * - multiple: [names] — those kinds may take several values: their value is the list of distinct values in order.
  * → {values: {name: value}, ambiguous: [names], unread: [numbers]}
  */
-export function assignNumbers(numbers, kinds) {
+const MAX_SPLIT_GROUPS = 12;   // 2^11 ways to split; a longer run is digits said one by one, never several values
+
+/** The single reading of a number as consecutive parts, each read by a test: [[kind, value], ...]; null for none; 'ambiguous'
+ * (with the kinds) for several. */
+function splitReading(groups, kinds, read, multiple) {
+   const found = new Map();
+   const parts = (from) => {   // every way to cut groups[from..] into consecutive parts
+      if (from === groups.length) return [[]];
+      const out = [];
+      for (let to = from + 1; to <= groups.length; to++) {
+         for (const rest of parts(to)) out.push([groups.slice(from, to).join(''), ...rest]);
+      }
+      return out;
+   };
+   for (const cut of parts(0)) {
+      if (cut.length < 2) { continue; } else { /* the whole number was already tried */ }
+      const options = cut.map((digits) => Object.entries(kinds).map(([kind, test]) => [kind, read(test, digits)]).filter(([, v]) => v));
+      const assign = (i, used, chosen) => {
+         if (i === cut.length) { found.set(JSON.stringify(chosen), chosen); return; } else { /* next part */ }
+         for (const [kind, value] of options[i]) {
+            if (used.has(kind) && !multiple.has(kind)) { continue; } else { /* this kind may take this part */ }
+            assign(i + 1, new Set(used).add(kind), [...chosen, [kind, value]]);
+         }
+      };
+      if (options.every((o) => o.length)) assign(0, new Set(), []); else { /* a part no test reads: not this cut */ }
+   }
+   if (found.size === 1) return [...found.values()][0];
+   if (found.size > 1) return { ambiguous: [...new Set([...found.values()].flat().map(([kind]) => kind))] };
+   return null;
+}
+
+export function assignNumbers(numbers, kinds, options) {
    const seen = {}, ambiguous = new Set(), unread = [];
+   const multiple = new Set(Array.isArray(options?.multiple) ? options.multiple : []);
    const read = (test, digits) => { const r = test(digits); return r === true ? digits : r ? String(r) : ''; };
    for (const n of numbers || []) {
       const readings = [];
@@ -152,12 +193,22 @@ export function assignNumbers(numbers, kinds) {
       } else if (readings.length > 1) {
          readings.forEach(([kind]) => ambiguous.add(kind));
       } else {
-         unread.push(n);
+         const groups = n.groups || [];
+         const split = options?.split === true && groups.length > 1 && groups.length <= MAX_SPLIT_GROUPS
+            ? splitReading(groups, kinds || {}, read, multiple) : null;
+         if (Array.isArray(split)) {
+            split.forEach(([kind, value]) => (seen[kind] ||= new Set()).add(value));
+         } else if (split) {
+            split.ambiguous.forEach((kind) => ambiguous.add(kind));
+         } else {
+            unread.push(n);
+         }
       }
    }
    const values = {};
    for (const [kind, set] of Object.entries(seen)) {
-      if (set.size === 1 && !ambiguous.has(kind)) values[kind] = [...set][0]; else ambiguous.add(kind);
+      if (ambiguous.has(kind)) { continue; } else { /* read */ }
+      if (multiple.has(kind)) values[kind] = [...set]; else if (set.size === 1) values[kind] = [...set][0]; else ambiguous.add(kind);
    }
    return { values, ambiguous: [...ambiguous], unread };
 }

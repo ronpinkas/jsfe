@@ -520,9 +520,12 @@ const engine = new WorkflowEngine(logger, aiCallback, flows, tools,
   `readInternationalPhone`, `readIdentifier`, `normalizeAndFindCapture`, and `matchInputs` (which of a
   form's inputs an answer fills; ties between inputs of the same form are returned for the flow to ask).
 - Reading numbers: `findNumbers(answer)` (every number in an answer, in order, number words included: `[{value, said,
-  start, end, restarts}]`; any other word separates two numbers) and `assignNumbers(numbers, kinds)` (which number is
-  which, by the flow's tests `{name: (digits) => false | true | value}`; a number two tests read, or a kind given two
-  values, is `ambiguous` and takes no value, so the flow asks). `addressDraft(raw)` splits a spoken or typed address into
+  start, end, restarts, groups}]`; any other word separates two numbers) and `assignNumbers(numbers, kinds, options)`
+  (which number is which, by the flow's tests `{name: (digits) => false | true | value}`; a number two tests read, or a
+  kind given two values, is `ambiguous` and takes no value, so the flow asks). Options: `split: true` reads a number no
+  test reads as values typed one after another ("07 10 1972 9238": a date, then a last four), cut only where the caller
+  separated it and only when every part passes a test, and only when that reading is the single one; `multiple: [names]`
+  lets those kinds take several values (a list). `addressDraft(raw)` splits a spoken or typed address into
   `{zip, street, unit, said}`.
 - The conversation: `chatTranscript(cargo.chatTurns)` (`role: text` lines) and `conversationCopy(cargo.chatTurns, lang)`
   (localized You / Assistant lines); `cargo.chatTurns` is the host's masked turns before the current one

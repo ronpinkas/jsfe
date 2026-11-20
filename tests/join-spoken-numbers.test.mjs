@@ -57,5 +57,23 @@ eq(joinSpokenNumbers('I have two hundred 5 here'),'I have 205 here','joined text
 // A lone "one" is found as 1 (on a call it may be the digit); a caller reading positions decides what it means.
 eq(findNumbers('the second one').map(({value,start,end})=>[value,start,end]),[['1',11,14]],'a lone "one": the digit, spanning the word');
 eq(findNumbers('one two three').map((n)=>n.value),['123'],'"one" among number words is a digit');
+// Several values typed one after another (split; owner 2026-11-20, prod WhatsApp 11-20 08:23 "07 10 1972 9238").
+const date=(v)=>{if(v.length!==8)return false;const m=+v.slice(0,2),d=+v.slice(2,4),y=+v.slice(4),t=new Date(Date.UTC(y,m-1,d));return y>=1900&&y<=2026&&t.getUTCMonth()+1===m&&t.getUTCDate()===d&&`${y}-${v.slice(0,2)}-${v.slice(2,4)}`;};
+const id={account:(v)=>/^5\d{6,7}$/.test(v),ssn:(v)=>v.length===4,dob:date};
+const split={split:true};
+eq(findNumbers('07 10 1972 9238')[0].groups,['07','10','1972','9238'],'groups as the caller separated them');
+eq(assignNumbers(findNumbers('07 10 1972 9238'),id).values,{},'without split: unchanged, nothing taken');
+eq(assignNumbers(findNumbers('07 10 1972 9238'),id,split),{values:{dob:'1972-07-10',ssn:'9238'},ambiguous:[],unread:[]},'a date then the last four: the only reading');
+eq(assignNumbers(findNumbers('9238 07 10 1972'),id,split).values,{ssn:'9238',dob:'1972-07-10'},'either order');
+eq(assignNumbers(findNumbers('07101972 9238'),id,split).values,{dob:'1972-07-10',ssn:'9238'},'a date typed as one group');
+eq(assignNumbers(findNumbers('323 5713211'),id,split).values,{},'a phone: 323 is no value, never a piece taken (prod 11-17)');
+eq(assignNumbers(findNumbers('1 12 2000 5'),id,split).values,{},'a stray digit fits nothing: every digit must be consumed');
+eq(assignNumbers(findNumbers('1972 9238'),id,split),{values:{},ambiguous:[],unread:findNumbers('1972 9238')},'two last-fours: one kind cannot take both, nothing read');
+eq(assignNumbers(findNumbers('1972 9238'),id,{split:true,multiple:['ssn']}).values,{ssn:['1972','9238']},'unless the kind takes several');
+eq(assignNumbers(findNumbers('5603 5214'),id,split).values,{account:'56035214'},'a whole number that fits is never split');
+eq(assignNumbers(findNumbers('1234 5678'),{a:(v)=>v.length===4,b:(v)=>v.length===4},split).ambiguous,['a','b'],'two readings: ambiguous, asked');
+eq(assignNumbers(findNumbers('7 10 1972 9238'),id,split).values,{},'a part no test reads (a 7-digit date): nothing taken');
+eq(assignNumbers(findNumbers('120 not 124'),{amount:(v)=>v.length===3},{multiple:['amount']}).values,{amount:['120','124']},'multiple: every value, in order');
+eq(assignNumbers(findNumbers('1 2 3 4 5 6 7 8 9 0 1 2 3'),{d:(v)=>v.length===1},split).values,{},'a run of more than 12 groups is never split');
 eq(['findNumbers','assignNumbers','joinSpokenNumbers','addressDraft'].every((f)=>typeof STANDARD_FUNCTIONS[f]==='function'),true,'offered to flows');
 console.log(`numbers: ${checks} checks passed`);
