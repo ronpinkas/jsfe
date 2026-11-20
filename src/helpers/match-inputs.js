@@ -44,6 +44,23 @@ const DIGIT_RUN = /\d(?:[\s.-]?\d|(?<=(?:^|\D)\d{1,3})(?:,\s?|\.\s)(?=\d))*/g;
 function digitRuns(raw) {
    return (raw.match(DIGIT_RUN) || []).map((r) => r.replace(/\D/g, ''));
 }
+/** The text with every number written as the caller said it, whole: each spoken run (DIGIT_RUN) joined into its digits
+ * ("323 571 3211" → "3235713211", "0 7 13" → "0713", "56, 0 8 17 58" → "56081758"). A reader that splits numbers itself
+ * reads pieces of one number as separate values (prod 2026-11-17: a phone typed "323 5713211" became account 5713211;
+ * 11-18: the year of a spoken date became an SSN's last four). Reading this text instead, a value is only ever a whole number. */
+export function joinSpokenNumbers(raw) {
+   return String(raw ?? '').replace(DIGIT_RUN, (m) => {
+      const digits = m.replace(/\D/g, '');
+      // The same number said twice is a restart, not a longer number ("6119 6119": the caller repeating it, or the transcript
+      // doubling it): when the run's groups split into two identical halves of four digits or more, it is that number once.
+      const groups = m.split(/\D+/).filter(Boolean);
+      for (let i = 1; i < groups.length; i++) {
+         const a = groups.slice(0, i).join(''), b = groups.slice(i).join('');
+         if (a === b && a.length >= 4) return a; else { /* not a repeat at this boundary */ }
+      }
+      return digits;
+   });
+}
 // A pause speech-to-text writes between spoken groups (DIGIT_RUN joins across it).
 const PAUSE = /,\s?|\.\s/;
 // A choice reads its keys without the comma join: "1, 2" names two keys, not 12.
