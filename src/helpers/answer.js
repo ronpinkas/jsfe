@@ -69,15 +69,13 @@ const AGENT_ONLY = /^(?:(?:i want|i need|i would like|id like|can i|could i|let 
 // sides of every comparison pass through normalize, so a word list matches with or without them; ñ is kept.
 const plainVowels = (s) => s.replace(/[áàâä]/g, 'a').replace(/[éèêë]/g, 'e').replace(/[íìîï]/g, 'i').replace(/[óòôö]/g, 'o').replace(/[úùûü]/g, 'u');
 
-// A whole answer that is one digit's word, with or without a closing period, IS that digit (owner 2026-11-19): speech-to-text
-// writes a pressed or spoken "0" as "Zero." as often as "0", and "0" is the agent key.
-const DIGIT_WORD = { zero: '0', one: '1', two: '2', three: '3', four: '4', five: '5', six: '6', seven: '7', eight: '8', nine: '9',
-   cero: '0', uno: '1', dos: '2', tres: '3', cuatro: '4', cinco: '5', seis: '6', siete: '7', ocho: '8', nueve: '9' };
-const digitAnswer = (s) => { const w = s.replace(/\.$/, ''); return Object.hasOwn(DIGIT_WORD, w) ? DIGIT_WORD[w] : s; };
-
 /** Unescapes what the engine escaped, lowercases, drops punctuation but keeps * @ ., and drops accents (not ñ). */
-const normalize = (s) => digitAnswer(plainVowels(String(s ?? '').replace(/\\(['"\\])/g, '$1').toLowerCase().replace(/[^\w\s*@.áéíóúüñàâäèêëìîïòôöùû]+/g, ''))
-   .replace(AGREEING, ' ').replace(/\s+/g, ' ').trim());
+const normalize = (s) => plainVowels(String(s ?? '').replace(/\\(['"\\])/g, '$1').toLowerCase().replace(/[^\w\s*@.áéíóúüñàâäèêëìîïòôöùû]+/g, ''))
+   .replace(AGREEING, ' ').replace(/\s+/g, ' ').trim();
+// The agent key 0, pressed or spoken: a whole answer that is one digit's word, with or without a closing period, is that digit
+// (owner 2026-11-19; speech-to-text writes "Zero." as often as "0"). Every other digit word already reads as its digit where
+// digits are read (choice keys, the number finder); only these literal "0" comparisons missed it.
+const isZeroKey = (b) => b === '0' || /^(?:zero|cero)\.?$/.test(b);
 const NEGATION_SET = new Set(NEGATIONS.map(plainVowels));
 const hasNegation = (s) => String(s).split(' ').some((t) => NEGATION_SET.has(t));
 
@@ -227,7 +225,7 @@ export function isAnswer(input, kind, extra = []) {
    const b = normalize(input);
    if (!b) {
       return false;
-   } else if (kind === 'agent' && b === '0') {
+   } else if (kind === 'agent' && isZeroKey(b)) {
       return true;
    } else if (kind === 'exit' && b === '*') {
       return true;
@@ -274,7 +272,7 @@ export function isGlobalExit(input) {
 export function isAgentRequest(input) {
    // the period normalize() keeps for emails is not part of the answer at its ends ("Operator." on a call, 2026-10-17)
    const b = normalize(input).replace(/^[.\s]+|[.\s]+$/g, '');
-   return b === '0' || (!hasNegation(b) && AGENT_ONLY.test(b));
+   return isZeroKey(b) || (!hasNegation(b) && AGENT_ONLY.test(b));
 }
 
 // A spoken or typed number: a digit, or a number word (ASR usually writes digits, not always).
@@ -566,7 +564,7 @@ export function pickChoice(answer, choices, acceptOther) {
       return found;
    } else if (blocked && noChoice) {
       return noChoice;
-   } else if ((b === '0' && !amount) || (!hasNegation(b) && !b.includes('@') && (AGENT_ONLY.test(b) || (!acceptOther && matchesChoice(b, ANSWER_WORDS.agent.filter((w) => !AGENT_AMBIGUOUS.has(w))))))) {
+   } else if ((isZeroKey(b) && !amount) || (!hasNegation(b) && !b.includes('@') && (AGENT_ONLY.test(b) || (!acceptOther && matchesChoice(b, ANSWER_WORDS.agent.filter((w) => !AGENT_AMBIGUOUS.has(w))))))) {
       return '__agent';
    } else if (b === '*' || (acceptOther ? /^(exit|quit|salir|abort)( please| por favor)?$/ : /^(exit|quit|salir|abort|cancel|cancelar)( please| por favor)?$/).test(b)) {
       return '__exit';

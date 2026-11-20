@@ -71,10 +71,15 @@ export function serviceDigits(text) {
 }
 export function otpDigits(text) {
    // The code is ONE complete six-digit number, or the caller's restart of it ("57. 57, 21, 80.", or said twice), read by the
-   // number finder (owner 2026-11-19). Anything else is no code ('') and the question is asked again: pieces separated by
-   // words are never glued into a code. Runs inside a flow expression, so findNumbers/assignNumbers are the standard functions.
-   const read=assignNumbers(findNumbers(String(text || '')),{code:v=>v.length===6});
-   return read.values.code || '';
+   // number finder (owner 2026-11-19). The OTP form reads the result three ways: six characters verify; any other non-empty
+   // result says "I was expecting a 6-digit code" and counts a format miss (ended at 3); '' is an answer without digits. So any
+   // other answer returns the digits it holds, as before, except pieces separated by words that glue to six: they are never a
+   // code ("572 and then 180" is "572180?", a format miss). Runs inside a flow expression, so findNumbers/assignNumbers are the
+   // standard functions.
+   const numbers=findNumbers(String(text || '')),read=assignNumbers(numbers,{code:v=>v.length===6});
+   if(read.values.code)return read.values.code;
+   const digits=numbers.map(n=>n.value).join('');
+   return digits.length===6?digits+'?':digits;
 }
 export function contactPrompt(cargo,options,callerAllowed,partial=false,es=false) {
    if(partial)return es?'Continúe.':'Go on.';
