@@ -519,6 +519,14 @@ const engine = new WorkflowEngine(logger, aiCallback, flows, tools,
   `isSpelledFragment`, `isAmountAnswer`, `amountInAnswer`, `readEmail`, `readPhone`,
   `readInternationalPhone`, `readIdentifier`, `normalizeAndFindCapture`, and `matchInputs` (which of a
   form's inputs an answer fills; ties between inputs of the same form are returned for the flow to ask).
+- Reading numbers: `findNumbers(answer)` (every number in an answer, in order, number words included: `[{value, said,
+  start, end, restarts}]`; any other word separates two numbers) and `assignNumbers(numbers, kinds)` (which number is
+  which, by the flow's tests `{name: (digits) => false | true | value}`; a number two tests read, or a kind given two
+  values, is `ambiguous` and takes no value, so the flow asks). `addressDraft(raw)` splits a spoken or typed address into
+  `{zip, street, unit, said}`.
+- The conversation: `chatTranscript(cargo.chatTurns)` (`role: text` lines) and `conversationCopy(cargo.chatTurns, lang)`
+  (localized You / Assistant lines); `cargo.chatTurns` is the host's masked turns before the current one
+  ([Sendables](docs/sendables.md)).
 - Saying values: `amountToSpeech`, `dateToWords`, `last4`, `maskEmail`, `urlToSpeech`,
   `textWithUrlToSpeech`, `anythingElse`, `goodbye`, `channelVerb(lang, cargo, capital)` ("say" on a call, "type"
   elsewhere, or the host's `cargo.verb`), and `yesNoKeys(lang, cargo, yes, no)` ("Press 1 or say YES, or press 2 or say
