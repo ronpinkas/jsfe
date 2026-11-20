@@ -93,19 +93,20 @@ export function findNumbers(answer) {
    // A line break separates two numbers, as a word does (prod WhatsApp 2026-10-18: a date, then the account on the next line).
    const lines = raw.replace(/[\r\n]/g, '|');
    // Number words become their digits first, so a number said partly in words joins like any other ("five five five 1212").
+   // Each character of text maps back to the answer: firstOf where a number starting on it begins, lastOf where one ending on it
+   // ends (a word's digits all begin at the word and end with it).
    let text = '';
-   const origin = [];
+   const firstOf = [], lastOf = [];
    let from = 0;
    for (const w of wordNumbers(lines)) {
-      for (let i = from; i < w.start; i++) { text += lines[i]; origin.push(i); }
-      for (const d of w.digits) { text += d; origin.push(w.start); }
-      origin[origin.length - 1] = w.end - 1;
+      for (let i = from; i < w.start; i++) { text += lines[i]; firstOf.push(i); lastOf.push(i); }
+      for (const d of w.digits) { text += d; firstOf.push(w.start); lastOf.push(w.end - 1); }
       from = w.end;
    }
-   for (let i = from; i < raw.length; i++) { text += lines[i]; origin.push(i); }
+   for (let i = from; i < raw.length; i++) { text += lines[i]; firstOf.push(i); lastOf.push(i); }
    return [...text.matchAll(DIGIT_RUN)].map((m) => {
       const said = m[0].replace(/[\s.,-]+$/, '');
-      const start = origin[m.index], end = origin[m.index + said.length - 1] + 1;
+      const start = firstOf[m.index], end = lastOf[m.index + said.length - 1] + 1;
       return { value: said.replace(/\D/g, ''), said: raw.slice(start, end), start, end, restarts: restartsOf(said) };
    });
 }

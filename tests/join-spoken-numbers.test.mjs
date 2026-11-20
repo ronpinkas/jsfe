@@ -20,7 +20,7 @@ eq(values('mil 3'),['1003'],'Spanish too');
 eq(values('two hundred fifty'),['250'],'a cardinal');
 eq(values('cinco cinco cinco 1212'),['5551212'],'digits said as words join the run');
 eq(values('una cuenta y a payment'),[],'an article alone is not a number');
-eq(values('the one ending in 4532'),['1','4532'],'a word separates them');
+eq(values('the one ending in 4532'),['1','4532'],'a word separates them; a lone "one" may be the digit 1 on a call (owner 2026-11-19), the caller decides');
 // Restarts.
 eq(findNumbers('seguro social 6119 6119')[0].restarts,['6119'],'the same number said twice');
 eq(findNumbers('04 13 1955 04 13 1955')[0].restarts,['04131955'],'a date said twice');
@@ -41,5 +41,12 @@ eq(assignNumbers(findNumbers('120 not 124'),{amount:(v)=>v.length===3}).ambiguou
 eq(assignNumbers(findNumbers('323 5713211'),kinds).values,{},'a phone fits no kind: nothing taken');
 eq(assignNumbers(findNumbers('56035214, 6119'),kinds).values,{account:'56035214',ssn:'6119'},'one per kind, several kinds');
 eq(assignNumbers(findNumbers('6119'),{ssn:(v)=>v.length===4&&'ssn-'+v}).values,{ssn:'ssn-6119'},'a test may normalize');
-eq(['findNumbers','assignNumbers','joinSpokenNumbers'].every((f)=>typeof STANDARD_FUNCTIONS[f]==='function'),true,'offered to flows');
+// Spans index the answer exactly, words included.
+eq(findNumbers('order five 1').map(({said,start,end})=>[said,start,end]),[['five 1',6,12]],'a word number begins at its word');
+eq(findNumbers('nine one three zero three').map(({said,start,end})=>[said,start,end]),[['nine one three zero three',0,25]],'digit words: the whole span');
+eq(joinSpokenNumbers('I have two hundred 5 here'),'I have 205 here','joined text replaces exactly the number');
+// A lone "one" is found as 1 (on a call it may be the digit); a caller reading positions decides what it means.
+eq(findNumbers('the second one').map(({value,start,end})=>[value,start,end]),[['1',11,14]],'a lone "one": the digit, spanning the word');
+eq(findNumbers('one two three').map((n)=>n.value),['123'],'"one" among number words is a digit');
+eq(['findNumbers','assignNumbers','joinSpokenNumbers','addressDraft'].every((f)=>typeof STANDARD_FUNCTIONS[f]==='function'),true,'offered to flows');
 console.log(`numbers: ${checks} checks passed`);

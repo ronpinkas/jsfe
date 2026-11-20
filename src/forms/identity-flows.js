@@ -3,6 +3,8 @@ import {defineWorker,defineForm} from './contracts.js';
 import {OTP_EXPIRY_MS} from '../helpers/otp-check.js';
 // maskEmail is a standard function: these functions run as flow expressions too, where it is in scope by name.
 import {maskEmail,emailAttempt} from '../helpers/contact.js';
+// findNumbers/assignNumbers are standard functions too: otpDigits runs as a flow expression, where they are in scope by name.
+import {findNumbers,assignNumbers} from '../helpers/numbers.js';
 // an answer that tries to give an email is never a phone number (prod 2026-11-17); inlined, so it needs no host function
 const emailTry=`(${emailAttempt.toString()})(contact_text)`;
 const vars=o=>Object.fromEntries(Object.entries(o).map(([k,v])=>[k,{type:Array.isArray(v)?'array':v===null||typeof v==='object'?'object':typeof v,value:v}]));
@@ -68,22 +70,11 @@ export function serviceDigits(text) {
    return String(text || '').replace(/[a-záéíóúñ]+/gi,word=>Object.hasOwn(words,word.toLowerCase())?words[word.toLowerCase()]:word);
 }
 export function otpDigits(text) {
-   const map={zero:'0',cero:'0',one:'1',uno:'1',two:'2',dos:'2',three:'3',tres:'3',four:'4',cuatro:'4',five:'5',cinco:'5',six:'6',seis:'6',seven:'7',siete:'7',eight:'8',ocho:'8',nine:'9',nueve:'9'};
-   const filler=new Set(['el','mi','es','codigo','code','is','my','the','numero','number','a','ver']);
-   const tokens=String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(/[\s,.;:!?-]+/).filter(t=>t&&!filler.has(t));
-   const spoken=tokens.length && tokens.some(t=>Object.hasOwn(map,t)) && tokens.every(t=>/^\d+$/.test(t)||Object.hasOwn(map,t))?tokens.map(t=>map[t]??t).join(''):'';
-   if(spoken.length===6)return spoken;
-   // A caller who restarts the code ("57. 57, 21, 80.") or says it twice gives the code last (owner 2026-11-18). Only an answer
-   // that is nothing but digits: the same six twice, or a restart that ends at a pause the transcript marks (a period or
-   // comma) and is how the last six begin. A number said digit by digit, a single run, or one with other words is left as it was.
-   if(tokens.length && tokens.every(t=>/^\d+$/.test(t)||Object.hasOwn(map,t))){
-      const all=tokens.map(t=>map[t]??t).join(''),cut=all.length-6,head=all.slice(0,cut),tail=all.slice(cut);
-      const marked=String(text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').split(/[.,;]/).map(p=>p.split(/\s+/).filter(t=>t&&!filler.has(t)).map(t=>map[t]??t).join('')).filter(Boolean);
-      let at=0;const pauses=new Set(marked.map(p=>(at+=p.length)));
-      const twice=cut===6&&head===tail&&tokens.length>=2,restart=cut>0&&cut<6&&pauses.has(cut)&&tail.startsWith(head);
-      if(twice || restart)return tail;
-   } else { /* other words: read as before */ }
-   return String(text || '').replace(/\D/g,'');
+   // The code is ONE complete six-digit number, or the caller's restart of it ("57. 57, 21, 80.", or said twice), read by the
+   // number finder (owner 2026-11-19). Anything else is no code ('') and the question is asked again: pieces separated by
+   // words are never glued into a code. Runs inside a flow expression, so findNumbers/assignNumbers are the standard functions.
+   const read=assignNumbers(findNumbers(String(text || '')),{code:v=>v.length===6});
+   return read.values.code || '';
 }
 export function contactPrompt(cargo,options,callerAllowed,partial=false,es=false) {
    if(partial)return es?'Continúe.':'Go on.';

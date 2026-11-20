@@ -14,6 +14,10 @@ eq(isAgentRequest('olive oil'), false, 'a product search is not an agent request
 eq(isAgentRequest('customer service hours'), false, 'a question about service is not an agent request');
 // prod 10-17 17:38: "Operator." at the continue question re-read the account (the period normalize() keeps for emails)
 for (const said of ['Operator.', 'Representative.', 'Agent.', 'Agente.', 'Operadora.']) { eq(isAgentRequest(said), true, `"${said}" (a period at the end) is an agent request`); }
+// A whole answer that is one digit's word, with or without a closing period, is that digit (owner 2026-11-19).
+for (const said of ['Zero.', 'zero', 'Cero.', 'cero']) { eq(isAgentRequest(said), true, `"${said}" is 0, the agent key`); eq(isAnswer(said, 'agent'), true, `"${said}" answers agent`); }
+for (const [said, key] of [['One.', 'a'], ['uno', 'a'], ['Two.', 'b'], ['Dos', 'b']]) { eq(pickChoice(said, [{ key: 'a', phrases: ['1'] }, { key: 'b', phrases: ['2'] }], false), key, `"${said}" picks its key`); }
+eq(isAgentRequest('zero balance'), false, 'a digit word inside a sentence stays a word');
 eq(isAgentRequest('No agent.'), false, '"No agent." is not');
 eq(isAgentRequest('I want to talk to a representative'), true, 'a whole agent request');
 eq(isAgentRequest('quiero hablar con un agente'), true, 'Spanish');
