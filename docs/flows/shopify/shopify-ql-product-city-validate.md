@@ -18,7 +18,7 @@
 ```mermaid
 flowchart TD
    START(("start"))
-   n0["set noop"]
+   n0["set spoken_zip"]
    START --> n0
    c1{"case"}
    n0 --> c1
@@ -26,7 +26,7 @@ flowchart TD
    class b2 endstep
    c1 -- "!reading #124;#124; (reading.origin!=='activation' && reading.origin!=='form_…" --> b2
    n3["set noop"]
-   c1 -- "/^\d#123;5#125;(?:\d#123;4#125;)?$/.test(wholeSpokenNumber(String(value #124;#124; '').trim()…" --> n3
+   c1 -- "!!spoken_zip" --> n3
    c1 -- "else" --> n3
    DONE(["end (back to caller)"])
    class DONE endstep
