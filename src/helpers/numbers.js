@@ -29,6 +29,21 @@ function wordNumbers(raw) {
    const found = [];
    for (let i = 0; i < tokens.length; i++) {
       const first = tokens[i].word;
+      // Spanish says "y" inside a number, and speech-to-text keeps it between the digits (owner 2026-11-19; prod 11-19 17:10
+      // "9 y 5, 55, 31" was the code 955531): tens and a digit add up ("40 y 3" → 43, "cuarenta y tres"); two single digits
+      // join ("9 y 5" → 95) unless the first ends a number already being said digit by digit ("1 2 3 4 y 0 5 1 2 1 9 8 0" is two
+      // numbers). "y" between longer groups still separates two numbers ("1382 y 5603").
+      const and = tokens[i + 1], unit = tokens[i + 2];
+      if (/^\d{1,2}$/.test(first) && and?.word === 'y' && unit && /^\d$/.test(unit.word) && gapOk(tokens[i], and) && gapOk(and, unit)
+         && !/\d/.test(raw[unit.end] || '')) {
+         const tensAndUnit = /^[2-9]0$/.test(first) && unit.word !== '0';
+         const digitPair = /^\d$/.test(first) && !/\d[\s.,-]*$/.test(raw.slice(0, tokens[i].start));
+         if (tensAndUnit || digitPair) {
+            found.push({ start: tokens[i].start, end: unit.end, digits: tensAndUnit ? String(Number(first) + Number(unit.word)) : first + unit.word });
+            i += 2;
+            continue;
+         } else { /* "15 y 3": two numbers */ }
+      } else { /* no "y" inside a number here */ }
       if (!isNumberWord(first) || CONNECTORS.has(first)) { continue; } else { /* a run starts here */ }
       let j = i;
       while (j + 1 < tokens.length && isNumberWord(tokens[j + 1].word) && gapOk(tokens[j], tokens[j + 1])) j++;

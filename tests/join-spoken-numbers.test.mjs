@@ -41,6 +41,15 @@ eq(assignNumbers(findNumbers('120 not 124'),{amount:(v)=>v.length===3}).ambiguou
 eq(assignNumbers(findNumbers('323 5713211'),kinds).values,{},'a phone fits no kind: nothing taken');
 eq(assignNumbers(findNumbers('56035214, 6119'),kinds).values,{account:'56035214',ssn:'6119'},'one per kind, several kinds');
 eq(assignNumbers(findNumbers('6119'),{ssn:(v)=>v.length===4&&'ssn-'+v}).values,{ssn:'ssn-6119'},'a test may normalize');
+// Spanish "y" inside a number (owner 2026-11-19; prod 11-19 17:10 "9 y 5, 55, 31" verified as 955531).
+eq(values('9 y 5, 55, 31'),['955531'],'two single digits join across y');
+eq(values('68, 92, 40 y 3'),['689243'],'tens and a digit add up: cuarenta y tres');
+eq(values('1382 y 5603'),['1382','5603'],'y between longer groups separates');
+eq(values('15 y 3'),['15','3'],'a teen and a digit stay two numbers');
+eq(values('1 2 3 4 y 0 5 1 2 1 9 8 0'),['1234','05121980'],'y after a number said digit by digit separates two numbers');
+eq(values('90 y... 97, 26 7 6'),['90','972676'],'a pause after y is a restart, not a join');
+eq(values('mil y 3'),['1003'],'a scale word still takes its digit');
+eq(findNumbers('código 40 y 3').map(({said})=>said),['40 y 3'],'the span covers the whole spoken number');
 // Spans index the answer exactly, words included.
 eq(findNumbers('order five 1').map(({said,start,end})=>[said,start,end]),[['five 1',6,12]],'a word number begins at its word');
 eq(findNumbers('nine one three zero three').map(({said,start,end})=>[said,start,end]),[['nine one three zero three',0,25]],'digit words: the whole span');
