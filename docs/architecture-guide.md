@@ -327,8 +327,14 @@ rules should decide.
 
 **How the values are taken:**
 
-- Each value is read by the readers as if said alone, then validated and stored like a typed answer, with the same An AMOUNT is the exception (jsfe 1.77, owner 2026-11-18): its digits come only from the caller's own words. A model's amount (these arguments, or an activation parameter intent detection extracted) is taken only where the caller said it as a whole number, and is read from those words with their money mark (`groundAmount`); a number the caller did not say, or a piece of one ("43" in "43, 4, 97"), is not taken.
+- Each value is read by the readers as if said alone, then validated and stored like a typed answer, with the same
   acknowledgement, attempts and confirmation. A value read at a confirmation changes the form, which is confirmed again.
+- An AMOUNT's digits come only from the caller's own words (jsfe 1.77). A model's amount (these arguments, or an
+  activation parameter intent detection extracted) is taken only where the caller said it as a whole number, read from
+  those words with their money mark (`groundAmount`); a number the caller did not say, or a piece of one ("43" in
+  "43, 4, 97"), is not taken.
+- Extraction reads the latest message and the assistant's last message only, never the caller's earlier words (jsfe
+  1.78.1): a ZIP code said at an earlier question is never taken as a later request's phone number.
 - Nothing read: the question is asked again, as without the declaration. Extraction failing behaves the same.
 - Two readings of one input that differ take nothing: the question is asked again.
 - A picked choice is applied first, then its arguments. An argument that answers the choice's own exclusive group
@@ -413,6 +419,60 @@ With `engine.intentDetection = 'two-stage'` (the default is one single call):
 Each stage is one `aiCallback` call that carries instructions for both a classifier and an LLM, so a host can run
 either, or race both. JSFE builds both sets of instructions and decodes both answers (`jsfe/host`), which keeps a
 production host and a test harness on one implementation.
+
+### Who reads what: options and descriptions
+
+Every model in a turn decides from a closed list, and it sees only what is declared to it. Most "the model chose wrong"
+symptoms are an option that was never offered, or offered under words that do not describe it. Check this first.
+
+| Reader | Decides | Reads | Never sees |
+| --- | --- | --- | --- |
+| Deterministic readers | keys, numbers, emails, whole-answer phrases | the reply, against the question asked and what it invites | anything not a whole, exact match |
+| Reply ranker | what a reply does with the question asked | each offered choice's `label`; without one, its key and up to six worded `phrases` | a choice's `description`; any option not offered |
+| Stage 1 (intent) | which primary flow starts, or None | each primary's `description` | workers; parameters |
+| Stage 2 (intent) and argument extraction | a flow's or a pick's arguments | each parameter's `description`; for a closed choice, each choice's `description`, else its `label` | the caller's earlier messages |
+
+**What the ranker is offered at each kind of question:**
+
+- **A form question with a `choice` profile:** its choices, the choices of the chain's other `choice` inputs the reader
+  would accept, and a person. A firm confirmation's YES, a `current_only` choice at another question, and text are
+  never offered.
+- **A form question with any other profile** (`pattern`, `text`, `digits`, `amount`…): no options of its own; the chain's
+  other `choice` inputs, the built-in verdicts (`answers`, `abort`, `new_request`, `irrelevant`, `concern` where
+  declared) and a person.
+- **A flow's contextual DISPATCH** (`onResponse: "continue"`): ONLY the step's `responseChoices`, plus the built-in
+  verdicts. Code after the DISPATCH that reads the reply for other options is reachable only when a reader reads them
+  first.
+- **A provider menu** (`whole_phrases`): every fact with phrases, every action, `done` and a person.
+
+**The traps, each seen in production:**
+
+1. **An option handled only by a word list or a regex is invisible to the ranker.** Said as the whole reply, the reader
+   takes it. Inside a sentence the ranker cannot pick it, so the reply becomes `answers` or `irrelevant` and the question
+   is asked again. Example (2026-11-19): "It's okay, I wanna say thank you for your time" at a product list was not
+   read as DONE, because DONE was a regex after the DISPATCH and not in its `responseChoices`. **Fix:** declare it as a
+   choice with a label.
+2. **A choice without a label is offered as its key and phrases.** A key like `4` or `other_method` tells the model
+   nothing. Every offered choice needs a `label` written for the ranker: what the caller does or asks, and what it is
+   not.
+3. **The ranker and stage 2 read different fields.** `label` is the ranker's; `description` is stage 2's. A choice that
+   can be both picked at its question and extracted from a first message needs both. Editing one never changes the
+   other.
+4. **A reply that fits no offered option is `answers`.** It is not routed anywhere: the question is asked again, counted
+   as an attempt. "Asked the same question again" usually means a missing option, not a reader defect. Example
+   (2026-11-19): a refund question at the order-status prompt heard the delivery line again until the order prompt
+   offered `other`.
+5. **Stage 1 reads only descriptions, so a description is a routing rule.** One that reads as "any mention of X"
+   starts its flow on a question about X. Write the trigger as an action or a report, and give the near misses a
+   `Not:` with the right flow (or None). Example (2026-11-19): "Quería saber sobre la tarjeta doblada" started a
+   damaged-card case until ServiceCase's `Not:` said that asking about one is None.
+6. **A reader that is too wide takes what the ranker should decide.** Readers are tight and exact on purpose: a whole
+   answer, or a signature that fits only one field. A reader widened to catch a phrase inside a sentence will also
+   catch it where it means something else. Widen the declared options instead, and let the ranker read the sentence.
+
+**Diagnosing a wrong verdict:** read the turn's `reply_rank` (the verdict and its scores; the row does not list what was offered) and the step's offered
+choices as the set declares them. Was the right option offered? Was its label written for this reply? Only when both
+are yes is it the model's judgement, which is measured live (n of N) before anything changes.
 
 ## 5. Why the transactions stay safe
 
@@ -547,11 +607,13 @@ it from the company's documents.
 6. **Sensitive decisions are bound.** Any action that charges, cancels or cannot be reversed declares
    `confirm: {exact: true}`: it runs only on the exact values the caller confirmed. How the YES is read is separate: a
    charge is asked as a firm confirmation, everything else softly, unless the form declares `confirm.confirmation`.
-7. **Descriptions are for detection only.** A primary's description says what starts it and what does not; caller
+7. **Every option a caller may say is declared where the ranker sees it,** with a label written for the ranker. A word
+   list or a regex is a fast path for a whole answer, never the only way to an option.
+8. **Descriptions are for detection only.** A primary's description says what starts it and what does not; caller
    wording belongs in questions and fact renderers.
-8. **`call` for a closed sub-task, `DISPATCH` for what the caller asked for.** A loop that grows the stack is a design
+9. **`call` for a closed sub-task, `DISPATCH` for what the caller asked for.** A loop that grows the stack is a design
    bug, and the validator refuses it.
-9. **Test journeys, not just units.** Run the real engine on the real set: in order, out of order, all at once,
+10. **Test journeys, not just units.** Run the real engine on the real set: in order, out of order, all at once,
    corrected, a mid-form question, a change of subject, a decline, voice and text, every language.
 
 ## Where to read next
