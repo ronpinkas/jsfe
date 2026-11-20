@@ -76,7 +76,7 @@ export function otpDigits(text) {
    // other answer returns the digits it holds, as before, except pieces separated by words that glue to six: they are never a
    // code ("572 and then 180" is "572180?", a format miss). Runs inside a flow expression, so findNumbers/assignNumbers are the
    // standard functions.
-   const numbers=findNumbers(String(text || '')),read=assignNumbers(numbers,{code:v=>v.length===6});
+   const numbers=findNumbers(String(text || '')),read=assignNumbers(numbers,[{name:'code',kind:'digits',min:6}]);
    if(read.values.code)return read.values.code;
    const digits=numbers.map(n=>n.value).join('');
    return digits.length===6?digits+'?':digits;
