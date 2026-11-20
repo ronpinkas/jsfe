@@ -43,10 +43,11 @@ const sendCopy = defineWorker({
       { name: 'item', type: 'string', enum_from: 'sendables', description: "What the user asks to have sent: the reply or document they name or point to. 'That', 'it', 'this', 'eso' or 'lo que me dijo' is the latest reply; the whole chat, conversation or transcript ('toda la conversación') is the whole conversation." },
       { name: 'medium', type: 'string', enum: ['text', 'email'], description: "How the user asks to have it sent: text for a text message or SMS ('mensaje', 'texto'), email for an email ('correo')." },
       { name: 'destination', type: 'string', description: 'The phone number or email address the user gave to send it to, as given.' },
+      { name: 'other_destination', type: 'boolean', description: "true when the user asks to send it to a different, new or other phone number or email than their own, without saying what it is ('another number', 'a different email', 'otro número', 'a mi otro correo'); false when they give the number or email, or name none." },
    ],
    variables: vars({
       noop: false, sc_items: [], sc_key: '', sc_item: null, sc_last: null, sc_last_head: '', sc_offer_q: '', sc_offer_q_es: '', sc_doc_list: '', sc_email: '', sc_phone: '',
-      sc_medium: '', sc_medium_q: '', sc_medium_q_es: '', sc_given: '', sc_media: [], sc_forced: '', sc_to: '', sc_subject: '', sc_content: '', sc_sent: false,
+      sc_medium: '', sc_medium_q: '', sc_medium_q_es: '', sc_given: '', sc_other: false, sc_media: [], sc_forced: '', sc_to: '', sc_subject: '', sc_content: '', sc_sent: false,
    }),
    steps: [
       set('sc_items', 'sc_items', 'sendables(cargo)'),
@@ -96,6 +97,23 @@ const sendCopy = defineWorker({
       })),
       when('sc_ask_medium_read', '!sc_medium', set('sc_medium_pick', 'sc_medium', "cargo.choice === 'text' || cargo.choice === 'email' ? cargo.choice : ''")),
       when('sc_no_medium_end', '!sc_medium', end('sc_no_medium_done')),
+
+      // another number or email, not given (prod 2026-11-19 14:57: "Can you text it to another number?" was texted to the
+      // number on file again): asked here, before any sender or the number on file is used
+      set('sc_other', 'sc_other', "typeof other_destination !== 'undefined' && other_destination === true && !(sc_medium === 'email' ? sc_email : sc_phone)"),
+      when('sc_other_number', "sc_other && sc_medium === 'text'", call('sc_other_number_call', 'ask-choice', {
+         question: 'What phone number should I text it to?', question_es: '¿A qué número de teléfono se lo envío?',
+         choices: [], accept_other: true, expect: 'number', digits: { min: 10, max: 11 },
+      })),
+      when('sc_other_number_read', "sc_other && sc_medium === 'text'", set('sc_other_number_set', 'sc_phone', "readPhone(cargo.choiceText || '')")),
+      when('sc_other_number_bad', "sc_other && sc_medium === 'text' && !sc_phone", say('sc_other_number_bad_say', "Sorry, I couldn't read that phone number." + ANYTHING_ELSE, 'Lo siento, no pude entender ese número de teléfono.' + ANYTHING_ELSE_ES)),
+      when('sc_other_number_end', "sc_other && sc_medium === 'text' && !sc_phone", end('sc_other_number_done', { outcome: 'unresolved', reason: 'no_phone_number' })),
+      when('sc_other_email_clear', "sc_other && sc_medium === 'email'", effect('sc_other_email_clear_set', "cargo.email = ''")),
+      when('sc_other_email', "sc_other && sc_medium === 'email'", call('sc_other_email_call', 'ask-email', {
+         question: 'What email address should I send it to?', question_es: '¿A qué correo electrónico se lo envío?', on_file: '',
+      })),
+      when('sc_other_email_read', "sc_other && sc_medium === 'email'", set('sc_other_email_set', 'sc_email', "cargo.email && validateEmail(String(cargo.email)) ? String(cargo.email) : ''")),
+      when('sc_other_email_end', "sc_other && sc_medium === 'email' && !sc_email", end('sc_other_email_done')),
 
       // a sender item: its flow collects what it needs (destination, identity) and tells the caller every outcome
       set('sc_given', 'sc_given', "sc_medium === 'email' ? sc_email : sc_phone"),
