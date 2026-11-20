@@ -3,7 +3,7 @@
 <!-- generated:start -->
 **ShopifyQLOrderReplyCheck** · `shopify-ql-order-reply-check` · version 3.0.0 · worker (called by other flows) · steps · isolated scope
 
-> Read a contextual order question or selection, using typed semantic continuation only when local field ownership cannot decide.
+> Read a contextual order question or selection, using typed semantic continuation only when local field ownership cannot decide. A question about the order that its status, delivery, tracking and items cannot answer (a refund, cancellation, change or complaint) is picked as `other` by the reply ranker and returns '' so the Guru answers from the tenant's knowledge (owner 2026-11-19; prod 15:27 'If it doesn't arrive today can I get my money back?' was given the delivery line a third time). An apology like the Curacao account menu's (account-unanswerable) is the alternative, to be decided from how this works.
 
 - **Parameters:** 
   - `value`: Original order question or selection
@@ -34,19 +34,24 @@ flowchart TD
    b6(["dispatch: intent detection"])
    class b6 endstep
    c5 -- "!read.invalid && !read.ambiguous && !read.ask && read.index #lt; 0 && !r…" --> b6
-   n7[["call shopify-ql-order-gate"]]
-   class n7 flowstep
-   c5 -- "else" --> n7
-   c8{"case"}
-   n7 --> c8
-   b9(["reboot → shopify-ql-order-desk"])
-   class b9 endstep
-   c8 -- "subject !== cargo.shopifyOrderIdentity #124;#124; !cargo.forms[form] #124;#124; cargo…" --> b9
-   n10["set read"]
-   c8 -- "else" --> n10
+   c7{"case"}
+   c5 -- "else" --> c7
+   b8(["return to host / AI"])
+   class b8 endstep
+   c7 -- "!!response && response.key === 'other'" --> b8
+   n9[["call shopify-ql-order-gate"]]
+   class n9 flowstep
+   c7 -- "else" --> n9
+   c10{"case"}
+   n9 --> c10
+   b11(["reboot → shopify-ql-order-desk"])
+   class b11 endstep
+   c10 -- "subject !== cargo.shopifyOrderIdentity #124;#124; !cargo.forms[form] #124;#124; cargo…" --> b11
+   n12["set read"]
+   c10 -- "else" --> n12
    DONE(["end (back to caller)"])
    class DONE endstep
-   n10 --> DONE
+   n12 --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

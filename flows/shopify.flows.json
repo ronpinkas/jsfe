@@ -6392,7 +6392,7 @@
     "version": "3.0.0",
     "id": "shopify-ql-order-reply-check",
     "name": "ShopifyQLOrderReplyCheck",
-    "description": "Read a contextual order question or selection, using typed semantic continuation only when local field ownership cannot decide.",
+    "description": "Read a contextual order question or selection, using typed semantic continuation only when local field ownership cannot decide. A question about the order that its status, delivery, tracking and items cannot answer (a refund, cancellation, change or complaint) is picked as `other` by the reply ranker and returns '' so the Guru answers from the tenant's knowledge (owner 2026-11-19; prod 15:27 'If it doesn't arrive today can I get my money back?' was given the delivery line a third time). An apology like the Curacao account menu's (account-unanswerable) is the alternative, to be decided from how this works.",
     "parameters": [
       {
         "name": "value",
@@ -6443,6 +6443,15 @@
             "jsfe:continuation-safety:v1"
           ]
         }
+      },
+      "order_other": {
+        "type": "array",
+        "value": [
+          {
+            "key": "other",
+            "label": "asks something about this order that its status, delivery date, tracking or items cannot answer: a refund or money back, a cancellation, a change, or a complaint"
+          }
+        ]
       }
     },
     "steps": [
@@ -6558,10 +6567,30 @@
               "form": "{{form}}",
               "flow": "shopify-ql-order-question",
               "reason": "shopify_order_question_yield"
-            }
+            },
+            "responseChoices": "order_other"
           },
           "default": {
             "id": "order_reply_other_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "order_reply_unanswerable",
+        "type": "CASE",
+        "branches": {
+          "condition: !!response && response.key === 'other'": {
+            "id": "order_reply_to_guru",
+            "type": "RETURN",
+            "value": "''",
+            "outcome": "unresolved",
+            "reason": "order_question_unanswerable"
+          },
+          "default": {
+            "id": "order_reply_unanswerable_skip",
             "type": "SET",
             "variable": "noop",
             "value": "true"

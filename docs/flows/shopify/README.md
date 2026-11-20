@@ -73,7 +73,7 @@ flowchart LR
 | [shopify-ql-order-delivery](shopify-ql-order-delivery.md) | steps | Provide when the order arrives or was delivered for the verified focused order. |
 | [shopify-ql-order-items](shopify-ql-order-items.md) | steps | Provide what is in the order for the verified focused order. |
 | [shopify-ql-order-details](shopify-ql-order-details.md) | steps | Provide order state, total, items and shipping address for the verified focused order. |
-| [shopify-ql-order-reply-check](shopify-ql-order-reply-check.md) | steps | Read a contextual order question or selection, using typed semantic continuation only when local field ownership cannot decide. |
+| [shopify-ql-order-reply-check](shopify-ql-order-reply-check.md) | steps | Read a contextual order question or selection, using typed semantic continuation only when local field ownership cannot decide. A question … |
 | [shopify-ql-order-question](shopify-ql-order-question.md) | form + steps | Collect one contextual order selection or follow-up using the standard reentrant FORM protocol. |
 | [shopify-ql-tracking-inputs](shopify-ql-tracking-inputs.md) | form + steps | Collect a carrier tracking number through generic input matching; answer where to find it before resuming. |
 | [shopify-ql-tracking-number-check](shopify-ql-tracking-number-check.md) | steps | Normalize a complete carrier identifier without joining arbitrary spoken words into a false number. |
