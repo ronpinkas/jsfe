@@ -124,6 +124,12 @@ function unclaimedSpans(raw, readings) {
    return spans;
 }
 
+/** A field's own words, which an answer may say around its value: its name, names, labels, template words and confirm word. */
+function inputWords(field) {
+   const said = [String(field.name || '').replace(/_/g, ' '), ...(field.names || []), field.label, field.label_es, ...(field.profile?.template_words || []), field.confirm_out_of_order?.word, field.confirm_out_of_order?.word_es].filter(Boolean);
+   return said.flatMap((s) => String(s).split(/\s+/));
+}
+
 /**
  * One input's reading of the answer: { value, evidence } or null. `evidence` is what the answer spent on it (digits
  * or words), so two inputs that claim the same part of the answer are told apart from a compound answer.
@@ -559,13 +565,31 @@ export function matchInputs(answer, candidates, current, choiceKey) {
          return false;
       }
    });
+   // The number asked is taken only when the answer is accounted for (owner 2026-11-20: a tight reader, else the reply ranker): the
+   // number, courtesy and connecting words and the field's own words ("mi código es 129", "zip code 91306, gracias"). Several
+   // parts read are a compound answer (a whole address at the ZIP question), as in rule 1. Any other word means the reader does not decide: the
+   // ranker does, and extracts the field (the input's rank_parameters). Prod 11-18: a street address said at the
+   // billing ZIP took the house number; payment amounts at the security code filled the CVV. profile.in_sentence: the number is
+   // read wherever it is said (the one-time code, where a wrong number only fails the check).
+   readings = readings.filter((reading) => {
+      const field = fieldOf(reading);
+      const compound = located.some((other) => other.form !== reading.form || other.name !== reading.name);
+      if (!reading.current || field.profile.kind !== 'digits' || field.profile.in_sentence === true || reading.keypad || compound || isReaderFiller(leftover, inputWords(field))) {
+         return true;
+      } else {
+         // the ranker reads the whole sentence: no "add the word" line for another number in it
+         clarify.splice(0);
+         refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'unaccounted_words', spans: reading.spans });
+         return false;
+      }
+   });
 
    // Rule 1, a full match (owner 2026-11-02): one part of the answer read out of order, with nothing read for the question asked,
    // accounts for the whole answer: the reading, courtesy or connecting words, and the words of the field itself (its names, label,
    // template words, its confirmation word). Any other word means the matcher does not decide: the reply ranker does ("Si son 129"
    // at the card number). An input asked keeps its reading ("mi código es 129"), several parts read are a compound answer, a
    // confirmation asks no input (its fields are corrections, current.whole_reply declares when they must be whole), and an amount has rule 4.
-   const fieldWords = (reading) => { const field = fieldOf(reading), said = [String(field.name || '').replace(/_/g, ' '), ...(field.names || []), field.label, field.label_es, ...(field.profile.template_words || []), field.confirm_out_of_order?.word, field.confirm_out_of_order?.word_es].filter(Boolean); return said.flatMap((s) => String(s).split(/\s+/)); };
+   const fieldWords = (reading) => inputWords(fieldOf(reading));
    const unaccounted = unclaimedSpans(raw, readings.filter((reading) => !reading.fallback && reading.unlocated !== true)).map(([a, b]) => raw.slice(a, b)).join(' ');
    const spansMeet = (a, b) => (a.spans || []).some(([s, e]) => (b.spans || []).some(([t, u]) => s < u && t < e));
    const onePartAlone = !!cur.name && !readings.some(inOrder) && readings.every((reading) => spansMeet(reading, readings[0]));

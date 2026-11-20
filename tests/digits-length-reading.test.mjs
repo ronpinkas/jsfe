@@ -10,9 +10,9 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 const S=(id,value,variable='noop')=>({id,type:'SET',variable,value});
 let checks=0;const failures=[];
 async function test(name,run){try{await run();checks++;console.log('PASS '+name);}catch(error){failures.push({name,error});console.error('FAIL '+name+'\n'+error.stack);}}
-function fixture(flows,{language='en'}={}){
+function fixture(flows,{language='en',extracted={}}={}){
  const ranked=[];const quiet={info(){},debug(){},error(){},warn(){}};
- const ai=async(_s,_m,_schema,request)=>{if(request?.task==='rank_reply'){ranked.push(request.input||'');return JSON.stringify({option:'answers'});}if(request?.task==='detect_flow')return JSON.stringify({flowName:'None',parameters:{}});throw new Error('Unexpected model task');};
+ const ai=async(_s,_m,_schema,request)=>{if(request?.task==='rank_reply'){ranked.push(request.input||'');return JSON.stringify({option:'answers'});}if(request?.task==='extract_parameters')return JSON.stringify({parameters:extracted});if(request?.task==='detect_flow')return JSON.stringify({flowName:'None',parameters:{}});throw new Error('Unexpected model task');};
  const engine=new WorkflowEngine(quiet,ai,linkFormSchemas([...FLOWS,...flows]),[],{...STANDARD_FUNCTIONS},{},false,language);engine.disableCommands();
  let session=engine.initSession('fixture',crypto.randomUUID(),language);Object.assign(session.cargo,{voice:true});
  return {ranked,get session(){return session;},async say(content,start){session=clone(await engine.updateActivity({role:'user',content,...(start?{start:{flow:start}}:{})},clone(session)));return String(session.response||'').replace(/\s+/g,' ');}};
@@ -73,12 +73,25 @@ for(const [said,mmyy] of [['0 6 3 0 30 se vence.','0630'],['1 2 2 9, ya','1229']
   assert.match(JSON.stringify(t.session.cargo),new RegExp(`"card_expiration":"${mmyy}"`));
  });
 }
-await test('four single digits out of order are not an expiration: at the billing ZIP, "1 2 3 6 Avenue ... 8 9 3 0 1" keeps its ZIP and asks no expiration-or-code question',async()=>{
- const t=fixture([]);await t.say('start','collect-credit-card');await t.say('4111111111111111');await t.say('0929');await t.say('123');
+await test('a street sentence at the billing ZIP is the ranker\'s to read (owner 2026-11-20): "1 2 3 6 Avenue ... 8 9 3 0 1" takes the ZIP it extracts, asks no expiration question',async()=>{
+ const t=fixture([],{extracted:{zip:'89301'}});await t.say('start','collect-credit-card');await t.say('4111111111111111');await t.say('0929');await t.say('123');
  const reply=await t.say('1 2 3 6 Avenue, g Nevada 8 9 3 0 1.');
+ assert.deepEqual(t.ranked,['1 2 3 6 Avenue, g Nevada 8 9 3 0 1.'],'the reader does not decide a sentence');
  assert.doesNotMatch(reply,/expiration/i,reply);
  assert.match(JSON.stringify(t.session.cargo),/"card_zip":"89301"/);
  assert.doesNotMatch(JSON.stringify(t.session.cargo),/"card_expiration":"1 ?2 ?3 ?6"/);
+});
+await test('a house number in a sentence at the billing ZIP is never the ZIP (prod 11-18): nothing extracted, the ZIP is asked again',async()=>{
+ const t=fixture([],{language:'es'});await t.say('start','collect-credit-card');await t.say('4111111111111111');await t.say('0929');await t.say('123');
+ await t.say('Tengo la de 15 4 30 Maple Street.');
+ assert.equal(t.ranked.length,1);
+ assert.doesNotMatch(JSON.stringify(t.session.cargo),/"card_zip":"15430"/);
+});
+await test('the number alone, with courtesy and the field\'s own words, is read without the ranker',async()=>{
+ for(const said of ['89301','Es 8 9 3 0 1, gracias.','My billing zip code is 89301.']){
+  const t=fixture([]);await t.say('start','collect-credit-card');await t.say('4111111111111111');await t.say('0929');await t.say('123');
+  await t.say(said);assert.equal(t.ranked.length,0,said);assert.match(JSON.stringify(t.session.cargo),/"card_zip":"89301"/,said);
+ }
 });
 await test('a spoken expiration with no words is stored as its four digits, never with spaces',async()=>{
  const t=fixture([]);await t.say('start','collect-credit-card');await t.say('4111111111111111');await t.say('0 5 2 9.');

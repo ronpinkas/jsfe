@@ -64,6 +64,7 @@ export const FIELD_PRESETS = {
       retry: 'Please say your email address, for example juan at gmail dot com.', retry_es: 'Por favor diga su correo electrónico, por ejemplo juan arroba gmail punto com.',
       retry_text: 'Please type your email address, for example juan@gmail.com.', retry_text_es: 'Por favor escriba su correo electrónico, por ejemplo juan@gmail.com.' },
    zip: { label: 'ZIP code', label_es: 'código postal', profile: { kind: 'digits', min: 5, max: 5, refuse_amount_shape: true }, digits: { min: 5, max: 5 },
+      rank_parameters: [{ name: 'zip', description: 'The 5-digit ZIP code, as the caller said it.' }],
       length_message: 'I heard {heard} digits; a ZIP code has 5.', length_message_es: 'Escuché {heard} dígitos; el código postal tiene 5.',
       question: 'What is your ZIP code?', question_es: '¿Cuál es su código postal?',
       retry: 'Please say or enter your 5-digit ZIP code.', retry_es: 'Por favor diga o ingrese su código postal de 5 dígitos.',
@@ -74,6 +75,7 @@ export const FIELD_PRESETS = {
       retry: 'Please say or enter your account number.', retry_es: 'Por favor diga o ingrese su número de cuenta.',
       retry_text: 'Please type your account number.', retry_text_es: 'Por favor escriba su número de cuenta.' },
    ssn_last4: { label: 'last four digits of your Social Security number', label_es: 'últimos cuatro dígitos de su Seguro Social',
+      rank_parameters: [{ name: 'ssn_last4', description: 'The last four digits of the Social Security number, as the caller said them.' }],
       profile: { kind: 'digits', min: 4, max: 4 }, digits: { min: 4, max: 4 }, pii: true,
       length_message: 'I heard {heard} digits; I need only the last 4.', length_message_es: 'Escuché {heard} dígitos; solo necesito los últimos 4.',
       question: 'What are the last four digits of your Social Security number?', question_es: '¿Cuáles son los últimos cuatro dígitos de su Seguro Social?' },
@@ -85,6 +87,7 @@ export const FIELD_PRESETS = {
    state: { label: 'state', label_es: 'estado', profile: { kind: 'pattern', regex: '^\\s*(?:Alabama|Alaska|Arizona|Arkansas|California|Colorado|Connecticut|Delaware|Florida|Georgia|Hawaii|Idaho|Illinois|Indiana|Iowa|Kansas|Kentucky|Louisiana|Maine|Maryland|Massachusetts|Michigan|Minnesota|Mississippi|Missouri|Montana|Nebraska|Nevada|New Hampshire|New Jersey|New Mexico|New York|North Carolina|North Dakota|Ohio|Oklahoma|Oregon|Pennsylvania|Rhode Island|South Carolina|South Dakota|Tennessee|Texas|Utah|Vermont|Virginia|Washington|West Virginia|Wisconsin|Wyoming|District of Columbia|Puerto Rico|AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY|DC|PR)\\s*$' },
       question: 'What state?', question_es: '¿En qué estado?' },
    card_number: { label: 'card number', label_es: 'número de tarjeta', accumulate: true, accumulate_first: '^[2-6]', profile: { kind: 'digits', min: 13, max: 19 }, digits: { min: 13, max: 19, complete:[{first:'4',lengths:[16,19]},{first:'25',lengths:[16]},{first:'3',lengths:[15]},{first:'6',lengths:[16,19]}] },
+      rank_parameters: [{ name: 'card_number', description: 'The card number, every digit as the caller said it.' }],
       pii: true, validator: 'validate-card-number',
       length_message: 'I heard {heard} digits; a card number has 16, or 15 for American Express.', length_message_es: 'Escuché {heard} dígitos; el número de la tarjeta tiene 16, o 15 si es American Express.',
       question: 'Please say or enter your card number.', question_es: 'Por favor diga o ingrese el número de su tarjeta.',
@@ -107,6 +110,7 @@ export const FIELD_PRESETS = {
       retry: 'Please say or enter the expiration as four digits, month then year, like 0 9 2 8.', retry_es: 'Por favor diga o ingrese el vencimiento en cuatro dígitos, mes y año, por ejemplo 0 9 2 8.',
       retry_text: 'Please type the expiration as four digits, month then year, like 0928.', retry_text_es: 'Por favor escriba el vencimiento en cuatro dígitos, mes y año, por ejemplo 0928.' },
    card_cvv: { label: 'security code', label_es: 'código de seguridad', profile: { kind: 'digits', min: 3, max: 4 }, digits: { min: 3, max: 4 }, pii: true,
+      rank_parameters: [{ name: 'security_code', description: "The card's 3- or 4-digit security code, as the caller said it." }],
       length_message: 'I heard {heard} digits; the security code has 3, or 4 on the front of an American Express card.', length_message_es: 'Escuché {heard} dígitos; el código de seguridad tiene 3, o 4 al frente de una American Express.',
       validator: 'validate-card-cvv',
       // A bare 3-4 digit number out of order may be a group of the card number (prod 2026-11-16: a lone 4-digit group at the card number
@@ -116,6 +120,7 @@ export const FIELD_PRESETS = {
    // A bare five-digit number out of order may be anything (prod 2026-11-11: it replaced an answered ZIP), so it fills the
    // billing ZIP only beside the word (owner 2026-11-11).
    card_zip: { label: 'billing ZIP code', label_es: 'código postal de facturación', profile: { kind: 'digits', min: 5, max: 5, refuse_amount_shape: true }, digits: { min: 5, max: 5 },
+      rank_parameters: [{ name: 'zip', description: "The card's 5-digit billing ZIP code, as the caller said it." }],
       length_message: 'I heard {heard} digits; the billing ZIP code has 5.', length_message_es: 'Escuché {heard} dígitos; el código postal de facturación tiene 5.',
       confirm_out_of_order: { word: 'ZIP', word_es: 'CÓDIGO POSTAL', message: 'If {value} is the billing ZIP code of the card, add the word {word}.', message_es: 'Si {value} es el código postal de facturación de la tarjeta, agregue las palabras {word}.' },
       question: 'What is the billing ZIP code for the card?', question_es: '¿Cuál es el código postal de facturación de la tarjeta?' },

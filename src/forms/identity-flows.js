@@ -255,7 +255,9 @@ const emailToo=worker('send-otp-email-too','SendOtpEmailToo',"Email a second one
    set('otp_email_too_said','also_sent',expression(otpAlsoSent,'cargo')),set('otp_email_too_said_es','also_sent_es',expression(otpAlsoSent,'cargo','true')),
    set('otp_email_too_where','otp_where',expression(otpWhere,'cargo')),set('otp_email_too_where_es','otp_where_es',expression(otpWhere,'cargo','true')),
    cases('otp_email_too_say',{'condition: cargo.otpAltSent === true':say('otp_email_too_sent','{{also_sent}}','{{also_sent_es}}'),default:say('otp_email_too_refused','{{otp_where}}','{{otp_where_es}}')})]});
-const OTP_PROFILES=[{name:'code',label:'verification code',label_es:'código de verificación',profile:{kind:'digits',min:6,max:6}},{...raw,form_client:false}];
+// in_sentence: the code is read wherever it is said (owner 2026-11-20), the named exception to a number being the whole answer: a
+// wrong number only fails the check, which counts it.
+const OTP_PROFILES=[{name:'code',label:'verification code',label_es:'código de verificación',profile:{kind:'digits',min:6,max:6,in_sentence:true}},{...raw,form_client:false}];
 const code=worker('get-and-validate-otp-code','GetAndValidateOtpCode','Collect a one-time-code answer through the owning FORM ancestry, preserving protocol commands for validation.',{variables:vars({otp_code:'',user_choice:'',normalized_otp_code:'',otp_question:'',otp_question_es:'',otp_profiles:OTP_PROFILES}),contract:{role:'collector',summary:'One-time-code answer collector using shared FORM matching'},steps:[
    when('otp_already_verified','cargo.otpVerified === true',end('otp_existing_verification')),
    set('otp_question','otp_question',expression(otpPrompt,'cargo')),set('otp_question_es','otp_question_es',expression(otpPrompt,'cargo','true')),
