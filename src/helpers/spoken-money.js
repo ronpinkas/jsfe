@@ -87,3 +87,8 @@ export function scanSpokenMoney(answer) {
 }
 
 export function readSpokenMoney(answer) {return scanSpokenMoney(answer).readings;}
+
+/** For the number finder (numbers.js), so the cardinal grammar lives here once: a run of number words' value, or null. */
+export function cardinalWords(words) {return words.some(word=>/\d/.test(word))?null:cardinal(words);}
+export function isNumberWord(word) {return NUMBER_WORDS.has(word);}
+export function plainWord(word) {return plain(word);}

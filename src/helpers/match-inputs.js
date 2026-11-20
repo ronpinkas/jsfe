@@ -15,6 +15,7 @@ import { readSpokenMoney } from './spoken-money.js';
 import {readMoneyAmount,isPartialMoneyAnswer} from './money.js';
 import { pickProviderQuestion } from './form-sources.js';
 import { spokenDigitsText, wholeSpokenNumber } from './spoken-digits.js';
+import { DIGIT_RUN } from './numbers.js';
 
 /**
  * This turn's acceptance decisions for the host to log, appended per match: fields filled out of order, in a compound
@@ -36,30 +37,9 @@ function unescape(answer) {
    return String(answer ?? '').replace(/\\(['"\\])/g, '$1');
 }
 
-/** A run of digits as said: spoken digits come apart ("4 3 2 1", "555-123-4567"), so a single space, dash or dot inside a run
- * joins it, and so does a comma (or a period and a space) after a group of one to three digits: speech-to-text writes the
- * pauses between spoken groups that way (prod 2026-10-31: the ZIP 92610 said as "926, 1 0.", the code as "7, 9, 984. 5."). A comma after a
- * longer number separates two numbers ("92610, 56035214"). */
-const DIGIT_RUN = /\d(?:[\s.-]?\d|(?<=(?:^|\D)\d{1,3})(?:,\s?|\.\s)(?=\d))*/g;
+// DIGIT_RUN, the run of digits as said, lives with the number finder (numbers.js), so the rule is written once.
 function digitRuns(raw) {
    return (raw.match(DIGIT_RUN) || []).map((r) => r.replace(/\D/g, ''));
-}
-/** The text with every number written as the caller said it, whole: each spoken run (DIGIT_RUN) joined into its digits
- * ("323 571 3211" → "3235713211", "0 7 13" → "0713", "56, 0 8 17 58" → "56081758"). A reader that splits numbers itself
- * reads pieces of one number as separate values (prod 2026-11-17: a phone typed "323 5713211" became account 5713211;
- * 11-18: the year of a spoken date became an SSN's last four). Reading this text instead, a value is only ever a whole number. */
-export function joinSpokenNumbers(raw) {
-   return String(raw ?? '').replace(DIGIT_RUN, (m) => {
-      const digits = m.replace(/\D/g, '');
-      // The same number said twice is a restart, not a longer number ("6119 6119": the caller repeating it, or the transcript
-      // doubling it): when the run's groups split into two identical halves of four digits or more, it is that number once.
-      const groups = m.split(/\D+/).filter(Boolean);
-      for (let i = 1; i < groups.length; i++) {
-         const a = groups.slice(0, i).join(''), b = groups.slice(i).join('');
-         if (a === b && a.length >= 4) return a; else { /* not a repeat at this boundary */ }
-      }
-      return digits;
-   });
 }
 // A pause speech-to-text writes between spoken groups (DIGIT_RUN joins across it).
 const PAUSE = /,\s?|\.\s/;
