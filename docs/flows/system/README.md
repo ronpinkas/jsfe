@@ -10,8 +10,8 @@ flowchart LR
    live_agent_requested(["LiveAgentRequested · live-agent-requested"])
    send_copy(["SendCopy · send-copy"])
    send_copy --> ask_choice["ask-choice"]
-   send_copy --> x__sc_item_sender_[("#123;#123;sc_item.sender#125;#125; (not in this checkout)")]
    send_copy --> ask_email["ask-email"]
+   send_copy --> x__sc_item_sender_[("#123;#123;sc_item.sender#125;#125; (not in this checkout)")]
    send_copy --> send_text["send-text"]
    send_copy --> send_email_message["send-email-message"]
 ```
