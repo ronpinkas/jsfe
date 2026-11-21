@@ -18538,7 +18538,7 @@
     "primary": true,
     "prompt": "Send a copy",
     "prompt_es": "Enviar una copia",
-    "description": "Asks to be sent something by text or email, whatever it is ('email me that', 'text me the case number', 'can I have that emailed to me', 'send me a copy of this chat', 'mándame eso por mensaje', 'me lo puede mandar por correo'). Not: continuing the conversation by text (SwitchToText); a payment receipt (PaymentReceipt); a statement (SendStatement).",
+    "description": "Asks to be sent something by text or email, whatever it is ('email me that', 'text me the case number', 'send me the receipt', 'can I have that emailed to me', 'send me a copy of this chat', 'mándame eso por mensaje', 'me lo puede mandar por correo'). Not: continuing the conversation by text (SwitchToText).",
     "parameters": [
       {
         "name": "item",
@@ -18628,6 +18628,10 @@
         "value": ""
       },
       "sc_other": {
+        "type": "boolean",
+        "value": false
+      },
+      "sc_too_long": {
         "type": "boolean",
         "value": false
       },
@@ -18929,10 +18933,22 @@
         "value": "typeof medium === 'string' && (medium === 'text' || medium === 'email') ? medium : sc_email ? 'email' : sc_phone ? 'text' : ''"
       },
       {
+        "id": "sc_content",
+        "type": "SET",
+        "variable": "sc_content",
+        "value": "sc_item.kind === 'conversation' ? conversationCopy(cargo.chatTurns, language) : String(sc_item.content || '')"
+      },
+      {
+        "id": "sc_too_long",
+        "type": "SET",
+        "variable": "sc_too_long",
+        "value": "!sc_item.sender && sc_content.length > 1600"
+      },
+      {
         "id": "sc_media",
         "type": "SET",
         "variable": "sc_media",
-        "value": "Array.isArray(sc_item.media) && sc_item.media.length ? sc_item.media : (sc_item.sender || cargo.twilioNumber ? ['text', 'email'] : ['email'])"
+        "value": "Array.isArray(sc_item.media) && sc_item.media.length ? sc_item.media : ((sc_item.sender || cargo.twilioNumber) && !sc_too_long ? ['text', 'email'] : ['email'])"
       },
       {
         "id": "sc_forced",
@@ -18941,10 +18957,28 @@
         "value": "sc_media.length === 1 && !!sc_medium && sc_medium !== sc_media[0] ? sc_media[0] : ''"
       },
       {
+        "id": "sc_forced_long",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_forced === 'email' && sc_too_long": {
+            "id": "sc_forced_long_say",
+            "type": "SAY",
+            "value": "That's too long for a text message, so I'll email it.",
+            "value_es": "Es demasiado largo para un mensaje de texto, así que se lo enviaré por correo."
+          },
+          "default": {
+            "id": "sc_forced_long_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "sc_forced_email",
         "type": "CASE",
         "branches": {
-          "condition: sc_forced === 'email'": {
+          "condition: sc_forced === 'email' && !sc_too_long": {
             "id": "sc_forced_email_say",
             "type": "SAY",
             "value": "I can only send that by email, so I'll email it.",
@@ -19550,12 +19584,6 @@
         "type": "SET",
         "variable": "sc_subject",
         "value": "language === 'es' ? 'Su copia de nuestra conversación' : sc_item.kind === 'conversation' ? 'Your copy of our conversation' : 'Your copy from our conversation'"
-      },
-      {
-        "id": "sc_content",
-        "type": "SET",
-        "variable": "sc_content",
-        "value": "sc_item.kind === 'conversation' ? conversationCopy(cargo.chatTurns, language) : sc_item.content"
       },
       {
         "id": "sc_send_text",

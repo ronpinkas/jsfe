@@ -22,7 +22,7 @@ flowchart LR
 |---|---|---|
 | [switch-to-text](switch-to-text.md) | steps | Explicitly asks to continue this conversation by text or SMS ('text me instead', 'seguimos por mensaje de texto'). Not: a person (LiveAgent… |
 | [live-agent-requested](live-agent-requested.md) | steps | Wants a person, or says just 'agent' / 'AGENT': a live agent, representative, customer service or supervisor ('transfer me', 'agente', 'rep… |
-| [send-copy](send-copy.md) | steps | Asks to be sent something by text or email, whatever it is ('email me that', 'text me the case number', 'can I have that emailed to me', 's… |
+| [send-copy](send-copy.md) | steps | Asks to be sent something by text or email, whatever it is ('email me that', 'text me the case number', 'send me the receipt', 'can I have … |
 
 ## Workers
 
