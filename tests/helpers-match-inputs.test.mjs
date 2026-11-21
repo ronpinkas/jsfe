@@ -224,4 +224,20 @@ const trace = formAcceptanceTrace(null, matchInputs('88 91 7112', [...code, meth
 eq(trace, { filled: [], refused: [{ form: 'pay', name: 'method', rule: 'fragment' }] }, 'the trace records the refusal by field and rule, no value');
 eq(formAcceptanceTrace(trace, matchInputs('50 dollars', [route, payAmt], { form: 'pay', name: 'route' })).filled, [{ form: 'pay', name: 'amount', rule: 'out_of_order' }], 'the trace appends an out-of-order fill');
 eq(formAcceptanceTrace(null, matchInputs('45', [payAmt], { form: 'pay', name: 'amount' })), null, 'an in-order answer adds nothing');
+
+// One numeric answer over the form's numeric inputs (owner 2026-11-20, matchInputs numericSplit): each preset by its kind.
+{
+   const { FIELD_PRESETS } = await import('../dist/forms/flows.js');
+   const card = ['card_number', 'card_expiration', 'card_cvv', 'card_zip'].map((field) => ({ ...FIELD_PRESETS[field], field, name: field, form: 'cc' }));
+   const at = (answer) => matchInputs(answer, card, { form: 'cc', name: 'card_number' });
+   let r = at('4111 1111 1111 1111 123');
+   eq(names(r), ['card_number=4111111111111111'], 'a card then its code: the card number alone, not 19 digits');
+   eq(r.refused.map((x) => `${x.name}=${x.value}:${x.rule}`), ['card_cvv=123:confirm_out_of_order'], 'the code goes to its out-of-order guard (owner 2026-11-17), not refused as a fragment');
+   r = at('4111 1111 1111 1111 0930 123 92610');
+   eq(names(r), ['card_number=4111111111111111'], 'the whole card line: the card number');
+   eq(r.refused.map((x) => `${x.name}=${x.value}:${x.rule}`).sort(), ['card_cvv=123:confirm_out_of_order', 'card_expiration=0930:confirm_out_of_order', 'card_zip=92610:confirm_out_of_order'], 'each other part to its guard');
+   eq(names(at('4111 1111 1111 1111')), ['card_number=4111111111111111'], 'a card in groups of four: one number, as before');
+   eq(names(at('4111 1111 1111 1112 123')), ['card_number=4111111111111112123'], 'no valid split (a bad check digit): read as before, the validator decides');
+   eq(names(matchInputs('4111 1111 1111 1111 123', card.slice(0, 1), { form: 'cc', name: 'card_number' })), ['card_number=4111111111111111123'], 'a form with one numeric input: read as before');
+}
 console.log(`match-inputs: ${checks} checks passed`);

@@ -15,7 +15,7 @@ import { readSpokenMoney } from './spoken-money.js';
 import {readMoneyAmount,isPartialMoneyAnswer} from './money.js';
 import { pickProviderQuestion } from './form-sources.js';
 import { spokenDigitsText, wholeSpokenNumber } from './spoken-digits.js';
-import { DIGIT_RUN } from './numbers.js';
+import { DIGIT_RUN, findNumbers, assignNumbers, NUMBER_KINDS } from './numbers.js';
 
 /**
  * This turn's acceptance decisions for the host to log, appended per match: fields filled out of order, in a compound
@@ -378,6 +378,42 @@ export function readFormAnswer(answer,candidates,current,choiceKey,questions=[])
    const provenance=h=>({...h,raw,utterance:raw});
    return {...matches,hits:matches.hits.map(provenance),ambiguous:matches.ambiguous.map(provenance),remaining:(matches.remaining||[]).map(group=>group.map(provenance)),questions:[...new Set(asked)]};
 }
+// The span of `value`'s digits in raw, starting at the first digit at or after `from` (separators between them allowed). → null
+function digitsSpan(raw, value, from) {
+   let i = from;
+   while (i < raw.length && !/\d/.test(raw[i])) i++;
+   const start = i;
+   let got = '';
+   while (i < raw.length && got.length < value.length) { if (/\d/.test(raw[i])) got += raw[i]; else { /* a separator inside the value */ } i++; }
+   return got === value ? [start, i] : null;
+}
+// One numeric answer that fills several of the form's numeric inputs (owner 2026-11-20): at a digits question, an answer of
+// digits and separators alone ("4111 1111 1111 1111 123" at the card number) is read with jsfe assignNumbers, each numeric
+// input of the asked input's form a spec (a preset field by its kind: the card number with its check digit, the expiration a
+// valid unexpired date; any other digits input by its length), multiple: true. Used only when exactly one reading gives the
+// asked input a complete value beside at least one other input and consumes every digit; otherwise null and the answer reads
+// as before (a card said in groups, a card spoken over two turns, a lone ZIP). → {name: {value, spans}} | null
+function numericSplit(raw, list, own) {
+   if (!own || own.profile.kind !== 'digits' || !/^[\d\s.,-]+[.!]?$/.test(raw.trim())) return null;
+   const numeric = list.filter((c) => c.form === own.form && !c.confirmation && (NUMBER_KINDS.includes(c.field) || c.profile.kind === 'digits'));
+   if (numeric.length < 2) return null;
+   const specs = numeric.map((c) => (NUMBER_KINDS.includes(c.field) ? { name: c.name, kind: c.field } : { name: c.name, kind: 'digits', min: Number(c.profile.min || 1), max: Number(c.profile.max || c.profile.min || 1) }));
+   let read = null;
+   try { read = assignNumbers(findNumbers(raw), specs, { multiple: true }); } catch { read = null; }
+   const names = read ? Object.keys(read.values) : [];
+   if (!read || read.ambiguous.length || read.unread.length || names.length < 2 || !names.includes(own.name)) return null;
+   const out = {};
+   let at = 0;
+   for (let left = [...names]; left.length;) {
+      const next = left.find((name) => digitsSpan(raw, read.values[name], at));
+      if (!next) return null;
+      const span = digitsSpan(raw, read.values[next], at);
+      out[next] = { value: read.values[next], spans: [span] };
+      at = span[1];
+      left = left.filter((name) => name !== next);
+   }
+   return out;
+}
 export function matchInputs(answer, candidates, current, choiceKey) {
    const raw = unescape(answer);
    const list = Array.isArray(candidates) ? candidates.filter((c) => c && c.name && c.profile) : [];
@@ -402,6 +438,7 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    // An invited input is read as in order while it is asked (docs/copilot-reference.md §5): its asked signature, not
    // its narrower out-of-order one ("40" at "NEW CARD, LINK, or a different amount" is the amount).
    const invitedInput = new Set([...list.filter(isCur).flatMap((c) => Array.isArray(c.invites) ? c.invites : []), ...(Array.isArray(cur.invites) ? cur.invites : [])]);
+   const split = numericSplit(raw, list, own);
    for (const c of list) {
       // Rule 2: a confirmation is answered only when asked, firm by CONFIRM_WORDS, soft by the wider YES vocabulary.
       const confirmation = ['firm', 'soft'].includes(c.confirmation) ? c.confirmation : '';
@@ -414,7 +451,9 @@ export function matchInputs(answer, candidates, current, choiceKey) {
       }
       const vocabulary = confirmation ? { ...c.profile, choices: (c.profile.choices || []).map((x) => x.key === 'yes' ? { ...x, phrases: [...(x.phrases ?? x.words ?? []), ...(confirmation === 'firm' ? CONFIRM_WORDS : ANSWER_WORDS.yes)], exact: confirmation === 'firm' || x.exact === true } : x.key === 'no' ? { ...x, phrases: [...(x.phrases ?? x.words ?? []), ...ANSWER_WORDS.no] } : x) } : c.profile;
       const profile=narrativeCurrent && vocabulary.kind==='email' ? {...vocabulary,literal:true} : vocabulary;
-      let r = readInputProfile(profile, raw, isCur(c) || invitedInput.has(c.name) && c.confirmation === undefined);
+      // A split answer's numeric inputs take its parts (or nothing); the rules below judge each part as they judge any reading.
+      const splitInput = split && c.form === own.form && !c.confirmation && (NUMBER_KINDS.includes(c.field) || c.profile.kind === 'digits');
+      let r = splitInput ? (split[c.name] ? { value: split[c.name].value, spans: split[c.name].spans, evidence: [`split:${c.field || c.profile.kind}`] } : null) : readInputProfile(profile, raw, isCur(c) || invitedInput.has(c.name) && c.confirmation === undefined);
       // A semantic choice supplied by ask-choice (e.g. spoken keypad keys) is a reading, not an early return.
       if (!r && c === own && choiceKey && c.profile.kind === 'choice' && (c.profile.choices || []).some(x => x.key === choiceKey)) {
          r = { ...(r || {}), value: choiceKey, spans: r?.spans?.length ? r.spans : [[0, raw.length]] };
@@ -477,7 +516,8 @@ export function matchInputs(answer, candidates, current, choiceKey) {
       } else if (bare(reading) && fieldOf(reading).profile.kind === 'amount') {
          refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'bare_amount_out_of_order', spans: reading.spans });
          return false;
-      } else if (/\d/.test(spanText(reading)) && !wholeRuns(reading)) {
+      } else if (/\d/.test(spanText(reading)) && !wholeRuns(reading) && !(split && reading.form === own.form && split[reading.name]?.value === reading.value)) {
+         // (a part of a numeric split is whole by construction: every digit of the answer is assigned to one of the parts)
          refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'fragment', spans: reading.spans });
          return false;
       } else {
