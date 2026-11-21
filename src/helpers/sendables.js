@@ -103,13 +103,35 @@ export function conversationCopy(turns, language = 'en') {
    }
 }
 
+const OMITTED = '[earlier turns omitted]';
 /**
  * The conversation as "role: text" lines, one per turn, in order: the same text the host's flat chat history has
  * always carried (ChatContextManager.messagesWithRole), so a note built from it reads as before.
+ * `maxLength` (optional, for a field with a length limit: a CRM description takes 2,000 characters, prod 2026-11-20): the
+ * latest whole turns that fit, after a line saying earlier turns were left out; a last turn longer than the room keeps its
+ * end. Without it the whole conversation, as before.
  */
-export function chatTranscript(turns) {
+export function chatTranscript(turns, maxLength) {
    if (Array.isArray(turns)) {
-      return turns.filter((turn) => turn && typeof turn.role === 'string').map((turn) => `${turn.role}: ${turn.text ?? ''}`).join('\n');
+      const lines = turns.filter((turn) => turn && typeof turn.role === 'string').map((turn) => `${turn.role}: ${turn.text ?? ''}`);
+      const whole = lines.join('\n');
+      const max = Number(maxLength);
+      if (maxLength === undefined || maxLength === null || !Number.isFinite(max) || whole.length <= max) {
+         return whole;
+      } else if (max <= OMITTED.length + 1) {
+         return whole.slice(whole.length - Math.max(0, Math.floor(max)));
+      } else {
+         const room = Math.floor(max) - OMITTED.length - 1;
+         const kept = [];
+         let used = 0;
+         for (let i = lines.length - 1; i >= 0; i--) {
+            const cost = lines[i].length + (kept.length ? 1 : 0);
+            if (used + cost > room) break;
+            kept.unshift(lines[i]);
+            used += cost;
+         }
+         return `${OMITTED}\n${kept.length ? kept.join('\n') : lines[lines.length - 1].slice(lines[lines.length - 1].length - room)}`;
+      }
    } else {
       return '';
    }

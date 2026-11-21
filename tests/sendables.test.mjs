@@ -118,4 +118,20 @@ check('a flow step registers a document and the next step offers it with the rep
    assert.match(String(session.response), /Offered: receipt-9,conversation,reply-2/);
 });
 
+check('chatTranscript maxLength keeps the latest whole turns that fit (a 2,000-character CRM description, prod 2026-11-20)', () => {
+   const turns = Array.from({ length: 60 }, (_, i) => ({ role: i % 2 ? 'assistant' : 'user', text: `turn ${i} ` + 'x'.repeat(60) }));
+   const whole = chatTranscript(turns);
+   assert.ok(whole.length > 2000);
+   assert.equal(chatTranscript(turns, undefined), whole, 'no maximum: the whole conversation, as before');
+   assert.equal(chatTranscript(turns, whole.length), whole, 'a maximum it fits: unchanged');
+   const cut = chatTranscript(turns, 1500);
+   assert.ok(cut.length <= 1500, `fits: ${cut.length}`);
+   assert.ok(cut.startsWith('[earlier turns omitted]\n'), 'says earlier turns were left out');
+   assert.ok(cut.endsWith(whole.split('\n').at(-1)), 'ends with the last turn, whole');
+   assert.ok(cut.split('\n').slice(1).every((line) => whole.split('\n').includes(line)), 'every kept line is a whole turn');
+   const long = chatTranscript([{ role: 'user', text: 'a'.repeat(3000) }], 500);
+   assert.ok(long.length <= 500 && long.endsWith('aaa'), 'one turn longer than the room keeps its end');
+   assert.ok(chatTranscript(turns, 10).length <= 10, 'a tiny maximum still fits');
+});
+
 console.log(`sendables: ${checks} checks passed`);
