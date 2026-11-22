@@ -10620,7 +10620,21 @@
             },
             "digits": {
               "min": 10,
-              "max": 11
+              "max": 11,
+              "complete": [
+                {
+                  "first": "23456789",
+                  "lengths": [
+                    10
+                  ]
+                },
+                {
+                  "first": "1",
+                  "lengths": [
+                    11
+                  ]
+                }
+              ]
             },
             "length_message": "I heard {heard} digits; a phone number has 10.",
             "length_message_es": "Escuché {heard} dígitos; el número de teléfono tiene 10.",
