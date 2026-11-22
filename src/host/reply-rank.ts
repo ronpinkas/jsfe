@@ -7,7 +7,7 @@
  *   answers      the reply answers the question (the default: an open question's reply that clears no option is its answer)
  *   abort        the caller withdraws the request and asks for nothing else
  *   new_request  the caller clearly asks for something else: a different service, product or action, or an unrelated question
- *   irrelevant   the reply means nothing here (a stray word, an unfinished sentence, speech to someone else): the question
+ *   irrelevant   the reply means nothing here (a stray word, an unfinished sentence): the question
  *                is asked again and no flow moves. A reason question does not offer it.
  *   concern      the caller doubts the current process is what they need (offered only when a form declares
  *                user_description, passed as `concern`): the form says what it does and how to cancel, then asks again
@@ -90,7 +90,9 @@ const CRITERIA: Record<typeof REPLY_OPTIONS[number], { true: string; false: stri
     false: 'It responds to the current question, only withdraws the request, or does not clearly say what the caller wants.',
   },
   irrelevant: {
-    true: 'The latest message means nothing here: a stray word or name, an unfinished sentence, background speech or words addressed to someone else. It names no service, action, product, amount or person to speak to.',
+    // Not speech meant for someone else (owner 2026-11-21): on a phone line the host's preprocessor hears every turn first and
+    // answers it, so it never reaches a flow; a typed message is always meant for the assistant.
+    true: 'The latest message means nothing here: a stray word or name, or an unfinished sentence. It names no service, action, product, amount or person to speak to.',
     false: 'It responds to the current question in any words (yes, no, thanks, a name, a number, a question about it), withdraws the request, or names something the caller wants.',
   },
 };

@@ -293,7 +293,7 @@ does this reply do with the question the flow asked? The model picks from a clos
 | `choice:<key>` | the reply picks one of the question's offered choices | that choice is the answer |
 | `abort` | the caller withdraws the request | every flow ends; the caller hears that the request was cancelled |
 | `new_request` | the caller clearly asks for something else | DISPATCH: the message goes to intent detection |
-| `irrelevant` | the reply means nothing here: a stray word, an unfinished sentence, speech to someone else | the question is asked again; no flow moves |
+| `irrelevant` | the reply means nothing here: a stray word, an unfinished sentence (speech to someone else on a phone line is the host preprocessor's) | the question is asked again; no flow moves |
 | `concern` | the caller expresses doubt that the current process is what they need ("It's not a new address, I'm just changing the delivery address") | offered only when a form in the chain declares `user_description`: the caller hears it, how to cancel, and the question again; no attempt is counted |
 
 **Saying what a process does.** A form declares `user_description` / `user_description_es` (the engine's own `{{...}}`

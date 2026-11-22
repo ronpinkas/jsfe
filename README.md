@@ -387,7 +387,7 @@ in the chain declaring `user_description` / `user_description_es`, written with 
 a reason question; cut 0.6, and the top score wins over a cleared choice): the caller expresses doubt that the current process is what they need.
 The reader says the description, how to cancel ("To cancel, press the asterisk key or say EXIT." / "To cancel, type EXIT."; Spanish
 SALIR) and the question again; no attempt is counted;
-`irrelevant` (a stray word, an unfinished sentence, speech to someone else; cut 0.7; rated above a cleared choice, it outranks it) extracts nothing and asks again: no flow moves. `new_request` ends the flows and routes the input through intent detection, which reads it with the exchange it answered (the caller's previous words and what the flow said after them), as the ranker did. Only a new request is routed: after
+`irrelevant` (a stray word, an unfinished sentence; speech to someone else on a phone line is the host preprocessor's; cut 0.7; rated above a cleared choice, it outranks it) extracts nothing and asks again: no flow moves. `new_request` ends the flows and routes the input through intent detection, which reads it with the exchange it answered (the caller's previous words and what the flow said after them), as the ranker did. Only a new request is routed: after
 `answers` a later ordinary DISPATCH in the same turn hands the host the turn without detection. A host that does not know the task answers the `llm`
 instructions with its text model.
 
