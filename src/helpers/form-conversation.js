@@ -194,7 +194,7 @@ export function cancelFormTask(cargo,id) {
 /** The form that answers a whole NO said at this question: the nearest form up the chain (this one, or a sub-form's owner)
  * that declares `on_no`, when the question is not a yes/no or confirmation and does not read the NO itself. '' if none. */
 export function formNoOwner(cargo,id,spec,answer) {
-   const raw=String(answer ?? '').replace(/\\(['"\\])/g,'$1').trim();
+   const raw=String(answer ?? '').trim();
    if(!raw || !isWholeNo(raw) || !spec || spec.confirmation || spec.proposal)return '';
    if([spec,...(Array.isArray(spec.any_of)?spec.any_of:[])].some(s=>s && s.profile && readInputProfile(s.profile,raw,true)))return '';   // the question offers NO itself
    const seen=new Set();

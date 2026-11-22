@@ -32,9 +32,9 @@ export function formAcceptanceTrace(previous, matches) {
    }
 }
 
-/** The answer as said: jsfe stores user input escaped (don\'t). */
-function unescape(answer) {
-   return String(answer ?? '').replace(/\\(['"\\])/g, '$1');
+/** The answer as said: a string (jsfe stores user input as given). */
+function asText(answer) {
+   return String(answer ?? '');
 }
 
 // DIGIT_RUN, the run of digits as said, lives with the number finder (numbers.js), so the rule is written once.
@@ -135,7 +135,7 @@ function inputWords(field) {
  * or words), so two inputs that claim the same part of the answer are told apart from a compound answer.
  */
 export function readInputProfile(profile, answer, isCurrent = true) {
-   const raw = unescape(answer);
+   const raw = asText(answer);
    // A field may declare a narrower signature for out-of-order reading: the payment card takes a bare
    // last four when asked, but out of order only a card word or "ending in 4242".
    if (!isCurrent && profile && profile.out_of_order && typeof profile.out_of_order === 'object') {
@@ -328,7 +328,7 @@ export function saysNoValue(answer) {
  * value is not taken. Prod 2026-11-17 CA3a7c: "43, 4, 97. ¿Ya?" (code digits) was proposed as $43.
  */
 export function groundAmount(utterance, value) {
-   const raw = unescape(utterance), n = Number(String(value ?? '').replace(/[^\d.]/g, ''));
+   const raw = asText(utterance), n = Number(String(value ?? '').replace(/[^\d.]/g, ''));
    if (!raw.trim() || !Number.isFinite(n)) return null; else { /* something to ground */ }
    const decimalRuns = [...raw.matchAll(DECIMAL_AMOUNT)].map((m) => [m.index, m.index + m[0].length]);
    const undecimal = decimalRuns.reduce((text, [a, b]) => text.slice(0, a) + ' '.repeat(b - a) + text.slice(b), raw);
@@ -353,17 +353,17 @@ export function readArgument(said, utterance, candidates, current, choiceKey = '
    const kindOf = (h) => ((candidates || []).find((c) => c.form === h.form && c.name === h.name)?.profile || {}).kind;
    if (!String(utterance ?? '').trim()) return read; else { /* the caller's words are known */ }
    const ground = (h) => {
-      if (kindOf(h) !== 'amount') return [{ ...h, utterance: unescape(utterance) }]; else { /* an amount: the caller's words decide */ }
+      if (kindOf(h) !== 'amount') return [{ ...h, utterance: asText(utterance) }]; else { /* an amount: the caller's words decide */ }
       const g = groundAmount(utterance, h.value);
       if (!g) return []; else { /* said */ }
       const again = readFormAnswer(g.text, candidates, { form: h.form, name: h.name }, choiceKey, []).hits.filter((x) => x.form === h.form && x.name === h.name);
-      return again.map((x) => ({ ...x, raw: g.text, utterance: unescape(utterance) }));
+      return again.map((x) => ({ ...x, raw: g.text, utterance: asText(utterance) }));
    };
    const ungrounded = read.hits.filter((h) => kindOf(h) === 'amount' && !groundAmount(utterance, h.value)).map((h) => ({ form: h.form, name: h.name, value: h.value, rule: 'not_said' }));
    return { ...read, hits: read.hits.flatMap(ground), ambiguous: read.ambiguous.flatMap(ground), refused: [...(read.refused || []), ...ungrounded] };
 }
 export function readFormAnswer(answer,candidates,current,choiceKey,questions=[]) {
-   const raw=unescape(answer),parts=raw.split(/([?;\n]|\b(?:and|y)\b)/i),asked=[];
+   const raw=asText(answer),parts=raw.split(/([?;\n]|\b(?:and|y)\b)/i),asked=[];
    let consumed=false;
    const remaining=parts.map(part=>{
       const text=part.trim();
@@ -415,7 +415,7 @@ function numericSplit(raw, list, own) {
    return out;
 }
 export function matchInputs(answer, candidates, current, choiceKey) {
-   const raw = unescape(answer);
+   const raw = asText(answer);
    const list = Array.isArray(candidates) ? candidates.filter((c) => c && c.name && c.profile) : [];
    const cur = current && typeof current === 'object' ? current : {};
    const isCur = (c) => (Array.isArray(cur.names) ? cur.names.indexOf(c.name) > -1 : c.name === cur.name) && (cur.form === undefined || c.form === cur.form);

@@ -206,8 +206,9 @@ Resuming: the next turn's input is stored by `setUserInputVariable`:
 - Voice, a one-key question: the key, when the whole answer is one of `0-9 * #`.
 - Voice, a digit count within the question's `digits` range: the digits only.
 - Voice, otherwise: a voice-cleanup model call.
-- Every string is stored escaped (backslash, quotes, newline, carriage return, tab) inside a `{__userInput, value}`
-  wrapper. Expressions see the unwrapped value, still escaped.
+- Every answer is stored as given inside a `{__userInput, value}` wrapper; expressions see the unwrapped value as a
+  parameter of the sandbox, never pasted into code, so it is not escaped (since 1.87.0; before, quotes, backslashes
+  and line breaks were escaped and each reader undid part of it).
 
 The SAY-GET is popped and the loop continues with the flow's next step, typically a reader in a worker flow.
 

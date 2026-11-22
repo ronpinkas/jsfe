@@ -70,7 +70,7 @@ const AGENT_ONLY = /^(?:(?:i want|i need|i would like|id like|can i|could i|let 
 const plainVowels = (s) => s.replace(/[áàâä]/g, 'a').replace(/[éèêë]/g, 'e').replace(/[íìîï]/g, 'i').replace(/[óòôö]/g, 'o').replace(/[úùûü]/g, 'u');
 
 /** Unescapes what the engine escaped, lowercases, drops punctuation but keeps * @ ., and drops accents (not ñ). */
-const normalize = (s) => plainVowels(String(s ?? '').replace(/\\(['"\\])/g, '$1').toLowerCase().replace(/[^\w\s*@.áéíóúüñàâäèêëìîïòôöùû]+/g, ''))
+const normalize = (s) => plainVowels(String(s ?? '').toLowerCase().replace(/[^\w\s*@.áéíóúüñàâäèêëìîïòôöùû]+/g, ''))
    .replace(AGREEING, ' ').replace(/\s+/g, ' ').trim();
 // The agent key 0, pressed or spoken: a whole answer that is one digit's word, with or without a closing period, is that digit
 // (owner 2026-11-19; speech-to-text writes "Zero." as often as "0"). Every other digit word already reads as its digit where
@@ -151,7 +151,7 @@ function trimAnswerWrappers(tokens) {
    return tokens;
 }
 function textRequest(input, words, extra) {
-   const raw = String(input ?? '').replace(/\\(['"\\])/g, '$1');
+   const raw = String(input ?? '');
    // Quotation, code, blockquotes and strikethrough mark non-command text before normalization
    // removes their delimiters. Ordinary emphasis and apostrophes remain valid command text.
    const quoted = /["“”«»]|(?:^|\s)'[^']+'(?=$|\s|[.,!?;:])|(?:^|\s)‘[^’]+’(?=$|\s|[.,!?;:])/u.test(raw);
@@ -325,7 +325,7 @@ const AMOUNT_ANSWER = /\$|\b(dollars?|d[oó]lar(es)?|bucks?|cents?|centavos?)\b|
  * the caller was offered $235.90 (2026-10-14).
  */
 export function isAmountAnswer(input) {
-   return AMOUNT_ANSWER.test(String(input ?? '').replace(/\\(['"\\])/g, '$1'));
+   return AMOUNT_ANSWER.test(String(input ?? ''));
 }
 
 // A number that names something other than an amount: an account or sub-account, a card's last digits, a code, a ZIP.
@@ -360,7 +360,7 @@ export function amountInAnswer(input) { return numericAmountReading(input).value
 
 /** Internal numeric evidence shared by the opt-in money reader; legacy results stay unchanged. */
 export function numericAmountReading(input) {
-   const raw = String(input ?? '').replace(/\\(['"\\])/g, '$1');
+   const raw = String(input ?? '');
    // A connector plus cents is a fragment of another amount, not a new standalone payment.
    // A caller can instead explicitly request "51 cents" or provide the complete dollars and cents.
    if (/^\s*(?:and|con|y)\s*(?:un\s+)?\d{1,2}\s*(?:cents?|centavos?)\b/i.test(raw)) return {value:NaN,candidates:0};
@@ -464,7 +464,7 @@ export function isReaderFiller(text, templateWords = []) {
  * whole answer is an agent request and EXIT only on exit/quit/salir/abort (cancel is an answer there).
  */
 export function pickChoice(answer, choices, acceptOther) {
-   const raw = String(answer ?? '').replace(/\\(['"\\])/g, '$1');
+   const raw = String(answer ?? '');
    const b = normalize(raw);
    const pos = [];
    const negs = [];

@@ -6830,26 +6830,6 @@ function isUserInputVariable(value: unknown): boolean {
 }
 
 /**
- * Input sanitization for user-provided values
- * Escapes special characters that could break expression syntax
- * NOTE: This is secondary defense - primary security is treating user input as literal data
- */
-function sanitizeUserInput(input: unknown): string {
-  if (typeof input !== 'string') {
-    return String(input);
-  }
-
-  // Escape special characters that could break expression syntax
-  return input
-    .replace(/\\/g, '\\\\')   // Escape backslashes
-    .replace(/'/g, "\\'")     // Escape single quotes  
-    .replace(/"/g, '\\"')     // Escape double quotes
-    .replace(/\n/g, '\\n')    // Escape newlines
-    .replace(/\r/g, '\\r')    // Escape carriage returns
-    .replace(/\t/g, '\\t');   // Escape tabs
-}
-
-/**
  * Simplified Expression Evaluator 
  * Replaced complex two-phase parser with regex + JavaScript evaluation for 100% reliability
  */
@@ -7179,11 +7159,14 @@ async function setUserInputVariable(
     }
   }
 
-  // Mark user input as static literal data that should never be evaluated as code
+  // Mark user input as static literal data that should never be evaluated as code. It is stored as given: expressions
+  // receive it as a value in the sandbox, never pasted into code, so escaping it protected nothing and every reader had
+  // to undo it (a typed line break reached the readers as the two characters \n: prod 2026-11-21, an email and a phone
+  // number on separate lines read as one international number).
   variables[key] = {
     __userInput: true,
     __literal: true,
-    value: sanitize && typeof processedValue === 'string' ? sanitizeUserInput(processedValue) : processedValue
+    value: processedValue
   };
 }
 

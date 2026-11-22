@@ -686,7 +686,7 @@ export const FLOWS = [
             "id": "ac_return_amount",
             "type": "SET",
             "variable": "assignment_side_effect",
-            "value": "cargo.choice = 'amount', cargo.choiceText = String(ac_answer || '').replace(/\\\\(['\"\\\\])/g, '$1')"
+            "value": "cargo.choice = 'amount', cargo.choiceText = String(ac_answer || '')"
           },
           "condition: ac_key === '__elsewhere'": {
             "id": "ac_elsewhere",
@@ -696,7 +696,7 @@ export const FLOWS = [
             "id": "ac_return_other",
             "type": "SET",
             "variable": "assignment_side_effect",
-            "value": "cargo.choice = 'other', cargo.choiceText = String(ac_answer || '').replace(/\\\\(['\"\\\\])/g, '$1')"
+            "value": "cargo.choice = 'other', cargo.choiceText = String(ac_answer || '')"
           },
           "condition: ac_key === ''": {
             "id": "ac_other_request",
@@ -706,7 +706,7 @@ export const FLOWS = [
             "id": "ac_return_choice",
             "type": "SET",
             "variable": "assignment_side_effect",
-            "value": "cargo.choice = ac_key, cargo.choiceText = String(ac_answer || '').replace(/\\\\(['\"\\\\])/g, '$1')"
+            "value": "cargo.choice = ac_key, cargo.choiceText = String(ac_answer || '')"
           }
         }
       }

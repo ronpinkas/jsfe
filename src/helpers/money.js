@@ -22,7 +22,7 @@ const DIGIT_WORD='(?:zero|one|two|three|four|five|six|seven|eight|nine|cero|uno|
 const CARD_SUFFIX=new RegExp('\\s+(?:with (?:the |my )?card(?: (?:ending(?: in)?|number))?|con (?:la |mi )?tarjeta(?: (?:que termina en|terminad[ao] en))?)\\s+(?:\\d(?:[ -]?\\d){3}|'+DIGIT_WORD+'(?: '+DIGIT_WORD+'){3})$','i');
 const ACCOUNT_SUFFIX=/\s+(?:(?:on|to) (?:sub[ -]?account|account)|(?:a|en) (?:la )?(?:subcuenta|cuenta))\s+\d{1,8}$/i;
 function completeMoneyAnswer(input) {
-   let raw=String(input??'').replace(/\\(['"\\])/g,'$1').trim().replace(/^[¡!]+|[.!]+$/g,'').trim();
+   let raw=String(input??'').trim().replace(/^[¡!]+|[.!]+$/g,'').trim();
    raw=raw.replace(/^(?:please|por favor)[, ]+/i,'').replace(/[, ]+(?:please|por favor)$/i,'').trim();
    raw=raw.replace(PAYMENT_PREFIX,'').replace(AMOUNT_LABEL_PREFIX,'').replace(AMOUNT_LABEL_SUFFIX,'').replace(ACCOUNT_PREFIX,'').replace(CARD_SUFFIX,'').replace(ACCOUNT_SUFFIX,'').trim();
    if(NUMERIC_MONEY.test(raw))return true;
@@ -62,7 +62,7 @@ function introducedAsIdentifier(raw,start) {
  */
 export function readMoneyAmount(input,options) {
    validateMoneyOptions(options);
-   const raw=String(input??'').replace(/\\(['"\\])/g,'$1');
+   const raw=String(input??'');
    if(unsupportedCurrency(raw)||negativeAmount(raw)||!moneyIntentAllows(raw,options.intent))return NaN;
    const {readings,invalid}=scanSpokenMoney(raw);
    if(invalid.length||options.cardinals!==true&&readings.length||readings.some(reading=>introducedAsIdentifier(raw,reading.start)))return NaN;
