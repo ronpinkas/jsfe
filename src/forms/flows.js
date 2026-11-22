@@ -54,7 +54,9 @@ const MONTH_RE = MONTH_NAMES.map(([n]) => n).join('|');
 // ── field presets (decision 2A): ONE library, read only by collect-input ─────────────────────────────────────────
 // A form uses a preset by name ({ name, field }); keys it gives override the preset's (e.g. a tenant's account pattern).
 export const FIELD_PRESETS = {
-   phone: { label: 'phone number', label_es: 'número de teléfono', profile: { kind: 'phone' }, digits: { min: 10, max: 11 },
+   // complete: a US/Canada number is whole at 10 keys starting 2-9, or 11 starting with 1, so the keypad submits it on its last key
+   // (prod 2026-11-21: "2133698962" keyed at a new-cell question waited 4.5 s for an 11th key, and speech in that wait replaced it).
+   phone: { label: 'phone number', label_es: 'número de teléfono', profile: { kind: 'phone' }, digits: { min: 10, max: 11, complete: [{ first: '23456789', lengths: [10] }, { first: '1', lengths: [11] }] },
       length_message: 'I heard {heard} digits; a phone number has 10.', length_message_es: 'Escuché {heard} dígitos; el número de teléfono tiene 10.',
       question: 'What is your phone number?', question_es: '¿Cuál es su número de teléfono?',
       retry: 'Please say or enter your 10-digit phone number.', retry_es: 'Por favor diga o ingrese su número de teléfono de 10 dígitos.',
