@@ -165,6 +165,11 @@ const KNOWN_KINDS = {
    digits: (spec) => length(Number(spec.min), Number(spec.max ?? spec.min))
 };
 export const NUMBER_KINDS = Object.keys(KNOWN_KINDS);
+/** A preset field's own value check (a kind read with no spec: card_number, card_expiration, card_cvv, zip...): true when the
+ * digits are a valid value of it, false when not, null for a kind that needs its spec (date, pattern, digits). */
+export function presetValid(kind, digits) {
+   return Object.hasOwn(KNOWN_KINDS, kind) && !['date', 'pattern', 'digits'].includes(kind) ? !!KNOWN_KINDS[kind]({})(String(digits ?? '')) : null;
+}
 
 /** specs → [{name, read}]. A spec list is the documented form; a {name: (digits) => false | true | value} object (jsfe
  * 1.81-1.83) is still read the same way. An unknown kind, a pattern without its regex, digits without min, or a repeated

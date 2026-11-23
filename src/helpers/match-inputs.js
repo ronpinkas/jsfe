@@ -15,7 +15,8 @@ import { readSpokenMoney } from './spoken-money.js';
 import {readMoneyAmount,isPartialMoneyAnswer} from './money.js';
 import { pickProviderQuestion } from './form-sources.js';
 import { spokenDigitsText, wholeSpokenNumber } from './spoken-digits.js';
-import { DIGIT_RUN, findNumbers, assignNumbers, NUMBER_KINDS } from './numbers.js';
+import { DIGIT_RUN, findNumbers, assignNumbers, NUMBER_KINDS, presetValid } from './numbers.js';
+import { expirationDigits, validateExpiration } from './card-checks.js';
 
 /**
  * This turn's acceptance decisions for the host to log, appended per match: fields filled out of order, in a compound
@@ -294,12 +295,14 @@ export function saysConfirmWord(answer, spec) {
    return [spec?.word, spec?.word_es].some((word) => word && matchesChoice(String(answer ?? ''), [String(word).toLowerCase()]));
 }
 
-// confirm_out_of_order's line: {value} the number (digit by digit on a call), {word} its word.
+// confirm_out_of_order's line: {value} the number (digit by digit on a call, unless spec.say_digits is false: an amount is
+// said as a number), {word} its word.
 export function confirmOutOfOrderLine(spec, value, language, voice) {
    const es = language === 'es';
    const line = String((es && spec?.message_es) || spec?.message || '');
    const word = String((es && spec?.word_es) || spec?.word || '');
-   const own = line.replace('{value}', String(value ?? '').split('').join(voice ? ' ' : '')).replace('{word}', word);
+   const said = spec?.say_digits === false ? String(value ?? '').replace(/\.0+$/, '') : String(value ?? '').split('').join(voice ? ' ' : '');
+   const own = line.replace('{value}', said).replace('{word}', word);
    // The same number may name several fields ("1234": an expiration or a security code): each one's line is said (owner 2026-11-17).
    return [own, ...(Array.isArray(spec?.also) ? spec.also.map((other) => confirmOutOfOrderLine({ ...other, also: undefined }, other.value, language, voice)) : [])].filter(Boolean).join(' ');
 }
@@ -414,6 +417,26 @@ function numericSplit(raw, list, own) {
    }
    return out;
 }
+// Rule 1, a valid value (owner 2026-11-23): out of order a number is read as a field only when it is a valid value of that field.
+// The card expiration is month then year within the card window ("150" is 01/50 and "300" is 03/00: neither); a month said by
+// name is judged by its year. Every other preset by its own check (the card number's check digit, a code's length), a digits
+// field by its declared length, an amount when it is more than zero. Any other field: its reader already decided.
+function validOutOfOrder(field, value) {
+   const text = String(value ?? ''), digits = text.replace(/\D/g, '');
+   if (field.field === 'card_expiration' && /\p{L}/u.test(text)) {
+      return digits.length >= 2 && validateExpiration('12', digits.slice(-2));
+   } else if (field.field === 'card_expiration') {
+      return !!expirationDigits(text);
+   } else if (NUMBER_KINDS.includes(field.field) && presetValid(field.field, digits) !== null) {
+      return presetValid(field.field, digits);
+   } else if (field.profile.kind === 'digits') {
+      return digits.length >= Number(field.profile.min || 1) && digits.length <= Number(field.profile.max || field.profile.min || digits.length);
+   } else if (field.profile.kind === 'amount') {
+      return Number(text.replace(/[^\d.]/g, '')) > 0;
+   } else {
+      return true;
+   }
+}
 export function matchInputs(answer, candidates, current, choiceKey) {
    const raw = asText(answer);
    const list = Array.isArray(candidates) ? candidates.filter((c) => c && c.name && c.profile) : [];
@@ -513,7 +536,9 @@ export function matchInputs(answer, candidates, current, choiceKey) {
          // a bare number for a field whose prerequisites are not filled yet (the sub-account before the account is known)
          refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'prerequisite_unmet', spans: reading.spans });
          return false;
-      } else if (bare(reading) && fieldOf(reading).profile.kind === 'amount') {
+      } else if (bare(reading) && fieldOf(reading).profile.kind === 'amount' && !fieldOf(reading).confirm_out_of_order) {
+         // An amount that declares confirm_out_of_order is named among the number's fields below (owner 2026-11-23: a number
+         // is matched to every field it is valid for, and the caller is told how to mean each).
          refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'bare_amount_out_of_order', spans: reading.spans });
          return false;
       } else if (/\d/.test(spanText(reading)) && !wholeRuns(reading) && !(split && reading.form === own.form && split[reading.name]?.value === reading.value)) {
@@ -572,10 +597,19 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    // input.confirm_out_of_order {word, word_es, message, message_es}: out of order a number fills this input only beside its
    // word ("account 5373850"). Alone it may be anything (a code said with an extra digit, owner 2026-11-02), so the caller is
    // told how to mean it and the current question is asked again.
+   readings = readings.filter((reading) => {
+      if (reading.rule !== 'out_of_order' || validOutOfOrder(fieldOf(reading), reading.value)) {
+         return true;
+      } else {
+         refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'invalid_out_of_order', spans: reading.spans });
+         return false;
+      }
+   });
    const clarify = [];
    readings = readings.filter((reading) => {
       const field = fieldOf(reading);
-      if (reading.rule !== 'out_of_order' || !field.confirm_out_of_order || saysConfirmWord(raw, field.confirm_out_of_order)) {
+      // An amount asks its word only of a bare number (owner 2026-11-18): "109 con 47", "$150" or "150 dollars" is the amount.
+      if (reading.rule !== 'out_of_order' || !field.confirm_out_of_order || field.profile.kind === 'amount' && !bare(reading) || saysConfirmWord(raw, field.confirm_out_of_order)) {
          return true;
       } else {
          refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'confirm_out_of_order', spans: reading.spans });

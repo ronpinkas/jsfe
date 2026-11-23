@@ -25,7 +25,8 @@ export function validateCardNumber(input) {
    }
 }
 
-/** MM and YY (two digits each), a real month, not expired, at most 20 years out. `now` is for tests. */
+/** MM and YY (two digits each), a real month, not expired, at most 6 years out (owner 2026-11-23: issuers set at most 5;
+ * one more for safety). `now` is for tests. */
 export function validateExpiration(month, year, now = new Date()) {
    const m = String(month || '').replace(/\D/g, '');
    const y = String(year || '').replace(/\D/g, '');
@@ -37,5 +38,14 @@ export function validateExpiration(month, year, now = new Date()) {
    const curMonth = now.getMonth() + 1;
    if (yNum < curYear) return false;
    if (yNum === curYear && mNum < curMonth) return false;
-   return yNum <= curYear + 20;
+   return yNum <= curYear + 6;
+}
+
+/** A spoken or typed expiration's digits as MMYY when they are a valid one (validateExpiration), else ''. Month then year,
+ * as the card expiration validator reads digits: "0929", "929", "150" (01/50, past the window: ''), "09 2029", "09029". */
+export function expirationDigits(value, now = new Date()) {
+   const digits = String(value ?? '').replace(/\D/g, '');
+   const m = /^(0?[1-9]|1[0-2])(?:20)?(\d{2})$/.exec(digits) || /^(0[1-9])0(\d{2})$/.exec(digits);
+   const mm = m ? m[1].padStart(2, '0') : '';
+   return m && validateExpiration(mm, m[2], now) ? mm + m[2] : '';
 }

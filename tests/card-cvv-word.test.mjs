@@ -43,5 +43,11 @@ await begin('es',true);await say('4111111111111111');
 r=await say('1 2 2 9, ya');assert.equal(values().card_expiration,'1229','at its own question the expiration needs no word');checks++;
 // A number two fields could take names both (owner 2026-11-17).
 await begin('en',false);
-r=await say('1234');assert.match(r,/If 1234 is the expiration date of the card, add the word EXPIRATION\. If 1234 is the security code of the card, add the words SECURITY CODE\./,r);checks++;
+r=await say('1230');assert.match(r,/If 1230 is the expiration date of the card, add the word EXPIRATION\. If 1230 is the security code of the card, add the words SECURITY CODE\./,r);checks++;
+// Out of order a number names only a field it is a valid value of (owner 2026-11-23): 150 is no expiration (01/50 is past the
+// card window) and stays a valid security code; 1240 (12/40) is past the window as well.
+await begin('es',false);
+r=await say('150');assert.doesNotMatch(r,/vencimiento/,r);assert.match(r,/Si 150 es el código de seguridad de la tarjeta/,r);checks++;
+await begin('en',false);
+r=await say('1240');assert.doesNotMatch(r,/expiration/,r);assert.match(r,/If 1240 is the security code/,r);checks++;
 console.log(`Card security code: all ${checks} checks passed`);

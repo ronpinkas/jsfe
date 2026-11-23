@@ -541,7 +541,7 @@ const engine = new WorkflowEngine(logger, aiCallback, flows, tools,
 - Checks: `validateDigits(input, min, max)` (digits only, length in range), `validatePhone(phone, acceptInternational)`
   (10 digits, or 11 with a leading 1; with `acceptInternational`, any 11 to 15), `validateEmail` (`x@y.z`, no spaces),
   `validateCardNumber` (12 to 19 digits passing Luhn), `validateExpiration(MM, YY)` (a real month, not expired, at most
-  20 years out), and the async `validateOTP(code, container)`, which accepts a code whose SHA-256 matches
+  6 years out), and the async `validateOTP(code, container)`, which accepts a code whose SHA-256 matches
   `container.otpHash` within 10 minutes of `container.otpTimestamp`, or a second code emailed beside it
   (`otpAltHash` / `otpAltTimestamp`, jsfe 1.17.0) on its own clock; accepting either clears both (`clearOtp`).
   Accepting sets `container.otpVerified` and `otpVerifiedAt`; an expired code is cleared. A refusal leaves its

@@ -29,9 +29,16 @@ async function at(answer,option,detected='Balance',extra={},ranked=true){
 }
 let r=await at('my code never showed up','choice:resend');
 assert.equal(r.s.cargo.testResends,1);assert.doesNotMatch(r.s.response,/Let me explain/);
-assert.deepEqual(r.offered.options.filter(o=>o.startsWith('choice:')),['choice:email','choice:where','choice:cannot_find','choice:another_way','choice:resend','choice:no_phone','choice:__agent','choice:usecase:pay','choice:exit:payment_link'],'the step offers (another account only after a caller-ID preselection), the use cases, the declared exits');
+assert.deepEqual(r.offered.options.filter(o=>o.startsWith('choice:')),['choice:email','choice:where','choice:cannot_find','choice:another_way','choice:resend','choice:has_code','choice:no_phone','choice:__agent','choice:usecase:pay','choice:exit:payment_link'],'the step offers (another account only after a caller-ID preselection), the use cases, the declared exits');
 assert.match(r.offered.choices.find(c=>c.key==='usecase:pay').label,/^states the reason for the call: The caller wants to make a payment\.$/,'a use case is labelled by its description, without its Not: list');
 console.log('PASS a resend said in other words resends');
+// "Aquí está" (owner 2026-11-23; prod 2026-11-22 11:48 ended verification as a third word miss): the caller has the code or is
+// getting it, so it is answered and no miss is counted; from the fourth such reply it counts again.
+r=await at('Here it is.','choice:has_code','Balance',{otpWordMisses:2});
+assert.match(r.s.response,/^Go ahead\. Read me the six digits when you have them\./,r.s.response);assert.equal(r.s.cargo.otpWordMisses,2);assert.equal(r.s.cargo.otpCodeHolds,1);checks++;
+r=await at('One moment, I am looking.','choice:has_code','Balance',{otpWordMisses:2,otpCodeHolds:3});
+assert.doesNotMatch(r.s.response,/Go ahead/,r.s.response);assert.equal(r.s.cargo.otpWordMisses,3);checks++;
+console.log('PASS having or getting the code is no word miss, within its own bound');
 // authOptions.other_whole_answer: "another account" inside a sentence goes to the ranker, which also hears "I have no other" (prod 2026-11-03: it switched accounts).
 const wholeOther={callerPreselected:true,authOptions:{parent_form:'',other_whole_answer:true}};
 r=await at("I don't have another account.",'choice:no_other_account','Balance',wholeOther);

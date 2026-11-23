@@ -199,7 +199,7 @@ Each flow page has a generated part (facts and charts, rewritten from `flows/sys
 
 **Phrases** (in the reference host, `foundation/text/phrases.js`): `anythingElse(lang, name)` is the closing question in the turn's language (`'en'` when it is neither `'en'` nor `'es'`), addressed by name when one is known: "Is there anything else I can help you with[, {name}]?" / "¿Hay algo más en lo que pueda ayudarle[, {name}]?". A name stored in capitals is said in title case.
 
-**Card checks** (in the reference host, `foundation/payment/card-checks.js`), used by ask-field: `validateCardNumber(digits)` is true for 12 to 19 digits that pass the Luhn checksum; `validateExpiration(mm, yy)` is true for a real month that has not passed, at most 20 years out.
+**Card checks** (in the reference host, `foundation/payment/card-checks.js`), used by ask-field: `validateCardNumber(digits)` is true for 12 to 19 digits that pass the Luhn checksum; `validateExpiration(mm, yy)` is true for a real month that has not passed, at most 6 years out.
 
 **Answer vocabulary.** The YES / NO / AGENT / EXIT / TEXT words are not in the flows. They live in the host's answer module (in the reference host, hy-rag-lambdas, `foundation/text/answer.js`), one list per kind shared by every flow set. Words match whole words or word runs, never substrings.
 - `isAnswer(input, kind, extra?)` returns whether the answer is a `kind` answer (for `yes`, only an answer of nothing but affirmatives, courtesy aside), `kind` being one of `yes`, `no`, `agent`, `exit`, `text`, with the caller's `extra` words added to that kind's list. `0` is AGENT and `*` is EXIT. A negated answer ("not sure", "I don't want an agent") never matches YES, AGENT or TEXT.

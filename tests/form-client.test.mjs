@@ -36,7 +36,7 @@ const currentPaths=fields=>fields.flatMap(f=>[...(f.current?[f.path]:[]),...(f.f
 assert.deepEqual(currentPaths(view.fields),['email'],'the asked field alone is current');
 const encode=values=>'JSFE_FORM_V1:'+JSON.stringify({form:projectForm(session).form,values});
 const note='O\'Brien says "hello"; C:\\docs\\new\nsecond line';
-const card={card_number:'4111111111111111',card_expiration:'12/39',card_cvv:'837',card_zip:'90001'};
+const card={card_number:'4111111111111111',card_expiration:'12/30',card_cvv:'837',card_zip:'90001'};
 assert.throws(()=>parseFormSubmission('JSFE_FORM_V1:{',view),/JSON/);
 assert.throws(()=>parseFormSubmission('JSFE_FORM_V2:{}',view),/version/);
 assert.throws(()=>parseFormSubmission(encode({admin:'yes'}),view),/Unknown/);
