@@ -876,7 +876,7 @@
         "id": "auth_challenge_init",
         "type": "SET",
         "variable": "noop",
-        "value": "(cargo.otpLateCode='',cargo.otpResends=0,cargo.otpMismatches=0,cargo.otpFormatMisses=0,cargo.otpWordMisses=0,cargo.otp_cell_number=cell_number || '',cargo.otp_email=email || '',cargo.otpAltSent=false,cargo.otpAltHash=null,cargo.otpAltTimestamp=null,true)"
+        "value": "(cargo.otpLateCode='',cargo.otpResends=0,cargo.otpMismatches=0,cargo.otpFormatMisses=0,cargo.otpWordMisses=0,cargo.otpCodeHolds=0,cargo.otp_cell_number=cell_number || '',cargo.otp_email=email || '',cargo.otpAltSent=false,cargo.otpAltHash=null,cargo.otpAltTimestamp=null,true)"
       },
       {
         "id": "auth_send_limit",
@@ -2443,6 +2443,10 @@
             "label": "the code did not arrive; send it again"
           },
           {
+            "key": "has_code",
+            "label": "has the code now or is getting it (here it is, one moment, let me look)"
+          },
+          {
             "key": "no_phone",
             "label": "no longer has that phone or number"
           },
@@ -2858,6 +2862,12 @@
         "value": "no_code_given && !(otp_reply && otp_reply.key && String(otp_reply.key).indexOf('usecase:') !== 0)"
       },
       {
+        "id": "otp_hold_cap",
+        "type": "SET",
+        "variable": "no_code_given",
+        "value": "no_code_given || !!(otp_reply && otp_reply.key === 'has_code' && (cargo.otpCodeHolds=Number(cargo.otpCodeHolds || 0)+1) > 3)"
+      },
+      {
         "id": "otp_reply_route",
         "type": "CASE",
         "branches": {
@@ -2906,6 +2916,12 @@
             "type": "SAY",
             "value": "{{otp_where}} To reach a person, {{cargo.verb}} AGENT.",
             "value_es": "{{otp_where_es}} Para hablar con una persona, {{cargo.verb_es}} AGENTE."
+          },
+          "condition: !no_code_given && otp_reply && otp_reply.key === 'has_code'": {
+            "id": "otp_ranked_has_code",
+            "type": "SAY",
+            "value": "Go ahead. Read me the six digits when you have them.",
+            "value_es": "Adelante. Dígame los seis dígitos cuando los tenga."
           },
           "condition: !no_code_given && otp_reply && otp_reply.key === 'resend'": {
             "id": "otp_ranked_resend",
