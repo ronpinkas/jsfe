@@ -1402,7 +1402,7 @@
         "id": "identity_contact_remember",
         "type": "SET",
         "variable": "noop",
-        "value": "(cargo.contactOptions=contact_options,cargo.authCapture=[{variable:\"cell_number\",reader:\"phone\"},{variable:\"email\",reader:\"email\"}].concat(contact_options.account_pattern?[{variable:\"acct_number\",regex:contact_options.account_pattern,normalizer:\"[^0-9]\"}]:[]),true)"
+        "value": "(cargo.contactOptions=contact_options,cargo.authCapture=[{variable:\"cell_number\",reader:\"phone\"},{variable:\"email\",reader:\"email\"}].concat(contact_options.account_pattern?[{variable:\"acct_number\",reader:\"account\",regex:contact_options.account_pattern}]:[]),true)"
       },
       {
         "id": "identity_contact_new_rejection_series",
