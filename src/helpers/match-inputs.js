@@ -10,7 +10,7 @@
  */
 import { matchesChoice } from './matches-choice.js';
 import { pickChoice, amountInAnswer, isAmountAnswer, isReaderFiller, ANSWER_WORDS, CONFIRM_WORDS } from './answer.js';
-import { readEmail, readPhone, readInternationalPhone, readIdentifier } from './contact.js';
+import { readEmail, readPhone, readInternationalPhone, readIdentifier, emailSpans } from './contact.js';
 import { readSpokenMoney } from './spoken-money.js';
 import {readMoneyAmount,isPartialMoneyAnswer} from './money.js';
 import { pickProviderQuestion } from './form-sources.js';
@@ -92,30 +92,6 @@ function choiceSpans(raw, words) {
    }
    return spans;
 }
-function emailSpans(raw, value) {
-   const literal = raw.toLowerCase().indexOf(value);
-   if (literal >= 0) return [[literal, literal + value.length]];
-   // Spoken addresses may use at / arroba / dot / punto. Select the shortest source window yielding this address.
-   const tokens = [...raw.matchAll(/\S+/g)];
-   if (tokens.length > 128) return [[0,raw.length]];
-   for (let size = 1; size <= tokens.length; size++) {
-      const spans = [];
-      for (let i = 0; i + size <= tokens.length; i++) {
-         const a = tokens[i].index, b = tokens[i+size-1].index + tokens[i+size-1][0].length;
-         if (readEmail(raw.slice(a,b)) === value) {
-            // "juan at gmail" already reads as gmail.com: the spoken ending after it belongs to the same address
-            let j = i + size;
-            while (j < tokens.length && /^(?:dot|punto|punt|ponto|com|con|\.com)[.,;:!?]*$/i.test(tokens[j][0])) j++;
-            spans.push([a, j > i + size ? tokens[j-1].index + tokens[j-1][0].length : b]);
-         } else {
-            // this window is not the address
-         }
-      }
-      if (spans.length) return spans;
-   }
-   return [[0,raw.length]];
-}
-
 /** Remove independently spent evidence while leaving the original narrative value intact. */
 function unclaimedSpans(raw, readings) {
    let spans = [[0, raw.length]];

@@ -18,4 +18,10 @@ const R = [{ variable: 'cell_number', reader: 'phone' }, { variable: 'email', re
 eq(f('juan at gmail dot com', R), { variable: 'email', value: 'juan@gmail.com' }, 'a reader pattern reads a spoken email');
 eq(f('1 (213) 555-0147', R), { variable: 'cell_number', value: '2135550147' }, 'a reader pattern reads a phone');
 eq(f('yes', R), null, 'a reader pattern finds nothing');
+// The retry menu's account capture reads with readIdentifier (owner 2026-11-24: one reader, no copy).
+const A = [...R, { variable: 'acct_number', reader: 'account', regex: '^5\\d{6,7}$' }];
+eq(f('5623 1348', A), { variable: 'acct_number', value: '56231348' }, 'an account in the tenant pattern');
+eq(f('my account is 5 6 2 3 1 3 4 8', A), { variable: 'acct_number', value: '56231348' }, 'said digit by digit');
+eq(f('ab5123456@gmail.com', A), { variable: 'email', value: 'ab5123456@gmail.com' }, 'the digits inside an email are the email\'s');
+eq(f('1234', A), null, 'not the tenant pattern');
 console.log(`capture: ${checks} checks passed`);

@@ -6,20 +6,25 @@
  * through `warn`, so one bad tenant pattern cannot stop the others.
  *
  * A pattern may name a reader instead of a regex: { variable, reader: 'phone' | 'email' } reads the answer with
- * readPhone / readEmail (spoken and spelled forms included).
+ * readPhone / readEmail (spoken and spelled forms included); { variable, reader: 'account', regex } reads it with
+ * readIdentifier, an account whose digits match the tenant's regex (a number inside an email is the email's).
  *
  * Part of jsfe/helpers; imports only its sibling contact.js.
  */
-import { readEmail, readPhone } from './contact.js';
+import { readEmail, readPhone, readIdentifier } from './contact.js';
 
-const READERS = { phone: readPhone, email: readEmail };
+const READERS = {
+   phone: (input) => readPhone(input),
+   email: (input) => readEmail(input),
+   account: (input, pattern) => { const id = readIdentifier(input, pattern.regex || ''); return id && id.kind === 'account' ? id.value : ''; }
+};
 export function normalizeAndFindCapture(userInput, patterns, warn = () => {}) {
    if (!Array.isArray(patterns)) {
       return null;
    } else {
       for (const pattern of patterns) {
          if (pattern && READERS[pattern.reader]) {
-            const value = READERS[pattern.reader](userInput);
+            const value = READERS[pattern.reader](userInput, pattern);
             if (value) {
                return { variable: pattern.variable, value };
             } else {

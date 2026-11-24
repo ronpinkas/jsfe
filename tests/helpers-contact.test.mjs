@@ -111,4 +111,16 @@ eq(readEmail('s o n n y at gmail dot com'), 'sonny@gmail.com', 'a spelled "y" be
 eq(readEmail('juan guion perez at gmail dot com'), 'juan-perez@gmail.com', 'guion is a dash');
 eq(readEmail('mary y juan at gmail dot com'), 'juan@gmail.com', '"y" between words is still a lead-in');
 eq(readEmail('my email is a b at x dot com'), 'ab@x.com', 'two spelled letters after a lead-in');
+// An email and a phone claim their part of the answer (owner 2026-11-24, prod 2026-11-18..23): a number inside the email is the
+// email's; when a complete phone and the email overlap, the one that begins first keeps its part, the other is read on the rest.
+const ACCOUNT = '^5\\d{6,7}$';
+eq(readIdentifier('Ab5123456@Gmail.com.', ACCOUNT), { kind: 'email', value: 'ab5123456@gmail.com' }, 'the digits inside an email are not an account');
+eq(readIdentifier('The email is a b 5 1 2 3 4 5 6 at Gmail dot com.', ACCOUNT), { kind: 'email', value: 'ab5123456@gmail.com' }, 'spoken, the same');
+eq(readIdentifier('correo electrónico: maria36@gmail.com; número de cuenta: 55512345', ACCOUNT), { kind: 'account', value: '55512345' }, 'the email\'s digits never join the account into a phone');
+eq(readPhone('john2135550147@gmail.com'), '', 'a phone-shaped name inside an email is the email\'s');
+eq(readEmail('213-555-0147  jperez@ymail.com'), 'jperez@ymail.com', 'a phone before the email keeps its part');
+eq(readPhone('213-555-0147  jperez@ymail.com'), '2135550147', 'and is read');
+eq(readEmail('2135550148 \n\nJuanperez10@gmail.com'), 'juanperez10@gmail.com', 'on its own line, the same');
+eq(readPhone('ana30594@gmail.com\n213 555 0149'), '2135550149', 'a phone after the email is read');
+eq(readEmail('Con 8 lopez 6 5 4 arroba Gmail punto com.'), '8lopez654@gmail.com', 'a number that is no phone stays in the email');
 console.log(`contact: ${checks} checks passed`);

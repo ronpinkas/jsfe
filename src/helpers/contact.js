@@ -5,8 +5,15 @@
  * address ("juan at gmail dot com", "j u a n arroba gmail punto com"), so the same answer worked for a statement and
  * failed at the identity question (flow design review 2026-10-13).
  *
- * Part of jsfe/helpers; zero imports.
+ * An email and a phone claim the part of the answer they were read from, and a number inside the email is never read as
+ * another field (owner 2026-11-24: the longest match wins; a fragment of a match is never another field's). When the email
+ * and a complete phone overlap, the one that begins first keeps its part (a tie: the phone) and the other is read again on
+ * the rest. Prod 2026-11-23: the digits inside an address were read as an account number, an address's digits joined an
+ * account number into a phone, and a phone typed before an address became the start of the address.
+ *
+ * Part of jsfe/helpers; imports its sibling numbers.js.
  */
+import { findNumbers } from './numbers.js';
 
 // Words that introduce an address and are never part of it ("my email is", "mi correo es", "send it to").
 const EMAIL_LEAD_IN = new Set(['my', 'mi', 'su', 'your', 'email', 'e-mail', 'mail', 'correo', 'electronico', 'electrónico',
@@ -24,7 +31,12 @@ const EMAIL_LEAD_IN = new Set(['my', 'mi', 'su', 'your', 'email', 'e-mail', 'mai
  * With `{literal:true}`, a complete visible address wins over surrounding prose; absent one,
  * the same spoken/spelled parsing applies. Distinct visible addresses are ambiguous and return empty.
  */
-export function readEmail(text, { literal = false } = {}) {
+export function readEmail(text, options = {}) {
+   return emailClaim(text, options).email;
+}
+
+/** readEmail's reading of the whole answer, before any phone claims its part. */
+function rawEmail(text, { literal = false } = {}) {
    // Contextual prose must not become part of an already complete, visible address. This
    // explicit mode preserves the default spoken/spelled-name grammar for existing callers.
    if (literal) {
@@ -141,6 +153,61 @@ export function emailAttempt(text) {
 
 const northAmerican = (digits) => digits.length === 11 && digits.startsWith('1') ? digits.slice(1) : digits.length === 10 ? digits : '';
 
+/** Where the address rawEmail read sits in the answer: [[start, end], ...]. Typed, the address itself; spoken (at / arroba /
+ * dot / punto), the shortest run of words that reads as it, with a spoken ending after it. */
+export function emailSpans(raw, value) {
+   const literal = raw.toLowerCase().indexOf(value);
+   if (literal >= 0) return [[literal, literal + value.length]];
+   // Spoken addresses may use at / arroba / dot / punto. Select the shortest source window yielding this address.
+   const tokens = [...raw.matchAll(/\S+/g)];
+   if (tokens.length > 128) return [[0,raw.length]];
+   for (let size = 1; size <= tokens.length; size++) {
+      const spans = [];
+      for (let i = 0; i + size <= tokens.length; i++) {
+         const a = tokens[i].index, b = tokens[i+size-1].index + tokens[i+size-1][0].length;
+         if (rawEmail(raw.slice(a,b)) === value) {
+            // "juan at gmail" already reads as gmail.com: the spoken ending after it belongs to the same address
+            let j = i + size;
+            while (j < tokens.length && /^(?:dot|punto|punt|ponto|com|con|\.com)[.,;:!?]*$/i.test(tokens[j][0])) j++;
+            spans.push([a, j > i + size ? tokens[j-1].index + tokens[j-1][0].length : b]);
+         } else {
+            // this window is not the address
+         }
+      }
+      if (spans.length) return spans;
+   }
+   return [[0,raw.length]];
+}
+
+const blank = (text, spans) => spans.reduce((out, [a, b]) => out.slice(0, a) + ' '.repeat(b - a) + out.slice(b), text);
+
+/** The email in the answer and the part it claims: {email, spans}. A complete North American phone number overlapping it
+ * that begins no later than the email keeps its part, and the email is read again on the rest. */
+function emailClaim(text, options = {}) {
+   const t = String(text ?? '');
+   const email = rawEmail(t, options);
+   if (!email) {
+      return { email: '', spans: [] };
+   } else {
+      const spans = emailSpans(t, email);
+      const start = Math.min(...spans.map(([a]) => a));
+      const phone = findNumbers(t).find((n) => northAmerican(n.value) && spans.some(([a, b]) => n.start < b && n.end > a));
+      if (phone && phone.start <= start) {
+         const rest = blank(t, [[phone.start, phone.end]]);
+         const again = rawEmail(rest, options);
+         return again ? { email: again, spans: emailSpans(rest, again) } : { email: '', spans: [] };
+      } else {
+         return { email, spans };
+      }
+   }
+}
+
+/** The answer with the email's part blanked, for the digit readers: its digits are the email's. */
+function withoutEmail(text) {
+   const t = String(text ?? '');
+   return blank(t, emailClaim(t).spans);
+}
+
 /**
  * The 10-digit North American number in the answer (a leading 1 dropped), or ''. A caller who restates the number
  * ("Area code 21. 213 555 0147.", "Area code, 213 555. Area code 213-555-0147.") is read by the last complete number
@@ -148,7 +215,7 @@ const northAmerican = (digits) => digits.length === 11 && digits.startsWith('1')
  * nothing. An answer with an international prefix (+, plus, más, 00) is never split, so it stays international.
  */
 export function readPhone(text) {
-   const t = String(text ?? '');
+   const t = withoutEmail(text);
    const whole = northAmerican(t.replace(/[^0-9]/g, ''));
    if (whole) {
       return whole;
@@ -197,7 +264,7 @@ export function callerIsInternational(cargo) {
  * accountPattern (a regex source, e.g. '^5\\d{6,7}$') is the tenant's account-number shape; its digits win first.
  */
 export function readIdentifier(text, accountPattern = '') {
-   const digits = String(text ?? '').replace(/[^0-9]/g, '');
+   const digits = withoutEmail(text).replace(/[^0-9]/g, '');
    let account = false;
    try {
       account = !!accountPattern && new RegExp(accountPattern).test(digits);
