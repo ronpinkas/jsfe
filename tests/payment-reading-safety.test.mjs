@@ -36,4 +36,6 @@ const engine=new WorkflowEngine(quiet,async()=>JSON.stringify({flowName:'None'})
 let session=engine.initSession('synthetic','partial-money','en');
 for(const [text,start] of [['begin',true],['con75 centavos',false]])session=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content:text,...(start?{start:{flow:'partial-money-owner'}}:{})},session)));
 assert.equal(session.cargo.forms[session.cargo.formTasks['partial-money-owner']].values.amount,undefined);assert.equal(session.cargo.effects,undefined);assert.doesNotMatch(session.response,/AUTHORIZE/);checks++;
+// The amount named 'la suma de' / 'the sum of', as monto and cantidad (owner 2026-11-25; prod 2026-11-24 12:45).
+for(const raw of ['Quiero pagar la suma de 220 dólares.','la suma de 220 dólares','I want to pay the sum of 220 dollars','Quiero pagar la cantidad de 220 dólares.']){assert.equal(moneyIntentAllows(raw,'payment'),true,raw);checks++;}
 console.log(`Payment reading withholding: all checks passed (${checks})`);

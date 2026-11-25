@@ -15,7 +15,8 @@ const NUMERIC_MONEY=/^(?:\$\s*)?(?:\d{1,3}(?:[,.]\d{3})+|\d+)(?:[.,]\d{1,2})?(?:
 // recovery offer 'Pago de 100 dólares.' was asked whether 100 was the card's expiration date).
 const PAYMENT_PREFIX=/^(?:(?:(?:i (?:want to|would like to|will) |i['’]d like to |i['’]ll )?make )?(?:a )?payment(?: of)?|(?:i (?:want to|would like to|can|am able to|will) |i['’]d like to )?pay|(?:quiero |quisiera |puedo |s[ií] puedo |voy a )?(?:pagar|abonar)|(?:no,?\s+)?make it|(?:(?:quiero |quisiera |voy a )?hacer )?(?:un )?(?:pago|abono)(?: de)?)\s*(?=\$|\d|[a-záéíóúüñ])/i;
 // The field named with its value ("100 amount", "the amount is 100", "monto 100"): the amount, said as such.
-const AMOUNT_LABEL_PREFIX=/^(?:(?:the|el|la)\s+)?(?:amount|monto|cantidad)(?:\s+(?:is|of|es|de))?[:\s]+(?=\$|\d)/i;
+// 'la suma de 220 dólares' (owner 2026-11-25; prod 2026-11-24 12:45 got the security-code hint) and 'the sum of'.
+const AMOUNT_LABEL_PREFIX=/^(?:(?:the|el|la)\s+)?(?:amount|sum|monto|cantidad|suma)(?:\s+(?:is|of|es|de))?[:\s]+(?=\$|\d)/i;
 const AMOUNT_LABEL_SUFFIX=/(?<=\d|\$)\s+(?:(?:as\s+)?(?:the\s+)?amount|(?:de\s+|el\s+)?monto|(?:de\s+|la\s+)?cantidad)$/i;
 const ACCOUNT_PREFIX=/^(?:(?:sub[ -]?account|subcuenta|cuenta)\s+\d{1,8}\s*,\s*)/i;
 const DIGIT_WORD='(?:zero|one|two|three|four|five|six|seven|eight|nine|cero|uno|dos|tres|cuatro|cinco|seis|siete|ocho|nueve)';
