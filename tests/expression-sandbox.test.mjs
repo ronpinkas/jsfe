@@ -93,6 +93,12 @@ test('no state survives an evaluation', () => {
    assert.throws(() => fnOut(), /after the expression ends/);
 });
 
+test('the limit is the expression\'s own work, never the clock: a slow helper or a loaded machine does not stop it', () => {
+   const busy = (ms) => { const end = Date.now() + ms; while (Date.now() < end) { /* a slow host helper, or a starved CPU */ } return 1; };
+   assert.equal(ev('slow(800) + slow(800)', {slow: busy}), 2, '1.6 s in a helper: answered');
+   assert.equal(ev('[1, 2, 3].map(function (x) { return x * 2; }).join(",")'), '2,4,6', 'ordinary work: answered');
+});
+
 test('runaway code is stopped and the sandbox stays usable', () => {
    assert.throws(() => ev('(() => { while (true) {} })()'), /interrupted/);
    assert.throws(() => ev('(() => { const a = []; while (true) a.push(new Array(100000).fill(1)); })()'), /memory|interrupted/);

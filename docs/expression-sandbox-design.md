@@ -99,8 +99,10 @@ frozen and hold no state.
   and on exit the host's object and function tables and the guest's stand-in cache are cleared, so no stand-in outlives
   its evaluation. jsfe evaluates synchronously, so evaluations never overlap.
 - **Limits** (`EXPRESSION_LIMITS`; an `ExpressionSandbox` takes overrides, the engine uses these): memory 256 MB for the
-  process (a tenant's full flow set compiled uses about 12 MB), stack 1 MB, a wall deadline of 500 ms per evaluation checked
-  by the interrupt handler. The prototype's slowest evaluation took 70 ms. A limit hit throws `Expression evaluation
+  process (a tenant's full flow set compiled uses about 12 MB), stack 1 MB, and 1,000 steps per evaluation: the interrupt
+  handler's calls, which QuickJS makes at a fixed count of executed bytecode. The budget is the expression's own work, so
+  the verdict does not depend on the machine or its load, and a helper the expression calls is not counted. Real flows use
+  at most 6 steps (7.29 M evaluations measured); a runaway loop is stopped within about 30-600 ms. A limit hit throws `Expression evaluation
   failed: interrupted` (or `out of memory`), handled like any failed expression.
 - **Compiled expressions** are cached per sandbox (1,000, least recently used); a cached wrapper holds no state.
 - **Release:** the shared sandbox lives as long as the process. A separately created `ExpressionSandbox` is released by

@@ -23,7 +23,12 @@ const BUILTINS = new Set(['Object', 'Date', 'Math', 'String', 'Number', 'Boolean
 const identifier = /^[A-Za-z_$][\w$]*$/;
 const COMPILED_CACHE = 1000;
 
-export const EXPRESSION_LIMITS = Object.freeze({memoryBytes: 256 * 1024 * 1024, stackBytes: 1024 * 1024, timeoutMs: 500});
+// steps: the interrupt handler's calls in one evaluation, which QuickJS makes at a fixed count of executed bytecode, so the
+// limit is the expression's own work: the same verdict on any machine, under any load, and a trusted helper the expression
+// calls (readFormAnswer, matchInputs) is not counted. Measured 2026-11-24 over 7.29 M evaluations (all AIDevelopment flow
+// suites and jsfe's): at most 6 steps, 99.99% at 3 or fewer; a runaway loop makes 1.7-30 steps per ms, so 1,000 stops one
+// within ~30-600 ms.
+export const EXPRESSION_LIMITS = Object.freeze({memoryBytes: 256 * 1024 * 1024, stackBytes: 1024 * 1024, steps: 1000});
 
 // Guest runtime. The host functions it is given are captured and removed from the global object before anything else
 // runs; its API is the script's completion value, never a global.
@@ -197,14 +202,14 @@ const guestError = (ctx, handle) => {
 
 export class ExpressionSandbox {
    constructor(limits = {}) {
-      const {memoryBytes, stackBytes, timeoutMs} = {...EXPRESSION_LIMITS, ...limits};
+      const {memoryBytes, stackBytes, steps} = {...EXPRESSION_LIMITS, ...limits};
       const rt = QuickJS.newRuntime();
       rt.setMemoryLimit(memoryBytes);
       rt.setMaxStackSize(stackBytes);
       const res = {rt, ctx: null, handles: [], compiled: new Map(), released: false};
       this.res = res;
-      this.timeoutMs = timeoutMs;
-      this.deadline = 0;
+      this.stepLimit = steps;
+      this.steps = -1;                          // -1 outside an evaluation: nothing is counted or interrupted
       this.depth = 0;
       this.generation = 0;
       this.owned = [];
@@ -214,7 +219,7 @@ export class ExpressionSandbox {
       this.namespaces = new WeakMap();          // a named-function namespace -> its guest object
       this.namespaceCache = new Map();          // compiled once per source (see defineNamespace)
       const self = new WeakRef(this);
-      rt.setInterruptHandler(() => { const s = self.deref(); return !s || (s.deadline !== 0 && Date.now() > s.deadline); });
+      rt.setInterruptHandler(() => { const s = self.deref(); if (!s) { return true; } else if (s.steps < 0) { return false; } else { s.steps++; return s.steps > s.stepLimit; } });
       const ctx = rt.newContext();
       res.ctx = ctx;
       this.ctx = ctx;
@@ -348,7 +353,7 @@ export class ExpressionSandbox {
       return this.inn(JSON.parse(this.ctx.getString(encoded)));
    }
 
-   /** One evaluation: a deadline, a fresh object table, every handle released at the end. */
+   /** One evaluation: a step budget, a fresh object table, every handle released at the end. */
    scope(run, approved) {
       const outer = this.depth === 0;
       const previousApproved = this.approved;
@@ -356,7 +361,7 @@ export class ExpressionSandbox {
       if (outer) {
          if (this.res.released) throw new Error('expression sandbox released');
          this.generation++;
-         this.deadline = Date.now() + this.timeoutMs;
+         this.steps = 0;
       }
       this.depth++;
       try {
@@ -365,7 +370,7 @@ export class ExpressionSandbox {
          this.depth--;
          this.approved = previousApproved;
          if (outer) {
-            this.deadline = 0;
+            this.steps = -1;
             for (const h of this.owned) if (h.alive) h.dispose();
             this.owned = [];
             this.objs = []; this.objId.clear(); this.evalFuns = []; this.evalFunId.clear();
