@@ -572,3 +572,26 @@ export function pickChoice(answer, choices, acceptOther) {
       return '';
    }
 }
+
+/**
+ * pickChoice for a flow's own word reader, tight (owner 2026-11-24: a word inside a sentence never decides; the reply ranker
+ * does). A choice's phrase picks only when the rest of the answer is courtesy, connecting words, numbers or `templateWords`
+ * (isReaderFiller, the rule of profile.whole_phrases); otherwise ''. Keys, YES words and agent/exit picks are pickChoice's
+ * (already whole-answer). "where is my order, please" picks; "it says delivered but I never got it" does not.
+ */
+export function pickWholeChoice(answer, choices, templateWords = []) {
+   const key = pickChoice(answer, choices, false);
+   const choice = (Array.isArray(choices) ? choices : []).find((c) => c && c.key === key);
+   if (!key || !choice) {
+      return key;
+   } else {
+      const plain = (x) => ' ' + normalize(String(x ?? '').replace(/[^\p{L}\p{N}'\s]/gu, ' ')).replace(/\s+/g, ' ').trim() + ' ';
+      const said = plain(answer);
+      const hit = (choice.phrases ?? choice.words ?? []).map(plain).filter((p) => p.trim() && said.includes(p)).sort((a, b) => b.length - a.length)[0];
+      if (!hit) {
+         return key;   // a key, a YES word or a spoken key: pickChoice reads those only as the whole answer
+      } else {
+         return isReaderFiller(said.replace(hit, ' '), templateWords) ? key : '';
+      }
+   }
+}

@@ -1,7 +1,7 @@
 // jsfe/helpers answer.js — the answer vocabulary every flow set shares.
 //   node tests/helpers-answer.test.mjs
 import assert from 'node:assert/strict';
-import { isAnswer, isAgentRequest, isExitRequest, pickChoice, isOtherRequest, isSpelledFragment, isAmountAnswer, amountInAnswer } from '../dist/helpers/answer.js';
+import { isAnswer, isAgentRequest, isExitRequest, pickChoice, pickWholeChoice, isOtherRequest, isSpelledFragment, isAmountAnswer, amountInAnswer } from '../dist/helpers/answer.js';
 
 let checks = 0;
 const eq = (got, want, what) => { assert.equal(got, want, what); checks++; };
@@ -285,4 +285,14 @@ for (const said of ['exit', 'Cancelar.', 'cancel please', 'salir por favor', '*'
    eq(isExitRequest(said), true, `"${said}" exits`);
 for (const said of ['Cancelar el pedido', 'cancel my order', 'quiero cancelar', 'salir de la deuda', 'no cancel', '', 'salir salir de la deuda', 'Cancelar membresía', 'cancelar para cancelar el pedido'])
    eq(isExitRequest(said), false, `"${said}" does not exit`);
+// pickWholeChoice: a flow's own word reader, tight (owner 2026-11-24): a phrase picks only as the whole answer, courtesy,
+// connecting words, numbers and the template words aside; a phrase inside any other sentence picks nothing (the reply ranker reads it).
+{
+   const asks = [{ key: 'track', words: ['track', 'where is my order', 'dónde está'] }, { key: 'delivery', words: ['when will it arrive', 'delivered', 'entregado', 'cuándo llega'] }, { key: '1', words: ['1'] }];
+   for (const [said, want] of [['where is my order?', 'track'], ['Where is my order, please', 'track'], ['I want to track my order', 'track'], ['track order 1234567', 'track'],
+      ['delivered', 'delivery'], ['¿Cuándo llega?', 'delivery'], ['1', '1'],
+      ['It says delivered but I never got it', ''], ['Dice entregado pero no lo recibí', ''], ['My package was delivered to the wrong house', ''], ['Pregunta cuando llega', ''], ['nothing here', '']])
+      eq(pickWholeChoice(said, asks, ['order', 'pedido']), want, `"${said}" -> "${want}"`);
+   eq(pickChoice('It says delivered but I never got it', asks, false), 'delivery', 'pickChoice itself still reads a phrase inside a sentence');
+}
 console.log(`answer: ${checks} checks passed`);
