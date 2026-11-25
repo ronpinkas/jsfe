@@ -90,53 +90,62 @@ flowchart TD
    c14 -- "contact_kind === 'international'" --> b19
    b20(["replace → contact-misread"])
    class b20 endstep
-   c14 -- "contact_kind === 'invalid_phone'" --> b20
+   c14 -- "contact_kind === 'invalid_account'" --> b20
    b21(["replace → contact-misread"])
    class b21 endstep
-   c14 -- "contact_kind === 'invalid_email'" --> b21
-   b22(["dispatch: intent detection"])
+   c14 -- "contact_kind === 'invalid_number'" --> b21
+   b22(["replace → contact-misread"])
    class b22 endstep
-   c14 -- "contact_kind === 'unmapped'" --> b22
-   b23(["replace → contact-misread"])
+   c14 -- "contact_kind === 'invalid_email'" --> b22
+   b23(["dispatch: intent detection"])
    class b23 endstep
-   c14 -- "contact_kind === 'invalid'" --> b23
-   n24["set contact_rank_kind, contact_rank_options, contact_rank_first, contact_…"]
-   c14 -- "else" --> n24
-   c25{"case"}
-   n24 --> c25
-   b26(["reboot → live-agent-requested"])
-   class b26 endstep
-   c25 -- "contact_rank_kind === '__agent'" --> b26
-   b27(["reboot → #123;#123;contact_options.cancel_flow#125;#125;"])
+   c14 -- "contact_kind === 'unmapped'" --> b23
+   b24(["replace → contact-misread"])
+   class b24 endstep
+   c14 -- "contact_kind === 'invalid'" --> b24
+   n25["set contact_rank_kind, contact_rank_options, contact_rank_first, contact_…"]
+   c14 -- "else" --> n25
+   c26{"case"}
+   n25 --> c26
+   b27(["replace → get-cell-or-email"])
    class b27 endstep
-   c25 -- "contact_rank_kind === 'exit'" --> b27
-   b28(["reboot → switch-to-text"])
+   c26 -- "contact_rank_kind === 'gives_contact' && !!contact_given" --> b27
+   b28(["replace → contact-misread"])
    class b28 endstep
-   c25 -- "contact_rank_kind === 'text'" --> b28
-   b29(["replace → get-cell-or-email"])
+   c26 -- "contact_rank_kind === 'gives_contact'" --> b28
+   b29(["reboot → live-agent-requested"])
    class b29 endstep
-   c25 -- "contact_rank_first" --> b29
-   b30(["replace → contact-misread"])
+   c26 -- "contact_rank_kind === '__agent'" --> b29
+   b30(["reboot → #123;#123;contact_options.cancel_flow#125;#125;"])
    class b30 endstep
-   c25 -- "contact_kind === 'unmapped'" --> b30
-   n31["set acct_number, cell_number, email, contact_check_key"]
-   c25 -- "else" --> n31
-   c32{"case"}
-   n31 --> c32
-   b33[["call #123;#123;contact_options.validate_flow#125;#125;"]]
-   class b33 flowstep
-   c32 -- "contact_check_key && !cargo.contactCheck" --> b33
-   n34["set contact_error, contact_error_es"]
-   b33 --> n34
-   c32 -- "else" --> n34
+   c26 -- "contact_rank_kind === 'exit'" --> b30
+   b31(["reboot → switch-to-text"])
+   class b31 endstep
+   c26 -- "contact_rank_kind === 'text'" --> b31
+   b32(["replace → get-cell-or-email"])
+   class b32 endstep
+   c26 -- "contact_rank_first" --> b32
+   b33(["replace → contact-misread"])
+   class b33 endstep
+   c26 -- "contact_kind === 'unmapped'" --> b33
+   n34["set acct_number, cell_number, email, contact_check_key"]
+   c26 -- "else" --> n34
    c35{"case"}
    n34 --> c35
-   b36(["replace → contact-not-on-file"])
-   class b36 endstep
-   c35 -- "cargo.contactCheck === #quot;none#quot;" --> b36
+   b36[["call #123;#123;contact_options.validate_flow#125;#125;"]]
+   class b36 flowstep
+   c35 -- "contact_check_key && !cargo.contactCheck" --> b36
+   n37["set contact_error, contact_error_es"]
+   b36 --> n37
+   c35 -- "else" --> n37
+   c38{"case"}
+   n37 --> c38
+   b39(["replace → contact-not-on-file"])
+   class b39 endstep
+   c38 -- "cargo.contactCheck === #quot;none#quot;" --> b39
    DONE(["end (back to caller)"])
    class DONE endstep
-   c35 -- "else" --> DONE
+   c38 -- "else" --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

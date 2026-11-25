@@ -1330,6 +1330,35 @@
         "type": "boolean",
         "value": false
       },
+      "contact_given": {
+        "type": "object",
+        "value": null
+      },
+      "contact_number_words": {
+        "type": "array",
+        "value": [
+          "account",
+          "number",
+          "cuenta",
+          "numero",
+          "número",
+          "phone",
+          "telephone",
+          "cell",
+          "teléfono",
+          "telefono",
+          "celular",
+          "yes",
+          "yeah",
+          "si",
+          "sí",
+          "it",
+          "es",
+          "is",
+          "was",
+          "era"
+        ]
+      },
       "contact_names_account": {
         "type": "array",
         "value": [
@@ -1653,7 +1682,7 @@
         "id": "identity_contact_classify",
         "type": "SET",
         "variable": "contact_kind",
-        "value": "contact_id && contact_id.kind === 'account' ? 'account' : contact_phone ? 'phone' : contact_mail ? 'email' : contact_options.account_pattern && !contact_digits && matchesChoice(contact_text,contact_names_account) ? 'names_account' : readInternationalPhone(contact_text) ? 'international' : isAgentRequest(contact_text) ? 'agent' : isExitRequest(contact_text) ? 'exit' : (function emailAttempt(text) {\n   return /@|\\barroba\\b|\\b(?:g\\s?mail|gmai|hotmail|hot mail|yahoo|outlook|icloud|aol)\\b/i.test(String(text ?? ''));\n})(contact_text) ? 'invalid_email' : contact_allowed && /^(?:no|nope|nah)\\b/i.test(contact_text.trim()) && !/[0-9@]/.test(contact_text) ? 'decline' : contact_allowed && cargo.serviceAnswer && cargo.serviceAnswer.values.caller_decision === 'yes' ? 'caller' : contact_digits ? 'invalid_phone' : /[a-záéíóúñü]/i.test(contact_text) ? 'unmapped' : 'invalid'"
+        "value": "contact_id && contact_id.kind === 'account' ? 'account' : contact_phone ? 'phone' : contact_mail ? 'email' : contact_options.account_pattern && !contact_digits && matchesChoice(contact_text,contact_names_account) ? 'names_account' : readInternationalPhone(contact_text) ? 'international' : isAgentRequest(contact_text) ? 'agent' : isExitRequest(contact_text) ? 'exit' : (function emailAttempt(text) {\n   return /@|\\barroba\\b|\\b(?:g\\s?mail|gmai|hotmail|hot mail|yahoo|outlook|icloud|aol)\\b/i.test(String(text ?? ''));\n})(contact_text) ? 'invalid_email' : contact_allowed && /^(?:no|nope|nah)\\b/i.test(contact_text.trim()) && !/[0-9@]/.test(contact_text) ? 'decline' : contact_allowed && cargo.serviceAnswer && cargo.serviceAnswer.values.caller_decision === 'yes' ? 'caller' : contact_digits ? (isReaderFiller(contact_text,contact_number_words) ? (contact_options.account_pattern && (contact_options.account_shape || []).length && /\\b(?:account|cuenta)\\b/i.test(contact_text) ? 'invalid_account' : 'invalid_number') : 'unmapped') : /[a-záéíóúñü]/i.test(contact_text) ? 'unmapped' : 'invalid'"
       },
       {
         "id": "identity_contact_named",
@@ -1665,13 +1694,13 @@
         "id": "identity_contact_error",
         "type": "SET",
         "variable": "contact_error",
-        "value": "(function contactError(kind,options,es=false) {\n   const account=options.account_pattern?(es?options.account_name_es || options.account_name:options.account_name):'';\n   if(kind==='international')return es?\"Un número fuera de EE. UU. y Canadá no se puede usar aquí. Por favor indique el correo de su cuenta\"+(account?', o '+account:'')+\", o un celular de EE. UU. o Canadá.\":\"A number outside the US and Canada can't be used here. Please give the email on your account\"+(account?', or '+account:'')+\", or a US or Canadian mobile number.\";\n   if(kind==='invalid_email')return es?'Lo siento, no entendí el correo electrónico completo, por ejemplo: nombre arroba gmail punto com.':\"Sorry, I didn't get the whole email address, for example: name at gmail dot com.\";\n   if(kind==='invalid_phone')return es?'El número de teléfono que proporcionó no es válido.':\"Sorry, the phone number you provided isn't valid.\";\n   return es?'Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta'+(account?', o '+account:'')+' para continuar.':'Sorry, I do need the phone or email associated with your account'+(account?', or '+account:'')+' to proceed.';\n})(contact_kind,contact_options)"
+        "value": "(function contactError(kind,options,es=false) {\n   const account=options.account_pattern?(es?options.account_name_es || options.account_name:options.account_name):'';\n   if(kind==='international')return es?\"Un número fuera de EE. UU. y Canadá no se puede usar aquí. Por favor indique el correo de su cuenta\"+(account?', o '+account:'')+\", o un celular de EE. UU. o Canadá.\":\"A number outside the US and Canada can't be used here. Please give the email on your account\"+(account?', or '+account:'')+\", or a US or Canadian mobile number.\";\n   if(kind==='invalid_email')return es?'Lo siento, no entendí el correo electrónico completo, por ejemplo: nombre arroba gmail punto com.':\"Sorry, I didn't get the whole email address, for example: name at gmail dot com.\";\n   // A number said alone that is no identifier (owner 2026-11-25). Named an account number: the tenant's account shape, said.\n   if(kind==='invalid_account'){\n      const shapes=options.account_shape || [],first=[...new Set(shapes.flatMap(shape=>String(shape.first || '').split('')))],lengths=[...new Set(shapes.flatMap(shape=>shape.lengths || []))].sort((a,b)=>a-b);\n      const list=(items,or)=>items.length>1?items.slice(0,-1).join(', ')+' '+or(items[items.length-1])+' '+items[items.length-1]:String(items[0]);\n      return es?'Ese no es un número de cuenta válido. Los números de cuenta empiezan con '+list(first,()=>'o')+' y tienen '+list(lengths,n=>/^(8|11)/.test(String(n))?'u':'o')+' dígitos.':\"That isn't a valid account number. Account numbers start with \"+list(first,()=>'or')+' and are '+list(lengths,()=>'or')+' digits long.';\n   }\n   if(kind==='invalid_number')return options.account_pattern?(es?'Esto no parece ser un número de teléfono o de cuenta válido. Por favor revíselo e intente de nuevo.':\"This doesn't seem to be a valid phone or account number. Please check it and try again.\"):(es?'Esto no parece ser un número de teléfono válido. Por favor revíselo e intente de nuevo.':\"This doesn't seem to be a valid phone number. Please check it and try again.\");\n   return es?'Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta'+(account?', o '+account:'')+' para continuar.':'Sorry, I do need the phone or email associated with your account'+(account?', or '+account:'')+' to proceed.';\n})(contact_kind,contact_options)"
       },
       {
         "id": "identity_contact_error_es",
         "type": "SET",
         "variable": "contact_error_es",
-        "value": "(function contactError(kind,options,es=false) {\n   const account=options.account_pattern?(es?options.account_name_es || options.account_name:options.account_name):'';\n   if(kind==='international')return es?\"Un número fuera de EE. UU. y Canadá no se puede usar aquí. Por favor indique el correo de su cuenta\"+(account?', o '+account:'')+\", o un celular de EE. UU. o Canadá.\":\"A number outside the US and Canada can't be used here. Please give the email on your account\"+(account?', or '+account:'')+\", or a US or Canadian mobile number.\";\n   if(kind==='invalid_email')return es?'Lo siento, no entendí el correo electrónico completo, por ejemplo: nombre arroba gmail punto com.':\"Sorry, I didn't get the whole email address, for example: name at gmail dot com.\";\n   if(kind==='invalid_phone')return es?'El número de teléfono que proporcionó no es válido.':\"Sorry, the phone number you provided isn't valid.\";\n   return es?'Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta'+(account?', o '+account:'')+' para continuar.':'Sorry, I do need the phone or email associated with your account'+(account?', or '+account:'')+' to proceed.';\n})(contact_kind,contact_options,true)"
+        "value": "(function contactError(kind,options,es=false) {\n   const account=options.account_pattern?(es?options.account_name_es || options.account_name:options.account_name):'';\n   if(kind==='international')return es?\"Un número fuera de EE. UU. y Canadá no se puede usar aquí. Por favor indique el correo de su cuenta\"+(account?', o '+account:'')+\", o un celular de EE. UU. o Canadá.\":\"A number outside the US and Canada can't be used here. Please give the email on your account\"+(account?', or '+account:'')+\", or a US or Canadian mobile number.\";\n   if(kind==='invalid_email')return es?'Lo siento, no entendí el correo electrónico completo, por ejemplo: nombre arroba gmail punto com.':\"Sorry, I didn't get the whole email address, for example: name at gmail dot com.\";\n   // A number said alone that is no identifier (owner 2026-11-25). Named an account number: the tenant's account shape, said.\n   if(kind==='invalid_account'){\n      const shapes=options.account_shape || [],first=[...new Set(shapes.flatMap(shape=>String(shape.first || '').split('')))],lengths=[...new Set(shapes.flatMap(shape=>shape.lengths || []))].sort((a,b)=>a-b);\n      const list=(items,or)=>items.length>1?items.slice(0,-1).join(', ')+' '+or(items[items.length-1])+' '+items[items.length-1]:String(items[0]);\n      return es?'Ese no es un número de cuenta válido. Los números de cuenta empiezan con '+list(first,()=>'o')+' y tienen '+list(lengths,n=>/^(8|11)/.test(String(n))?'u':'o')+' dígitos.':\"That isn't a valid account number. Account numbers start with \"+list(first,()=>'or')+' and are '+list(lengths,()=>'or')+' digits long.';\n   }\n   if(kind==='invalid_number')return options.account_pattern?(es?'Esto no parece ser un número de teléfono o de cuenta válido. Por favor revíselo e intente de nuevo.':\"This doesn't seem to be a valid phone or account number. Please check it and try again.\"):(es?'Esto no parece ser un número de teléfono válido. Por favor revíselo e intente de nuevo.':\"This doesn't seem to be a valid phone number. Please check it and try again.\");\n   return es?'Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta'+(account?', o '+account:'')+' para continuar.':'Sorry, I do need the phone or email associated with your account'+(account?', or '+account:'')+' to proceed.';\n})(contact_kind,contact_options,true)"
       },
       {
         "id": "identity_contact_rank_asked",
@@ -1683,7 +1712,7 @@
         "id": "identity_contact_rank_offers",
         "type": "SET",
         "variable": "contact_rank_offers",
-        "value": "[{key:'no_identifier',label:'does not know or does not have the phone number, email or account number on the account'},{key:'other_contact',label:'has or wants to give a different phone number or email'},{key:'__agent',label:'speak with a person (a live agent)'},{key:'exit',label:'does not want to continue and stops here'}].concat(callerTextNumber(cargo) ? [{key:'text',label:'continue by text message'}] : [])"
+        "value": "[{key:'gives_contact',label:'gives a phone number, email or account number for the account',parameters:[{name:'phone',type:'string',description:'The phone number the caller gave, as said; empty if none.'},{name:'email',type:'string',description:'The email address the caller gave, as said; empty if none.'}].concat(contact_options.account_pattern ? [{name:'account_number',type:'string',description:'The account number the caller gave, as said; empty if none.'}] : [])},{key:'no_identifier',label:'does not know or does not have the phone number, email or account number on the account'},{key:'other_contact',label:'has or wants to give a different phone number or email'},{key:'__agent',label:'speak with a person (a live agent)'},{key:'exit',label:'does not want to continue and stops here'}].concat(callerTextNumber(cargo) ? [{key:'text',label:'continue by text message'}] : [])"
       },
       {
         "id": "identity_contact_rank_clear",
@@ -1742,8 +1771,20 @@
             },
             "initializeDefaults": true
           },
-          "condition: contact_kind === 'invalid_phone'": {
-            "id": "identity_contact_invalid_phone",
+          "condition: contact_kind === 'invalid_account'": {
+            "id": "identity_contact_invalid_account",
+            "type": "FLOW",
+            "value": "contact-misread",
+            "callType": "replace",
+            "parameters": {
+              "contact_options": "{{contact_options}}",
+              "error_message": "{{contact_error}}",
+              "error_message_es": "{{contact_error_es}}"
+            },
+            "initializeDefaults": true
+          },
+          "condition: contact_kind === 'invalid_number'": {
+            "id": "identity_contact_invalid_number",
             "type": "FLOW",
             "value": "contact-misread",
             "callType": "replace",
@@ -1833,9 +1874,52 @@
         "value": "contact_rank_options ? contact_rank_options.intro_es : contact_error_es"
       },
       {
+        "id": "identity_contact_given",
+        "type": "SET",
+        "variable": "contact_given",
+        "value": "contact_rank_kind === 'gives_contact' ? (function contactGiven(reply,spoken,text,options) {\n   const args=reply && reply.arguments || {},digits=String(spoken || '').replace(/\\D/g,'');\n   const grounded=value=>{const d=String(value || '').replace(/\\D/g,'');return d.length>=7 && digits.includes(d)?d:'';};\n   const account=options.account_pattern?grounded(args.account_number):'';\n   if(account && new RegExp(options.account_pattern).test(account))return {acct_number:account,cell_number:'',email:''};\n   const phone=grounded(args.phone);\n   if(phone && validatePhone(phone))return {acct_number:'',cell_number:phone.slice(-10),email:''};\n   const mail=args.email?readEmail(String(args.email)):'';\n   if(mail && String(text || '').toLowerCase().replace(/\\s+/g,'').includes(String(mail).split('@')[0].toLowerCase()))return {acct_number:'',cell_number:'',email:String(mail)};\n   return null;\n})(contact_rank_reply,(function serviceDigits(text) {\n   const words={zero:'0',cero:'0',one:'1',uno:'1',two:'2',dos:'2',three:'3',tres:'3',four:'4',cuatro:'4',five:'5',cinco:'5',six:'6',seis:'6',seven:'7',siete:'7',eight:'8',ocho:'8',nine:'9',nueve:'9'};\n   return String(text || '').replace(/[a-záéíóúñ]+/gi,word=>Object.hasOwn(words,word.toLowerCase())?words[word.toLowerCase()]:word);\n})(contact_text),contact_text,contact_options) : null"
+      },
+      {
+        "id": "identity_contact_given_line",
+        "type": "SET",
+        "variable": "contact_error",
+        "value": "contact_rank_kind === 'gives_contact' && !contact_given ? (function contactError(kind,options,es=false) {\n   const account=options.account_pattern?(es?options.account_name_es || options.account_name:options.account_name):'';\n   if(kind==='international')return es?\"Un número fuera de EE. UU. y Canadá no se puede usar aquí. Por favor indique el correo de su cuenta\"+(account?', o '+account:'')+\", o un celular de EE. UU. o Canadá.\":\"A number outside the US and Canada can't be used here. Please give the email on your account\"+(account?', or '+account:'')+\", or a US or Canadian mobile number.\";\n   if(kind==='invalid_email')return es?'Lo siento, no entendí el correo electrónico completo, por ejemplo: nombre arroba gmail punto com.':\"Sorry, I didn't get the whole email address, for example: name at gmail dot com.\";\n   // A number said alone that is no identifier (owner 2026-11-25). Named an account number: the tenant's account shape, said.\n   if(kind==='invalid_account'){\n      const shapes=options.account_shape || [],first=[...new Set(shapes.flatMap(shape=>String(shape.first || '').split('')))],lengths=[...new Set(shapes.flatMap(shape=>shape.lengths || []))].sort((a,b)=>a-b);\n      const list=(items,or)=>items.length>1?items.slice(0,-1).join(', ')+' '+or(items[items.length-1])+' '+items[items.length-1]:String(items[0]);\n      return es?'Ese no es un número de cuenta válido. Los números de cuenta empiezan con '+list(first,()=>'o')+' y tienen '+list(lengths,n=>/^(8|11)/.test(String(n))?'u':'o')+' dígitos.':\"That isn't a valid account number. Account numbers start with \"+list(first,()=>'or')+' and are '+list(lengths,()=>'or')+' digits long.';\n   }\n   if(kind==='invalid_number')return options.account_pattern?(es?'Esto no parece ser un número de teléfono o de cuenta válido. Por favor revíselo e intente de nuevo.':\"This doesn't seem to be a valid phone or account number. Please check it and try again.\"):(es?'Esto no parece ser un número de teléfono válido. Por favor revíselo e intente de nuevo.':\"This doesn't seem to be a valid phone number. Please check it and try again.\");\n   return es?'Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta'+(account?', o '+account:'')+' para continuar.':'Sorry, I do need the phone or email associated with your account'+(account?', or '+account:'')+' to proceed.';\n})('invalid_number',contact_options) : contact_error"
+      },
+      {
+        "id": "identity_contact_given_line_es",
+        "type": "SET",
+        "variable": "contact_error_es",
+        "value": "contact_rank_kind === 'gives_contact' && !contact_given ? (function contactError(kind,options,es=false) {\n   const account=options.account_pattern?(es?options.account_name_es || options.account_name:options.account_name):'';\n   if(kind==='international')return es?\"Un número fuera de EE. UU. y Canadá no se puede usar aquí. Por favor indique el correo de su cuenta\"+(account?', o '+account:'')+\", o un celular de EE. UU. o Canadá.\":\"A number outside the US and Canada can't be used here. Please give the email on your account\"+(account?', or '+account:'')+\", or a US or Canadian mobile number.\";\n   if(kind==='invalid_email')return es?'Lo siento, no entendí el correo electrónico completo, por ejemplo: nombre arroba gmail punto com.':\"Sorry, I didn't get the whole email address, for example: name at gmail dot com.\";\n   // A number said alone that is no identifier (owner 2026-11-25). Named an account number: the tenant's account shape, said.\n   if(kind==='invalid_account'){\n      const shapes=options.account_shape || [],first=[...new Set(shapes.flatMap(shape=>String(shape.first || '').split('')))],lengths=[...new Set(shapes.flatMap(shape=>shape.lengths || []))].sort((a,b)=>a-b);\n      const list=(items,or)=>items.length>1?items.slice(0,-1).join(', ')+' '+or(items[items.length-1])+' '+items[items.length-1]:String(items[0]);\n      return es?'Ese no es un número de cuenta válido. Los números de cuenta empiezan con '+list(first,()=>'o')+' y tienen '+list(lengths,n=>/^(8|11)/.test(String(n))?'u':'o')+' dígitos.':\"That isn't a valid account number. Account numbers start with \"+list(first,()=>'or')+' and are '+list(lengths,()=>'or')+' digits long.';\n   }\n   if(kind==='invalid_number')return options.account_pattern?(es?'Esto no parece ser un número de teléfono o de cuenta válido. Por favor revíselo e intente de nuevo.':\"This doesn't seem to be a valid phone or account number. Please check it and try again.\"):(es?'Esto no parece ser un número de teléfono válido. Por favor revíselo e intente de nuevo.':\"This doesn't seem to be a valid phone number. Please check it and try again.\");\n   return es?'Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta'+(account?', o '+account:'')+' para continuar.':'Sorry, I do need the phone or email associated with your account'+(account?', or '+account:'')+' to proceed.';\n})('invalid_number',contact_options,true) : contact_error_es"
+      },
+      {
         "id": "identity_contact_unmapped_retry",
         "type": "CASE",
         "branches": {
+          "condition: contact_rank_kind === 'gives_contact' && !!contact_given": {
+            "id": "identity_contact_rank_given",
+            "type": "FLOW",
+            "value": "get-cell-or-email",
+            "callType": "replace",
+            "parameters": {
+              "contact_options": "{{contact_options}}",
+              "cell_number": "{{contact_given.cell_number}}",
+              "email": "{{contact_given.email}}",
+              "acct_number": "{{contact_given.acct_number}}"
+            },
+            "initializeDefaults": true
+          },
+          "condition: contact_rank_kind === 'gives_contact'": {
+            "id": "identity_contact_rank_given_invalid",
+            "type": "FLOW",
+            "value": "contact-misread",
+            "callType": "replace",
+            "parameters": {
+              "contact_options": "{{contact_options}}",
+              "error_message": "{{contact_error}}",
+              "error_message_es": "{{contact_error_es}}"
+            },
+            "initializeDefaults": true
+          },
           "condition: contact_rank_kind === '__agent'": {
             "id": "identity_contact_rank_agent",
             "type": "FLOW",
@@ -8740,6 +8824,11 @@
         "name": "value",
         "type": "string",
         "description": "the reading"
+      },
+      {
+        "name": "reading",
+        "type": "object",
+        "description": "the reading, with the answer as said (raw)"
       }
     ],
     "steps": [
@@ -8754,7 +8843,7 @@
         "id": "vce_check",
         "type": "SET",
         "variable": "assignment_side_effect",
-        "value": "(function (v) { var names = [\"september\",\"septiembre\",\"setiembre\",\"february\",\"febrero\",\"november\",\"noviembre\",\"december\",\"diciembre\",\"january\",\"octubre\",\"october\",\"august\",\"agosto\",\"enero\",\"marzo\",\"march\",\"abril\",\"april\",\"junio\",\"julio\",\"mayo\",\"june\",\"july\",\"sept\",\"jan\",\"ene\",\"feb\",\"mar\",\"apr\",\"abr\",\"may\",\"jun\",\"jul\",\"aug\",\"ago\",\"sep\",\"oct\",\"nov\",\"dec\",\"dic\"]; var nums = [9,9,9,2,2,11,11,12,12,1,10,10,8,8,1,3,3,4,4,6,7,5,6,7,9,1,1,2,3,4,4,5,6,7,8,8,9,10,11,12,12]; var w = new RegExp('\\\\b(' + names.join('|') + ')\\\\b', 'i').exec(String(v)); if (w) { v = String(v).replace(w[0], ' ' + nums[names.indexOf(w[1].toLowerCase())] + ' '); } var m = /^(0?[1-9]|1[0-2])\\D*(?:20)?(\\d{2})$/.exec(String(v).replace(/\\s+/g, '').replace(/de/gi, '')) || /^(\\d{2})(\\d{2})$/.exec(String(v).replace(/\\D/g, '')) || /^(0[1-9])0(\\d{2})$/.exec(String(v).replace(/\\D/g, '')); var mm = m ? ('0' + m[1]).slice(-2) : ''; var yy = m ? m[2] : ''; cargo.inputCheck = m && validateExpiration(mm, yy) ? { ok: true, value: mm + yy } : { ok: false, message: \"That expiration date doesn't look right.\", message_es: 'Esa fecha de vencimiento no parece correcta.' }; return true; })(value)"
+        "value": "(function (v, said) { var names = [\"september\",\"septiembre\",\"setiembre\",\"february\",\"febrero\",\"november\",\"noviembre\",\"december\",\"diciembre\",\"january\",\"octubre\",\"october\",\"august\",\"agosto\",\"enero\",\"marzo\",\"march\",\"abril\",\"april\",\"junio\",\"julio\",\"mayo\",\"june\",\"july\",\"sept\",\"jan\",\"ene\",\"feb\",\"mar\",\"apr\",\"abr\",\"may\",\"jun\",\"jul\",\"aug\",\"ago\",\"sep\",\"oct\",\"nov\",\"dec\",\"dic\"]; var nums = [9,9,9,2,2,11,11,12,12,1,10,10,8,8,1,3,3,4,4,6,7,5,6,7,9,1,1,2,3,4,4,5,6,7,8,8,9,10,11,12,12]; var re = new RegExp('\\\\b(' + names.join('|') + ')\\\\b', 'i'); var w = re.exec(String(v)); if (w) { v = String(v).replace(w[0], ' ' + nums[names.indexOf(w[1].toLowerCase())] + ' '); } var m = /^(0?[1-9]|1[0-2])\\D*(?:20)?(\\d{2})$/.exec(String(v).replace(/\\s+/g, '').replace(/de/gi, '')) || /^(\\d{2})(\\d{2})$/.exec(String(v).replace(/\\D/g, '')) || /^(0[1-9])0(\\d{2})$/.exec(String(v).replace(/\\D/g, '')); var mm = m ? ('0' + m[1]).slice(-2) : ''; var yy = m ? m[2] : ''; var named = re.exec(String(said)); var agrees = !named || ('0' + nums[names.indexOf(named[1].toLowerCase())]).slice(-2) === mm; cargo.inputCheck = m && agrees && validateExpiration(mm, yy) ? { ok: true, value: mm + yy } : { ok: false, message: \"That expiration date doesn't look right.\", message_es: 'Esa fecha de vencimiento no parece correcta.' }; return true; })(value, reading && (reading.raw || reading.utterance) || '')"
       }
     ],
     "variables": {
@@ -9235,7 +9324,7 @@
             "label_es": "fecha de vencimiento",
             "profile": {
               "kind": "pattern",
-              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b|\\b(?:0\\s?[1-9]|1\\s?[0-2]|[1-9])[\\s,.]*(?:gui[oó]n|dash|hyphen|slash|barra|diagonal)[\\s,.]*(?:2\\s?0\\s?)?\\d\\s?\\d\\b",
+              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:[\\s,.]*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}[\\s,.]*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b|\\b(?:0\\s?[1-9]|1\\s?[0-2]|[1-9])[\\s,.]*(?:gui[oó]n|dash|hyphen|slash|barra|diagonal)[\\s,.]*(?:2\\s?0\\s?)?\\d\\s?\\d\\b",
               "asked_regex": "\\b(?:0\\s[1-9]|1\\s[0-2])\\s\\d\\s\\d\\b"
             },
             "digits": {
@@ -10851,7 +10940,7 @@
             "label_es": "fecha de vencimiento",
             "profile": {
               "kind": "pattern",
-              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:\\s*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}\\s*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b|\\b(?:0\\s?[1-9]|1\\s?[0-2]|[1-9])[\\s,.]*(?:gui[oó]n|dash|hyphen|slash|barra|diagonal)[\\s,.]*(?:2\\s?0\\s?)?\\d\\s?\\d\\b",
+              "regex": "\\b(0?[1-9]|1[0-2]|september|septiembre|setiembre|february|febrero|november|noviembre|december|diciembre|january|octubre|october|august|agosto|enero|marzo|march|abril|april|junio|julio|mayo|june|july|sept|jan|ene|feb|mar|apr|abr|may|jun|jul|aug|ago|sep|oct|nov|dec|dic)\\.?(?:[\\s,.]*(?:/|-|del?|año|ano|year|of)(?=[\\s\\d])){0,2}[\\s,.]*(?:20)?(\\d{2})\\b|\\b0[1-9]0\\s+(?:20)?\\d{2}\\b|\\b(?:0\\s?[1-9]|1\\s?[0-2]|[1-9])[\\s,.]*(?:gui[oó]n|dash|hyphen|slash|barra|diagonal)[\\s,.]*(?:2\\s?0\\s?)?\\d\\s?\\d\\b",
               "asked_regex": "\\b(?:0\\s[1-9]|1\\s[0-2])\\s\\d\\s\\d\\b"
             },
             "digits": {

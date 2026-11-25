@@ -8,6 +8,7 @@
 - **Parameters:** 
   - `input`: input name
   - `value`: the reading
+  - `reading`: the reading, with the answer as said (raw)
 - **Calls:** no other flow
 - **Tools:** none
 - **Called by:** [collect-credit-card](collect-credit-card.md) (validator), [confirm-form](confirm-form.md) (validator)
