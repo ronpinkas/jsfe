@@ -14,7 +14,7 @@ import { readEmail, readPhone, readInternationalPhone, readIdentifier, emailSpan
 import { readSpokenMoney } from './spoken-money.js';
 import {readMoneyAmount,isPartialMoneyAnswer} from './money.js';
 import { pickProviderQuestion } from './form-sources.js';
-import { spokenDigitsText, wholeSpokenNumber } from './spoken-digits.js';
+import { spokenDigitsText, wholeSpokenNumber, numberAlone } from './spoken-digits.js';
 import { DIGIT_RUN, findNumbers, assignNumbers, NUMBER_KINDS, presetValid } from './numbers.js';
 import { expirationDigits, validateExpiration } from './card-checks.js';
 
@@ -207,8 +207,8 @@ export function readInputProfile(profile, answer, isCurrent = true) {
       let fits = [...new Set(digitRuns(source).filter((d) => d.length >= min && d.length <= max))];
       // At its own question, an answer of digits and separators alone is one number when its length fits ("4111, 1111,
       // 1111, 1111": a card read in groups of four).
-      const whole = source.replace(/\D/g, '');
-      if (!fits.length && isCurrent && /^[\d\s.,-]+$/.test(source.trim()) && whole.length >= min && whole.length <= max) { fits = [whole]; } else { /* read by runs */ }
+      const whole = numberAlone(source);
+      if (!fits.length && isCurrent && whole && whole.length >= min && whole.length <= max) { fits = [whole]; } else { /* read by runs */ }
       if (fits.length === 1) {
          return { value: fits[0], spans: numberSpans(raw, fits[0]), evidence: [`d:${fits[0]}`] };
       } else {
@@ -379,7 +379,7 @@ function digitsSpan(raw, value, from) {
 // asked input a complete value beside at least one other input and consumes every digit; otherwise null and the answer reads
 // as before (a card said in groups, a card spoken over two turns, a lone ZIP). → {name: {value, spans}} | null
 function numericSplit(raw, list, own) {
-   if (!own || own.profile.kind !== 'digits' || !/^[\d\s.,-]+[.!]?$/.test(raw.trim())) return null;
+   if (!own || own.profile.kind !== 'digits' || !numberAlone(raw)) return null;
    const numeric = list.filter((c) => c.form === own.form && !c.confirmation && (NUMBER_KINDS.includes(c.field) || c.profile.kind === 'digits'));
    if (numeric.length < 2) return null;
    const specs = numeric.map((c) => (NUMBER_KINDS.includes(c.field) ? { name: c.name, kind: c.field } : { name: c.name, kind: 'digits', min: Number(c.profile.min || 1), max: Number(c.profile.max || c.profile.min || 1) }));
@@ -502,7 +502,7 @@ export function matchInputs(answer, candidates, current, choiceKey) {
    // A choice is excluded (a digit it does not offer reaches the invited amount, rule 4), and so is an amount.
    const bareDigits = raw.replace(/\D/g, '');
    const shapeOf = own && own.digits && !['choice', 'amount', 'text'].includes(own.profile.kind) ? own.digits : null;
-   if (shapeOf && bareDigits && /^[\d\s.,/-]+$/.test(raw.trim()) && !isAmountAnswer(raw) && bareDigits.length >= Number(shapeOf.min || 1) && bareDigits.length <= Number(shapeOf.max || shapeOf.min || 1)
+   if (shapeOf && bareDigits && numberAlone(raw, { slash: true }) && !isAmountAnswer(raw) && bareDigits.length >= Number(shapeOf.min || 1) && bareDigits.length <= Number(shapeOf.max || shapeOf.min || 1)
       && !readings.some((reading) => reading.current || invited(reading))) {
       readings.push({ form: own.form, name: own.name, value: bareDigits, ...(own.validator ? {} : { invalid: true }), known: false, repeatedChoice: false, wholeChoice: false, choice: false, narrative: false, resetOn: [], spans: [[0, raw.length]], keypad: false, fallback: false,
          group: own.group, exclusive: own.exclusive === true, level: forms.indexOf(own.scope || own.form), current: true, confirm: Array.isArray(own.confirm_against) ? own.confirm_against : [] });

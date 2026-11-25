@@ -4,8 +4,10 @@
  * A dash joins only single digits: "12-34 Main St" is a hyphenated house number, not a pause.
  *
  * mode true: any run of groups of up to three digits. mode 'house_number': the first group has at most two digits,
- * because "509 12 Ave" is a house number and a numbered street. Part of jsfe/helpers; zero imports.
+ * because "509 12 Ave" is a house number and a numbered street. Part of jsfe/helpers.
  */
+import { answerCore } from './matches-choice.js';
+
 const RUN = /(?<![\w.,-])\d{1,3}(?:(?:[ \t]+|,\s*|\.\s+|-)\d{1,3})+(?![\w-])/g;
 const joins = (run, mode) => {
    const groups = run.split(/\D+/);
@@ -52,9 +54,21 @@ export function joinSpokenDigits(input, mode = true) {
 
 /**
  * A whole answer that is one number said digit by digit reads as that number: "6 5 4 6", "6, 5, 4, 6.", "6-5-4-6", "6. 5. 4. 6.".
- * Anything else comes back as it was. A period with no space after it stays a decimal point ("4.5").
+ * Punctuation at its edges aside (answerCore). Anything else comes back as it was. A period with no space after it stays a
+ * decimal point ("4.5").
  */
 export function wholeSpokenNumber(input) {
    const text = String(input ?? '');
-   return /^\s*\d(?:(?:\s+|,\s*|-|\.\s+)\d)+[\s.]*$/.test(text) ? text.replace(/\D/g, '') : text;
+   const core = answerCore(text).text;
+   return /^\d(?:(?:\s+|,\s*|-|\.\s+)\d)+$/.test(core) ? core.replace(/\D/g, '') : text;
+}
+
+/**
+ * The one test of "this answer is a number alone" (owner 2026-11-24): digits and the separators speech-to-text puts between
+ * them (spaces, . , -; with slash: true also /, as in "07/29"), punctuation at the answer's edges aside (answerCore: "4111,
+ * 1111, 1111, 1111.", "799604!"). A question mark is not an edge: "1234?" is not a number alone. → its digits, or ''.
+ */
+export function numberAlone(input, { slash = false } = {}) {
+   const core = answerCore(input).text;
+   return (slash ? /^[\d\s.,\/-]*\d[\d\s.,\/-]*$/ : /^[\d\s.,-]*\d[\d\s.,-]*$/).test(core) ? core.replace(/\D/g, '') : '';
 }

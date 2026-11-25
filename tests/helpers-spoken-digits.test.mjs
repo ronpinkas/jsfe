@@ -1,6 +1,6 @@
 /** Every numeric reader takes a number said in pieces (owner 2026-11-03; prod 11-02 CA6621f: "5 0 9 Lazy Lane" asked again). */
 import assert from 'node:assert/strict';
-import { joinSpokenDigits, readInputProfile, amountInAnswer } from '../dist/helpers/index.js';
+import { joinSpokenDigits, readInputProfile, amountInAnswer, numberAlone, wholeSpokenNumber, STANDARD_FUNCTIONS } from '../dist/helpers/index.js';
 import { addressDraft } from '../dist/forms/index.js';
 const eq = (a, b, m) => assert.deepEqual(a, b, m);
 for (const [said, want] of [['5 0 9 Lazy Lane', '509 Lazy Lane'], ['50 9 Lazy Lane', '509 Lazy Lane'], ['5, 0, 9 Lazy Lane', '509 Lazy Lane'], ['5-0-9 Lazy Lane', '509 Lazy Lane'], ['5. 0. 9 Lazy Lane', '509 Lazy Lane'],
@@ -32,4 +32,10 @@ eq(readInputProfile({ ...amount, marked: 'out_of_order' }, '1 5 0', false), null
 eq(amountInAnswer('1 5 0 dollars'), 150);
 eq(readInputProfile({ kind: 'amount', min: 0.01, marked: false, money: { currency: 'USD', cardinals: true, intent: 'payment' } }, '1 5 0 dollars', true).value, '150', 'the money reader too'); eq(Number.isNaN(amountInAnswer('2 4 8 6')), true, 'alone, a card ending or a code');
 eq(addressDraft('5 0 9 Lazy Lane').street, '509 Lazy Lane');
+// numberAlone: the one "number alone" test (owner 2026-11-24); punctuation at the edges aside, a question is not a number.
+for (const [said, want] of [['799604', '799604'], ['799604.', '799604'], ['799604!', '799604'], ['¡799604!', '799604'], ['4111, 1111, 1111, 1111.', '4111111111111111'],
+   ['5-0-9', '509'], [', 0', '0'], ['799604?', ''], ['¿799604?', ''], ['"799604"', ''], ['my code 799604', ''], ['.', ''], [', ,', ''], ['07/29', ''], ['', '']]) eq(numberAlone(said), want, `numberAlone ${JSON.stringify(said)}`);
+eq(numberAlone('07/29', { slash: true }), '0729', 'slash: a date said with a slash');
+eq(STANDARD_FUNCTIONS.numberAlone, numberAlone, 'flows call it by name');
+for (const [said, want] of [['5, 6,', '56'], ['6 8 5. 0,', '6850'], ['6. 5. 4. 6.', '6546'], ['4.5', '4.5'], ['5 6?', '5 6?']]) eq(wholeSpokenNumber(said), want, `wholeSpokenNumber ${JSON.stringify(said)}`);
 console.log('helpers-spoken-digits: ok');
