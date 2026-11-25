@@ -34,7 +34,7 @@ await test('two answers that are no contact ask the question again; the third of
 await test('a reply with no identifier is ranked against the question\'s options; the first not-knowing pick is answered, the second counts (owner 2026-11-18)',async()=>{
  let t=fixture();await t.start('lookup');rankedSeen.length=0;
  let r=await t.say("Don't know it.");
- assert.deepEqual(rankedSeen.at(-1).options.filter(o=>o.startsWith('choice:')).sort(),['choice:__agent','choice:exit','choice:no_identifier','choice:other_contact']);
+ assert.deepEqual(rankedSeen.at(-1).options.filter(o=>o.startsWith('choice:')).sort(),['choice:__agent','choice:exit','choice:gives_contact','choice:no_identifier','choice:other_contact']);
  assert.match(r,/^No problem\. Any phone number or email on your account works\. If you don't have any of them, type AGENT to speak with a person\. Please type the phone or email/);
  assert.equal(t.s.cargo.gceMisses,0);
  r=await t.say("Don't know it.");assert.match(r,/^No problem\. Any phone number.*Please type the phone or email/);assert.equal(t.s.cargo.gceMisses,1);

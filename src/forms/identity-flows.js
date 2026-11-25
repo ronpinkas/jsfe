@@ -109,12 +109,32 @@ export function contactError(kind,options,es=false) {
    const account=options.account_pattern?(es?options.account_name_es || options.account_name:options.account_name):'';
    if(kind==='international')return es?"Un número fuera de EE. UU. y Canadá no se puede usar aquí. Por favor indique el correo de su cuenta"+(account?', o '+account:'')+", o un celular de EE. UU. o Canadá.":"A number outside the US and Canada can't be used here. Please give the email on your account"+(account?', or '+account:'')+", or a US or Canadian mobile number.";
    if(kind==='invalid_email')return es?'Lo siento, no entendí el correo electrónico completo, por ejemplo: nombre arroba gmail punto com.':"Sorry, I didn't get the whole email address, for example: name at gmail dot com.";
-   if(kind==='invalid_phone')return es?'El número de teléfono que proporcionó no es válido.':"Sorry, the phone number you provided isn't valid.";
+   // A number said alone that is no identifier (owner 2026-11-25). Named an account number: the tenant's account shape, said.
+   if(kind==='invalid_account'){
+      const shapes=options.account_shape || [],first=[...new Set(shapes.flatMap(shape=>String(shape.first || '').split('')))],lengths=[...new Set(shapes.flatMap(shape=>shape.lengths || []))].sort((a,b)=>a-b);
+      const list=(items,or)=>items.length>1?items.slice(0,-1).join(', ')+' '+or(items[items.length-1])+' '+items[items.length-1]:String(items[0]);
+      return es?'Ese no es un número de cuenta válido. Los números de cuenta empiezan con '+list(first,()=>'o')+' y tienen '+list(lengths,n=>/^(8|11)/.test(String(n))?'u':'o')+' dígitos.':"That isn't a valid account number. Account numbers start with "+list(first,()=>'or')+' and are '+list(lengths,()=>'or')+' digits long.';
+   }
+   if(kind==='invalid_number')return options.account_pattern?(es?'Esto no parece ser un número de teléfono o de cuenta válido. Por favor revíselo e intente de nuevo.':"This doesn't seem to be a valid phone or account number. Please check it and try again."):(es?'Esto no parece ser un número de teléfono válido. Por favor revíselo e intente de nuevo.':"This doesn't seem to be a valid phone number. Please check it and try again.");
    return es?'Lo siento, necesito el teléfono o correo electrónico asociado con su cuenta'+(account?', o '+account:'')+' para continuar.':'Sorry, I do need the phone or email associated with your account'+(account?', or '+account:'')+' to proceed.';
 }
 
+/** A phone, email or account number the reply ranker extracted from the caller's sentence (owner 2026-11-25), kept only when
+ * the caller's own words hold it (its digits in the spoken digits, the email's name in the text) and it is a valid identifier. */
+export function contactGiven(reply,spoken,text,options) {
+   const args=reply && reply.arguments || {},digits=String(spoken || '').replace(/\D/g,'');
+   const grounded=value=>{const d=String(value || '').replace(/\D/g,'');return d.length>=7 && digits.includes(d)?d:'';};
+   const account=options.account_pattern?grounded(args.account_number):'';
+   if(account && new RegExp(options.account_pattern).test(account))return {acct_number:account,cell_number:'',email:''};
+   const phone=grounded(args.phone);
+   if(phone && validatePhone(phone))return {acct_number:'',cell_number:phone.slice(-10),email:''};
+   const mail=args.email?readEmail(String(args.email)):'';
+   if(mail && String(text || '').toLowerCase().replace(/\s+/g,'').includes(String(mail).split('@')[0].toLowerCase()))return {acct_number:'',cell_number:'',email:String(mail)};
+   return null;
+}
+
 const contact=worker('get-cell-or-email','GetCellOrEmail','Identify a supplied contact or account number; collect missing data through a FORM, with caller-ID eligibility and bounded contact validation.',{
-   parameters:contactParams,variables:vars({...contactDefaults,contact_profiles_base:contactProfiles,contact_named_options:null,contact_rank_asked:'',contact_rank_offers:[],contact_rank_reply:null,contact_rank_kind:'',contact_rank_options:null,contact_rank_first:false,contact_names_account:['número de cuenta','numero de cuenta','mi número de cuenta','mi numero de cuenta','con mi número de cuenta','con mi numero de cuenta','con el número de cuenta','con el numero de cuenta','account number','my account number','with my account number','with the account number']}),contract:{role:'collector',summary:'Contact identification with FORM ancestry',result:{paths:['cell_number','email','acct_number','cargo.contactKind','cargo.contactValue'],type:'object'}},
+   parameters:contactParams,variables:vars({...contactDefaults,contact_profiles_base:contactProfiles,contact_named_options:null,contact_rank_asked:'',contact_rank_offers:[],contact_rank_reply:null,contact_rank_kind:'',contact_rank_options:null,contact_rank_first:false,contact_given:null,contact_number_words:['account','number','cuenta','numero','número','phone','telephone','cell','teléfono','telefono','celular','yes','yeah','si','sí','it','es','is','was','era'],contact_names_account:['número de cuenta','numero de cuenta','mi número de cuenta','mi numero de cuenta','con mi número de cuenta','con mi numero de cuenta','con el número de cuenta','con el numero de cuenta','account number','my account number','with my account number','with the account number']}),contract:{role:'collector',summary:'Contact identification with FORM ancestry',result:{paths:['cell_number','email','acct_number','cargo.contactKind','cargo.contactValue'],type:'object'}},
    steps:[
       set('identity_contact_options','contact_options',"contact_options || (retrying && cargo.contactOptions ? Object.assign({},cargo.contactOptions,{fromMenu:true,intro:'',intro_es:''}) : {retry_flow:retry_flow || 'authenticate-user',cancel_flow:cancel_flow || 'contact-support',account_pattern:account_pattern,account_name:account_name,account_name_es:account_name_es,account_shape:account_shape,intro:intro,intro_es:intro_es,caller_on_file:caller_on_file,retry_call_type:retry_call_type || 'reboot',validate_flow:validate_flow,merge_partials:merge_partials === true || merge_partials === 'true',parent_form:parent_form})"),
       // options carried from an earlier verification may name a task the caller has since closed; opening under it fails
@@ -145,13 +165,13 @@ const contact=worker('get-cell-or-email','GetCellOrEmail','Identify a supplied c
       when('identity_contact_split_overshoot',"contact_partial && contact_digits.length > (contact_options.account_shape || []).reduce(function(max,s){return Math.max(max,Math.max.apply(null,s.lengths || [0]));},0)",call('identity_contact_restart_split','contact-split-failed',{contact_options:'{{contact_options}}'},'replace')),
       set('identity_contact_identifier','contact_id',"contact_options.account_pattern ? readIdentifier(contact_text,contact_options.account_pattern) : null"),
       set('identity_contact_phone','contact_phone',"readPhone(contact_text) || (validatePhone(contact_digits) ? contact_digits : '')"),set('identity_contact_email','contact_mail','readEmail(contact_text)'),
-      set('identity_contact_classify','contact_kind',"contact_id && contact_id.kind === 'account' ? 'account' : contact_phone ? 'phone' : contact_mail ? 'email' : contact_options.account_pattern && !contact_digits && matchesChoice(contact_text,contact_names_account) ? 'names_account' : readInternationalPhone(contact_text) ? 'international' : isAgentRequest(contact_text) ? 'agent' : isExitRequest(contact_text) ? 'exit' : "+emailTry+" ? 'invalid_email' : contact_allowed && /^(?:no|nope|nah)\\b/i.test(contact_text.trim()) && !/[0-9@]/.test(contact_text) ? 'decline' : contact_allowed && cargo.serviceAnswer && cargo.serviceAnswer.values.caller_decision === 'yes' ? 'caller' : contact_digits ? 'invalid_phone' : /[a-záéíóúñü]/i.test(contact_text) ? 'unmapped' : 'invalid'"),
+      set('identity_contact_classify','contact_kind',"contact_id && contact_id.kind === 'account' ? 'account' : contact_phone ? 'phone' : contact_mail ? 'email' : contact_options.account_pattern && !contact_digits && matchesChoice(contact_text,contact_names_account) ? 'names_account' : readInternationalPhone(contact_text) ? 'international' : isAgentRequest(contact_text) ? 'agent' : isExitRequest(contact_text) ? 'exit' : "+emailTry+" ? 'invalid_email' : contact_allowed && /^(?:no|nope|nah)\\b/i.test(contact_text.trim()) && !/[0-9@]/.test(contact_text) ? 'decline' : contact_allowed && cargo.serviceAnswer && cargo.serviceAnswer.values.caller_decision === 'yes' ? 'caller' : contact_digits ? (isReaderFiller(contact_text,contact_number_words) ? (contact_options.account_pattern && (contact_options.account_shape || []).length && /\\b(?:account|cuenta)\\b/i.test(contact_text) ? 'invalid_account' : 'invalid_number') : 'unmapped') : /[a-záéíóúñü]/i.test(contact_text) ? 'unmapped' : 'invalid'"),
       set('identity_contact_named','contact_named_options',"Object.assign({},contact_options,{fromMenu:false,intro:'Sure, your account number.',intro_es:'Claro, su número de cuenta.'})"),
       set('identity_contact_error','contact_error',expression(contactError,'contact_kind','contact_options')),set('identity_contact_error_es','contact_error_es',expression(contactError,'contact_kind','contact_options','true')),
       // A reply with letters and no identifier goes to the reply ranker with the question's own options (owner 2026-11-18): the
       // identifiers above are read lexically anywhere in the reply; the ranker only picks one of these, never an identifier.
       set('identity_contact_rank_asked','contact_rank_asked',"language === 'es' ? contact_question_es : contact_question"),
-      set('identity_contact_rank_offers','contact_rank_offers',"[{key:'no_identifier',label:'does not know or does not have the phone number, email or account number on the account'},{key:'other_contact',label:'has or wants to give a different phone number or email'},{key:'__agent',label:'speak with a person (a live agent)'},{key:'exit',label:'does not want to continue and stops here'}].concat(callerTextNumber(cargo) ? [{key:'text',label:'continue by text message'}] : [])"),
+      set('identity_contact_rank_offers','contact_rank_offers',"[{key:'gives_contact',label:'gives a phone number, email or account number for the account',parameters:[{name:'phone',type:'string',description:'The phone number the caller gave, as said; empty if none.'},{name:'email',type:'string',description:'The email address the caller gave, as said; empty if none.'}].concat(contact_options.account_pattern ? [{name:'account_number',type:'string',description:'The account number the caller gave, as said; empty if none.'}] : [])},{key:'no_identifier',label:'does not know or does not have the phone number, email or account number on the account'},{key:'other_contact',label:'has or wants to give a different phone number or email'},{key:'__agent',label:'speak with a person (a live agent)'},{key:'exit',label:'does not want to continue and stops here'}].concat(callerTextNumber(cargo) ? [{key:'text',label:'continue by text message'}] : [])"),
       set('identity_contact_rank_clear','contact_rank_reply','null'),
       cases('identity_contact_route',{
          "condition: contact_kind === 'agent'":call('identity_contact_agent','live-agent-requested',undefined,'reboot'),
@@ -161,7 +181,8 @@ const contact=worker('get-cell-or-email','GetCellOrEmail','Identify a supplied c
          // failure menu, and the number keyed next was taken for other fields): the question again, acknowledged.
          "condition: contact_kind === 'names_account'":contactReplay('identity_contact_names_account',{contact_options:'{{contact_named_options}}'}),
          "condition: contact_kind === 'international'":contactMiss('identity_contact_international'),
-         "condition: contact_kind === 'invalid_phone'":contactMiss('identity_contact_invalid_phone'),
+         "condition: contact_kind === 'invalid_account'":contactMiss('identity_contact_invalid_account'),
+         "condition: contact_kind === 'invalid_number'":contactMiss('identity_contact_invalid_number'),
          "condition: contact_kind === 'invalid_email'":contactMiss('identity_contact_invalid_email'),
          "condition: contact_kind === 'unmapped'":{id:'identity_contact_off_topic',type:'DISPATCH',onResponse:'continue',responseContext:'Current question: {{contact_rank_asked}}',responseChoices:'contact_rank_offers',responseVariable:'contact_rank_reply',outcome:'unresolved',reason:'auth_prompt_off_topic'},
          "condition: contact_kind === 'invalid'":contactMiss('identity_contact_missing'),default:effect('identity_contact_typed','true')}),
@@ -171,8 +192,13 @@ const contact=worker('get-cell-or-email','GetCellOrEmail','Identify a supplied c
       set('identity_contact_rank_first','contact_rank_first','!!contact_rank_options && !cargo.gceRanked'),
       effect('identity_contact_rank_mark','(contact_rank_options ? cargo.gceRanked=true : true,true)'),
       set('identity_contact_rank_line','contact_error','contact_rank_options ? contact_rank_options.intro : contact_error'),set('identity_contact_rank_line_es','contact_error_es','contact_rank_options ? contact_rank_options.intro_es : contact_error_es'),
+      set('identity_contact_given','contact_given',"contact_rank_kind === 'gives_contact' ? "+expression(contactGiven,'contact_rank_reply',`(${serviceDigits.toString()})(contact_text)`,'contact_text','contact_options')+" : null"),
+      set('identity_contact_given_line','contact_error',"contact_rank_kind === 'gives_contact' && !contact_given ? "+expression(contactError,"'invalid_number'",'contact_options')+" : contact_error"),set('identity_contact_given_line_es','contact_error_es',"contact_rank_kind === 'gives_contact' && !contact_given ? "+expression(contactError,"'invalid_number'",'contact_options','true')+" : contact_error_es"),
       // A classified response is not authority to abandon identification: the question again, then the bounded recovery menu.
       cases('identity_contact_unmapped_retry',{
+         // a valid identifier the ranker found in the caller's words is the answer; one that is not valid is a miss, with why
+         "condition: contact_rank_kind === 'gives_contact' && !!contact_given":contactReplay('identity_contact_rank_given',{acct_number:'{{contact_given.acct_number}}',cell_number:'{{contact_given.cell_number}}',email:'{{contact_given.email}}'}),
+         "condition: contact_rank_kind === 'gives_contact'":contactMiss('identity_contact_rank_given_invalid'),
          "condition: contact_rank_kind === '__agent'":call('identity_contact_rank_agent','live-agent-requested',undefined,'reboot'),
          "condition: contact_rank_kind === 'exit'":call('identity_contact_rank_exit','{{contact_options.cancel_flow}}',undefined,'reboot'),
          "condition: contact_rank_kind === 'text'":call('identity_contact_rank_text','switch-to-text',undefined,'reboot'),

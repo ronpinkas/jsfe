@@ -9,7 +9,7 @@ const cargo={voice:false,verb:'type',verb_es:'escriba',callerPreselected:false};
 equal(contactPrompt(cargo,{account_pattern:'^X',account_name:'your reference',account_name_es:'su referencia'},false).includes(', or your reference'),true);
 equal(contactPrompt(cargo,{},true).startsWith('To use your caller id'),true);equal(contactPrompt(cargo,{},false,true),'Go on.');
 equal(contactError('invalid',{account_pattern:'^X',account_name:'your reference'}).includes(', or your reference to proceed.'),true);
-equal(contactError('invalid_phone',{}),"Sorry, the phone number you provided isn't valid.");
+equal(contactError('invalid_number',{}),"This doesn't seem to be a valid phone number. Please check it and try again.");
 equal(otpPrompt({...cargo,otp_cell_number:'8185551234'}).includes('cell ending with 1234'),true);
 equal(otpPrompt({...cargo,voice:true,otp_cell_number:'8185551234'}).includes('cell ending with 1, 2, 3, 4'),true);
 equal(otpPrompt({...cargo,otpSentOn:'whatsapp'}).includes('I just sent you here in this chat'),true);
