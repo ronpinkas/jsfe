@@ -8,7 +8,7 @@
  * Tenant-agnostic shape reading only (the same class as pickChoice / readIdentifier). Conversation behaviour stays in
  * the flows. Part of jsfe/helpers; imports only siblings.
  */
-import { matchesChoice } from './matches-choice.js';
+import { matchesChoice, answerCore } from './matches-choice.js';
 import { pickChoice, amountInAnswer, isAmountAnswer, isReaderFiller, ANSWER_WORDS, CONFIRM_WORDS } from './answer.js';
 import { readEmail, readPhone, readInternationalPhone, readIdentifier, emailSpans } from './contact.js';
 import { readSpokenMoney } from './spoken-money.js';
@@ -215,8 +215,13 @@ export function readInputProfile(profile, answer, isCurrent = true) {
          return null;   // none, or two different numbers of that length: not this input's answer by shape alone
       }
    } else if (kind === 'pattern') {
+      // The pattern reads the answer without punctuation at its edges, as speech-to-text adds it ("3 noches.", "¿3 noches?");
+      // profile.raw_answer: true reads the answer as given (free text whose value is the caller's whole sentence).
       // spoken_digits: the pattern reads a number said in pieces as one number ("5 0 9 Lazy Lane", "apt 2 0 4").
-      const said = profile.spoken_digits ? spokenDigitsText(raw, profile.spoken_digits) : { text: raw, at: (i) => i };
+      const core = profile.raw_answer === true ? { text: raw, start: 0 } : answerCore(raw);
+      const spoken = (text) => (profile.spoken_digits ? spokenDigitsText(text, profile.spoken_digits) : { text, at: (i) => i });
+      const inner = spoken(core.text);
+      const said = { text: inner.text, at: (i) => core.start + inner.at(i) };
       let m = null;
       try {
          m = new RegExp(profile.regex, profile.flags || 'i').exec(said.text);
@@ -228,7 +233,8 @@ export function readInputProfile(profile, answer, isCurrent = true) {
          const start = m.index + m[0].indexOf(v);
          return { value: v, spans: [[said.at(start), said.at(start + v.length - 1) + 1]], evidence: [`p:${String(v).toLowerCase()}`] };
       } else {
-         return isCurrent&&profile.accept_other===true&&raw.trim()?{value:said.text.trim(),fallback:true,spans:[[0,raw.length]]}:null;
+         // accept_other keeps the answer as given, as before
+         return isCurrent&&profile.accept_other===true&&raw.trim()?{value:spoken(raw).text.trim(),fallback:true,spans:[[0,raw.length]]}:null;
       }
    } else if (kind === 'text') {
       const t = raw.trim();

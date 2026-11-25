@@ -22,6 +22,22 @@
  *
  * Zero imports, so scripts/tests/matches-choice.mjs runs the real implementation.
  */
+// Punctuation and spaces at an answer's edges, as speech-to-text adds them ("3 noches.", "California,"). A question mark
+// stays: a question is not an answer ("¿No es en diciembre?" at the return date). Quotes stay: a quoted command is not
+// the caller's own (speech-to-text adds none).
+const ANSWER_EDGES = /^[\s.,;:!¡]+|[\s.,;:!¡]+$/g;
+const ANSWER_EDGES_AND_QUESTION = /^[\s.,;:!?¿¡'"]+|[\s.,;:!?¿¡'"]+$/g;
+
+/**
+ * The answer without punctuation at its edges, and where that core starts in the answer: {text, start}.
+ * questions: true also removes ? and ¿ (matchesChoice's keypad keys, as before: "1?" is the key 1).
+ */
+export function answerCore(input, { questions = false } = {}) {
+   const raw = String(input ?? '');
+   const text = raw.replace(questions ? ANSWER_EDGES_AND_QUESTION : ANSWER_EDGES, '');
+   return { text, start: text ? raw.indexOf(text) : 0 };
+}
+
 export function matchesChoice(input, choices) {
    if (!input || !Array.isArray(choices)) {
       return false;
@@ -40,7 +56,7 @@ export function matchesChoice(input, choices) {
    return choices.some(choice => {
       const choiceWords = tokenize(choice);
       if (/^[0-9*#]$/.test(String(choice).trim())) {
-         return String(input).replace(/^[\s.,;:!?¿¡'"]+|[\s.,;:!?¿¡'"]+$/g, '') === String(choice).trim();
+         return answerCore(input, { questions: true }).text === String(choice).trim();
       } else if (choiceWords.length === 0) {
          return false;
       } else {

@@ -1,7 +1,7 @@
 // jsfe/helpers match-inputs.js — which of a form's inputs an answer fills (the FORM convention's collect-input).
 //   node tests/helpers-match-inputs.test.mjs
 import assert from 'node:assert/strict';
-import { matchInputs, formAcceptanceTrace } from '../dist/helpers/match-inputs.js';
+import { matchInputs, formAcceptanceTrace, readInputProfile } from '../dist/helpers/match-inputs.js';
 
 let checks = 0;
 const reasonFree = () => ({ form: 'return', name: 'reason', profile: { kind: 'text' } });
@@ -239,5 +239,29 @@ eq(formAcceptanceTrace(null, matchInputs('45', [payAmt], { form: 'pay', name: 'a
    eq(names(at('4111 1111 1111 1111')), ['card_number=4111111111111111'], 'a card in groups of four: one number, as before');
    eq(names(at('4111 1111 1111 1112 123')), ['card_number=4111111111111112123'], 'no valid split (a bad check digit): read as before, the validator decides');
    eq(names(matchInputs('4111 1111 1111 1111 123', card.slice(0, 1), { form: 'cc', name: 'card_number' })), ['card_number=4111111111111111123'], 'a form with one numeric input: read as before');
+}
+// A whole-answer pattern reads an answer with punctuation at its edges, as speech-to-text writes it (prod 2026-11-24:
+// "3 noches." at the nights question, refused); a question is not an answer (owner 2026-11-24): "¿3 noches?" stays refused.
+{
+   const nights = { kind: 'pattern', spoken_digits: true, group: 1, regex: '^\\s*(?:(?:just|solo|somos|son)\\s+)?(one|two|three|uno|dos|tres|\\d{1,3}|una semana)(?:\\s+(?:nights?|noches?))?\\s*$' };
+   const state = { kind: 'pattern', regex: '^\\s*(?:California|Texas|CA|TX)\\s*$' };
+   const whole = { kind: 'pattern', regex: '^[\\s\\S]{2,}$' };
+   const read = (p, a) => { const r = readInputProfile(p, a); return r && { value: r.value, spans: r.spans }; };
+   eq(read(nights, '3 noches'), { value: '3', spans: [[0, 1]] }, 'nights: as before');
+   eq(read(nights, '3 noches.'), { value: '3', spans: [[0, 1]] }, 'nights: a closing period');
+   eq(read(nights, '¿3 noches?'), null, 'nights: a question is not an answer');
+   eq(read(nights, '3 noches?'), null, 'nights: a closing question mark alone is a question too');
+   eq(read(nights, '¡Tres noches!'), { value: 'Tres', spans: [[1, 5]] }, 'nights: exclamation marks, the span on the raw answer');
+   eq(read(nights, '3 noches,'), { value: '3', spans: [[0, 1]] }, 'nights: a comma');
+   eq(read(nights, '"3 noches"'), null, 'nights: a quoted answer is not the caller\'s own');
+   eq(read(nights, '3 noches en Cancún.'), null, 'nights: more words than the answer, still refused');
+   eq(read(state, 'California.'), { value: 'California', spans: [[0, 10]] }, 'state: a closing period');
+   eq(read(state, 'California'), { value: 'California', spans: [[0, 10]] }, 'state: as before');
+   eq(read(whole, 'returns.'), { value: 'returns', spans: [[0, 7]] }, 'a whole-answer pattern reads the core');
+   eq(read(whole, 'returns?'), { value: 'returns?', spans: [[0, 8]] }, 'the question mark is kept');
+   eq(read({ ...whole, raw_answer: true }, 'returns.'), { value: 'returns.', spans: [[0, 8]] }, 'raw_answer: the answer as given, punctuation and all');
+   eq(read({ ...state, raw_answer: true }, 'California.'), null, 'raw_answer: an anchored pattern sees the period');
+   eq(read(state, '...'), null, 'punctuation alone reads nothing');
+   eq(read({ ...state, accept_other: true }, 'Nowhere.'), { value: 'Nowhere.', spans: [[0, 8]] }, 'accept_other keeps the answer as given');
 }
 console.log(`match-inputs: ${checks} checks passed`);
