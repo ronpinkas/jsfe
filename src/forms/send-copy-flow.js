@@ -12,6 +12,9 @@
  * - A sender item runs its flow with {medium, destination, args} (destination: only what the caller gave): the sender
  *   collects the rest, sets cargo.copyHandled = true as it takes over and tells the caller every outcome. Without it (a
  *   missing sender) SendCopy says it could not send. A sender's declared media limit the medium (statement: email).
+ * - The web chat link (WEB_LINK_KEY, owner 2026-11-26: "can I continue this on my computer?") is made at send time by the
+ *   host's get-web-chat-link tool. With no medium or destination named it is texted to the caller's number, else emailed to
+ *   the email on file, else the medium is asked; any number or email the caller names is used, as for any item.
  * No authentication gate here (owner rule: an authenticated caller's chat and documents are theirs to send anywhere;
  * before authentication no reply holds account data). A sender flow gates its own document.
  */
@@ -34,23 +37,23 @@ const TEXT_MAX = 1600;
 const EMAIL_WORDS = ['2', 'email', 'e-mail', 'mail', 'correo', 'correo electrónico', 'correo electronico', 'email address'];
 
 const sendCopy = defineWorker({
-   contract: { role: 'router', summary: 'Sends a reply, registered document or the whole conversation the caller picks, by text or email, through the system send workers or the document\'s sender flow' },
+   contract: { role: 'router', summary: 'Sends a reply, registered document, the whole conversation or a link to continue it on the web, as the caller picks, by text or email, through the system send workers or the document\'s sender flow' },
    id: 'send-copy',
    name: 'SendCopy',
-   version: '1.1.0',
+   version: '1.2.0',
    primary: true,
    prompt: 'Send a copy',
    prompt_es: 'Enviar una copia',
-   description: "Asks to be sent something by text or email, whatever it is ('email me that', 'text me the case number', 'send me the receipt', 'can I have that emailed to me', 'send me a copy of this chat', 'mándame eso por mensaje', 'me lo puede mandar por correo'). Not: continuing the conversation by text (SwitchToText).",
+   description: "Asks to be sent something by text or email, whatever it is ('email me that', 'text me the case number', 'send me the receipt', 'can I have that emailed to me', 'send me a copy of this chat', 'mándame eso por mensaje', 'me lo puede mandar por correo'), or asks to continue this conversation on the web or another device ('can I continue this on my computer?', 'send me a link to continue on the web', '¿puedo seguir esto en mi computadora?'). Not: continuing the conversation by text (SwitchToText).",
    parameters: [
-      { name: 'item', type: 'string', enum_from: 'sendables', description: "What the user asks to have sent: the reply or document they name or point to. 'That', 'it', 'this', 'eso' or 'lo que me dijo' is the latest reply; the whole chat, conversation or transcript ('toda la conversación') is the whole conversation." },
+      { name: 'item', type: 'string', enum_from: 'sendables', description: "What the user asks to have sent: the reply or document they name or point to. 'That', 'it', 'this', 'eso' or 'lo que me dijo' is the latest reply; the whole chat, conversation or transcript ('toda la conversación') is the whole conversation; continuing on the web, a computer or another device is the link to continue on the web." },
       { name: 'medium', type: 'string', enum: ['text', 'email'], description: "How the user asks to have it sent: text for a text message or SMS ('mensaje', 'texto'), email for an email ('correo')." },
       { name: 'destination', type: 'string', description: 'The phone number or email address the user gave to send it to, as given.' },
       { name: 'other_destination', type: 'boolean', description: "true when the user asks to send it to a different, new or other phone number or email than their own, without saying what it is ('another number', 'a different email', 'otro número', 'a mi otro correo'); false when they give the number or email, or name none." },
    ],
    variables: vars({
       noop: false, sc_items: [], sc_key: '', sc_item: null, sc_last: null, sc_last_head: '', sc_offer_q: '', sc_offer_q_es: '', sc_doc_list: '', sc_email: '', sc_phone: '',
-      sc_medium: '', sc_medium_q: '', sc_medium_q_es: '', sc_given: '', sc_other: false, sc_too_long: false, sc_media: [], sc_forced: '', sc_to: '', sc_subject: '', sc_content: '', sc_sent: false,
+      sc_medium: '', sc_medium_q: '', sc_medium_q_es: '', sc_given: '', sc_other: false, sc_too_long: false, sc_media: [], sc_forced: '', sc_to: '', sc_subject: '', sc_content: '', sc_sent: false, sc_link: '',
    }),
    steps: [
       set('sc_items', 'sc_items', 'sendables(cargo)'),
@@ -83,9 +86,16 @@ const sendCopy = defineWorker({
       set('sc_email', 'sc_email', "(String(typeof destination === 'string' ? destination : '').match(/[^\\s@]+@[^\\s@]+\\.[^\\s@]+/) || [''])[0].replace(/[.,;:]+$/, '')"),
       set('sc_phone', 'sc_phone', "readPhone(typeof destination === 'string' ? destination : '')"),
       set('sc_medium', 'sc_medium', "typeof medium === 'string' && (medium === 'text' || medium === 'email') ? medium : sc_email ? 'email' : sc_phone ? 'text' : ''"),
+      // the web chat link: texted to the caller's number when nothing was named, else emailed to the email on file
+      when('sc_link_text', "sc_item.kind === 'web_link' && !sc_medium && !!cargo.twilioNumber && !!textDestination(cargo)", set('sc_link_text_set', 'sc_medium', "'text'")),
+      when('sc_link_email', "sc_item.kind === 'web_link' && !sc_medium && validateEmail(String(cargo.otp_email || ''))", set('sc_link_email_set', 'sc_email', 'String(cargo.otp_email)')),
+      when('sc_link_email_medium', "sc_item.kind === 'web_link' && !sc_medium && !!sc_email", set('sc_link_email_medium_set', 'sc_medium', "'email'")),
+      when('sc_link', "sc_item.kind === 'web_link'", { id: 'sc_link_call', type: 'CALL-TOOL', tool: 'get-web-chat-link', variable: 'sc_link', args: {}, onFail: set('sc_link_failed', 'sc_link', "''") }),
+      when('sc_link_none', "sc_item.kind === 'web_link' && !sc_link", say('sc_link_none_say', "Sorry, I couldn't make a link to continue on the web." + ANYTHING_ELSE, 'Lo siento, no pude crear un enlace para continuar en la web.' + ANYTHING_ELSE_ES)),
+      when('sc_link_none_end', "sc_item.kind === 'web_link' && !sc_link", end('sc_link_none_done', { outcome: 'unresolved', reason: 'no_web_link' })),
       // the media this item can go by: a sender's declared media; content by text only where the line has a sender and it
       // fits one text message (TEXT_MAX), else by email
-      set('sc_content', 'sc_content', "sc_item.kind === 'conversation' ? conversationCopy(cargo.chatTurns, language) : String(sc_item.content || '')"),
+      set('sc_content', 'sc_content', "sc_item.kind === 'conversation' ? conversationCopy(cargo.chatTurns, language) : sc_item.kind === 'web_link' ? (language === 'es' ? 'Continúe nuestra conversación en la web: ' : 'Continue our conversation on the web: ') + sc_link : String(sc_item.content || '')"),
       set('sc_too_long', 'sc_too_long', `!sc_item.sender && sc_content.length > ${TEXT_MAX}`),
       set('sc_media', 'sc_media', "Array.isArray(sc_item.media) && sc_item.media.length ? sc_item.media : ((sc_item.sender || cargo.twilioNumber) && !sc_too_long ? ['text', 'email'] : ['email'])"),
       set('sc_forced', 'sc_forced', "sc_media.length === 1 && !!sc_medium && sc_medium !== sc_media[0] ? sc_media[0] : ''"),
@@ -157,7 +167,7 @@ const sendCopy = defineWorker({
       when('sc_email_none_end', "sc_medium === 'email' && !sc_to", end('sc_email_none_done')),
 
       // send: a sender item runs its flow (it tells the caller); content goes as is
-      set('sc_subject', 'sc_subject', "language === 'es' ? 'Su copia de nuestra conversación' : sc_item.kind === 'conversation' ? 'Your copy of our conversation' : 'Your copy from our conversation'"),
+      set('sc_subject', 'sc_subject', "sc_item.kind === 'web_link' ? (language === 'es' ? 'Continúe nuestra conversación en la web' : 'Continue our conversation on the web') : language === 'es' ? 'Su copia de nuestra conversación' : sc_item.kind === 'conversation' ? 'Your copy of our conversation' : 'Your copy from our conversation'"),
       when('sc_send_text', "sc_medium === 'text'", call('sc_send_text_call', 'send-text', { message: '{{sc_content}}' })),
       when('sc_send_email', "sc_medium === 'email'", call('sc_send_email_call', 'send-email-message', { to: '{{sc_to}}', subject: '{{sc_subject}}', message: '{{sc_content}}', cc: '' })),
       set('sc_sent', 'sc_sent', "sc_medium === 'text' ? cargo.textSent === true : cargo.emailSent === true"),

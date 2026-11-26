@@ -9,14 +9,20 @@
  * {n, role, text, source?}); nothing registers them. chatTranscript(turns) formats that list as "role: text" lines.
  * Once the assistant has replied, the whole conversation is offered too (key CONVERSATION_KEY, email only): it carries no
  * content, because its text is the caller's language's copy, conversationCopy(cargo.chatTurns, language), made at send time.
+ * Off the web chat (a call, SMS, WhatsApp, email) a link that continues this conversation on the web is offered too (key
+ * WEB_LINK_KEY, owner 2026-11-26): no content either, since the host's get-web-chat-link tool makes the link at send time.
  */
 
 const REPLY_COUNT = 6;
 const REPLY_LABEL_CHARS = 120;
 /** The whole conversation's key in sendables(cargo); like "reply-<n>", no flow may register or declare it. */
 export const CONVERSATION_KEY = 'conversation';
-const RESERVED_KEYS = `a key starting with "reply-" or "${CONVERSATION_KEY}"`;
-const reservedKey = (key) => key.startsWith('reply-') || key === CONVERSATION_KEY;
+/** The web chat link's key in sendables(cargo); reserved like CONVERSATION_KEY. */
+export const WEB_LINK_KEY = 'web-link';
+const RESERVED_KEYS = `a key starting with "reply-", "${CONVERSATION_KEY}" or "${WEB_LINK_KEY}"`;
+const reservedKey = (key) => key.startsWith('reply-') || key === CONVERSATION_KEY || key === WEB_LINK_KEY;
+/** The channels a caller is not on the web chat in, where a link to continue on the web is offered. */
+const OFF_WEB_CHANNELS = ['voice', 'sms', 'whatsapp', 'email'];
 const SPEAKERS = {en: {user: 'You', assistant: 'Assistant'}, es: {user: 'Usted', assistant: 'Asistente'}};
 
 const isText = (value) => typeof value === 'string' && value.trim() !== '';
@@ -71,10 +77,12 @@ export function registerSendable(cargo, entry) {
 
 /**
  * Everything the caller may ask to be sent now: the registered documents, the whole conversation (once the assistant has
- * replied), then the last REPLY_COUNT non-empty assistant turns of cargo.chatTurns, newest last. Each item is
- * {key, label, label_es?, kind, media?, content | sender+args}; the conversation is {key: CONVERSATION_KEY, kind:
- * 'conversation'} with no content (conversationCopy makes it; SendCopy texts it when it fits one message, else emails it). A reply's key is "reply-<n>" (its turn
- * number) and its label "Reply <n>: <first 120 characters>".
+ * replied), the web chat link (off the web chat: cargo.voice, or channel voice / sms / whatsapp / email), then the last
+ * REPLY_COUNT non-empty assistant turns of cargo.chatTurns, newest last. Each item is {key, label, label_es?, kind, media?,
+ * content | sender+args}; the conversation is {key: CONVERSATION_KEY, kind: 'conversation'} with no content
+ * (conversationCopy makes it; SendCopy texts it when it fits one message, else emails it), and the link {key: WEB_LINK_KEY,
+ * kind: 'web_link'} with none (SendCopy asks the host's get-web-chat-link tool for it). A reply's key is "reply-<n>" (its
+ * turn number) and its label "Reply <n>: <first 120 characters>".
  */
 export function sendables(cargo) {
    const documents = Array.isArray(cargo?.sendables) ? cargo.sendables.filter((item) => isText(item?.key)).map((item) => (item.args ? {...item, args: {...item.args}} : {...item})) : [];
@@ -87,7 +95,10 @@ export function sendables(cargo) {
    const conversation = replies.length
       ? [{key: CONVERSATION_KEY, label: 'The whole conversation', label_es: 'Toda nuestra conversación', kind: 'conversation'}]
       : [];
-   return [...documents, ...conversation, ...replies];
+   const webLink = cargo?.voice === true || OFF_WEB_CHANNELS.includes(cargo?.channel)
+      ? [{key: WEB_LINK_KEY, label: 'A link to continue this conversation on the web', label_es: 'Un enlace para continuar esta conversación en la web', kind: 'web_link'}]
+      : [];
+   return [...documents, ...conversation, ...webLink, ...replies];
 }
 
 /**
