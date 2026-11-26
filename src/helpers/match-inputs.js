@@ -587,7 +587,7 @@ export function matchInputs(answer, candidates, current, choiceKey) {
          return false;
       }
    });
-   const clarify = [];
+   const clarify = [], hintReading = new Map();
    readings = readings.filter((reading) => {
       const field = fieldOf(reading);
       // An amount asks its word only of a bare number (owner 2026-11-18): "109 con 47", "$150" or "150 dollars" is the amount.
@@ -596,7 +596,7 @@ export function matchInputs(answer, candidates, current, choiceKey) {
       } else {
          refused.push({ form: reading.form, name: reading.name, value: reading.value, rule: 'confirm_out_of_order', spans: reading.spans });
          const taken = readings.some((other) => inOrder(other) && !other.fallback && (other.spans || []).some(([s, e]) => (reading.spans || []).some(([t, u]) => s < u && t < e)));
-         if (!taken) clarify.push({ form: reading.form, name: reading.name, value: reading.value, ...field.confirm_out_of_order });
+         if (!taken) { const hint = { form: reading.form, name: reading.name, value: reading.value, ...field.confirm_out_of_order }; hintReading.set(hint, reading); clarify.push(hint); } else { /* the digits are another field's answer */ }
          return false;
       }
    });
@@ -657,6 +657,21 @@ export function matchInputs(answer, candidates, current, choiceKey) {
          return false;
       }
    });
+   // Rule 1 judges an out-of-order hint too (owner 2026-11-26): the hint is said only when its reading, with what is still read,
+   // would be the whole answer ("107", "107 por favor"). A number inside a sentence is no match, so it gives no hint and the
+   // reply ranker reads the sentence (prod 2026-11-25 CA5b1d: "Voy a pagar el monto vencido de 107 dólares." was told to add
+   // CÓDIGO DE SEGURIDAD). Judged after the filters above, which read the answer without the refused reading.
+   for (let i = clarify.length - 1; i >= 0; i--) {
+      const reading = hintReading.get(clarify[i]);
+      const withIt = reading ? [...readings, reading] : readings;
+      const alone = !!cur.name && !withIt.some(inOrder) && withIt.every((other) => spansMeet(other, withIt[0]));
+      const rest = unclaimedSpans(raw, withIt.filter((other) => !other.fallback && other.unlocated !== true)).map(([a, b]) => raw.slice(a, b)).join(' ');
+      if (!reading || !alone || reading.unlocated === true || fieldOf(reading).profile.kind === 'amount' || isReaderFiller(rest, fieldWords(reading))) {
+         // a whole answer (or no reading to judge): the hint stands
+      } else {
+         clarify.splice(i, 1);   // already refused as confirm_out_of_order above
+      }
+   }
 
    // The pieces of a pause join (owner 2026-11-15): the join can glue a number to the one after it ("Nuevecientos 44. 9 0 0 4 4." at
    // a ZIP is 4490044; its pieces are 44 and 90044). When nothing at all read or was refused for the answer's digits, a digits field
