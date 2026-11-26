@@ -47,6 +47,8 @@ const unknown = called.filter((n) => !known.has(n) && !jsNames.has(n) && !/^[a-z
 // expression() writes them: (function otpPrompt(…){…})(cargo), or an arrow assigned to a name) are not functions it
 // needs from a host
 const local = new Set([...text.matchAll(/(?:var|let|const)\s+([a-zA-Z0-9_]+)\s*=\s*(?:function|\([^)]*\)\s*=>|[a-zA-Z0-9_]+\s*=>)|function ([a-zA-Z0-9_]+)\(|[,;{(]\s*([a-zA-Z0-9_]+)\s*=\s*(?:function|\([^)]*\)\s*=>|[a-zA-Z0-9_]+\s*=>)/g)].map((m) => m[1] || m[2] || m[3]));
+// an arrow function's parameters are its own names too: const list=(items,or)=>…or(…) calls the function it was given
+for (const m of text.matchAll(/\(([A-Za-z0-9_$,\s]*)\)\s*=>/g)) m[1].split(',').map((x) => x.trim()).filter(Boolean).forEach((x) => local.add(x));
 eq(unknown.filter((n) => !local.has(n)), [], 'every function the system flows call is standard or a known host function');
 
 console.log(`helpers-standard: ${checks} checks passed`);
