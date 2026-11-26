@@ -34,6 +34,8 @@ const mediaError = (media) => (media === undefined || (Array.isArray(media) && m
 /**
  * Register (or replace, by key) a document the caller may ask to be sent. Throws on a malformed entry: a flow that
  * registers something unsendable is a flow bug and must fail where it is written, not when a caller asks for it.
+ * disclaimer / disclaimer_es (a content entry only): said before the document is sent to a number or email that is not the
+ * caller's own, with the read-back SendCopy asks then (owner 2026-11-26).
  * → true, so it can stand in a SET expression.
  */
 export function registerSendable(cargo, entry) {
@@ -53,6 +55,10 @@ export function registerSendable(cargo, entry) {
       throw new Error(`registerSendable(${entry.key}): args, when given, must be an object`);
    } else if (entry.args !== undefined && !isText(entry.sender)) {
       throw new Error(`registerSendable(${entry.key}): args belong to a sender entry`);
+   } else if ((entry.disclaimer !== undefined && !isText(entry.disclaimer)) || (entry.disclaimer_es !== undefined && !isText(entry.disclaimer_es))) {
+      throw new Error(`registerSendable(${entry.key}): disclaimer and disclaimer_es, when given, must be nonempty strings`);
+   } else if (entry.disclaimer !== undefined && isText(entry.sender)) {
+      throw new Error(`registerSendable(${entry.key}): a disclaimer belongs to a content entry (a sender flow gates its own destination)`);
    } else if (mediaError(entry.media)) {
       throw new Error(`registerSendable(${entry.key}): ${mediaError(entry.media)}`);
    } else {
@@ -61,6 +67,13 @@ export function registerSendable(cargo, entry) {
          stored.label_es = entry.label_es;
       } else {
          // English label only: the ranker reads the label in either language.
+      }
+      for (const field of ['disclaimer', 'disclaimer_es']) {
+         if (isText(entry[field])) {
+            stored[field] = entry[field];
+         } else {
+            // not declared: no warning before a send to someone else
+         }
       }
       if (isText(entry.content)) {
          stored.content = entry.content;

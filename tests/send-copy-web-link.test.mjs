@@ -92,6 +92,37 @@ await check('the caller\'s own phone, the verified cell and the email on file ar
    assert.deepEqual(sent.map((x) => [x.medium, x.to]), [['email', 'ana@example.com']]);
 });
 
+await check('every item to someone else is read back: a reply plainly, the conversation and a declared disclaimer with their warning', async () => {
+   const ask = async (args, cargo = {}) => {
+      sent.length = 0;
+      let {engine, session} = await engineFor({...CALLER, chatTurns: [{n: 1, role: 'user', text: 'balance?'}, {n: 2, role: 'assistant', text: 'Your balance is $10.'}], ...cargo});
+      session = await engine.updateActivity({role: 'user', content: 'send it', start: {flow: 'SendCopy', arguments: args}}, session);
+      return {engine, session, r: String(session.response)};
+   };
+   let {engine, session, r} = await ask({item: 'reply-2', destination: '(213) 555-0147'});
+   assert.match(r, /^Should I send it to \(213\) 555-0147\?/, r);
+   assert.deepEqual(sent, []);
+   session = await engine.updateActivity({role: 'user', content: 'yes'}, session);
+   assert.deepEqual(sent.map((x) => [x.to, x.message]), [['2135550147', 'Your balance is $10.']]);
+   ({r} = await ask({item: 'conversation', medium: 'email', destination: 'bob@example.com'}));
+   assert.match(r, /^This is our whole conversation, including any account details\. Should I send it to bob@example\.com\?/, r);
+   const doc = {sendables: [{key: 'receipt', label: 'Your receipt', kind: 'document', content: 'Paid $10.', disclaimer: 'This receipt shows your account number.'}]};
+   ({r} = await ask({item: 'receipt', destination: '(213) 555-0147'}, doc));
+   assert.match(r, /^This receipt shows your account number\. Should I send it to \(213\) 555-0147\?/, r);
+   ({r} = await ask({item: 'reply-2', medium: 'text'}));
+   assert.deepEqual(sent.map((x) => x.to), ['3105551234'], 'the caller\'s own phone: no question');
+   assert.match(r, /^Done\./);
+});
+
+await check('registerSendable takes a disclaimer on a content entry only', () => {
+   const cargo = {};
+   registerSendable(cargo, {key: 'r', label: 'R', content: 'x', disclaimer: 'Careful.', disclaimer_es: 'Cuidado.'});
+   assert.equal(cargo.sendables[0].disclaimer, 'Careful.');
+   assert.equal(cargo.sendables[0].disclaimer_es, 'Cuidado.');
+   assert.throws(() => registerSendable({}, {key: 's', label: 'S', sender: 'send-statement', disclaimer: 'x'}), /content entry/);
+   assert.throws(() => registerSendable({}, {key: 't', label: 'T', content: 'x', disclaimer: ''}), /nonempty/);
+});
+
 await check('in Spanish the line is Spanish', async () => {
    sent.length = 0;
    const functions = {...STANDARD_FUNCTIONS, getWebChatLink: async () => LINK, recordSent: (medium, to, message) => { sent.push({medium, to, message}); return true; }};
