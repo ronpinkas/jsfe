@@ -18651,19 +18651,19 @@
   },
   {
     "scope": "isolated",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "id": "send-copy",
     "name": "SendCopy",
     "primary": true,
     "prompt": "Send a copy",
     "prompt_es": "Enviar una copia",
-    "description": "Asks to be sent something by text or email, whatever it is ('email me that', 'text me the case number', 'send me the receipt', 'can I have that emailed to me', 'send me a copy of this chat', 'mándame eso por mensaje', 'me lo puede mandar por correo'). Not: continuing the conversation by text (SwitchToText).",
+    "description": "Asks to be sent something by text or email, whatever it is ('email me that', 'text me the case number', 'send me the receipt', 'can I have that emailed to me', 'send me a copy of this chat', 'mándame eso por mensaje', 'me lo puede mandar por correo'), or asks to continue this conversation on the web or another device ('can I continue this on my computer?', 'send me a link to continue on the web', '¿puedo seguir esto en mi computadora?'). Not: continuing the conversation by text (SwitchToText).",
     "parameters": [
       {
         "name": "item",
         "type": "string",
         "enum_from": "sendables",
-        "description": "What the user asks to have sent: the reply or document they name or point to. 'That', 'it', 'this', 'eso' or 'lo que me dijo' is the latest reply; the whole chat, conversation or transcript ('toda la conversación') is the whole conversation."
+        "description": "What the user asks to have sent: the reply or document they name or point to. 'That', 'it', 'this', 'eso' or 'lo que me dijo' is the latest reply; the whole chat, conversation or transcript ('toda la conversación') is the whole conversation; continuing on the web, a computer or another device is the link to continue on the web."
       },
       {
         "name": "medium",
@@ -18778,12 +18778,40 @@
         "type": "boolean",
         "value": false
       },
+      "sc_link": {
+        "type": "string",
+        "value": ""
+      },
+      "sc_trusted": {
+        "type": "boolean",
+        "value": true
+      },
+      "sc_warning": {
+        "type": "string",
+        "value": ""
+      },
+      "sc_warning_es": {
+        "type": "string",
+        "value": ""
+      },
+      "sc_target": {
+        "type": "string",
+        "value": ""
+      },
+      "sc_confirm_q": {
+        "type": "string",
+        "value": ""
+      },
+      "sc_confirm_q_es": {
+        "type": "string",
+        "value": ""
+      },
       "contract": {
         "type": "object",
         "value": {
           "version": 1,
           "role": "router",
-          "summary": "Sends a reply, registered document or the whole conversation the caller picks, by text or email, through the system send workers or the document's sender flow",
+          "summary": "Sends a reply, registered document, the whole conversation or a link to continue it on the web, as the caller picks, by text or email, through the system send workers or the document's sender flow",
           "parametersFrom": "parameters",
           "requires": [
             "jsfe:continuation-safety:v1"
@@ -19052,10 +19080,125 @@
         "value": "typeof medium === 'string' && (medium === 'text' || medium === 'email') ? medium : sc_email ? 'email' : sc_phone ? 'text' : ''"
       },
       {
+        "id": "sc_link_text",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_item.kind === 'web_link' && !sc_medium && !!cargo.twilioNumber && !!textDestination(cargo)": {
+            "id": "sc_link_text_set",
+            "type": "SET",
+            "variable": "sc_medium",
+            "value": "'text'"
+          },
+          "default": {
+            "id": "sc_link_text_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_link_email",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_item.kind === 'web_link' && !sc_medium && validateEmail(String(cargo.otp_email || ''))": {
+            "id": "sc_link_email_set",
+            "type": "SET",
+            "variable": "sc_email",
+            "value": "String(cargo.otp_email)"
+          },
+          "default": {
+            "id": "sc_link_email_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_link_email_medium",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_item.kind === 'web_link' && !sc_medium && !!sc_email": {
+            "id": "sc_link_email_medium_set",
+            "type": "SET",
+            "variable": "sc_medium",
+            "value": "'email'"
+          },
+          "default": {
+            "id": "sc_link_email_medium_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_link",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_item.kind === 'web_link'": {
+            "id": "sc_link_call",
+            "type": "CALL-TOOL",
+            "tool": "get-web-chat-link",
+            "variable": "sc_link",
+            "args": {},
+            "onFail": {
+              "id": "sc_link_failed",
+              "type": "SET",
+              "variable": "sc_link",
+              "value": "''"
+            }
+          },
+          "default": {
+            "id": "sc_link_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_link_none",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_item.kind === 'web_link' && !sc_link": {
+            "id": "sc_link_none_say",
+            "type": "SAY",
+            "value": "Sorry, I couldn't make a link to continue on the web. Is there anything else I can help you with?",
+            "value_es": "Lo siento, no pude crear un enlace para continuar en la web. ¿Hay algo más en lo que le pueda ayudar?"
+          },
+          "default": {
+            "id": "sc_link_none_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_link_none_end",
+        "type": "CASE",
+        "branches": {
+          "condition: sc_item.kind === 'web_link' && !sc_link": {
+            "id": "sc_link_none_done",
+            "type": "END",
+            "outcome": "unresolved",
+            "reason": "no_web_link"
+          },
+          "default": {
+            "id": "sc_link_none_end_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "sc_content",
         "type": "SET",
         "variable": "sc_content",
-        "value": "sc_item.kind === 'conversation' ? conversationCopy(cargo.chatTurns, language) : String(sc_item.content || '')"
+        "value": "sc_item.kind === 'conversation' ? conversationCopy(cargo.chatTurns, language) : sc_item.kind === 'web_link' ? (language === 'es' ? 'Continúe nuestra conversación en la web: ' : 'Continue our conversation on the web: ') + sc_link : String(sc_item.content || '')"
       },
       {
         "id": "sc_too_long",
@@ -19699,10 +19842,182 @@
         }
       },
       {
+        "id": "sc_trusted",
+        "type": "SET",
+        "variable": "sc_trusted",
+        "value": "(sc_medium === 'email' ? sc_to.toLowerCase() === String(cargo.otp_email || '').trim().toLowerCase() : [cargo.callerId, cargo.otp_cell_number].map(function (n) { return String(n || '').replace(/\\D/g, '').slice(-10); }).filter(function (n) { return n.length === 10; }).indexOf(String(cargo.textTo || '').replace(/\\D/g, '').slice(-10)) >= 0)"
+      },
+      {
+        "id": "sc_warning",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_trusted": {
+            "id": "sc_warning_set",
+            "type": "SET",
+            "variable": "sc_warning",
+            "value": "sc_item.kind === 'web_link' ? 'This link opens our conversation, including any account details, for whoever has it. ' : sc_item.kind === 'conversation' ? 'This is our whole conversation, including any account details. ' : sc_item.disclaimer ? String(sc_item.disclaimer) + ' ' : ''"
+          },
+          "default": {
+            "id": "sc_warning_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_warning_es",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_trusted": {
+            "id": "sc_warning_es_set",
+            "type": "SET",
+            "variable": "sc_warning_es",
+            "value": "sc_item.kind === 'web_link' ? 'Este enlace abre nuestra conversación, incluidos los datos de su cuenta, para quien lo tenga. ' : sc_item.kind === 'conversation' ? 'Es toda nuestra conversación, incluidos los datos de su cuenta. ' : sc_item.disclaimer ? String(sc_item.disclaimer_es || sc_item.disclaimer) + ' ' : ''"
+          },
+          "default": {
+            "id": "sc_warning_es_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_target",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_trusted": {
+            "id": "sc_target_set",
+            "type": "SET",
+            "variable": "sc_target",
+            "value": "sc_medium === 'email' ? sc_to : String(cargo.textTo || '').replace(/\\D/g, '').slice(-10).replace(/^(\\d{3})(\\d{3})(\\d{4})$/, '($1) $2-$3')"
+          },
+          "default": {
+            "id": "sc_target_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_confirm_q",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_trusted": {
+            "id": "sc_confirm_q_set",
+            "type": "SET",
+            "variable": "sc_confirm_q",
+            "value": "sc_warning + 'Should I send it to ' + sc_target + '? ' + yesNoKeys('en', cargo)"
+          },
+          "default": {
+            "id": "sc_confirm_q_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_confirm_q_es",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_trusted": {
+            "id": "sc_confirm_q_es_set",
+            "type": "SET",
+            "variable": "sc_confirm_q_es",
+            "value": "sc_warning_es + '¿Se lo envío a ' + sc_target + '? ' + yesNoKeys('es', cargo)"
+          },
+          "default": {
+            "id": "sc_confirm_q_es_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_confirm",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_trusted": {
+            "id": "sc_confirm_ask",
+            "type": "FLOW",
+            "value": "ask-choice",
+            "callType": "call",
+            "parameters": {
+              "question": "{{sc_confirm_q}}",
+              "question_es": "{{sc_confirm_q_es}}",
+              "choices": [
+                {
+                  "key": "yes",
+                  "phrases": [
+                    "1"
+                  ]
+                },
+                {
+                  "key": "no",
+                  "phrases": [
+                    "2"
+                  ]
+                }
+              ],
+              "digits": {
+                "min": 1,
+                "max": 1
+              }
+            }
+          },
+          "default": {
+            "id": "sc_confirm_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_confirm_no",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_trusted && cargo.choice !== 'yes'": {
+            "id": "sc_confirm_no_say",
+            "type": "SAY",
+            "value": "Okay, I didn't send it. Is there anything else I can help you with?",
+            "value_es": "De acuerdo, no lo envié. ¿Hay algo más en lo que le pueda ayudar?"
+          },
+          "default": {
+            "id": "sc_confirm_no_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "sc_confirm_no_end",
+        "type": "CASE",
+        "branches": {
+          "condition: !sc_trusted && cargo.choice !== 'yes'": {
+            "id": "sc_confirm_no_done",
+            "type": "END",
+            "outcome": "unresolved",
+            "reason": "declined"
+          },
+          "default": {
+            "id": "sc_confirm_no_end_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "sc_subject",
         "type": "SET",
         "variable": "sc_subject",
-        "value": "language === 'es' ? 'Su copia de nuestra conversación' : sc_item.kind === 'conversation' ? 'Your copy of our conversation' : 'Your copy from our conversation'"
+        "value": "sc_item.kind === 'web_link' ? (language === 'es' ? 'Continúe nuestra conversación en la web' : 'Continue our conversation on the web') : language === 'es' ? 'Su copia de nuestra conversación' : sc_item.kind === 'conversation' ? 'Your copy of our conversation' : 'Your copy from our conversation'"
       },
       {
         "id": "sc_send_text",

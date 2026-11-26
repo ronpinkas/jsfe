@@ -541,6 +541,25 @@
     }
   },
   {
+    "id": "get-web-chat-link",
+    "name": "Get Web Chat Link",
+    "description": "A link that opens this conversation in the tenant's web chat (https://<site>/#iAIg-widget=<token>), good for a day on every tap: SendCopy's link to continue on the web. '' when there is no conversation or no tenant site.",
+    "parameters": {},
+    "required": [],
+    "additionalProperties": false,
+    "implementation": {
+      "type": "local",
+      "function": "getWebChatLink",
+      "args": [],
+      "timeout": 5000
+    },
+    "security": {
+      "requiresAuth": false,
+      "auditLevel": "medium",
+      "dataClassification": "customer_service"
+    }
+  },
+  {
     "id": "send-email",
     "name": "Send Email",
     "description": "Send a plain-text email to a customer (the host's sendEmail: SES, the platform's sender address; an address that cannot receive mail is refused). For a message the flow wrote itself, e.g. a receipt; never a code (send-email-otp).",
