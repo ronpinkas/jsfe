@@ -57,9 +57,39 @@ await check('nothing named, no line to text from: the link is emailed to the ema
    assert.match(r, /^Done\. I emailed it to ana@example\.com\./);
 });
 
-await check('a named email is used as given, over the number on file', async () => {
-   await run({voice: true, twilioNumber: '+12135551000', callerId: '+13105551234'}, {medium: 'email', destination: 'bob@example.com'});
-   assert.deepEqual(sent.map((s) => [s.medium, s.to]), [['email', 'bob@example.com']]);
+async function engineFor(cargo, language = 'en') {
+   const functions = {...STANDARD_FUNCTIONS, getWebChatLink: async () => LINK, recordSent: (medium, to, message) => { sent.push({medium, to, message}); return true; }};
+   const engine = new WorkflowEngine(quiet, async () => '{"flowName":"None"}', linkFormSchemas([...FLOWS, ...workers]), tools, functions, {}, false, language);
+   engine.disableCommands();
+   let session = engine.initSession('test', 'web-link-2', language);
+   Object.assign(session.cargo, {chatTurns: [{n: 1, role: 'assistant', text: 'Hello'}]}, cargo);
+   return {engine, session};
+}
+const CALLER = {voice: true, twilioNumber: '+12135551000', callerId: '+13105551234'};
+await check('a target that is not the caller\'s is read back with the warning and sent only on YES', async () => {
+   sent.length = 0;
+   let {engine, session} = await engineFor(CALLER);
+   session = await engine.updateActivity({role: 'user', content: 'text it to 213 555 0147', start: {flow: 'SendCopy', arguments: {item: WEB_LINK_KEY, destination: '(213) 555-0147'}}}, session);
+   assert.match(String(session.response), /^This link opens our conversation, including any account details, for whoever has it\. Should I send it to \(213\) 555-0147\?/);
+   assert.deepEqual(sent, [], 'nothing sent before YES');
+   session = await engine.updateActivity({role: 'user', content: 'yes'}, session);
+   assert.deepEqual(sent.map((x) => [x.medium, x.to]), [['text', '2135550147']]);
+   sent.length = 0;
+   ({engine, session} = await engineFor(CALLER));
+   session = await engine.updateActivity({role: 'user', content: 'email it to bob', start: {flow: 'SendCopy', arguments: {item: WEB_LINK_KEY, medium: 'email', destination: 'bob@example.com'}}}, session);
+   assert.match(String(session.response), /Should I send it to bob@example\.com\?/);
+   session = await engine.updateActivity({role: 'user', content: 'no'}, session);
+   assert.deepEqual(sent, [], 'NO: nothing sent');
+   assert.match(String(session.response), /^Okay, I didn't send it\./);
+});
+
+await check('the caller\'s own phone, the verified cell and the email on file are sent without the question', async () => {
+   await run(CALLER, {destination: '310-555-1234'});
+   assert.deepEqual(sent.map((x) => x.to), ['3105551234']);
+   await run({...CALLER, otp_cell_number: '8185550199'}, {destination: '818 555 0199'});
+   assert.deepEqual(sent.map((x) => x.to), ['8185550199']);
+   await run({...CALLER, otp_email: 'Ana@Example.com'}, {medium: 'email', destination: 'ana@example.com'});
+   assert.deepEqual(sent.map((x) => [x.medium, x.to]), [['email', 'ana@example.com']]);
 });
 
 await check('in Spanish the line is Spanish', async () => {

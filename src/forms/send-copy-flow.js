@@ -14,7 +14,9 @@
  *   missing sender) SendCopy says it could not send. A sender's declared media limit the medium (statement: email).
  * - The web chat link (WEB_LINK_KEY, owner 2026-11-26: "can I continue this on my computer?") is made at send time by the
  *   host's get-web-chat-link tool. With no medium or destination named it is texted to the caller's number, else emailed to
- *   the email on file, else the medium is asked; any number or email the caller names is used, as for any item.
+ *   the email on file, else the medium is asked; any number or email the caller names is used, as for any item. The link
+ *   opens the conversation for whoever has it, so a target that is not the caller's (their own phone, the verified cell,
+ *   the email on file) is read back with that warning and sent only on YES (owner 2026-11-26).
  * No authentication gate here (owner rule: an authenticated caller's chat and documents are theirs to send anywhere;
  * before authentication no reply holds account data). A sender flow gates its own document.
  */
@@ -53,7 +55,7 @@ const sendCopy = defineWorker({
    ],
    variables: vars({
       noop: false, sc_items: [], sc_key: '', sc_item: null, sc_last: null, sc_last_head: '', sc_offer_q: '', sc_offer_q_es: '', sc_doc_list: '', sc_email: '', sc_phone: '',
-      sc_medium: '', sc_medium_q: '', sc_medium_q_es: '', sc_given: '', sc_other: false, sc_too_long: false, sc_media: [], sc_forced: '', sc_to: '', sc_subject: '', sc_content: '', sc_sent: false, sc_link: '',
+      sc_medium: '', sc_medium_q: '', sc_medium_q_es: '', sc_given: '', sc_other: false, sc_too_long: false, sc_media: [], sc_forced: '', sc_to: '', sc_subject: '', sc_content: '', sc_sent: false, sc_link: '', sc_link_trusted: true, sc_target: '', sc_confirm_q: '', sc_confirm_q_es: '',
    }),
    steps: [
       set('sc_items', 'sc_items', 'sendables(cargo)'),
@@ -165,6 +167,20 @@ const sendCopy = defineWorker({
       })),
       when('sc_email_read', "sc_medium === 'email' && !sc_to", set('sc_email_pick', 'sc_to', "cargo.email && validateEmail(String(cargo.email)) ? String(cargo.email) : ''")),
       when('sc_email_none_end', "sc_medium === 'email' && !sc_to", end('sc_email_none_done')),
+
+      // the web link to a target that is not the caller's: read back with the warning, sent only on YES
+      set('sc_link_trusted', 'sc_link_trusted', "sc_item.kind !== 'web_link' || (sc_medium === 'email' ? sc_to.toLowerCase() === String(cargo.otp_email || '').trim().toLowerCase() : [cargo.callerId, cargo.otp_cell_number].map(function (n) { return String(n || '').replace(/\\D/g, '').slice(-10); }).filter(function (n) { return n.length === 10; }).indexOf(String(cargo.textTo || '').replace(/\\D/g, '').slice(-10)) >= 0)"),
+      when('sc_target', '!sc_link_trusted', set('sc_target_set', 'sc_target', "sc_medium === 'email' ? sc_to : String(cargo.textTo || '').replace(/\\D/g, '').slice(-10).replace(/^(\\d{3})(\\d{3})(\\d{4})$/, '($1) $2-$3')")),
+      when('sc_confirm_q', '!sc_link_trusted', set('sc_confirm_q_set', 'sc_confirm_q', "'This link opens our conversation, including any account details, for whoever has it. Should I send it to ' + sc_target + '? ' + yesNoKeys('en', cargo)")),
+      when('sc_confirm_q_es', '!sc_link_trusted', set('sc_confirm_q_es_set', 'sc_confirm_q_es', "'Este enlace abre nuestra conversación, incluidos los datos de su cuenta, para quien lo tenga. ¿Se lo envío a ' + sc_target + '? ' + yesNoKeys('es', cargo)")),
+      when('sc_confirm', '!sc_link_trusted', call('sc_confirm_ask', 'ask-choice', {
+         question: '{{sc_confirm_q}}',
+         question_es: '{{sc_confirm_q_es}}',
+         choices: [{ key: 'yes', phrases: ['1'] }, { key: 'no', phrases: ['2'] }],
+         digits: { min: 1, max: 1 },
+      })),
+      when('sc_confirm_no', "!sc_link_trusted && cargo.choice !== 'yes'", say('sc_confirm_no_say', "Okay, I didn't send it." + ANYTHING_ELSE, 'De acuerdo, no lo envié.' + ANYTHING_ELSE_ES)),
+      when('sc_confirm_no_end', "!sc_link_trusted && cargo.choice !== 'yes'", end('sc_confirm_no_done', { outcome: 'unresolved', reason: 'declined' })),
 
       // send: a sender item runs its flow (it tells the caller); content goes as is
       set('sc_subject', 'sc_subject', "sc_item.kind === 'web_link' ? (language === 'es' ? 'Continúe nuestra conversación en la web' : 'Continue our conversation on the web') : language === 'es' ? 'Su copia de nuestra conversación' : sc_item.kind === 'conversation' ? 'Your copy of our conversation' : 'Your copy from our conversation'"),
