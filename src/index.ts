@@ -7021,6 +7021,17 @@ function outcomeInForce(engine: Engine): { outcome: string; reason?: string; flo
 /**
  * Create evaluation context with all available variables for simplified evaluator
  */
+/** The declared parameter names of the flow whose variables these are (the frame holding this very container), else none. */
+function declaredParametersOf(engine: Engine, variables: Record<string, unknown>): string[] {
+  const frame = (engine.flowStacks || []).flat().find((f: any) => f?.variables === variables) as FlowFrame | undefined;
+  if (!frame) return [];
+  const flow: any = engine.flowsMenu?.find(f => f.id === frame.flowId);
+  const declared = flow?.parameters;
+  if (Array.isArray(declared)) return declared.map((p: any) => (typeof p === 'string' ? p : p?.name)).filter(Boolean);
+  else if (declared && typeof declared === 'object') return Object.keys(declared.properties || declared);
+  else return [];
+}
+
 function createSimplifiedEvaluationContext(
   variables: Record<string, unknown>,
   contextStack: ContextEntry[],
@@ -7060,6 +7071,11 @@ function createSimplifiedEvaluationContext(
     Array,
     JSON
   };
+  // A declared parameter the caller did not pass is undefined, never a missing name: the host's JSON save of the
+  // session drops an undefined variable, and a later turn's bare read of it threw (prod 2026-11-26, done_by_ai).
+  for (const name of declaredParametersOf(engine, allVars)) {
+    if (!(name in context)) context[name] = undefined; else { /* the flow holds a value: kept as given */ }
+  }
   const functions = engine.getNamedFunctionNamespace();
   if (functions) context.fn = functions;
   if (engine.sharedData) context.$data = engine.sharedData;
