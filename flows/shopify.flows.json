@@ -172,14 +172,33 @@
           "catalog": "provides",
           "parametersFrom": "parameters"
         }
+      },
+      "request_said": {
+        "type": "string",
+        "value": ""
       }
     },
     "steps": [
       {
+        "id": "product_request_said",
+        "type": "SET",
+        "variable": "request_said",
+        "value": "typeof userInput!=='undefined'?String(userInput):''"
+      },
+      {
+        "id": "product_request_shown",
+        "type": "FLOW",
+        "value": "shopify-ql-shown-product-read",
+        "callType": "call",
+        "parameters": {
+          "answer": "{{request_said}}"
+        }
+      },
+      {
         "id": "product_request",
         "type": "SET",
         "variable": "request",
-        "value": "(function productRequest(state, supplied, input, voice, answerReader) {\n const text=String(input || '').trim(),w=text.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();\n const old=state && Array.isArray(state.products)?state:null;\n const shown=old?old.products.slice(0,voice?3:5):[];\n const ref=/\\b(those|these|them|it|that|this|one|ones|esos|esas|estos|estas|eso|ese|esa|segundo|segunda|primero|primera|second|first|cheapest|barato|barata)\\b/.test(w);\n const explicit=typeof supplied.search_query==='string'?supplied.search_query.trim():'';const constraints=typeof supplied.refinement==='string'?supplied.refinement.trim():'';\n let query=explicit || (old && (ref || supplied.asked || supplied.user_city || supplied.product_number || constraints)?old.query:'');\n if(query && constraints && !query.toLowerCase().includes(constraints.toLowerCase()))query+=' '+constraints;\n let asked=String(supplied.asked || '');\n if(!asked){if(/\\b(cheapest|least expensive|mas barato|mas barata|menor precio)\\b/.test(w))asked='cheapest';else if(/\\b(price|cost|how much|cuanto|cuesta|cuestan|precio|precios)\\b/.test(w))asked='price';else if(/\\b(store|stores|near|nearby|tienda|tiendas|cerca|pickup|pick up)\\b/.test(w))asked='stores';else if(/\\b(stock|available|availability|disponible|disponibles|agotado|existencia)\\b/.test(w))asked='stock';else if(supplied.user_city)asked='stores';else asked='results';}\n let selection=String(supplied.product_number || '').trim();\n if(!selection&&!explicit){const n=w.match(/^(?:yes |si |the |el |la |number |numero |product |producto )*([1-5])(?:\\b|$)/);if(n)selection=n[1];else{const ord=[[/\\b(first|primero|primera|primer)\\b/,1],[/\\b(second|segundo|segunda)\\b/,2],[/\\b(third|tercero|tercera)\\b/,3],[/\\b(fourth|cuarto|cuarta)\\b/,4],[/\\b(fifth|quinto|quinta)\\b/,5]];selection=String(ord.find(x=>x[0].test(w))?.[1] || '');}}\n const affirmative=answerReader?answerReader(text,'yes'):/^(yes|yeah|yep|sure|ok|okay|please|yes please|si|claro|por favor|si por favor|dale|ese|esa|that one|this one|it)[.!\\s]*$/.test(w);\n if(!selection&&!explicit&&shown.length>1){const stop=/^(the|el|la|los|las|is|are|it|this|that|esta|este|esto|disponible|disponibles|available|availability|stock|in|en|de|del|for|para|tienen|tiene|hay|do|does|you|have|precio|price|cuanto|cuesta|how|much|y|and|o|or|un|una|a|si|yes)$/;const words=w.split(/[^a-z0-9]+/).filter(x=>x&&!stop.test(x));if(words.length){const scored=shown.map((p,i)=>{const t=String(p.title||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);const hit=words.filter(x=>t.includes(x)).length;return {i,hit,ratio:t.length?hit/t.length:0};}).filter(s=>s.hit===words.length).sort((a,b)=>b.ratio-a.ratio);if(scored.length===1||scored.length>1&&scored[0].ratio-scored[1].ratio>=0.15)selection=String(scored[0].i+1);}}\n if(!selection && !explicit && shown.length===1 && affirmative)selection='1';\n let index=selection?Number(selection)-1:old && ref && /\\b(it|that one|this one|ese|esa)\\b/.test(w)?old.focus:-1;\n const ordinalPositions=[[/\\b(first|primero|primera|primer)\\b/,1],[/\\b(second|segundo|segunda)\\b/,2],[/\\b(third|tercero|tercera|tercer)\\b/,3],[/\\b(fourth|cuarto|cuarta)\\b/,4],[/\\b(fifth|quinto|quinta)\\b/,5]].filter(pair=>pair[0].test(w)).map(pair=>String(pair[1]));const positions=[...new Set((w.match(/\\b[1-5]\\b/g) || []).concat(ordinalPositions))];const selectionGrammar=w.replace(/\\b(?:[1-5]|first|second|third|fourth|fifth|primero|primera|primer|segundo|segunda|tercero|tercera|tercer|cuarto|cuarta|quinto|quinta)\\b/g,'').replace(/\\b(?:the|el|la|los|las|one|ones|option|options|product|products|item|items|number|numbers|opcion|opciones|producto|productos|numero|numeros|or|and|o|y|with|con|compare|comparar|please|por|favor|maybe|perhaps)\\b/g,'').replace(/[\\s.,!?¿¡:;-]/g,'');const conflictingSelection=!!old && (!explicit || !!supplied.product_number) && positions.length>1 && !selectionGrammar;const invalidSelection=conflictingSelection || !!selection && (!Number.isInteger(index)||index<0||index>=shown.length);\n if(invalidSelection)index=-1;\n return {query,refinement:constraints,asked,index,selection,invalidSelection,city:String(supplied.user_city || '').trim(),refresh:supplied.refresh===true,reuse:!!old&&query===old.query&&supplied.refresh!==true,done:supplied.key==='done'||/^(no|no thanks|no thank you|done|nothing else|that's all|listo|no gracias|nada mas|eso es todo)[.!\\s]*$/.test(w)};\n})(cargo.shopifyProducts,{search_query:search_query,refinement:refinement,user_city:user_city,product_number:product_number,asked:asked,refresh:refresh},typeof userInput!=='undefined'?userInput:'',!!cargo.voice,isAnswer)"
+        "value": "(function productRequest(state, supplied, input, voice, answerReader, shownRead) {\n const text=String(input || '').trim(),w=text.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();\n const old=state && Array.isArray(state.products)?state:null;\n const shown=old?old.products.slice(0,voice?3:5):[];\n const ref=/\\b(those|these|them|it|that|this|one|ones|esos|esas|estos|estas|eso|ese|esa|segundo|segunda|primero|primera|second|first|cheapest|barato|barata)\\b/.test(w);\n const explicit=typeof supplied.search_query==='string'?supplied.search_query.trim():'';const constraints=typeof supplied.refinement==='string'?supplied.refinement.trim():'';\n let query=explicit || (old && (ref || supplied.asked || supplied.user_city || supplied.product_number || constraints)?old.query:'');\n if(query && constraints && !query.toLowerCase().includes(constraints.toLowerCase()))query+=' '+constraints;\n let asked=String(supplied.asked || '');\n if(!asked){if(/\\b(cheapest|least expensive|mas barato|mas barata|menor precio)\\b/.test(w))asked='cheapest';else if(/\\b(price|cost|how much|cuanto|cuesta|cuestan|precio|precios)\\b/.test(w))asked='price';else if(/\\b(store|stores|near|nearby|tienda|tiendas|cerca|pickup|pick up)\\b/.test(w))asked='stores';else if(/\\b(stock|available|availability|disponible|disponibles|agotado|existencia)\\b/.test(w))asked='stock';else if(supplied.user_city)asked='stores';else asked='results';}\n let selection=String(supplied.product_number || '').trim();\n if(!selection&&!explicit)selection=String(shownRead && shownRead.answer===String(input || '') && shownRead.selection || '');\n const affirmative=answerReader?answerReader(text,'yes'):/^(yes|yeah|yep|sure|ok|okay|please|yes please|si|claro|por favor|si por favor|dale|ese|esa|that one|this one|it)[.!\\s]*$/.test(w);\n if(!selection && !explicit && shown.length===1 && affirmative)selection='1';\n let index=selection?Number(selection)-1:old && ref && /\\b(it|that one|this one|ese|esa)\\b/.test(w)?old.focus:-1;\n const conflictingSelection=!!old && (!explicit || !!supplied.product_number) && !!(shownRead && shownRead.answer===String(input || '') && shownRead.conflict);const invalidSelection=conflictingSelection || !!selection && (!Number.isInteger(index)||index<0||index>=shown.length);\n if(invalidSelection)index=-1;\n return {query,refinement:constraints,asked,index,selection,invalidSelection,city:String(supplied.user_city || '').trim(),refresh:supplied.refresh===true,reuse:!!old&&query===old.query&&supplied.refresh!==true,done:supplied.key==='done'||/^(no|no thanks|no thank you|done|nothing else|that's all|listo|no gracias|nada mas|eso es todo)[.!\\s]*$/.test(w)};\n})(cargo.shopifyProducts,{search_query:search_query,refinement:refinement,user_city:user_city,product_number:product_number,asked:asked,refresh:refresh},typeof userInput!=='undefined'?userInput:'',!!cargo.voice,isAnswer,cargo.shopifyShownRead)"
       },
       {
         "id": "product_done",
@@ -724,10 +743,17 @@
     },
     "steps": [
       {
+        "id": "product_facts_shown",
+        "type": "FLOW",
+        "value": "shopify-ql-shown-products",
+        "callType": "call",
+        "parameters": {}
+      },
+      {
         "id": "product_facts_projection",
         "type": "SET",
         "variable": "noop",
-        "value": "(cargo.shopifyProductFacts=(function productFacts(state, requested, voice, language, money) {\n const es=language==='es',all=state.products.slice(0,voice?3:5),focused=state.focus>=0?all[state.focus]:null;\n const price=p=>{const scalar=v=>{const candidate=v!==null&&typeof v==='object'?v.amount:v;if(typeof candidate!=='number' && (typeof candidate!=='string'||!/^\\d+(?:\\.\\d+)?$/.test(candidate.trim())))return null;const n=Number(candidate)/(v!==null&&typeof v==='object'?100:1);return Number.isFinite(n)&&n>=0?n:null;};return {min:scalar(p.price_range?.min ?? p.price),max:scalar(p.price_range?.max ?? p.price_range?.min ?? p.price)};};\n const available=p=>p.variants.filter(v=>v.availability?.available===true||v.availability?.available===undefined&&v.available===true).length;\n const stock=p=>{const flags=p.variants.map(v=>typeof v.availability?.available==='boolean'?v.availability.available:typeof v.available==='boolean'?v.available:null);return !flags.length||flags.every(v=>v===null)?(es?'disponibilidad no indicada':'stock not provided'):flags.every(v=>v===true)?(es?'disponible':'in stock'):flags.some(v=>v===true)?(es?'algunas opciones disponibles':'some options in stock'):flags.some(v=>v===null)?(es?'disponibilidad no indicada':'stock not provided'):(es?'agotado':'out of stock');};\n const priceText=p=>{const r=price(p);if(r.min===null)return es?'Precio no indicado':'Price not provided';const currency=p.price_range?.min?.currency || p.price?.currency || 'USD';const amount=n=>currency!=='USD'?currency+' '+n.toFixed(2):voice?money(n.toFixed(2),language,true):'$'+n.toFixed(2);return r.max!==null&&r.max!==r.min?(es?'desde ':'from ')+amount(r.min):amount(r.min);};\n const row=(p,i,mode)=>String(all.indexOf(p)+1)+'. '+p.title+(mode==='stock'?', '+stock(p):mode==='price'?', '+priceText(p):', '+priceText(p)+', '+stock(p))+(voice?'':p.url?'\\n'+p.url:'');\n let selected=focused?[focused]:all;\n const fact={};\n fact.results=(es?'Encontré ':'I found ')+all.length+(es?' para \"':' for \"')+state.query+'\".'+(voice?' ':'\\n')+selected.map((p,i)=>row(p,i,'results')).join(voice?' ': '\\n\\n');\n fact.stock=selected.map((p,i)=>row(p,i,'stock')).join(voice?' ': '\\n');\n fact.price=selected.map((p,i)=>row(p,i,'price')).join(voice?' ': '\\n');\n const priced=selected.filter(p=>price(p).min!==null),currencies=new Set(priced.map(p=>p.price_range?.min?.currency||p.price?.currency||'USD'));\n const cheapest=currencies.size<=1?priced.reduce((best,p)=>!best||price(p).min<price(best).min?p:best,null):null;\n fact.cheapest=cheapest?(es?'El precio más bajo entre los productos mostrados es ':'The lowest price among the products shown is ')+row(cheapest,0,'price'):es?'No tengo precios comparables para esos productos.':'I do not have comparable prices for those products.';\n fact.details=selected.map((p,i)=>row(p,i,'results')).join(voice?' ': '\\n');\n return fact;\n})(cargo.shopifyProducts,cargo.shopifyProductRequest,!!cargo.voice,language,amountToSpeech),true)"
+        "value": "(cargo.shopifyProductFacts=(function productFacts(state, requested, voice, language, money, shown) {\n const es=language==='es',all=state.products.slice(0,voice?3:5),focused=state.focus>=0?all[state.focus]:null;\n const price=p=>{const scalar=v=>{const candidate=v!==null&&typeof v==='object'?v.amount:v;if(typeof candidate!=='number' && (typeof candidate!=='string'||!/^\\d+(?:\\.\\d+)?$/.test(candidate.trim())))return null;const n=Number(candidate)/(v!==null&&typeof v==='object'?100:1);return Number.isFinite(n)&&n>=0?n:null;};return {min:scalar(p.price_range?.min ?? p.price),max:scalar(p.price_range?.max ?? p.price_range?.min ?? p.price)};};\n const available=p=>p.variants.filter(v=>v.availability?.available===true||v.availability?.available===undefined&&v.available===true).length;\n const stock=p=>{const flags=p.variants.map(v=>typeof v.availability?.available==='boolean'?v.availability.available:typeof v.available==='boolean'?v.available:null);return !flags.length||flags.every(v=>v===null)?(es?'disponibilidad no indicada':'stock not provided'):flags.every(v=>v===true)?(es?'disponible':'in stock'):flags.some(v=>v===true)?(es?'algunas opciones disponibles':'some options in stock'):flags.some(v=>v===null)?(es?'disponibilidad no indicada':'stock not provided'):(es?'agotado':'out of stock');};\n const priceText=p=>{const said=(shown[all.indexOf(p)] || {price:{}}).price[es?'es':'en'];return said || (es?'Precio no indicado':'Price not provided');};\n const row=(p,i,mode)=>String(all.indexOf(p)+1)+'. '+p.title+(mode==='stock'?', '+stock(p):mode==='price'?', '+priceText(p):', '+priceText(p)+', '+stock(p))+(voice?'':p.url?'\\n'+p.url:'');\n let selected=focused?[focused]:all;\n const fact={};\n fact.results=(es?'Encontré ':'I found ')+all.length+(es?' para \"':' for \"')+state.query+'\".'+(voice?' ':'\\n')+selected.map((p,i)=>row(p,i,'results')).join(voice?' ': '\\n\\n');\n fact.stock=selected.map((p,i)=>row(p,i,'stock')).join(voice?' ': '\\n');\n fact.price=selected.map((p,i)=>row(p,i,'price')).join(voice?' ': '\\n');\n const priced=selected.filter(p=>price(p).min!==null),currencies=new Set(priced.map(p=>p.price_range?.min?.currency||p.price?.currency||'USD'));\n const cheapest=currencies.size<=1?priced.reduce((best,p)=>!best||price(p).min<price(best).min?p:best,null):null;\n fact.cheapest=cheapest?(es?'El precio más bajo entre los productos mostrados es ':'The lowest price among the products shown is ')+row(cheapest,0,'price'):es?'No tengo precios comparables para esos productos.':'I do not have comparable prices for those products.';\n fact.details=selected.map((p,i)=>row(p,i,'results')).join(voice?' ': '\\n');\n return fact;\n})(cargo.shopifyProducts,cargo.shopifyProductRequest,!!cargo.voice,language,amountToSpeech,cargo.shopifyShown),true)"
       }
     ]
   },
@@ -884,6 +910,10 @@
           },
           "parametersFrom": "parameters"
         }
+      },
+      "followup_said": {
+        "type": "string",
+        "value": ""
       }
     },
     "steps": [
@@ -988,10 +1018,25 @@
         "value": "typeof global_store_locations!=='undefined' && Array.isArray(global_store_locations) && global_store_locations.length>0"
       },
       {
+        "id": "product_followup_said",
+        "type": "SET",
+        "variable": "followup_said",
+        "value": "String(cargo.forms[form_instance].values.response || '')"
+      },
+      {
+        "id": "product_followup_shown",
+        "type": "FLOW",
+        "value": "shopify-ql-shown-product-read",
+        "callType": "call",
+        "parameters": {
+          "answer": "{{followup_said}}"
+        }
+      },
+      {
         "id": "product_read_followup",
         "type": "SET",
         "variable": "next",
-        "value": "(function productFollowup(answer, state, voice, hasStores, requestReader=productRequest, answerReader, linkWords=[], supplied={}) {\n const w=String(answer||'').trim().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();\n const request=requestReader(state,supplied,answer,voice,answerReader);\n const hasFact=request.asked!=='results',typedFact=['results','stock','price','cheapest','details','stores'].includes(supplied.asked);\n const text=supplied.key==='text'||!!(answerReader && answerReader(answer,'text',linkWords));\n const selection=request.selection&&!request.invalidSelection;\n return {...request,text,known:request.done||text||hasFact||typedFact||!!selection||!!state && !!request.query && request.query!==state.query,asked:selection&&!hasFact&&hasStores?'stores':request.asked};\n})(cargo.forms[form_instance].values.response,cargo.shopifyProducts,!!cargo.voice,has_stores,function productRequest(state, supplied, input, voice, answerReader) {\n const text=String(input || '').trim(),w=text.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();\n const old=state && Array.isArray(state.products)?state:null;\n const shown=old?old.products.slice(0,voice?3:5):[];\n const ref=/\\b(those|these|them|it|that|this|one|ones|esos|esas|estos|estas|eso|ese|esa|segundo|segunda|primero|primera|second|first|cheapest|barato|barata)\\b/.test(w);\n const explicit=typeof supplied.search_query==='string'?supplied.search_query.trim():'';const constraints=typeof supplied.refinement==='string'?supplied.refinement.trim():'';\n let query=explicit || (old && (ref || supplied.asked || supplied.user_city || supplied.product_number || constraints)?old.query:'');\n if(query && constraints && !query.toLowerCase().includes(constraints.toLowerCase()))query+=' '+constraints;\n let asked=String(supplied.asked || '');\n if(!asked){if(/\\b(cheapest|least expensive|mas barato|mas barata|menor precio)\\b/.test(w))asked='cheapest';else if(/\\b(price|cost|how much|cuanto|cuesta|cuestan|precio|precios)\\b/.test(w))asked='price';else if(/\\b(store|stores|near|nearby|tienda|tiendas|cerca|pickup|pick up)\\b/.test(w))asked='stores';else if(/\\b(stock|available|availability|disponible|disponibles|agotado|existencia)\\b/.test(w))asked='stock';else if(supplied.user_city)asked='stores';else asked='results';}\n let selection=String(supplied.product_number || '').trim();\n if(!selection&&!explicit){const n=w.match(/^(?:yes |si |the |el |la |number |numero |product |producto )*([1-5])(?:\\b|$)/);if(n)selection=n[1];else{const ord=[[/\\b(first|primero|primera|primer)\\b/,1],[/\\b(second|segundo|segunda)\\b/,2],[/\\b(third|tercero|tercera)\\b/,3],[/\\b(fourth|cuarto|cuarta)\\b/,4],[/\\b(fifth|quinto|quinta)\\b/,5]];selection=String(ord.find(x=>x[0].test(w))?.[1] || '');}}\n const affirmative=answerReader?answerReader(text,'yes'):/^(yes|yeah|yep|sure|ok|okay|please|yes please|si|claro|por favor|si por favor|dale|ese|esa|that one|this one|it)[.!\\s]*$/.test(w);\n if(!selection&&!explicit&&shown.length>1){const stop=/^(the|el|la|los|las|is|are|it|this|that|esta|este|esto|disponible|disponibles|available|availability|stock|in|en|de|del|for|para|tienen|tiene|hay|do|does|you|have|precio|price|cuanto|cuesta|how|much|y|and|o|or|un|una|a|si|yes)$/;const words=w.split(/[^a-z0-9]+/).filter(x=>x&&!stop.test(x));if(words.length){const scored=shown.map((p,i)=>{const t=String(p.title||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);const hit=words.filter(x=>t.includes(x)).length;return {i,hit,ratio:t.length?hit/t.length:0};}).filter(s=>s.hit===words.length).sort((a,b)=>b.ratio-a.ratio);if(scored.length===1||scored.length>1&&scored[0].ratio-scored[1].ratio>=0.15)selection=String(scored[0].i+1);}}\n if(!selection && !explicit && shown.length===1 && affirmative)selection='1';\n let index=selection?Number(selection)-1:old && ref && /\\b(it|that one|this one|ese|esa)\\b/.test(w)?old.focus:-1;\n const ordinalPositions=[[/\\b(first|primero|primera|primer)\\b/,1],[/\\b(second|segundo|segunda)\\b/,2],[/\\b(third|tercero|tercera|tercer)\\b/,3],[/\\b(fourth|cuarto|cuarta)\\b/,4],[/\\b(fifth|quinto|quinta)\\b/,5]].filter(pair=>pair[0].test(w)).map(pair=>String(pair[1]));const positions=[...new Set((w.match(/\\b[1-5]\\b/g) || []).concat(ordinalPositions))];const selectionGrammar=w.replace(/\\b(?:[1-5]|first|second|third|fourth|fifth|primero|primera|primer|segundo|segunda|tercero|tercera|tercer|cuarto|cuarta|quinto|quinta)\\b/g,'').replace(/\\b(?:the|el|la|los|las|one|ones|option|options|product|products|item|items|number|numbers|opcion|opciones|producto|productos|numero|numeros|or|and|o|y|with|con|compare|comparar|please|por|favor|maybe|perhaps)\\b/g,'').replace(/[\\s.,!?¿¡:;-]/g,'');const conflictingSelection=!!old && (!explicit || !!supplied.product_number) && positions.length>1 && !selectionGrammar;const invalidSelection=conflictingSelection || !!selection && (!Number.isInteger(index)||index<0||index>=shown.length);\n if(invalidSelection)index=-1;\n return {query,refinement:constraints,asked,index,selection,invalidSelection,city:String(supplied.user_city || '').trim(),refresh:supplied.refresh===true,reuse:!!old&&query===old.query&&supplied.refresh!==true,done:supplied.key==='done'||/^(no|no thanks|no thank you|done|nothing else|that's all|listo|no gracias|nada mas|eso es todo)[.!\\s]*$/.test(w)};\n},isAnswer,[\"text me the links\",\"send me the links\",\"send the links\",\"envíame los enlaces\",\"mándame los enlaces\",\"mándamelos por texto\",\"los enlaces\",\"links\"],cargo.shopifyProductResponse || {})"
+        "value": "(function productFollowup(answer, state, voice, hasStores, requestReader=productRequest, answerReader, linkWords=[], supplied={}, shownRead) {\n const w=String(answer||'').trim().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();\n const request=requestReader(state,supplied,answer,voice,answerReader,shownRead);\n const hasFact=request.asked!=='results',typedFact=['results','stock','price','cheapest','details','stores'].includes(supplied.asked);\n const text=supplied.key==='text'||!!(answerReader && answerReader(answer,'text',linkWords));\n const selection=request.selection&&!request.invalidSelection;\n return {...request,text,known:request.done||text||hasFact||typedFact||!!selection||!!state && !!request.query && request.query!==state.query,asked:selection&&!hasFact&&hasStores?'stores':request.asked};\n})(cargo.forms[form_instance].values.response,cargo.shopifyProducts,!!cargo.voice,has_stores,function productRequest(state, supplied, input, voice, answerReader, shownRead) {\n const text=String(input || '').trim(),w=text.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();\n const old=state && Array.isArray(state.products)?state:null;\n const shown=old?old.products.slice(0,voice?3:5):[];\n const ref=/\\b(those|these|them|it|that|this|one|ones|esos|esas|estos|estas|eso|ese|esa|segundo|segunda|primero|primera|second|first|cheapest|barato|barata)\\b/.test(w);\n const explicit=typeof supplied.search_query==='string'?supplied.search_query.trim():'';const constraints=typeof supplied.refinement==='string'?supplied.refinement.trim():'';\n let query=explicit || (old && (ref || supplied.asked || supplied.user_city || supplied.product_number || constraints)?old.query:'');\n if(query && constraints && !query.toLowerCase().includes(constraints.toLowerCase()))query+=' '+constraints;\n let asked=String(supplied.asked || '');\n if(!asked){if(/\\b(cheapest|least expensive|mas barato|mas barata|menor precio)\\b/.test(w))asked='cheapest';else if(/\\b(price|cost|how much|cuanto|cuesta|cuestan|precio|precios)\\b/.test(w))asked='price';else if(/\\b(store|stores|near|nearby|tienda|tiendas|cerca|pickup|pick up)\\b/.test(w))asked='stores';else if(/\\b(stock|available|availability|disponible|disponibles|agotado|existencia)\\b/.test(w))asked='stock';else if(supplied.user_city)asked='stores';else asked='results';}\n let selection=String(supplied.product_number || '').trim();\n if(!selection&&!explicit)selection=String(shownRead && shownRead.answer===String(input || '') && shownRead.selection || '');\n const affirmative=answerReader?answerReader(text,'yes'):/^(yes|yeah|yep|sure|ok|okay|please|yes please|si|claro|por favor|si por favor|dale|ese|esa|that one|this one|it)[.!\\s]*$/.test(w);\n if(!selection && !explicit && shown.length===1 && affirmative)selection='1';\n let index=selection?Number(selection)-1:old && ref && /\\b(it|that one|this one|ese|esa)\\b/.test(w)?old.focus:-1;\n const conflictingSelection=!!old && (!explicit || !!supplied.product_number) && !!(shownRead && shownRead.answer===String(input || '') && shownRead.conflict);const invalidSelection=conflictingSelection || !!selection && (!Number.isInteger(index)||index<0||index>=shown.length);\n if(invalidSelection)index=-1;\n return {query,refinement:constraints,asked,index,selection,invalidSelection,city:String(supplied.user_city || '').trim(),refresh:supplied.refresh===true,reuse:!!old&&query===old.query&&supplied.refresh!==true,done:supplied.key==='done'||/^(no|no thanks|no thank you|done|nothing else|that's all|listo|no gracias|nada mas|eso es todo)[.!\\s]*$/.test(w)};\n},isAnswer,[\"text me the links\",\"send me the links\",\"send the links\",\"envíame los enlaces\",\"mándame los enlaces\",\"mándamelos por texto\",\"los enlaces\",\"links\"],cargo.shopifyProductResponse || {},cargo.shopifyShownRead)"
       },
       {
         "id": "product_close_finished",
@@ -1220,7 +1265,14 @@
             },
             "prepare": "shopify-ql-product-selection-prepare",
             "question": "Which listed product number?",
-            "question_es": "¿Qué número de producto de la lista?"
+            "question_es": "¿Qué número de producto de la lista?",
+            "answer_validator": "shopify-ql-product-selection-answer",
+            "route_keys": [
+              {
+                "prefix": "fits:",
+                "flow": "shopify-ql-product-selection-fits"
+              }
+            ]
           },
           {
             "name": "variant",
@@ -1910,9 +1962,182 @@
   {
     "scope": "isolated",
     "version": "3.0.0",
+    "id": "shopify-ql-shown-products",
+    "name": "ShopifyQLShownProducts",
+    "description": "The products the channel showed, each with every attribute it carries (title, brand, option values, the price the list reads) and its label for the reply ranker, into cargo.shopifyShown; the one place a listed product is described, for its readers, its labels and the price the list speaks.",
+    "parameters": [],
+    "variables": {
+      "contract": {
+        "type": "object",
+        "value": {
+          "version": 1,
+          "role": "worker",
+          "summary": "Describe each shown product once, for every reader and label.",
+          "parametersFrom": "parameters"
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "shown_products",
+        "type": "SET",
+        "variable": "noop",
+        "value": "(cargo.shopifyShown=(function shownProducts(state, voice, money) {\n const all=state && Array.isArray(state.products)?state.products.slice(0,voice?3:5):[];\n const norm=s=>String(s==null?'':s).normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();\n const tokens=s=>{const t=norm(s).split(/[^a-z0-9]+/).filter(Boolean);return t.concat(...t.map(x=>{const p=x.match(/[a-z]+|[0-9]+/g) || [];return p.length>1?p:[];}));};\n const text=v=>typeof v==='string'?v.trim():v && typeof v==='object' && typeof (v.value || v.label || v.name)==='string'?String(v.value || v.label || v.name).trim():'';\n const scalar=v=>{const candidate=v!==null&&typeof v==='object'?v.amount:v;if(typeof candidate!=='number' && (typeof candidate!=='string'||!/^\\d+(?:\\.\\d+)?$/.test(candidate.trim())))return null;const n=Number(candidate)/(v!==null&&typeof v==='object'?100:1);return Number.isFinite(n)&&n>=0?n:null;};\n return all.map((p,i)=>{\n  const title=String(p.title || '').trim(),currency=p.price_range?.min?.currency || p.price?.currency || 'USD';\n  const min=scalar(p.price_range?.min ?? p.price),max=scalar(p.price_range?.max ?? p.price_range?.min ?? p.price);\n  const amount=(n,lang)=>currency!=='USD'?currency+' '+n.toFixed(2):voice?money(n.toFixed(2),lang,true):'$'+n.toFixed(2);\n  const price=lang=>min===null?'':(max!==null&&max!==min?(lang==='es'?'desde ':'from ')+amount(min,lang):amount(min,lang));\n  // the label names the amount the list read as a figure: measured live, the ranker matches a spoken price to it as well\n  // and confuses fewer products than with the amount in words\n  const figure=lang=>min===null?'':(max!==null&&max!==min?(lang==='es'?'desde ':'from '):'')+(currency!=='USD'?currency+' ':'$')+min.toFixed(2);\n  const options=[];const add=v=>{const x=text(v);if(x && !/^default(?: title)?$/i.test(x) && !options.some(o=>norm(o)===norm(x)))options.push(x);};\n  (Array.isArray(p.options)?p.options:[]).forEach(o=>o && typeof o==='object' && Array.isArray(o.values)?o.values.forEach(add):add(o));\n  (Array.isArray(p.variants)?p.variants:[]).forEach(v=>{const own=Array.isArray(v.selectedOptions)?v.selectedOptions:Array.isArray(v.options)?v.options:[];if(own.length)own.forEach(add);else add(v.title || v.name);});\n  const maker=[p.vendor,p.brand,p.product_type].map(text).filter(x=>x && !norm(title).includes(norm(x)));\n  const named=title+(maker.length?' ('+maker.join(', ')+')':'')+(options.length?', '+options.join(', '):'');\n  const figures=[min,max].filter(n=>n!==null).map(n=>n.toFixed(2)+' '+(currency==='USD'?'dollar dollars dolar dolares':currency));\n  return {key:String(i+1),title,options,price:{en:price('en'),es:price('es')},\n   label:String(i+1)+': '+named+(figure('en')?', '+figure('en'):''),label_es:String(i+1)+': '+named+(figure('es')?', '+figure('es'):''),\n   title_words:tokens(title),words:[...new Set(tokens([title,...maker,...options,price('en'),price('es'),...figures].join(' ')))]};\n });\n})(cargo.shopifyProducts,!!cargo.voice,amountToSpeech),true)"
+      }
+    ]
+  },
+  {
+    "scope": "isolated",
+    "version": "3.0.0",
+    "id": "shopify-ql-shown-product-read",
+    "name": "ShopifyQLShownProductRead",
+    "description": "The one shown-product reader: a position key at the start, an ordinal, or words of the answer that are all attributes of exactly one shown product (closest title by 0.15), into cargo.shopifyShownRead {answer, selection, fits, conflict}; fits lists the products when every word is an attribute of several. Every other answer is left to the reply ranker.",
+    "parameters": [
+      {
+        "name": "answer",
+        "type": "string",
+        "description": "The caller's answer"
+      }
+    ],
+    "variables": {
+      "contract": {
+        "type": "object",
+        "value": {
+          "version": 1,
+          "role": "worker",
+          "summary": "Read which shown product an answer names.",
+          "parametersFrom": "parameters"
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "shown_read_products",
+        "type": "FLOW",
+        "value": "shopify-ql-shown-products",
+        "callType": "call",
+        "parameters": {}
+      },
+      {
+        "id": "shown_read",
+        "type": "SET",
+        "variable": "noop",
+        "value": "(cargo.shopifyShownRead=(function readShownProduct(answer, shown) {\n const w=String(answer || '').trim().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();\n const ords=[[/\\b(first|primero|primera|primer)\\b/,1],[/\\b(second|segundo|segunda)\\b/,2],[/\\b(third|tercero|tercera|tercer)\\b/,3],[/\\b(fourth|cuarto|cuarta)\\b/,4],[/\\b(fifth|quinto|quinta)\\b/,5]];\n let selection='',fits=[];const n=w.match(/^(?:yes |si |the |el |la |number |numero |product |producto )*([1-5])(?:\\b|$)/);\n if(n)selection=n[1];else selection=String(ords.find(x=>x[0].test(w))?.[1] || '');\n if(!selection && shown.length>1){const stop=/^(the|el|la|los|las|lo|is|are|it|this|that|esta|este|esto|one|ones|uno|disponible|disponibles|available|availability|stock|in|en|de|del|for|para|tienen|tiene|hay|do|does|you|have|precio|price|cuanto|cuesta|how|much|y|and|o|or|un|una|a|si|yes)$/;const words=w.split(/[^a-z0-9]+/).filter(x=>x&&!stop.test(x));if(words.length){const scored=shown.map((p,i)=>({i,hit:words.filter(x=>p.words.includes(x)).length,ratio:p.title_words.length?words.length/p.title_words.length:0})).filter(s=>s.hit===words.length).sort((a,b)=>b.ratio-a.ratio);if(scored.length===1||scored.length>1&&scored[0].ratio-scored[1].ratio>=0.15)selection=String(scored[0].i+1);else if(scored.length>1)fits=scored.map(s=>String(s.i+1)).sort();}}\n const positions=[...new Set((w.match(/\\b[1-5]\\b/g) || []).concat(ords.filter(pair=>pair[0].test(w)).map(pair=>String(pair[1]))))];\n const grammar=w.replace(/\\b(?:[1-5]|first|second|third|fourth|fifth|primero|primera|primer|segundo|segunda|tercero|tercera|tercer|cuarto|cuarta|quinto|quinta)\\b/g,'').replace(/\\b(?:the|el|la|los|las|one|ones|option|options|product|products|item|items|number|numbers|opcion|opciones|producto|productos|numero|numeros|or|and|o|y|with|con|compare|comparar|please|por|favor|maybe|perhaps)\\b/g,'').replace(/[\\s.,!?¿¡:;-]/g,'');\n return {answer:String(answer || ''),selection,fits,conflict:positions.length>1 && !grammar};\n})(answer,Array.isArray(cargo.shopifyShown)?cargo.shopifyShown:[]),true)"
+      }
+    ]
+  },
+  {
+    "scope": "shared",
+    "version": "3.0.0",
+    "id": "shopify-ql-product-selection-answer",
+    "name": "ShopifyQLProductSelectionAnswer",
+    "description": "ask-choice's answer_validator at the store product question: an answer the keys did not read is read by the shown-product reader, and a product it names is the answer's key (answer_key); anything else goes on to the reply ranker.",
+    "parameters": [
+      {
+        "name": "answer",
+        "type": "string",
+        "description": "The caller's answer"
+      }
+    ],
+    "variables": {
+      "contract": {
+        "type": "object",
+        "value": {
+          "version": 1,
+          "role": "worker",
+          "summary": "Key the store product question from the shown-product reader.",
+          "parametersFrom": "parameters"
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "selection_answer_read",
+        "type": "FLOW",
+        "value": "shopify-ql-shown-product-read",
+        "callType": "call",
+        "parameters": {
+          "answer": "{{answer}}"
+        }
+      },
+      {
+        "id": "selection_answer_key",
+        "type": "SET",
+        "variable": "answer_key",
+        "value": "(function(){var r=cargo.shopifyShownRead,n=Array.isArray(cargo.shopifyShown)?cargo.shopifyShown.length:0;return r && r.selection && !r.conflict && Number(r.selection)>=1 && Number(r.selection)<=n ? String(r.selection) : r && !r.selection && Array.isArray(r.fits) && r.fits.length>1 ? 'fits:'+r.fits.join(',') : '';})()"
+      }
+    ]
+  },
+  {
+    "scope": "isolated",
+    "version": "3.0.0",
+    "id": "shopify-ql-product-selection-fits",
+    "name": "ShopifyQLProductSelectionFits",
+    "description": "route_keys handler at the store product question: the answer fits several shown products (key fits:<numbers>); says which, counts an attempt, and the form asks the question again.",
+    "parameters": [
+      {
+        "name": "form",
+        "type": "string",
+        "description": "Owning form"
+      },
+      {
+        "name": "input",
+        "type": "string",
+        "description": "The asked input"
+      }
+    ],
+    "variables": {
+      "contract": {
+        "type": "object",
+        "value": {
+          "version": 1,
+          "role": "worker",
+          "summary": "Say which shown products an answer fits.",
+          "parametersFrom": "parameters"
+        }
+      },
+      "fits_list": {
+        "type": "string",
+        "value": ""
+      },
+      "fits_list_es": {
+        "type": "string",
+        "value": ""
+      }
+    },
+    "steps": [
+      {
+        "id": "fits_attempt",
+        "type": "SET",
+        "variable": "noop",
+        "value": "(cargo.forms[form].attempts=cargo.forms[form].attempts || {},cargo.forms[form].attempts[input]=Number(cargo.forms[form].attempts[input] || 0)+1,true)"
+      },
+      {
+        "id": "fits_en",
+        "type": "SET",
+        "variable": "fits_list",
+        "value": "(function(){var k=String(cargo.choice || '').slice(5).split(',').filter(Boolean);return k.slice(0,-1).join(', ')+' and '+k[k.length-1];})()"
+      },
+      {
+        "id": "fits_es",
+        "type": "SET",
+        "variable": "fits_list_es",
+        "value": "(function(){var k=String(cargo.choice || '').slice(5).split(',').filter(Boolean);return k.slice(0,-1).join(', ')+' y '+k[k.length-1];})()"
+      },
+      {
+        "id": "fits_say",
+        "type": "SAY",
+        "value": "That fits products {{fits_list}}.",
+        "value_es": "Eso corresponde a los productos {{fits_list_es}}."
+      }
+    ]
+  },
+  {
+    "scope": "isolated",
+    "version": "3.0.0",
     "id": "shopify-ql-product-selection-prepare",
     "name": "ShopifyQLProductSelectionPrepare",
-    "description": "Offer only the product positions the channel actually showed, each labelled with its product title so the reply ranker can match any part of it (brand, model, color).",
+    "description": "Offer only the product positions the channel actually showed, each labelled with every attribute the product carries (shopify-ql-shown-products: title, brand, option values, the price the list reads) so the reply ranker can match any of them.",
     "parameters": [
       {
         "name": "form",
@@ -1933,10 +2158,17 @@
     },
     "steps": [
       {
+        "id": "product_selection_shown",
+        "type": "FLOW",
+        "value": "shopify-ql-shown-products",
+        "callType": "call",
+        "parameters": {}
+      },
+      {
         "id": "product_selection_limit",
         "type": "SET",
         "variable": "noop",
-        "value": "(function(){var s=cargo.forms[form].specs.find(function(s){return s.name==='selection';});var n=Math.min(cargo.shopifyProducts.products.length,cargo.voice?3:5);var ps=cargo.shopifyProducts.products;s.profile.choices=s.profile.choices.slice(0,n).map(function(c,i){var t=String((ps[i]||{}).title||'').trim();return Object.assign({},c,t?{label:String(c.key)+': '+t,label_es:String(c.key)+': '+t}:{});});return true;})()"
+        "value": "(function(){var s=cargo.forms[form].specs.find(function(s){return s.name==='selection';});var shown=cargo.shopifyShown;s.profile.choices=s.profile.choices.slice(0,shown.length).map(function(c,i){var p=shown[i];return Object.assign({},c,{label:language==='es'?p.label_es:p.label,label_es:p.label_es});});return true;})()"
       }
     ]
   },
@@ -2124,10 +2356,19 @@
         "value": "null"
       },
       {
+        "id": "product_dialog_shown",
+        "type": "FLOW",
+        "value": "shopify-ql-shown-product-read",
+        "callType": "call",
+        "parameters": {
+          "answer": "{{value}}"
+        }
+      },
+      {
         "id": "product_dialog_raw_selection",
         "type": "SET",
         "variable": "candidate",
-        "value": "(function productRequest(state, supplied, input, voice, answerReader) {\n const text=String(input || '').trim(),w=text.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();\n const old=state && Array.isArray(state.products)?state:null;\n const shown=old?old.products.slice(0,voice?3:5):[];\n const ref=/\\b(those|these|them|it|that|this|one|ones|esos|esas|estos|estas|eso|ese|esa|segundo|segunda|primero|primera|second|first|cheapest|barato|barata)\\b/.test(w);\n const explicit=typeof supplied.search_query==='string'?supplied.search_query.trim():'';const constraints=typeof supplied.refinement==='string'?supplied.refinement.trim():'';\n let query=explicit || (old && (ref || supplied.asked || supplied.user_city || supplied.product_number || constraints)?old.query:'');\n if(query && constraints && !query.toLowerCase().includes(constraints.toLowerCase()))query+=' '+constraints;\n let asked=String(supplied.asked || '');\n if(!asked){if(/\\b(cheapest|least expensive|mas barato|mas barata|menor precio)\\b/.test(w))asked='cheapest';else if(/\\b(price|cost|how much|cuanto|cuesta|cuestan|precio|precios)\\b/.test(w))asked='price';else if(/\\b(store|stores|near|nearby|tienda|tiendas|cerca|pickup|pick up)\\b/.test(w))asked='stores';else if(/\\b(stock|available|availability|disponible|disponibles|agotado|existencia)\\b/.test(w))asked='stock';else if(supplied.user_city)asked='stores';else asked='results';}\n let selection=String(supplied.product_number || '').trim();\n if(!selection&&!explicit){const n=w.match(/^(?:yes |si |the |el |la |number |numero |product |producto )*([1-5])(?:\\b|$)/);if(n)selection=n[1];else{const ord=[[/\\b(first|primero|primera|primer)\\b/,1],[/\\b(second|segundo|segunda)\\b/,2],[/\\b(third|tercero|tercera)\\b/,3],[/\\b(fourth|cuarto|cuarta)\\b/,4],[/\\b(fifth|quinto|quinta)\\b/,5]];selection=String(ord.find(x=>x[0].test(w))?.[1] || '');}}\n const affirmative=answerReader?answerReader(text,'yes'):/^(yes|yeah|yep|sure|ok|okay|please|yes please|si|claro|por favor|si por favor|dale|ese|esa|that one|this one|it)[.!\\s]*$/.test(w);\n if(!selection&&!explicit&&shown.length>1){const stop=/^(the|el|la|los|las|is|are|it|this|that|esta|este|esto|disponible|disponibles|available|availability|stock|in|en|de|del|for|para|tienen|tiene|hay|do|does|you|have|precio|price|cuanto|cuesta|how|much|y|and|o|or|un|una|a|si|yes)$/;const words=w.split(/[^a-z0-9]+/).filter(x=>x&&!stop.test(x));if(words.length){const scored=shown.map((p,i)=>{const t=String(p.title||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);const hit=words.filter(x=>t.includes(x)).length;return {i,hit,ratio:t.length?hit/t.length:0};}).filter(s=>s.hit===words.length).sort((a,b)=>b.ratio-a.ratio);if(scored.length===1||scored.length>1&&scored[0].ratio-scored[1].ratio>=0.15)selection=String(scored[0].i+1);}}\n if(!selection && !explicit && shown.length===1 && affirmative)selection='1';\n let index=selection?Number(selection)-1:old && ref && /\\b(it|that one|this one|ese|esa)\\b/.test(w)?old.focus:-1;\n const ordinalPositions=[[/\\b(first|primero|primera|primer)\\b/,1],[/\\b(second|segundo|segunda)\\b/,2],[/\\b(third|tercero|tercera|tercer)\\b/,3],[/\\b(fourth|cuarto|cuarta)\\b/,4],[/\\b(fifth|quinto|quinta)\\b/,5]].filter(pair=>pair[0].test(w)).map(pair=>String(pair[1]));const positions=[...new Set((w.match(/\\b[1-5]\\b/g) || []).concat(ordinalPositions))];const selectionGrammar=w.replace(/\\b(?:[1-5]|first|second|third|fourth|fifth|primero|primera|primer|segundo|segunda|tercero|tercera|tercer|cuarto|cuarta|quinto|quinta)\\b/g,'').replace(/\\b(?:the|el|la|los|las|one|ones|option|options|product|products|item|items|number|numbers|opcion|opciones|producto|productos|numero|numeros|or|and|o|y|with|con|compare|comparar|please|por|favor|maybe|perhaps)\\b/g,'').replace(/[\\s.,!?¿¡:;-]/g,'');const conflictingSelection=!!old && (!explicit || !!supplied.product_number) && positions.length>1 && !selectionGrammar;const invalidSelection=conflictingSelection || !!selection && (!Number.isInteger(index)||index<0||index>=shown.length);\n if(invalidSelection)index=-1;\n return {query,refinement:constraints,asked,index,selection,invalidSelection,city:String(supplied.user_city || '').trim(),refresh:supplied.refresh===true,reuse:!!old&&query===old.query&&supplied.refresh!==true,done:supplied.key==='done'||/^(no|no thanks|no thank you|done|nothing else|that's all|listo|no gracias|nada mas|eso es todo)[.!\\s]*$/.test(w)};\n})(cargo.shopifyProducts,{},value,!!cargo.voice,isAnswer)"
+        "value": "(function productRequest(state, supplied, input, voice, answerReader, shownRead) {\n const text=String(input || '').trim(),w=text.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();\n const old=state && Array.isArray(state.products)?state:null;\n const shown=old?old.products.slice(0,voice?3:5):[];\n const ref=/\\b(those|these|them|it|that|this|one|ones|esos|esas|estos|estas|eso|ese|esa|segundo|segunda|primero|primera|second|first|cheapest|barato|barata)\\b/.test(w);\n const explicit=typeof supplied.search_query==='string'?supplied.search_query.trim():'';const constraints=typeof supplied.refinement==='string'?supplied.refinement.trim():'';\n let query=explicit || (old && (ref || supplied.asked || supplied.user_city || supplied.product_number || constraints)?old.query:'');\n if(query && constraints && !query.toLowerCase().includes(constraints.toLowerCase()))query+=' '+constraints;\n let asked=String(supplied.asked || '');\n if(!asked){if(/\\b(cheapest|least expensive|mas barato|mas barata|menor precio)\\b/.test(w))asked='cheapest';else if(/\\b(price|cost|how much|cuanto|cuesta|cuestan|precio|precios)\\b/.test(w))asked='price';else if(/\\b(store|stores|near|nearby|tienda|tiendas|cerca|pickup|pick up)\\b/.test(w))asked='stores';else if(/\\b(stock|available|availability|disponible|disponibles|agotado|existencia)\\b/.test(w))asked='stock';else if(supplied.user_city)asked='stores';else asked='results';}\n let selection=String(supplied.product_number || '').trim();\n if(!selection&&!explicit)selection=String(shownRead && shownRead.answer===String(input || '') && shownRead.selection || '');\n const affirmative=answerReader?answerReader(text,'yes'):/^(yes|yeah|yep|sure|ok|okay|please|yes please|si|claro|por favor|si por favor|dale|ese|esa|that one|this one|it)[.!\\s]*$/.test(w);\n if(!selection && !explicit && shown.length===1 && affirmative)selection='1';\n let index=selection?Number(selection)-1:old && ref && /\\b(it|that one|this one|ese|esa)\\b/.test(w)?old.focus:-1;\n const conflictingSelection=!!old && (!explicit || !!supplied.product_number) && !!(shownRead && shownRead.answer===String(input || '') && shownRead.conflict);const invalidSelection=conflictingSelection || !!selection && (!Number.isInteger(index)||index<0||index>=shown.length);\n if(invalidSelection)index=-1;\n return {query,refinement:constraints,asked,index,selection,invalidSelection,city:String(supplied.user_city || '').trim(),refresh:supplied.refresh===true,reuse:!!old&&query===old.query&&supplied.refresh!==true,done:supplied.key==='done'||/^(no|no thanks|no thank you|done|nothing else|that's all|listo|no gracias|nada mas|eso es todo)[.!\\s]*$/.test(w)};\n})(cargo.shopifyProducts,{},value,!!cargo.voice,isAnswer,cargo.shopifyShownRead)"
       },
       {
         "id": "product_dialog_classify",
@@ -2178,7 +2419,7 @@
               }
             ],
             "responseVariable": "response",
-            "responseContext": "product follow-up for the search \"{{cargo.shopifyProducts.query}}\". The shown products are {{cargo.shopifyProducts.products.slice(0,cargo.voice?3:5).map(function(p,i){return (i+1)+\". \"+p.title;}).join(\"; \")}}. Asking which of these are in stock, their price, the cheapest, a listed ordinal or nearby stores is a response to this task. Questions about existing results continue and extract the specific asked fact and product_number: which ones are in stock / cuáles están disponibles, their price / cuánto cuesta, or cheapest / más barato. A different product OR a request to find another color, size, feature or budget continues this product task with a fresh search, extracting search_query for a named new product or refinement for changes to prior products. For example, those in white / esos en color blanco continues with refinement set to the changed color; it requires a fresh search. Unrelated requests go to their handler.",
+            "responseContext": "product follow-up for the search \"{{cargo.shopifyProducts.query}}\". The shown products are {{cargo.shopifyShown.map(function(p){return p.label;}).join(\"; \")}}. Asking which of these are in stock, their price, the cheapest, a listed ordinal or nearby stores is a response to this task. Questions about existing results continue and extract the specific asked fact and product_number: which ones are in stock / cuáles están disponibles, their price / cuánto cuesta, or cheapest / más barato. A different product OR a request to find another color, size, feature or budget continues this product task with a fresh search, extracting search_query for a named new product or refinement for changes to prior products. For example, those in white / esos en color blanco continues with refinement set to the changed color; it requires a fresh search. Unrelated requests go to their handler.",
             "responseChoices": "pd_choices"
           },
           "default": {
@@ -2193,7 +2434,7 @@
         "id": "product_dialog_valid",
         "type": "SET",
         "variable": "noop",
-        "value": "(cargo.inputCheck=(function(){var request=(function productRequest(state, supplied, input, voice, answerReader) {\n const text=String(input || '').trim(),w=text.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();\n const old=state && Array.isArray(state.products)?state:null;\n const shown=old?old.products.slice(0,voice?3:5):[];\n const ref=/\\b(those|these|them|it|that|this|one|ones|esos|esas|estos|estas|eso|ese|esa|segundo|segunda|primero|primera|second|first|cheapest|barato|barata)\\b/.test(w);\n const explicit=typeof supplied.search_query==='string'?supplied.search_query.trim():'';const constraints=typeof supplied.refinement==='string'?supplied.refinement.trim():'';\n let query=explicit || (old && (ref || supplied.asked || supplied.user_city || supplied.product_number || constraints)?old.query:'');\n if(query && constraints && !query.toLowerCase().includes(constraints.toLowerCase()))query+=' '+constraints;\n let asked=String(supplied.asked || '');\n if(!asked){if(/\\b(cheapest|least expensive|mas barato|mas barata|menor precio)\\b/.test(w))asked='cheapest';else if(/\\b(price|cost|how much|cuanto|cuesta|cuestan|precio|precios)\\b/.test(w))asked='price';else if(/\\b(store|stores|near|nearby|tienda|tiendas|cerca|pickup|pick up)\\b/.test(w))asked='stores';else if(/\\b(stock|available|availability|disponible|disponibles|agotado|existencia)\\b/.test(w))asked='stock';else if(supplied.user_city)asked='stores';else asked='results';}\n let selection=String(supplied.product_number || '').trim();\n if(!selection&&!explicit){const n=w.match(/^(?:yes |si |the |el |la |number |numero |product |producto )*([1-5])(?:\\b|$)/);if(n)selection=n[1];else{const ord=[[/\\b(first|primero|primera|primer)\\b/,1],[/\\b(second|segundo|segunda)\\b/,2],[/\\b(third|tercero|tercera)\\b/,3],[/\\b(fourth|cuarto|cuarta)\\b/,4],[/\\b(fifth|quinto|quinta)\\b/,5]];selection=String(ord.find(x=>x[0].test(w))?.[1] || '');}}\n const affirmative=answerReader?answerReader(text,'yes'):/^(yes|yeah|yep|sure|ok|okay|please|yes please|si|claro|por favor|si por favor|dale|ese|esa|that one|this one|it)[.!\\s]*$/.test(w);\n if(!selection&&!explicit&&shown.length>1){const stop=/^(the|el|la|los|las|is|are|it|this|that|esta|este|esto|disponible|disponibles|available|availability|stock|in|en|de|del|for|para|tienen|tiene|hay|do|does|you|have|precio|price|cuanto|cuesta|how|much|y|and|o|or|un|una|a|si|yes)$/;const words=w.split(/[^a-z0-9]+/).filter(x=>x&&!stop.test(x));if(words.length){const scored=shown.map((p,i)=>{const t=String(p.title||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);const hit=words.filter(x=>t.includes(x)).length;return {i,hit,ratio:t.length?hit/t.length:0};}).filter(s=>s.hit===words.length).sort((a,b)=>b.ratio-a.ratio);if(scored.length===1||scored.length>1&&scored[0].ratio-scored[1].ratio>=0.15)selection=String(scored[0].i+1);}}\n if(!selection && !explicit && shown.length===1 && affirmative)selection='1';\n let index=selection?Number(selection)-1:old && ref && /\\b(it|that one|this one|ese|esa)\\b/.test(w)?old.focus:-1;\n const ordinalPositions=[[/\\b(first|primero|primera|primer)\\b/,1],[/\\b(second|segundo|segunda)\\b/,2],[/\\b(third|tercero|tercera|tercer)\\b/,3],[/\\b(fourth|cuarto|cuarta)\\b/,4],[/\\b(fifth|quinto|quinta)\\b/,5]].filter(pair=>pair[0].test(w)).map(pair=>String(pair[1]));const positions=[...new Set((w.match(/\\b[1-5]\\b/g) || []).concat(ordinalPositions))];const selectionGrammar=w.replace(/\\b(?:[1-5]|first|second|third|fourth|fifth|primero|primera|primer|segundo|segunda|tercero|tercera|tercer|cuarto|cuarta|quinto|quinta)\\b/g,'').replace(/\\b(?:the|el|la|los|las|one|ones|option|options|product|products|item|items|number|numbers|opcion|opciones|producto|productos|numero|numeros|or|and|o|y|with|con|compare|comparar|please|por|favor|maybe|perhaps)\\b/g,'').replace(/[\\s.,!?¿¡:;-]/g,'');const conflictingSelection=!!old && (!explicit || !!supplied.product_number) && positions.length>1 && !selectionGrammar;const invalidSelection=conflictingSelection || !!selection && (!Number.isInteger(index)||index<0||index>=shown.length);\n if(invalidSelection)index=-1;\n return {query,refinement:constraints,asked,index,selection,invalidSelection,city:String(supplied.user_city || '').trim(),refresh:supplied.refresh===true,reuse:!!old&&query===old.query&&supplied.refresh!==true,done:supplied.key==='done'||/^(no|no thanks|no thank you|done|nothing else|that's all|listo|no gracias|nada mas|eso es todo)[.!\\s]*$/.test(w)};\n})(cargo.shopifyProducts,response || {},value,!!cargo.voice,isAnswer);var followup=(function productFollowup(answer, state, voice, hasStores, requestReader=productRequest, answerReader, linkWords=[], supplied={}) {\n const w=String(answer||'').trim().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();\n const request=requestReader(state,supplied,answer,voice,answerReader);\n const hasFact=request.asked!=='results',typedFact=['results','stock','price','cheapest','details','stores'].includes(supplied.asked);\n const text=supplied.key==='text'||!!(answerReader && answerReader(answer,'text',linkWords));\n const selection=request.selection&&!request.invalidSelection;\n return {...request,text,known:request.done||text||hasFact||typedFact||!!selection||!!state && !!request.query && request.query!==state.query,asked:selection&&!hasFact&&hasStores?'stores':request.asked};\n})(value,cargo.shopifyProducts,!!cargo.voice,typeof global_store_locations!=='undefined' && Array.isArray(global_store_locations) && global_store_locations.length>0,function productRequest(state, supplied, input, voice, answerReader) {\n const text=String(input || '').trim(),w=text.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();\n const old=state && Array.isArray(state.products)?state:null;\n const shown=old?old.products.slice(0,voice?3:5):[];\n const ref=/\\b(those|these|them|it|that|this|one|ones|esos|esas|estos|estas|eso|ese|esa|segundo|segunda|primero|primera|second|first|cheapest|barato|barata)\\b/.test(w);\n const explicit=typeof supplied.search_query==='string'?supplied.search_query.trim():'';const constraints=typeof supplied.refinement==='string'?supplied.refinement.trim():'';\n let query=explicit || (old && (ref || supplied.asked || supplied.user_city || supplied.product_number || constraints)?old.query:'');\n if(query && constraints && !query.toLowerCase().includes(constraints.toLowerCase()))query+=' '+constraints;\n let asked=String(supplied.asked || '');\n if(!asked){if(/\\b(cheapest|least expensive|mas barato|mas barata|menor precio)\\b/.test(w))asked='cheapest';else if(/\\b(price|cost|how much|cuanto|cuesta|cuestan|precio|precios)\\b/.test(w))asked='price';else if(/\\b(store|stores|near|nearby|tienda|tiendas|cerca|pickup|pick up)\\b/.test(w))asked='stores';else if(/\\b(stock|available|availability|disponible|disponibles|agotado|existencia)\\b/.test(w))asked='stock';else if(supplied.user_city)asked='stores';else asked='results';}\n let selection=String(supplied.product_number || '').trim();\n if(!selection&&!explicit){const n=w.match(/^(?:yes |si |the |el |la |number |numero |product |producto )*([1-5])(?:\\b|$)/);if(n)selection=n[1];else{const ord=[[/\\b(first|primero|primera|primer)\\b/,1],[/\\b(second|segundo|segunda)\\b/,2],[/\\b(third|tercero|tercera)\\b/,3],[/\\b(fourth|cuarto|cuarta)\\b/,4],[/\\b(fifth|quinto|quinta)\\b/,5]];selection=String(ord.find(x=>x[0].test(w))?.[1] || '');}}\n const affirmative=answerReader?answerReader(text,'yes'):/^(yes|yeah|yep|sure|ok|okay|please|yes please|si|claro|por favor|si por favor|dale|ese|esa|that one|this one|it)[.!\\s]*$/.test(w);\n if(!selection&&!explicit&&shown.length>1){const stop=/^(the|el|la|los|las|is|are|it|this|that|esta|este|esto|disponible|disponibles|available|availability|stock|in|en|de|del|for|para|tienen|tiene|hay|do|does|you|have|precio|price|cuanto|cuesta|how|much|y|and|o|or|un|una|a|si|yes)$/;const words=w.split(/[^a-z0-9]+/).filter(x=>x&&!stop.test(x));if(words.length){const scored=shown.map((p,i)=>{const t=String(p.title||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);const hit=words.filter(x=>t.includes(x)).length;return {i,hit,ratio:t.length?hit/t.length:0};}).filter(s=>s.hit===words.length).sort((a,b)=>b.ratio-a.ratio);if(scored.length===1||scored.length>1&&scored[0].ratio-scored[1].ratio>=0.15)selection=String(scored[0].i+1);}}\n if(!selection && !explicit && shown.length===1 && affirmative)selection='1';\n let index=selection?Number(selection)-1:old && ref && /\\b(it|that one|this one|ese|esa)\\b/.test(w)?old.focus:-1;\n const ordinalPositions=[[/\\b(first|primero|primera|primer)\\b/,1],[/\\b(second|segundo|segunda)\\b/,2],[/\\b(third|tercero|tercera|tercer)\\b/,3],[/\\b(fourth|cuarto|cuarta)\\b/,4],[/\\b(fifth|quinto|quinta)\\b/,5]].filter(pair=>pair[0].test(w)).map(pair=>String(pair[1]));const positions=[...new Set((w.match(/\\b[1-5]\\b/g) || []).concat(ordinalPositions))];const selectionGrammar=w.replace(/\\b(?:[1-5]|first|second|third|fourth|fifth|primero|primera|primer|segundo|segunda|tercero|tercera|tercer|cuarto|cuarta|quinto|quinta)\\b/g,'').replace(/\\b(?:the|el|la|los|las|one|ones|option|options|product|products|item|items|number|numbers|opcion|opciones|producto|productos|numero|numeros|or|and|o|y|with|con|compare|comparar|please|por|favor|maybe|perhaps)\\b/g,'').replace(/[\\s.,!?¿¡:;-]/g,'');const conflictingSelection=!!old && (!explicit || !!supplied.product_number) && positions.length>1 && !selectionGrammar;const invalidSelection=conflictingSelection || !!selection && (!Number.isInteger(index)||index<0||index>=shown.length);\n if(invalidSelection)index=-1;\n return {query,refinement:constraints,asked,index,selection,invalidSelection,city:String(supplied.user_city || '').trim(),refresh:supplied.refresh===true,reuse:!!old&&query===old.query&&supplied.refresh!==true,done:supplied.key==='done'||/^(no|no thanks|no thank you|done|nothing else|that's all|listo|no gracias|nada mas|eso es todo)[.!\\s]*$/.test(w)};\n},isAnswer,[\"text me the links\",\"send me the links\",\"send the links\",\"envíame los enlaces\",\"mándame los enlaces\",\"mándamelos por texto\",\"los enlaces\",\"links\"],response || {});cargo.shopifyProductResponse=response || {};var ambiguous=!request.done&&(request.invalidSelection || isAnswer(value,'yes') && request.asked==='results' && cargo.shopifyProducts.products.slice(0,cargo.voice?3:5).length>1);return ambiguous?{ok:false,message:'Please choose one product number from the list shown.',message_es:'Elija un solo número de producto de la lista mostrada.'}:followup.known?{ok:true}:{ok:false,message:'Please ask about the shown products, choose a product number, or describe the new product and features you want.',message_es:'Pregunte por los productos mostrados, elija un número, o describa el nuevo producto y las características que busca.'};})(),true)"
+        "value": "(cargo.inputCheck=(function(){var request=(function productRequest(state, supplied, input, voice, answerReader, shownRead) {\n const text=String(input || '').trim(),w=text.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();\n const old=state && Array.isArray(state.products)?state:null;\n const shown=old?old.products.slice(0,voice?3:5):[];\n const ref=/\\b(those|these|them|it|that|this|one|ones|esos|esas|estos|estas|eso|ese|esa|segundo|segunda|primero|primera|second|first|cheapest|barato|barata)\\b/.test(w);\n const explicit=typeof supplied.search_query==='string'?supplied.search_query.trim():'';const constraints=typeof supplied.refinement==='string'?supplied.refinement.trim():'';\n let query=explicit || (old && (ref || supplied.asked || supplied.user_city || supplied.product_number || constraints)?old.query:'');\n if(query && constraints && !query.toLowerCase().includes(constraints.toLowerCase()))query+=' '+constraints;\n let asked=String(supplied.asked || '');\n if(!asked){if(/\\b(cheapest|least expensive|mas barato|mas barata|menor precio)\\b/.test(w))asked='cheapest';else if(/\\b(price|cost|how much|cuanto|cuesta|cuestan|precio|precios)\\b/.test(w))asked='price';else if(/\\b(store|stores|near|nearby|tienda|tiendas|cerca|pickup|pick up)\\b/.test(w))asked='stores';else if(/\\b(stock|available|availability|disponible|disponibles|agotado|existencia)\\b/.test(w))asked='stock';else if(supplied.user_city)asked='stores';else asked='results';}\n let selection=String(supplied.product_number || '').trim();\n if(!selection&&!explicit)selection=String(shownRead && shownRead.answer===String(input || '') && shownRead.selection || '');\n const affirmative=answerReader?answerReader(text,'yes'):/^(yes|yeah|yep|sure|ok|okay|please|yes please|si|claro|por favor|si por favor|dale|ese|esa|that one|this one|it)[.!\\s]*$/.test(w);\n if(!selection && !explicit && shown.length===1 && affirmative)selection='1';\n let index=selection?Number(selection)-1:old && ref && /\\b(it|that one|this one|ese|esa)\\b/.test(w)?old.focus:-1;\n const conflictingSelection=!!old && (!explicit || !!supplied.product_number) && !!(shownRead && shownRead.answer===String(input || '') && shownRead.conflict);const invalidSelection=conflictingSelection || !!selection && (!Number.isInteger(index)||index<0||index>=shown.length);\n if(invalidSelection)index=-1;\n return {query,refinement:constraints,asked,index,selection,invalidSelection,city:String(supplied.user_city || '').trim(),refresh:supplied.refresh===true,reuse:!!old&&query===old.query&&supplied.refresh!==true,done:supplied.key==='done'||/^(no|no thanks|no thank you|done|nothing else|that's all|listo|no gracias|nada mas|eso es todo)[.!\\s]*$/.test(w)};\n})(cargo.shopifyProducts,response || {},value,!!cargo.voice,isAnswer,cargo.shopifyShownRead);var followup=(function productFollowup(answer, state, voice, hasStores, requestReader=productRequest, answerReader, linkWords=[], supplied={}, shownRead) {\n const w=String(answer||'').trim().normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();\n const request=requestReader(state,supplied,answer,voice,answerReader,shownRead);\n const hasFact=request.asked!=='results',typedFact=['results','stock','price','cheapest','details','stores'].includes(supplied.asked);\n const text=supplied.key==='text'||!!(answerReader && answerReader(answer,'text',linkWords));\n const selection=request.selection&&!request.invalidSelection;\n return {...request,text,known:request.done||text||hasFact||typedFact||!!selection||!!state && !!request.query && request.query!==state.query,asked:selection&&!hasFact&&hasStores?'stores':request.asked};\n})(value,cargo.shopifyProducts,!!cargo.voice,typeof global_store_locations!=='undefined' && Array.isArray(global_store_locations) && global_store_locations.length>0,function productRequest(state, supplied, input, voice, answerReader, shownRead) {\n const text=String(input || '').trim(),w=text.normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase();\n const old=state && Array.isArray(state.products)?state:null;\n const shown=old?old.products.slice(0,voice?3:5):[];\n const ref=/\\b(those|these|them|it|that|this|one|ones|esos|esas|estos|estas|eso|ese|esa|segundo|segunda|primero|primera|second|first|cheapest|barato|barata)\\b/.test(w);\n const explicit=typeof supplied.search_query==='string'?supplied.search_query.trim():'';const constraints=typeof supplied.refinement==='string'?supplied.refinement.trim():'';\n let query=explicit || (old && (ref || supplied.asked || supplied.user_city || supplied.product_number || constraints)?old.query:'');\n if(query && constraints && !query.toLowerCase().includes(constraints.toLowerCase()))query+=' '+constraints;\n let asked=String(supplied.asked || '');\n if(!asked){if(/\\b(cheapest|least expensive|mas barato|mas barata|menor precio)\\b/.test(w))asked='cheapest';else if(/\\b(price|cost|how much|cuanto|cuesta|cuestan|precio|precios)\\b/.test(w))asked='price';else if(/\\b(store|stores|near|nearby|tienda|tiendas|cerca|pickup|pick up)\\b/.test(w))asked='stores';else if(/\\b(stock|available|availability|disponible|disponibles|agotado|existencia)\\b/.test(w))asked='stock';else if(supplied.user_city)asked='stores';else asked='results';}\n let selection=String(supplied.product_number || '').trim();\n if(!selection&&!explicit)selection=String(shownRead && shownRead.answer===String(input || '') && shownRead.selection || '');\n const affirmative=answerReader?answerReader(text,'yes'):/^(yes|yeah|yep|sure|ok|okay|please|yes please|si|claro|por favor|si por favor|dale|ese|esa|that one|this one|it)[.!\\s]*$/.test(w);\n if(!selection && !explicit && shown.length===1 && affirmative)selection='1';\n let index=selection?Number(selection)-1:old && ref && /\\b(it|that one|this one|ese|esa)\\b/.test(w)?old.focus:-1;\n const conflictingSelection=!!old && (!explicit || !!supplied.product_number) && !!(shownRead && shownRead.answer===String(input || '') && shownRead.conflict);const invalidSelection=conflictingSelection || !!selection && (!Number.isInteger(index)||index<0||index>=shown.length);\n if(invalidSelection)index=-1;\n return {query,refinement:constraints,asked,index,selection,invalidSelection,city:String(supplied.user_city || '').trim(),refresh:supplied.refresh===true,reuse:!!old&&query===old.query&&supplied.refresh!==true,done:supplied.key==='done'||/^(no|no thanks|no thank you|done|nothing else|that's all|listo|no gracias|nada mas|eso es todo)[.!\\s]*$/.test(w)};\n},isAnswer,[\"text me the links\",\"send me the links\",\"send the links\",\"envíame los enlaces\",\"mándame los enlaces\",\"mándamelos por texto\",\"los enlaces\",\"links\"],response || {},cargo.shopifyShownRead);cargo.shopifyProductResponse=response || {};var ambiguous=!request.done&&(request.invalidSelection || isAnswer(value,'yes') && request.asked==='results' && cargo.shopifyProducts.products.slice(0,cargo.voice?3:5).length>1);return ambiguous?{ok:false,message:'Please choose one product number from the list shown.',message_es:'Elija un solo número de producto de la lista mostrada.'}:followup.known?{ok:true}:{ok:false,message:'Please ask about the shown products, choose a product number, or describe the new product and features you want.',message_es:'Pregunte por los productos mostrados, elija un número, o describa el nuevo producto y las características que busca.'};})(),true)"
       }
     ]
   },

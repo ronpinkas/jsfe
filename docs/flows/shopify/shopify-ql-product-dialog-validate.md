@@ -8,7 +8,7 @@
 - **Parameters:** 
   - `value`: Candidate product response
   - `form`: Owning form
-- **Calls:** no other flow
+- **Calls:** [shopify-ql-shown-product-read](shopify-ql-shown-product-read.md) (call)
 - **Tools:** none
 - **Called by:** [shopify-ql-product-dialog](shopify-ql-product-dialog.md) (validator)
 
@@ -17,18 +17,23 @@
 ```mermaid
 flowchart TD
    START(("start"))
-   n0["set response, candidate"]
+   n0["set response"]
    START --> n0
-   c1{"case"}
-   n0 --> c1
-   b2(["dispatch: intent detection"])
-   class b2 endstep
-   c1 -- "!candidate.invalidSelection && !/^(?:[1-5](?: please)?#124;yes#124;si#124;sí#124;stoc…" --> b2
-   n3["set noop"]
-   c1 -- "else" --> n3
+   n1[["call shopify-ql-shown-product-read"]]
+   class n1 flowstep
+   n0 --> n1
+   n2["set candidate"]
+   n1 --> n2
+   c3{"case"}
+   n2 --> c3
+   b4(["dispatch: intent detection"])
+   class b4 endstep
+   c3 -- "!candidate.invalidSelection && !/^(?:[1-5](?: please)?#124;yes#124;si#124;sí#124;stoc…" --> b4
+   n5["set noop"]
+   c3 -- "else" --> n5
    DONE(["end (back to caller)"])
    class DONE endstep
-   n3 --> DONE
+   n5 --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

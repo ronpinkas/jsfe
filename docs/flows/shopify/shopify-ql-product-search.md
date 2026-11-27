@@ -12,7 +12,7 @@
   - `product_number`: Position among the products last shown, 1 through 3 on voice or 1 through 5 in text
   - `refresh`: True only for an explicit request to refresh online product availability
   - `asked` (results / stock / price / cheapest / details / stores): results: Find products or show the previously shown products. stock: Which of the shown products are in stock online; not physical store inventory. price: Prices of shown products or a selected product. cheapest: Cheapest among the products shown, not a claim about the entire catalog. details: Details of a listed product. stores: Stores near a city/state/ZIP with the selected product variant in stock
-- **Calls:** [shopify-ql-product-facts-load](shopify-ql-product-facts-load.md) (call), [shopify-ql-product-stores](shopify-ql-product-stores.md) (call), [shopify-ql-products-fetch](shopify-ql-products-fetch.md) (call), [text-destination](../system/text-destination.md) (system) (call), [provide-data](../system/provide-data.md) (system) (call), [shopify-ql-product-dialog](shopify-ql-product-dialog.md) (replace)
+- **Calls:** [shopify-ql-product-facts-load](shopify-ql-product-facts-load.md) (call), [shopify-ql-product-stores](shopify-ql-product-stores.md) (call), [shopify-ql-shown-product-read](shopify-ql-shown-product-read.md) (call), [shopify-ql-products-fetch](shopify-ql-products-fetch.md) (call), [text-destination](../system/text-destination.md) (system) (call), [provide-data](../system/provide-data.md) (system) (call), [shopify-ql-product-dialog](shopify-ql-product-dialog.md) (replace)
 - **Tools:** none
 - **Called by:** intent detection, [shopify-ql-product-dialog](shopify-ql-product-dialog.md)
 
@@ -21,58 +21,63 @@
 ```mermaid
 flowchart TD
    START(("start"))
-   n0["set request"]
+   n0["set request_said"]
    START --> n0
-   c1{"case"}
-   n0 --> c1
-   b2(["return to host / AI"])
-   class b2 endstep
-   c1 -- "request.done" --> b2
-   n3["set noop"]
-   c1 -- "else" --> n3
-   c4{"case"}
-   n3 --> c4
-   b5(["return to host / AI"])
-   class b5 endstep
-   c4 -- "!request.query" --> b5
+   n1[["call shopify-ql-shown-product-read"]]
+   class n1 flowstep
+   n0 --> n1
+   n2["set request"]
+   n1 --> n2
+   c3{"case"}
+   n2 --> c3
+   b4(["return to host / AI"])
+   class b4 endstep
+   c3 -- "request.done" --> b4
+   n5["set noop"]
+   c3 -- "else" --> n5
    c6{"case"}
-   c4 -- "else" --> c6
-   b7[["call shopify-ql-products-fetch"]]
-   class b7 flowstep
-   c6 -- "!cargo.shopifyProductRequest.reuse" --> b7
+   n5 --> c6
+   b7(["return to host / AI"])
+   class b7 endstep
+   c6 -- "!request.query" --> b7
    c8{"case"}
-   b7 --> c8
    c6 -- "else" --> c8
-   b9(["return to host / AI"])
-   class b9 endstep
-   c8 -- "cargo.shopifyProducts.products.length===0" --> b9
+   b9[["call shopify-ql-products-fetch"]]
+   class b9 flowstep
+   c8 -- "!cargo.shopifyProductRequest.reuse" --> b9
    c10{"case"}
+   b9 --> c10
    c8 -- "else" --> c10
-   b11["say: Please choose a product number from the list shown."]
-   c10 -- "cargo.shopifyProductRequest.invalidSelection" --> b11
-   n12["set noop"]
-   b11 --> n12
-   c10 -- "else" --> n12
-   c13{"case"}
-   n12 --> c13
-   b14[["call text-destination"]]
-   class b14 flowstep
-   c13 -- "!!cargo.voice" --> b14
-   n15["set noop"]
-   b14 --> n15
-   c13 -- "else" --> n15
-   c16{"case"}
-   n15 --> c16
-   b17[["call provide-data"]]
-   class b17 flowstep
-   c16 -- "request.asked==='stores' && !request.reuse" --> b17
-   n18[["call provide-data"]]
-   class n18 flowstep
-   b17 --> n18
-   c16 -- "else" --> n18
-   n19(["replace → shopify-ql-product-dialog"])
-   class n19 endstep
-   n18 --> n19
+   b11(["return to host / AI"])
+   class b11 endstep
+   c10 -- "cargo.shopifyProducts.products.length===0" --> b11
+   c12{"case"}
+   c10 -- "else" --> c12
+   b13["say: Please choose a product number from the list shown."]
+   c12 -- "cargo.shopifyProductRequest.invalidSelection" --> b13
+   n14["set noop"]
+   b13 --> n14
+   c12 -- "else" --> n14
+   c15{"case"}
+   n14 --> c15
+   b16[["call text-destination"]]
+   class b16 flowstep
+   c15 -- "!!cargo.voice" --> b16
+   n17["set noop"]
+   b16 --> n17
+   c15 -- "else" --> n17
+   c18{"case"}
+   n17 --> c18
+   b19[["call provide-data"]]
+   class b19 flowstep
+   c18 -- "request.asked==='stores' && !request.reuse" --> b19
+   n20[["call provide-data"]]
+   class n20 flowstep
+   b19 --> n20
+   c18 -- "else" --> n20
+   n21(["replace → shopify-ql-product-dialog"])
+   class n21 endstep
+   n20 --> n21
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

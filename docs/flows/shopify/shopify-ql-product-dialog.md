@@ -8,7 +8,7 @@
 - **Parameters:** 
   - `completion`: Outcome already presented before this optional follow-up
   - `form_instance`: Internal instance to resume
-- **Calls:** [shopify-ql-product-dialog-prepare](shopify-ql-product-dialog-prepare.md) (prepare), [shopify-ql-product-dialog-validate](shopify-ql-product-dialog-validate.md) (validator), [collect-input-accept](../system/collect-input-accept.md) (system) (call), [run-form](../system/run-form.md) (system) (call), [form-done](../system/form-done.md) (system) (call), [shopify-ql-product-links](shopify-ql-product-links.md) (call), [shopify-ql-product-search](shopify-ql-product-search.md) (replace), [shopify-ql-product-dialog](shopify-ql-product-dialog.md) (replace)
+- **Calls:** [shopify-ql-product-dialog-prepare](shopify-ql-product-dialog-prepare.md) (prepare), [shopify-ql-product-dialog-validate](shopify-ql-product-dialog-validate.md) (validator), [collect-input-accept](../system/collect-input-accept.md) (system) (call), [run-form](../system/run-form.md) (system) (call), [shopify-ql-shown-product-read](shopify-ql-shown-product-read.md) (call), [form-done](../system/form-done.md) (system) (call), [shopify-ql-product-links](shopify-ql-product-links.md) (call), [shopify-ql-product-search](shopify-ql-product-search.md) (replace), [shopify-ql-product-dialog](shopify-ql-product-dialog.md) (replace)
 - **Tools:** none
 - **Called by:** [shopify-ql-product-search](shopify-ql-product-search.md), [shopify-ql-products-fetch](shopify-ql-products-fetch.md) (by name), [shopify-ql-product-dialog](shopify-ql-product-dialog.md)
 
@@ -50,41 +50,46 @@ flowchart TD
    b5(["end (back to caller)"])
    class b5 endstep
    c4 -- "rf_status !== 'complete' #124;#124; !cargo.forms[form_instance]" --> b5
-   n6["set has_stores, next"]
+   n6["set has_stores, followup_said"]
    c4 -- "else" --> n6
-   c7{"case"}
-   n6 --> c7
-   b8[["call form-done"]]
-   class b8 flowstep
-   c7 -- "next.done" --> b8
+   n7[["call shopify-ql-shown-product-read"]]
+   class n7 flowstep
+   n6 --> n7
+   n8["set next"]
+   n7 --> n8
    c9{"case"}
-   b8 --> c9
-   c7 -- "else" --> c9
-   b10(["return to host / AI"])
-   class b10 endstep
+   n8 --> c9
+   b10[["call form-done"]]
+   class b10 flowstep
    c9 -- "next.done" --> b10
-   n11[["call form-done"]]
-   class n11 flowstep
-   c9 -- "else" --> n11
-   c12{"case"}
-   n11 --> c12
-   b13[["call shopify-ql-product-links"]]
-   class b13 flowstep
-   c12 -- "next.text" --> b13
+   c11{"case"}
+   b10 --> c11
+   c9 -- "else" --> c11
+   b12(["return to host / AI"])
+   class b12 endstep
+   c11 -- "next.done" --> b12
+   n13[["call form-done"]]
+   class n13 flowstep
+   c11 -- "else" --> n13
    c14{"case"}
-   b13 --> c14
-   c12 -- "else" --> c14
-   b15(["replace → shopify-ql-product-search"])
-   class b15 endstep
-   c14 -- "!next.text" --> b15
-   n16(["replace → shopify-ql-product-dialog"])
-   class n16 endstep
-   c14 -- "else" --> n16
-   n17[["call form-done"]]
-   class n17 flowstep
+   n13 --> c14
+   b15[["call shopify-ql-product-links"]]
+   class b15 flowstep
+   c14 -- "next.text" --> b15
+   c16{"case"}
+   b15 --> c16
+   c14 -- "else" --> c16
+   b17(["replace → shopify-ql-product-search"])
+   class b17 endstep
+   c16 -- "!next.text" --> b17
+   n18(["replace → shopify-ql-product-dialog"])
+   class n18 endstep
+   c16 -- "else" --> n18
+   n19[["call form-done"]]
+   class n19 flowstep
    DONE(["end (back to caller)"])
    class DONE endstep
-   n17 --> DONE
+   n19 --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80
