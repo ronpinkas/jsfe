@@ -19,7 +19,8 @@ let emails=[],refuse=false,checks=0;
 const functions={...STANDARD_FUNCTIONS,
    'send-email-otp':async({to,container,additional})=>{emails.push({to,additional});if(refuse)throw new Error('Failed to generate OTP: address refused');const h=sha('222222');if(additional){container.otpAltHash=h;container.otpAltTimestamp=Date.now();}return h;},
    'validate-otp':async({otp,container})=>STANDARD_FUNCTIONS.validateOTP(otp,container)};
-const ai=async(system,user,schema,r)=>r?.task==='rank_reply'?JSON.stringify({option:'answers'}):'{"flowName":"None"}';
+let rankOption='answers';
+const ai=async(system,user,schema,r)=>r?.task==='rank_reply'?JSON.stringify({option:rankOption}):'{"flowName":"None"}';
 const engine=new WorkflowEngine(quiet,ai,linkFormSchemas([...FLOWS,probe,resend]),tools,functions,{},false,'en');engine.disableCommands();
 let s;
 const say=async content=>{s=JSON.parse(JSON.stringify(await engine.updateActivity({role:'user',content},JSON.parse(JSON.stringify(s)))));return String(s.response||'').replace(/\s+/g,' ');};
@@ -61,5 +62,22 @@ for(const lang of ['en','es'])for(const voice of [false,true]){
    await begin(lang,voice);refuse=true;
    r=await say(SAID[lang][0]);ok(emails.length===1&&s.cargo.otpAltSent==='failed'&&/^(I sent it by text message|Se lo envié por mensaje de texto)/.test(r)&&!/also|también/.test(r.split('.')[0]),`${tag}: a refused address says where the code went [${r}]`);
    r=await say(SAID[lang][0]);ok(emails.length===1,`${tag}: and is not tried again`);
+}
+// "I don't have that phone" (owner 2026-11-26; prod 11-25 CA7f25: the code went to the account's cell on file, the caller no
+// longer had it, an email was on file and nothing was sent there): the second code goes to the email; with no email on file
+// the line never offers one. Said in words, and in other words through the reply ranker.
+const NO_PHONE={en:["I don't have that phone number anymore.",'I changed my number last year.'],es:['Ya no tengo ese teléfono.','Cambié de número el año pasado.']};
+for(const lang of ['en','es'])for(const voice of [false,true]){
+   const w=W[lang],tag=`${lang} ${voice?'call':'text'}`;
+   for(const [i,said] of NO_PHONE[lang].entries()){
+      rankOption=i===0?'answers':'choice:no_phone';
+      await begin(lang,voice);
+      let r=await say(said);
+      ok(r.startsWith(voice?w.voice:w.text)&&emails.length===1&&emails[0].to==='robin@example.com'&&emails[0].additional===true,`${tag}: "${said}" emails a second code and says so [${r}]`);
+      await begin(lang,voice,'');
+      r=await say(said);
+      ok(!emails.length&&(lang==='es'?/el código no le puede llegar ahí\. Para hablar con una persona, (diga|escriba) AGENTE\./:/the code can't reach you there\. To reach a person, (say|type) AGENT\./).test(r)&&!/email|correo/i.test(r.split(/\?/)[0]),`${tag}: "${said}" with no email on file: no email offered [${r}]`);
+   }
+   rankOption='answers';
 }
 console.log(`OTP email too: ${checks} checks passed`);

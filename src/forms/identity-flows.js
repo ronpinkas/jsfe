@@ -333,7 +333,9 @@ const validateCode=worker('validate-otp-code','ValidateOtpCode','Validate a chal
       'condition: wants_other_account':toParent(call('otp_change_account','authenticate-user',{cell_number:'',email:'',retrying:true,declined_caller:true},'replace')),
       // Email asked for at a code sent by text: authentication is an input step, so the contact question is asked again
       // (without the caller-ID offer) and the caller gives the email; a code sent by email keeps "no me llegó el correo" a resend.
-      ['condition: email_too && normalized_otp_code.length !== 6 && ('+'matchesChoice(user_choice,otp_phrases.resend) || matchesChoice(user_choice,otp_phrases.cannot_find) || matchesChoice(user_choice,otp_phrases.another_way) || matchesChoice(user_choice,otp_phrases.email)'+')']:call('otp_email_too','send-otp-email-too'),
+      // "I don't have that phone" (owner 2026-11-26) is the strongest case for the second code: the code went to the account's
+      // cell on file (an account number was given) and the caller no longer has it.
+      ['condition: email_too && normalized_otp_code.length !== 6 && ('+'matchesChoice(user_choice,otp_phrases.resend) || matchesChoice(user_choice,otp_phrases.cannot_find) || matchesChoice(user_choice,otp_phrases.another_way) || matchesChoice(user_choice,otp_phrases.email) || matchesChoice(user_choice,otp_phrases.noPhone) || '+expression(otpPhoneUnavailable,'user_choice')+')']:call('otp_email_too','send-otp-email-too'),
       'condition: !!cargo.otp_cell_number && normalized_otp_code.length !== 6 && matchesChoice(user_choice,otp_phrases.email)':toParent(call('otp_use_email','authenticate-user',{cell_number:'',email:'',retrying:true,declined_caller:true},'replace')),
       "condition: isExitRequest(user_choice)":call('otp_exit','{{otp_cancel}}',undefined,'reboot'),
       "condition: isAgentRequest(user_choice)":call('otp_agent','live-agent-requested',undefined,'reboot'),
@@ -346,7 +348,7 @@ const validateCode=worker('validate-otp-code','ValidateOtpCode','Validate a chal
       "condition: answer_key === 'code_notice'":effect('otp_tenant_notice_said','true'),
       'condition: normalized_otp_code.length > 0 && Number(cargo.otpFormatMisses || 0)<2':say('otp_bad_format',"I was expecting a 6-digit code. Let's try again.","Esperaba un código de 6 dígitos. Intentemos de nuevo."),
       'condition: normalized_otp_code.length > 0':effect('otp_format_cap_next','true'),
-      ['condition: matchesChoice(user_choice,otp_phrases.noPhone) || '+expression(otpPhoneUnavailable,'user_choice')]:otpMenu('otp_no_phone',"No problem. Then the code can't reach you there. You can use the email on your account instead, or {{cargo.verb}} AGENT to reach a person.",'No hay problema. Entonces el código no le puede llegar ahí. Puede usar el correo electrónico de su cuenta, o {{cargo.verb_es}} AGENTE para hablar con una persona.',false),
+      ['condition: matchesChoice(user_choice,otp_phrases.noPhone) || '+expression(otpPhoneUnavailable,'user_choice')]:otpMenu('otp_no_phone',"No problem. Then the code can't reach you there. To reach a person, {{cargo.verb}} AGENT.",'No hay problema. Entonces el código no le puede llegar ahí. Para hablar con una persona, {{cargo.verb_es}} AGENTE.',false),
       default:set('otp_words_missing','no_code_given','true')}),
    // An answer none of the above reads goes to the reply ranker (owner 2026-10-29: prod 10-28, 128 of 238 such replies were
    // explained again, whatever they asked): an offer said in other words is taken; a use case authentication serves, or
@@ -367,14 +369,14 @@ const validateCode=worker('validate-otp-code','ValidateOtpCode','Validate a chal
    // is answering, so it is no miss. Its own bound: from the fourth, it counts as a word miss again.
    set('otp_hold_cap','no_code_given',"no_code_given || !!(otp_reply && otp_reply.key === 'has_code' && (cargo.otpCodeHolds=Number(cargo.otpCodeHolds || 0)+1) > 3)"),
    cases('otp_reply_route',{
-      "condition: !no_code_given && email_too && otp_reply && ['email','resend','cannot_find','another_way'].includes(otp_reply.key)":call('otp_ranked_email_too','send-otp-email-too'),
+      "condition: !no_code_given && email_too && otp_reply && ['email','resend','cannot_find','another_way','no_phone'].includes(otp_reply.key)":call('otp_ranked_email_too','send-otp-email-too'),
       "condition: !no_code_given && otp_reply && otp_reply.key === 'email'":toParent(call('otp_ranked_email','authenticate-user',{cell_number:'',email:'',retrying:true,declined_caller:true},'replace')),
       "condition: !no_code_given && otp_reply && otp_reply.key === 'another_account'":toParent(call('otp_ranked_account','authenticate-user',{cell_number:'',email:'',retrying:true,declined_caller:true},'replace')),
       "condition: !no_code_given && otp_reply && (otp_reply.key === 'where' || otp_reply.key === 'cannot_find')":say('otp_ranked_where','{{otp_where}}','{{otp_where_es}}'),
       "condition: !no_code_given && otp_reply && otp_reply.key === 'another_way'":say('otp_ranked_no_other_way','{{otp_where}} To reach a person, {{cargo.verb}} AGENT.','{{otp_where_es}} Para hablar con una persona, {{cargo.verb_es}} AGENTE.'),
       "condition: !no_code_given && otp_reply && otp_reply.key === 'has_code'":say('otp_ranked_has_code','Go ahead. Read me the six digits when you have them.','Adelante. Dígame los seis dígitos cuando los tenga.'),
       "condition: !no_code_given && otp_reply && otp_reply.key === 'resend'":call('otp_ranked_resend','resend-otp-code',{resend_reason:'requested'}),
-      "condition: !no_code_given && otp_reply && otp_reply.key === 'no_phone'":otpMenu('otp_ranked_no_phone',"No problem. Then the code can't reach you there. You can use the email on your account instead, or {{cargo.verb}} AGENT to reach a person.",'No hay problema. Entonces el código no le puede llegar ahí. Puede usar el correo electrónico de su cuenta, o {{cargo.verb_es}} AGENTE para hablar con una persona.',false),
+      "condition: !no_code_given && otp_reply && otp_reply.key === 'no_phone'":otpMenu('otp_ranked_no_phone',"No problem. Then the code can't reach you there. To reach a person, {{cargo.verb}} AGENT.",'No hay problema. Entonces el código no le puede llegar ahí. Para hablar con una persona, {{cargo.verb_es}} AGENTE.',false),
       "condition: !no_code_given && otp_reply && otp_reply.key === 'no_other_account'":say('otp_ranked_no_other_account','I understand. We still need to secure access to your account.','Entiendo. Aún necesitamos asegurar el acceso a su cuenta.'),
       "condition: !no_code_given && otp_reply && otp_reply.key === '__agent'":call('otp_ranked_agent','live-agent-requested',undefined,'reboot'),
       default:effect('otp_reply_route_none','true')}),
