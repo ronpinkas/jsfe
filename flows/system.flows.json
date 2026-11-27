@@ -2784,7 +2784,7 @@
             "toParent": true,
             "initializeDefaults": true
           },
-          "condition: email_too && normalized_otp_code.length !== 6 && (matchesChoice(user_choice,otp_phrases.resend) || matchesChoice(user_choice,otp_phrases.cannot_find) || matchesChoice(user_choice,otp_phrases.another_way) || matchesChoice(user_choice,otp_phrases.email))": {
+          "condition: email_too && normalized_otp_code.length !== 6 && (matchesChoice(user_choice,otp_phrases.resend) || matchesChoice(user_choice,otp_phrases.cannot_find) || matchesChoice(user_choice,otp_phrases.another_way) || matchesChoice(user_choice,otp_phrases.email) || matchesChoice(user_choice,otp_phrases.noPhone) || (function otpPhoneUnavailable(value) {\n   const text=String(value || '').normalize('NFD').replace(/[\\u0300-\\u036f]/g,'').toLowerCase().replace(/[’]/g,\"'\");\n   return /\\b(?:no longer|cannot|can't|dont|don't|do not)\\s+(?:have(?:\\s+access\\s+to)?|access|use)\\b[^.!?]{0,70}\\b(?:phone|number|mobile|cellphone)\\b/.test(text)\n      || /\\b(?:ya\\s+no|no)\\s+(?:tengo|puedo\\s+(?:usar|acceder))\\b[^.!?]{0,70}\\b(?:telefono|numero|celular|movil)\\b/.test(text);\n})(user_choice))": {
             "id": "otp_email_too",
             "type": "FLOW",
             "value": "send-otp-email-too",
@@ -2955,7 +2955,7 @@
         "id": "otp_reply_route",
         "type": "CASE",
         "branches": {
-          "condition: !no_code_given && email_too && otp_reply && ['email','resend','cannot_find','another_way'].includes(otp_reply.key)": {
+          "condition: !no_code_given && email_too && otp_reply && ['email','resend','cannot_find','another_way','no_phone'].includes(otp_reply.key)": {
             "id": "otp_ranked_email_too",
             "type": "FLOW",
             "value": "send-otp-email-too",
