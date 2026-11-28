@@ -12,10 +12,11 @@ const lookup={id:'lookup',name:'Lookup',version:'1',primary:true,description:'Lo
 const support={id:'contact-support',name:'ContactSupport',description:'Support closing',steps:[{id:'cs',type:'SAY',value:'Closing.',value_es:'Cierre.'}]};
 // the tenant's validate-contact, stood in: reads cargo.contactKind/contactValue, answers cargo.contactCheck
 const validate={id:'stub-validate',name:'StubValidate',description:'Check a contact is on file',steps:[{id:'check',type:'SET',variable:'noop',value:"(cargo.validated=(cargo.validated || []).concat([String(cargo.contactValue)]),cargo.contactCheck=(cargo.onFile || []).indexOf(String(cargo.contactValue).toLowerCase())>=0?'found':'none',true)"}]};
+const relookup={...lookup,id:'relookup',name:'Relookup',steps:[{...lookup.steps[0],parameters:{...lookup.steps[0].parameters,retry_flow:'relookup',cell_number:'8185551234'}},lookup.steps[1]]};
 function fixture(onFile,language='en'){
- const engine=new WorkflowEngine(quiet,async(s,u,schema,r)=>r && r.task==='rank_reply'?JSON.stringify({option:'answers'}):'{"flowName":"None"}',[...FLOWS,lookup,support,validate],[],STANDARD_FUNCTIONS,{},false,language);engine.disableCommands();
+ const engine=new WorkflowEngine(quiet,async(s,u,schema,r)=>r && r.task==='rank_reply'?JSON.stringify({option:'answers'}):'{"flowName":"None"}',[...FLOWS,lookup,relookup,support,validate],[],STANDARD_FUNCTIONS,{},false,language);engine.disableCommands();
  let s=engine.initSession('u','alternatives',language);Object.assign(s.cargo,{voice:false,verb:'type',verb_es:'escriba',onFile});
- return {engine,get s(){return s;},set s(v){s=v;},async start(){s=await engine.updateActivity({role:'user',content:'go',start:{flow:'lookup',arguments:{}}},JSON.parse(JSON.stringify(s)));return String(s.response||'');},
+ return {engine,get s(){return s;},set s(v){s=v;},async start(flow='lookup'){s=await engine.updateActivity({role:'user',content:'go',start:{flow,arguments:{}}},JSON.parse(JSON.stringify(s)));return String(s.response||'');},
   async say(content){s=await engine.updateActivity({role:'user',content},JSON.parse(JSON.stringify(s)));return String(s.response||'');}};
 }
 await test('email and phone typed together: the phone is not on file, the email is, and wins',async()=>{
@@ -55,5 +56,11 @@ await test('a contact card with phone and email: the phone is not on file, the e
  Object.assign(t.engine.APPROVED_FUNCTIONS,formSubmissionReaders(request,()=>t.engine.getSessionContext()));
  let r;try{r=await t.say(request.prompt);}finally{Object.assign(t.engine.APPROVED_FUNCTIONS,old);}
  assert.equal(r,'FOUND ana@example.com');assert.deepEqual(t.s.cargo.validated,['8185551234','ana@example.com']);
+});
+await test('a contact handed back from the pending list keeps the rest: the tenant retries the phone, the email is still tried',async()=>{
+ const t=fixture(['ana@example.com']);
+ t.s.cargo.gceAlternatives=[{kind:'phone',key:'8185551234',value:'8185551234'},{kind:'email',key:'ana@example.com',value:'ana@example.com'}];
+ assert.equal(await t.start('relookup'),'FOUND ana@example.com');
+ assert.deepEqual(t.s.cargo.validated,['8185551234','ana@example.com']);
 });
 console.log(`identity-contact-alternatives: all ${checks} checks passed`);
