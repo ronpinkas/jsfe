@@ -6655,7 +6655,7 @@
     "version": "3.0.0",
     "id": "shopify-ql-order-reply-check",
     "name": "ShopifyQLOrderReplyCheck",
-    "description": "Read a contextual order question or selection, using typed semantic continuation only when local field ownership cannot decide. A question about the order that its status, delivery, tracking and items cannot answer (a refund, cancellation, change or complaint) is picked as `other` by the reply ranker and returns '' so the Guru answers from the tenant's knowledge (owner 2026-11-19; prod 15:27 'If it doesn't arrive today can I get my money back?' was given the delivery line a third time). An apology like the Curacao account menu's (account-unanswerable) is the alternative, to be decided from how this works.",
+    "description": "Read a contextual order question or selection, using typed semantic continuation only when local field ownership cannot decide. A question about the order that its status, delivery, tracking and items cannot answer (why it is late, a refund or a complaint) is picked as `other`; a request to cancel or change the order is a new request, routed by intent detection (owner 2026-11-27) by the reply ranker and returns '' so the Guru answers from the tenant's knowledge (owner 2026-11-19; prod 15:27 'If it doesn't arrive today can I get my money back?' was given the delivery line a third time). An apology like the Curacao account menu's (account-unanswerable) is the alternative, to be decided from how this works.",
     "parameters": [
       {
         "name": "value",
@@ -6712,7 +6712,7 @@
         "value": [
           {
             "key": "other",
-            "label": "asks something about this order that its status, delivery date, tracking or items cannot answer: a refund or money back, a cancellation, a change, or a complaint, such as a package shown as delivered that never arrived, delivered to the wrong address, or missing items"
+            "label": "asks something about this order that its status, delivery date, tracking or items cannot answer: why it is late, a refund or money back, or a complaint, such as a package shown as delivered that never arrived, delivered to the wrong address, or missing items"
           }
         ]
       }
@@ -6823,7 +6823,7 @@
               }
             ],
             "responseVariable": "response",
-            "responseContext": "order question or selection for the verified current customer. Focused order: {{cargo.orderFocus || \"none selected\"}}. Displayed orders: {{shown.map(function(order,i){return (i+1)+\". \"+order.orderNumber;}).join(\"; \")}}. It answers with any question about the order contents/items, arrival/delivery, tracking, status/details, listing these orders, pickup, a selection from this list, or an unreadable reply. Extract its canonical ask and the explicitly selected order_number or order_position. With no explicit selection use the focused order; with no focused order do not invent one. Positions must be shown, IDs must exactly match this list. Do not guess between conflicting selections. A different task or unrelated information is a new request.",
+            "responseContext": "order question or selection for the verified current customer. Focused order: {{cargo.orderFocus || \"none selected\"}}. Displayed orders: {{shown.map(function(order,i){return (i+1)+\". \"+order.orderNumber;}).join(\"; \")}}. It answers with any question about the order contents/items, arrival/delivery, tracking, status/details, listing these orders, pickup, a selection from this list, or an unreadable reply. Extract its canonical ask and the explicitly selected order_number or order_position. With no explicit selection use the focused order; with no focused order do not invent one. Positions must be shown, IDs must exactly match this list. Do not guess between conflicting selections. A different task, such as a request to cancel or change the order, or unrelated information is a new request.",
             "recovery": {
               "version": 1,
               "mode": "resume",
