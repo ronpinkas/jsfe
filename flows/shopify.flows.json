@@ -6849,7 +6849,7 @@
             "id": "order_reply_to_guru",
             "type": "RETURN",
             "value": "''",
-            "outcome": "unresolved",
+            "outcome": "resolved",
             "reason": "order_question_unanswerable"
           },
           "default": {
