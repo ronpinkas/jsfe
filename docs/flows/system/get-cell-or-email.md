@@ -129,7 +129,7 @@ flowchart TD
    b33(["replace → contact-misread"])
    class b33 endstep
    c26 -- "contact_kind === 'unmapped'" --> b33
-   n34["set acct_number, cell_number, email, contact_check_key"]
+   n34["set acct_number, cell_number, email, contact_pending_index, contact_check…"]
    c26 -- "else" --> n34
    c35{"case"}
    n34 --> c35

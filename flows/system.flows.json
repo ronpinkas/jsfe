@@ -1209,6 +1209,10 @@
         "type": "boolean",
         "value": false
       },
+      "contact_pending_index": {
+        "type": "number",
+        "value": -1
+      },
       "contact_next": {
         "type": "object",
         "value": null
@@ -2018,10 +2022,16 @@
         "value": "(cargo.contactKind=acct_number?'account':email?'email':String(cell_number).replace(/\\D/g,'').slice(-10)===String(cargo.callerId || '').replace(/\\D/g,'').slice(-10)?'caller':'phone',cargo.contactValue=String(acct_number || email || cell_number),cargo.contactAlternatives=cargo.serviceAnswer.values,true)"
       },
       {
+        "id": "identity_contact_pending",
+        "type": "SET",
+        "variable": "contact_pending_index",
+        "value": "(function () {var key=contact_kind === 'email' ? String(contact_mail).toLowerCase() : ['phone','caller'].includes(contact_kind) ? String(contact_phone || cell_number).replace(/\\D/g,'').slice(-10) : '';return contact_prefill && key ? (cargo.gceAlternatives || []).findIndex(function (a) {return a.key === key;}) : -1;})()"
+      },
+      {
         "id": "identity_contact_alternatives",
         "type": "SET",
         "variable": "noop",
-        "value": "(gce_alternative === true || gce_alternative === 'true' ? true : (cargo.gceAlternatives=['account','phone','email'].includes(contact_kind) ? (function contactAlternatives(answer,kind,phone,mail) {\n   const values=answer && answer.values || {},text=String(answer && answer.raw || ''),out=[];\n   const add=(k,value)=>{const v=String(value || '').trim();if(!v)return;const key=k==='email'?v.toLowerCase():v.replace(/\\D/g,'').slice(-10);\n      if((k==='phone' && kind==='phone' && key===String(phone).replace(/\\D/g,'').slice(-10)) || (k==='email' && kind==='email' && key===String(mail).toLowerCase()))return;\n      if(!out.some(a=>a.kind===k && a.key===key))out.push({kind:k,value:k==='phone'?key:v,key});};\n   const phoneOf=v=>{const d=String(v || '').replace(/\\D/g,'');return readPhone(String(v || '')) || (validatePhone(d)?d:'');};\n   add('phone',phoneOf(values.phone));add('phone',readPhone(text));\n   add('email',values.email_address?readEmail(String(values.email_address)):'');add('email',readEmail(text));\n   return out;\n})(cargo.serviceAnswer,contact_kind,contact_phone,contact_mail) : [],cargo.gceTried=[]),true)"
+        "value": "(gce_alternative === true || gce_alternative === 'true' ? true : contact_pending_index >= 0 ? (cargo.gceAlternatives=cargo.gceAlternatives.filter(function (a,i) {return i !== contact_pending_index;})) : (cargo.gceAlternatives=['account','phone','email'].includes(contact_kind) ? (function contactAlternatives(answer,kind,phone,mail) {\n   const values=answer && answer.values || {},text=String(answer && answer.raw || ''),out=[];\n   const add=(k,value)=>{const v=String(value || '').trim();if(!v)return;const key=k==='email'?v.toLowerCase():v.replace(/\\D/g,'').slice(-10);\n      if((k==='phone' && kind==='phone' && key===String(phone).replace(/\\D/g,'').slice(-10)) || (k==='email' && kind==='email' && key===String(mail).toLowerCase()))return;\n      if(!out.some(a=>a.kind===k && a.key===key))out.push({kind:k,value:k==='phone'?key:v,key});};\n   const phoneOf=v=>{const d=String(v || '').replace(/\\D/g,'');return readPhone(String(v || '')) || (validatePhone(d)?d:'');};\n   add('phone',phoneOf(values.phone));add('phone',readPhone(text));\n   add('email',values.email_address?readEmail(String(values.email_address)):'');add('email',readEmail(text));\n   return out;\n})(cargo.serviceAnswer,contact_kind,contact_phone,contact_mail) : [],cargo.gceTried=[]),true)"
       },
       {
         "id": "identity_contact_check_key",
