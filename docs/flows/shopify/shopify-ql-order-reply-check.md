@@ -3,7 +3,7 @@
 <!-- generated:start -->
 **ShopifyQLOrderReplyCheck** · `shopify-ql-order-reply-check` · version 3.0.0 · worker (called by other flows) · steps · isolated scope
 
-> Read a contextual order question or selection, using typed semantic continuation only when local field ownership cannot decide. A question about the order that its status, delivery, tracking and items cannot answer (a refund, cancellation, change or complaint) is picked as `other` by the reply ranker and returns '' so the Guru answers from the tenant's knowledge (owner 2026-11-19; prod 15:27 'If it doesn't arrive today can I get my money back?' was given the delivery line a third time). An apology like the Curacao account menu's (account-unanswerable) is the alternative, to be decided from how this works.
+> Read a contextual order question or selection, using typed semantic continuation only when local field ownership cannot decide. A question about the order that its status, delivery, tracking and items cannot answer (why it is late, a refund or a complaint) is picked as `other` by the reply ranker and returns '' so the Guru answers from the tenant's knowledge (owner 2026-11-19; prod 15:27 'If it doesn't arrive today can I get my money back?' was given the delivery line a third time). A request to cancel or change the order is a new request, routed by intent detection (owner 2026-11-27). An apology like the Curacao account menu's (account-unanswerable) is the alternative, to be decided from how this works.
 
 - **Parameters:** 
   - `value`: Original order question or selection
