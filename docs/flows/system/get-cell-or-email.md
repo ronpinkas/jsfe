@@ -27,6 +27,7 @@
   - `gce_partial`: Internal split identifier continuation
   - `gce_rejected`: Internal rejected contact continuation
   - `gce_missed`: Internal misread contact continuation
+  - `gce_alternative`: Internal: another contact from the same answer, tried after one not on file
 - **Calls:** [authenticate-user](authenticate-user.md) (value, by name), [contact-support](contact-support.md) (value, by name), [collect-service-answer](collect-service-answer.md) (call), [get-cell-or-email](get-cell-or-email.md) (replace), [contact-split-failed](contact-split-failed.md) (replace), [live-agent-requested](live-agent-requested.md) (reboot), {{contact_options.cancel_flow}} (reboot), [contact-caller-declined](contact-caller-declined.md) (replace), [contact-misread](contact-misread.md) (replace), [switch-to-text](switch-to-text.md) (reboot), {{contact_options.validate_flow}} (call), [contact-not-on-file](contact-not-on-file.md) (replace)
 - **Tools:** none
 - **Called by:** [authenticate-user](authenticate-user.md), [get-cell-or-email](get-cell-or-email.md), [contact-caller-declined](contact-caller-declined.md), [contact-split-failed](contact-split-failed.md), [contact-not-on-file](contact-not-on-file.md), [contact-misread](contact-misread.md)
@@ -135,17 +136,27 @@ flowchart TD
    b36[["call #123;#123;contact_options.validate_flow#125;#125;"]]
    class b36 flowstep
    c35 -- "contact_check_key && !cargo.contactCheck" --> b36
-   n37["set contact_error, contact_error_es"]
+   n37["set contact_next, contact_alt_cell, contact_alt_mail"]
    b36 --> n37
    c35 -- "else" --> n37
    c38{"case"}
    n37 --> c38
-   b39(["replace → contact-not-on-file"])
-   class b39 endstep
-   c38 -- "cargo.contactCheck === #quot;none#quot;" --> b39
+   c39{"case"}
+   c38 -- "!!contact_next" --> c39
+   c38 -- "else" --> c39
+   b40(["replace → get-cell-or-email"])
+   class b40 endstep
+   c39 -- "!!contact_next" --> b40
+   n41["set contact_error, contact_error_es"]
+   c39 -- "else" --> n41
+   c42{"case"}
+   n41 --> c42
+   b43(["replace → contact-not-on-file"])
+   class b43 endstep
+   c42 -- "cargo.contactCheck === #quot;none#quot;" --> b43
    DONE(["end (back to caller)"])
    class DONE endstep
-   c38 -- "else" --> DONE
+   c42 -- "else" --> DONE
    classDef endstep fill:#eef,stroke:#669
    classDef toolstep fill:#efe,stroke:#696
    classDef flowstep fill:#fef6e0,stroke:#b80

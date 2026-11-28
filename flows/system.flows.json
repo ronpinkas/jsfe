@@ -1108,6 +1108,11 @@
         "name": "gce_missed",
         "type": "boolean",
         "description": "Internal misread contact continuation"
+      },
+      {
+        "name": "gce_alternative",
+        "type": "boolean",
+        "description": "Internal: another contact from the same answer, tried after one not on file"
       }
     ],
     "variables": {
@@ -1199,6 +1204,22 @@
       "gce_missed": {
         "type": "boolean",
         "value": false
+      },
+      "gce_alternative": {
+        "type": "boolean",
+        "value": false
+      },
+      "contact_next": {
+        "type": "object",
+        "value": null
+      },
+      "contact_alt_cell": {
+        "type": "string",
+        "value": ""
+      },
+      "contact_alt_mail": {
+        "type": "string",
+        "value": ""
       },
       "contact_allowed": {
         "type": "boolean",
@@ -1997,6 +2018,12 @@
         "value": "(cargo.contactKind=acct_number?'account':email?'email':String(cell_number).replace(/\\D/g,'').slice(-10)===String(cargo.callerId || '').replace(/\\D/g,'').slice(-10)?'caller':'phone',cargo.contactValue=String(acct_number || email || cell_number),cargo.contactAlternatives=cargo.serviceAnswer.values,true)"
       },
       {
+        "id": "identity_contact_alternatives",
+        "type": "SET",
+        "variable": "noop",
+        "value": "(gce_alternative === true || gce_alternative === 'true' ? true : (cargo.gceAlternatives=['account','phone','email'].includes(contact_kind) ? (function contactAlternatives(answer,kind,phone,mail) {\n   const values=answer && answer.values || {},text=String(answer && answer.raw || ''),out=[];\n   const add=(k,value)=>{const v=String(value || '').trim();if(!v)return;const key=k==='email'?v.toLowerCase():v.replace(/\\D/g,'').slice(-10);\n      if((k==='phone' && kind==='phone' && key===String(phone).replace(/\\D/g,'').slice(-10)) || (k==='email' && kind==='email' && key===String(mail).toLowerCase()))return;\n      if(!out.some(a=>a.kind===k && a.key===key))out.push({kind:k,value:k==='phone'?key:v,key});};\n   const phoneOf=v=>{const d=String(v || '').replace(/\\D/g,'');return readPhone(String(v || '')) || (validatePhone(d)?d:'');};\n   add('phone',phoneOf(values.phone));add('phone',readPhone(text));\n   add('email',values.email_address?readEmail(String(values.email_address)):'');add('email',readEmail(text));\n   return out;\n})(cargo.serviceAnswer,contact_kind,contact_phone,contact_mail) : [],cargo.gceTried=[]),true)"
+      },
+      {
         "id": "identity_contact_check_key",
         "type": "SET",
         "variable": "contact_check_key",
@@ -2033,16 +2060,85 @@
         "value": "(contact_check_key ? (cargo.gceChecks=cargo.gceChecks || {},cargo.gceChecks[contact_check_key]=String(cargo.contactCheck || '')) : true,cargo.gceRejects=cargo.contactCheck === 'none'?Number(cargo.gceRejects || 0)+1:0,true)"
       },
       {
+        "id": "identity_contact_tried",
+        "type": "SET",
+        "variable": "noop",
+        "value": "(cargo.contactCheck === 'none' ? cargo.gceTried=(cargo.gceTried || []).concat([cargo.contactKind]) : true,true)"
+      },
+      {
+        "id": "identity_contact_next",
+        "type": "SET",
+        "variable": "contact_next",
+        "value": "cargo.contactCheck === 'none' && contact_options.validate_flow ? (cargo.gceAlternatives || []).filter(function (a) {return !(cargo.gceChecks || {})[contact_options.validate_flow+'|'+(a.kind === 'email' ? 'email:'+a.key : 'phone:'+a.key)];})[0] || null : null"
+      },
+      {
+        "id": "identity_contact_alt_cell",
+        "type": "SET",
+        "variable": "contact_alt_cell",
+        "value": "contact_next && contact_next.kind === 'phone' ? contact_next.value : ''"
+      },
+      {
+        "id": "identity_contact_alt_mail",
+        "type": "SET",
+        "variable": "contact_alt_mail",
+        "value": "contact_next && contact_next.kind === 'email' ? contact_next.value : ''"
+      },
+      {
+        "id": "identity_contact_alternative_uncounted",
+        "type": "CASE",
+        "branches": {
+          "condition: !!contact_next": {
+            "id": "identity_contact_alternative_uncount",
+            "type": "SET",
+            "variable": "noop",
+            "value": "(cargo.gceRejects=Math.max(0,Number(cargo.gceRejects || 0)-1),true)"
+          },
+          "default": {
+            "id": "identity_contact_alternative_uncounted_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
+        "id": "identity_contact_alternative",
+        "type": "CASE",
+        "branches": {
+          "condition: !!contact_next": {
+            "id": "identity_contact_try_alternative",
+            "type": "FLOW",
+            "value": "get-cell-or-email",
+            "callType": "replace",
+            "parameters": {
+              "contact_options": "{{contact_options}}",
+              "cell_number": "{{contact_alt_cell}}",
+              "email": "{{contact_alt_mail}}",
+              "acct_number": "",
+              "gce_alternative": true,
+              "gce_rejected": true
+            },
+            "initializeDefaults": true
+          },
+          "default": {
+            "id": "identity_contact_alternative_skip",
+            "type": "SET",
+            "variable": "noop",
+            "value": "true"
+          }
+        }
+      },
+      {
         "id": "identity_contact_rejected_message",
         "type": "SET",
         "variable": "contact_error",
-        "value": "cargo.contactKind === 'email' ? 'I could not find an account with that email.' : cargo.contactKind === 'caller' ? 'I could not find an account with the number you are calling from.' : 'I could not find an account with that phone number.'"
+        "value": "(cargo.gceTried || []).length > 1 ? 'I could not find an account with that phone number or that email.' : cargo.contactKind === 'email' ? 'I could not find an account with that email.' : cargo.contactKind === 'caller' ? 'I could not find an account with the number you are calling from.' : 'I could not find an account with that phone number.'"
       },
       {
         "id": "identity_contact_rejected_message_es",
         "type": "SET",
         "variable": "contact_error_es",
-        "value": "cargo.contactKind === 'email' ? 'No encontré una cuenta con ese correo.' : cargo.contactKind === 'caller' ? 'No encontré una cuenta con el número desde el que llama.' : 'No encontré una cuenta con ese número de teléfono.'"
+        "value": "(cargo.gceTried || []).length > 1 ? 'No encontré una cuenta con ese número de teléfono ni con ese correo.' : cargo.contactKind === 'email' ? 'No encontré una cuenta con ese correo.' : cargo.contactKind === 'caller' ? 'No encontré una cuenta con el número desde el que llama.' : 'No encontré una cuenta con ese número de teléfono.'"
       },
       {
         "id": "identity_contact_reject",
